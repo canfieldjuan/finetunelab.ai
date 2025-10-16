@@ -1,0 +1,365 @@
+# LLM Coding Standards and Requirements
+
+## Purpose
+This document defines the required standards and workflow for AI assistants working on this codebase. All LLMs must follow these guidelines to ensure code quality, continuity, and maintainability.
+
+---
+
+## 1. Session Log Management (CRITICAL)
+
+### Requirement
+**Always create or update session logs at the end of each work session.**
+
+### Purpose
+- Provide context continuity between sessions when token limits are reached
+- Document decisions, changes, and reasoning for future reference
+- Enable any LLM to resume work exactly where the previous session ended
+- Track progress across multiple sessions and iterations
+
+### Implementation
+1. **Location:** Store session logs in `/docs/SESSION_LOG_YYYYMMDD_TOPIC.md`
+2. **Format:** Use markdown with clear sections (see template below)
+3. **Timing:** Update the log before ending a session or when approaching token limits
+4. **Content:** Include file paths, line numbers, code changes, reasoning, and next steps
+
+### Session Log Template
+```markdown
+# Session Log - [Date]
+## [Main Topic/Feature]
+
+### Session Overview
+**Date:** YYYY-MM-DD
+**Focus:** [Brief description of work focus]
+**Status:** [Complete/In Progress/Blocked]
+
+### Work Completed
+1. **[Task Name]**
+   - **Files Modified:** `path/to/file.ts` (lines X-Y)
+   - **Changes Made:** [Bullet points describing changes]
+   - **Reasoning:** [Why these changes were made]
+
+### Problems Encountered
+- **Problem:** [Description]
+- **Solution:** [How it was resolved]
+- **Files Affected:** [List files]
+
+### Current State
+- [What works now]
+- [What's tested]
+- [Known issues]
+
+### Next Steps
+1. [Immediate next task]
+2. [Follow-up tasks]
+3. [Future considerations]
+
+### Context for Next Session
+- **Important:** [Critical information for continuation]
+- **Dependencies:** [External services, APIs, databases needed]
+- **Environment:** [Required setup or configuration]
+```
+
+---
+
+## 2. Code Verification Protocol (CRITICAL)
+
+### Never Make Assumptions
+- **Always verify claims** before acting on them
+- **Always read files** before modifying them
+- **Always validate changes** after applying them
+- If uncertain, ask the user for clarification
+
+### File Modification Workflow
+```
+STEP 1: Locate Exact Files
+  → Use Glob/Grep to find files that need changes
+  → List all files that will be affected
+  → Verify files exist and are correct
+
+STEP 2: Identify Exact Code Insertion Points
+  → Use Read tool to view current file contents
+  → Note exact line numbers where changes will occur
+  → Identify surrounding code context
+
+STEP 3: Verify Current State
+  → Read the file sections that will change
+  → Confirm current implementation
+  → Check for dependencies or related code
+
+STEP 4: Make Changes Incrementally
+  → Apply changes in small, logical blocks
+  → Use Edit tool with exact old_string matching
+  → Add one feature or function at a time
+
+STEP 5: Validate Changes
+  → Read the modified file to confirm changes
+  → Check for syntax errors
+  → Verify the change fixed the intended issue
+  → Test if possible (run build, tests, etc.)
+```
+
+---
+
+## 3. Incremental Development
+
+### Code Block Size
+- Write code in **manageable 30-line blocks** or complete logical blocks
+- Each block should represent one complete function or feature component
+- Don't write massive files all at once
+
+### Feature Addition
+- Add functions and features **incrementally**
+- Complete one feature before starting the next
+- Test each increment before proceeding
+
+### Example Workflow
+```
+❌ BAD: Write entire 500-line service file at once
+✅ GOOD:
+   1. Write interface/types (30 lines)
+   2. Write constructor and config (20 lines)
+   3. Write core method #1 (40 lines)
+   4. Test method #1
+   5. Write core method #2 (35 lines)
+   6. Test method #2
+   ... continue incrementally
+```
+
+---
+
+## 4. Python-Specific Requirements (CRITICAL)
+
+### No Unicode Characters
+- **Python files must contain ONLY ASCII characters**
+- No emoji, no special symbols, no unicode quotes
+- This applies to:
+  - Python source files (.py)
+  - Python test files (test_*.py)
+  - Python configuration files
+
+### Validation
+```bash
+# Check for non-ASCII characters
+python3 -c "
+with open('file.py', 'rb') as f:
+    data = f.read()
+    if any(b > 127 for b in data):
+        print('ERROR: Non-ASCII characters found')
+    else:
+        print('OK: All ASCII')
+"
+```
+
+### Examples
+```python
+# ❌ BAD - Contains unicode
+def process():
+    """Process data — returns result"""  # unicode dash
+    status = "✓ Complete"  # emoji
+
+# ✅ GOOD - ASCII only
+def process():
+    """Process data - returns result"""  # ASCII dash
+    status = "Complete"  # plain text
+```
+
+---
+
+## 5. Dependency Management
+
+### Map Dependencies
+- Before adding new packages, **check existing dependencies**
+- Verify no version conflicts between packages
+- Document dependencies in requirements.txt (Python) or package.json (Node.js)
+
+### Dependency Check Workflow
+```
+1. List current dependencies
+   → Python: pip list OR cat requirements.txt
+   → Node.js: npm list OR cat package.json
+
+2. Check for conflicts
+   → Verify version compatibility
+   → Check peer dependencies
+   → Look for duplicate packages
+
+3. Document new dependencies
+   → Add to requirements.txt / package.json
+   → Note why the dependency is needed
+   → Specify minimum version required
+```
+
+---
+
+## 6. Testing Requirements
+
+### Unit Test Standards
+- Create **robust unit tests** for all new functions
+- Test both success and failure cases
+- Mock external dependencies (APIs, databases, etc.)
+
+### Test Structure
+```python
+# Python test example
+def test_function_name():
+    """Test description: what is being tested"""
+    # Arrange: Set up test data
+    input_data = {...}
+    expected_output = {...}
+
+    # Act: Execute function
+    result = function_under_test(input_data)
+
+    # Assert: Verify result
+    assert result == expected_output
+
+    # Test edge cases
+    assert function_under_test(None) raises ValueError
+    assert function_under_test("") returns default_value
+```
+
+---
+
+## 7. Planning Requirements
+
+### Before Starting Work
+Create a **phased and detailed plan** that includes:
+
+1. **Phase Breakdown**
+   - Divide work into logical phases
+   - Each phase should be independently testable
+   - Phases should build on each other
+
+2. **File Impact Analysis**
+   - List all files that will be created
+   - List all files that will be modified
+   - Identify dependencies between files
+
+3. **Implementation Order**
+   - Order tasks by dependency (build foundation first)
+   - Identify which tasks can run in parallel
+   - Note any blocking dependencies
+
+### Plan Template
+```markdown
+## Implementation Plan
+
+### Phase 1: Foundation (Week 1)
+**Goal:** Set up basic infrastructure
+
+**Tasks:**
+1. Create database schema
+   - Files: `schema.sql`, `models.py`
+   - Dependencies: PostgreSQL running
+   - Testing: Can create/read records
+
+2. Set up API client
+   - Files: `client.py`, `types.py`
+   - Dependencies: requests library
+   - Testing: Can make authenticated requests
+
+### Phase 2: Core Features (Week 2)
+...
+
+### Phase 3: Integration (Week 3)
+...
+```
+
+---
+
+## 8. Communication Standards
+
+### When Uncertain
+- **Ask the user** rather than guessing
+- Provide options with pros/cons
+- Request clarification on ambiguous requirements
+
+### Progress Updates
+- Report what was completed
+- Note any issues encountered
+- Indicate next steps clearly
+
+### File References
+- Always use absolute paths: `/path/to/file.ts`
+- Include line numbers: `/path/to/file.ts:123-145`
+- Reference specific functions: `functionName()` in `file.ts:50`
+
+---
+
+## 9. Quality Checklist
+
+Before marking any task as complete, verify:
+
+- [ ] All modified files have been read first
+- [ ] Changes were applied incrementally
+- [ ] Each change was validated after application
+- [ ] No assumptions were made without verification
+- [ ] Exact file paths and line numbers documented
+- [ ] Python files contain NO unicode characters
+- [ ] Dependencies checked for conflicts
+- [ ] Unit tests created for new functions
+- [ ] Session log updated with all changes
+- [ ] Next steps clearly documented
+
+---
+
+## 10. Example: Complete Workflow
+
+```
+USER REQUEST: "Add authentication to the API"
+
+STEP 1: PLAN
+  → Read requirements
+  → Create phased plan (see template above)
+  → Get user approval on plan
+
+STEP 2: VERIFY CURRENT STATE
+  → Glob: Find all API route files
+  → Read: Check current auth implementation
+  → Grep: Search for existing auth patterns
+
+STEP 3: IMPLEMENT INCREMENTALLY
+  Phase 1: Auth Middleware (30 lines)
+    → Create auth.py with token validation
+    → Test middleware in isolation
+
+  Phase 2: Apply to Routes (20 lines per route)
+    → Add middleware to route 1
+    → Test route 1
+    → Add middleware to route 2
+    → Test route 2
+
+  Phase 3: Error Handling (25 lines)
+    → Add auth error responses
+    → Test error cases
+
+STEP 4: VALIDATE
+  → Check no unicode in Python files
+  → Run unit tests
+  → Verify dependencies
+
+STEP 5: DOCUMENT
+  → Update session log with:
+    - Files modified (paths + line numbers)
+    - Changes made (detailed)
+    - Test results
+    - Next steps
+```
+
+---
+
+## Summary
+
+These standards ensure:
+- **Continuity:** Session logs allow seamless handoffs between sessions
+- **Quality:** Verification and validation prevent errors
+- **Maintainability:** Incremental development keeps code manageable
+- **Compatibility:** Dependency checks prevent conflicts
+- **Reliability:** Testing ensures code works as expected
+- **Clarity:** Documentation helps future developers (human or AI)
+
+**All requirements marked CRITICAL must be followed without exception.**
+
+---
+
+**End of Coding Standards Document**
