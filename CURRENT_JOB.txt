@@ -1,0 +1,19 @@
+Current Training Job
+===================
+
+Job ID: cc311807-8c6b-4c0a-8f07-c36b8bbd2e66
+Started: 2025-10-27 22:32 (Attempt 6)
+
+Monitor Page:
+http://localhost:3000/training/monitor?jobId=cc311807-8c6b-4c0a-8f07-c36b8bbd2e66
+
+Status Check:
+curl http://localhost:3000/api/training/local/cc311807-8c6b-4c0a-8f07-c36b8bbd2e66/status
+
+Metrics Check:
+curl http://localhost:3000/api/training/local/cc311807-8c6b-4c0a-8f07-c36b8bbd2e66/metrics
+
+Expected:
+- Total steps: ~8367
+- Duration: ~1.5 hours
+- Metrics: ~167 data points

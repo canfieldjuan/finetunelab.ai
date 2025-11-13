@@ -1,0 +1,39 @@
+-- ============================================================================
+-- TRAINING ERROR RESOLUTION - COMPLETED
+-- ============================================================================
+--
+-- ISSUE FOUND (Not related to Phase 2):
+-- Error: Invalid model path format containing local snapshot paths
+-- Model path in config: huggingface_models/Qwen-Qwen3-1.7B/snapshots/70d244cc86ccca08cf5af4e1e306ecf908b1ad5e
+-- Expected: Qwen/Qwen3-1.7B (HuggingFace repo ID) OR local path with local_files_only=True
+--
+-- PHASE 2 STATUS: ✅ WORKING CORRECTLY
+-- - Dataset loaded successfully with 37,995 examples in normalized 'messages' format
+-- - No runtime conversion errors
+-- - Validation warnings working as expected
+-- - Training failed during tokenizer initialization (before any training logic)
+--
+-- FIX IMPLEMENTED: Model Path Normalization
+-- File: lib/training/standalone_trainer.py
+-- 
+-- Added _normalize_model_path() method that:
+--   1. Detects local snapshot paths (contains "snapshots/")
+--   2. Checks if local path exists → uses local_files_only=True
+--   3. If not found, extracts HuggingFace ID from path (e.g., Qwen-Qwen3-1.7B → Qwen/Qwen3-1.7B)
+--   4. Regular HF model IDs pass through unchanged
+--
+-- Updated methods:
+--   - _load_tokenizer() → uses normalized_path and local_files_only parameter
+--   - _load_model() → uses normalized_path and local_files_only parameter (both LoRA and full model paths)
+--
+-- TESTING:
+-- 1. Training server auto-reloads with changes (uvicorn --reload)
+-- 2. Click "Run Now" in UI to test training with fixed model loading
+-- 3. Check logs: C:\Users\Juan\Desktop\Dev_Ops\web-ui\lib\training\logs\job_<id>.log
+-- 4. Verify tokenizer loads successfully with normalized path
+--
+-- Expected outcome:
+-- - Tokenizer loads from "Qwen/Qwen3-1.7B" (downloads from HuggingFace if not cached)
+-- - OR uses local files if snapshot directory exists
+-- - Training proceeds past tokenizer initialization
+-- ============================================================================

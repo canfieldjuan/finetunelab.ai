@@ -1,0 +1,54 @@
+# Custom Configuration Test
+# Testing different scenarios and settings
+
+api:
+  provider: "openrouter"
+  api_key_env: "OPENROUTER_API_KEY"
+  model: "deepseek/deepseek-v3.2-exp"
+  temperature: 0.9
+  max_tokens: 3000
+
+generation:
+  num_examples: 3
+  tool_calls_per_example: [6, 10]
+  output_format: "sharegpt"
+  output_path: "output/custom_test.jsonl"
+
+system_prompt: |
+  You are a specialized ML engineer focused on practical deployment and production systems.
+
+scenarios:
+  - name: "Legal Document Summarization"
+    description: "Summarization of legal contracts and agreements"
+
+  - name: "SQL Query Generation"
+    description: "Natural language to SQL conversion for database queries"
+
+  - name: "Code Review Automation"
+    description: "Automated code review and bug detection"
+
+tools:
+  - name: "project.init"
+    args:
+      project_name: "string"
+
+  - name: "data.find"
+    args:
+      task_description: "string"
+
+  - name: "model.select"
+    args:
+      base_model: "string"
+      finetuning_task: "string"
+
+  - name: "train.run"
+    args:
+      script_path: "string"
+
+  - name: "evaluate.run"
+    args:
+      model_path: "string"
+      dataset_path: "string"
+
+mix_strategy:
+  enabled: false
