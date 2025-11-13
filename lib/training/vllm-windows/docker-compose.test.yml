@@ -1,0 +1,20 @@
+version: "3"
+services:
+    vllm-test:
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: all
+                          capabilities:
+                              - gpu
+        volumes:
+            - ~/.cache/huggingface:/root/.cache/huggingface
+        environment:
+            - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+        ports:
+            - 8003:8000
+        ipc: host
+        image: vllm/vllm-openai:v0.6.3.post1
+        command: --model Qwen/Qwen2.5-0.5B-Instruct --gpu-memory-utilization 0.7 --dtype auto
