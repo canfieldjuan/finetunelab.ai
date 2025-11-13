@@ -1,0 +1,190 @@
+INFO:     Will watch for changes in these directories: ['/home/juan-canfield/Desktop/web-ui/lib/training']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [225427] using WatchFiles
+[2025-11-10 15:45:48] [training_server] [WARNING] [Supabase] supabase-py not installed - database operations will fail
+[2025-11-10 15:45:48] [training_server] [INFO] [Persistence] Configured endpoints: jobs=http://localhost:3000/api/training/local/jobs, metrics=http://localhost:3000/api/training/local/metrics
+[2025-11-10 15:45:48] [training_server] [INFO] Job store initialized
+[2025-11-10 15:45:48] [training_server] [INFO] Job queue initialized
+[2025-11-10 15:45:48] [training_server] [INFO] WebSocket connection manager initialized
+[2025-11-10 15:45:48] [training_server] [INFO] Training API server initialized
+[2025-11-10 15:45:48] [training_server] [INFO] Python executable: /home/juan-canfield/Desktop/web-ui/lib/training/trainer_venv/bin/python3
+[2025-11-10 15:45:48] [training_server] [INFO] Trainer script: /home/juan-canfield/Desktop/web-ui/lib/training/standalone_trainer.py
+INFO:     Started server process [225430]
+INFO:     Waiting for application startup.
+[2025-11-10 15:45:48] [training_server] [INFO] [Startup] Starting job queue worker...
+[2025-11-10 15:45:48] [training_server] [INFO] [Startup] Queue worker started - jobs will be processed sequentially
+[2025-11-10 15:45:48] [training_server] [INFO] [Startup] Checking for orphaned training jobs...
+[2025-11-10 15:45:48] [training_server] [INFO] [Reconnect] Scanning for orphaned training jobs...
+[2025-11-10 15:45:48] [training_server] [INFO] [Reconnect] Found 1 orphaned trainer process(es): [208318]
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3777ef7f-de03-4084-ac2d-b16754429480 - progress file too old (322735s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 649a10a0-40b2-4849-abc5-1636e1324d0b - progress file too old (318923s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3c99aac2-044e-419a-ad22-251be868ee7f - progress file too old (771405s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 78e4f1d0-103b-4524-b221-801409d9a269 - progress file too old (330371s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 2a155e18-9425-4c48-b2d6-f5d817fc6e26 - progress file too old (397221s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 74801829-a543-49e1-b269-d4d605af2a84 - progress file too old (45071s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping b9b79a00-b432-4fe4-94ed-c3a548453a54 - progress file too old (780797s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 047124ac-637b-4174-9658-a8f7f9002e19 - progress file too old (482603s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3d12f567-0bf2-435e-9618-37a3e50a3a31 - progress file too old (1197589s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 9d30797b-9434-4b91-b394-b54809e41e2e - progress file too old (336183s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping c317df07-844e-48b3-8ab6-5668784b01da - progress file too old (510585s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 7bc56d70-0a22-4cfe-9205-4c1ccc15add8 - progress file too old (388159s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 12abe5f5-7252-4c6d-b049-eef485d750e5 - progress file too old (52526s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 1502e762-a10b-4dc7-81c5-0012da8a9368 - progress file too old (1189499s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 001efdc1-ecdf-46ef-bdb5-f1a9e8afefd2 - progress file too old (785661s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 57c9bc89-f373-42e7-b9f9-e17e0dd134f3 - progress file too old (485283s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping aa63e536-1490-4d70-a631-d3d91e45fbdd - progress file too old (334697s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 0763e0f4-e27a-4582-a85e-ec8cc35f9637 - progress file too old (1188885s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 064e0616-84e9-4901-9337-8877d2bc0c99 - progress file too old (336775s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 8026310f-be6f-459c-8f1c-21e92a01fac2 - progress file too old (337877s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3d334fda-73f9-4f6c-b6d0-67aac253b508 - progress file too old (337621s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 4c777063-7ae1-44ee-b4ae-ead010b90a01 - progress file too old (400227s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3acee2e0-7721-4634-ac54-40dab510edcb - progress file too old (1189963s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 66c882f8-7342-4e0e-a626-cc1187d2a701 - progress file too old (699203s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3f7793a0-a463-459d-ab96-44d41254ba0f - progress file too old (820559s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping c8883013-d8c0-44c8-9fa1-118cf4b756a6 - progress file too old (567527s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 2b8c13c8-4ddd-4324-8c1b-4ccaadf8ab6a - progress file too old (437249s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 4f372d63-9957-4774-8195-2e65069f880d - progress file too old (341259s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [INFO] [Reconnect] Found active training job: bd5c0fe9-e0b0-433f-8a9b-c24d7ab1d7c5
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Supabase not available, cannot fetch job bd5c0fe9-e0b0-433f-8a9b-c24d7ab1d7c5
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 6af38235-7894-4850-9898-f1eb0b2276b9 - progress file too old (1024095s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 1f6c7022-8218-42bb-9ff3-03bc22283d62 - progress file too old (394235s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping a690e29e-152f-4586-a6e5-26a9a4a1bdd6 - progress file too old (312721s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 0d411dee-b958-4da4-ad87-bdfd4c1c42f5 - progress file too old (513307s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping dd454fff-38dc-4726-b5f5-964f1638a921 - progress file too old (704041s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 5d979506-12e8-4148-9e0d-e080a00dbfa7 - progress file too old (336921s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 8c1416c0-183c-4b02-99e6-c55944096026 - progress file too old (329957s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping af72c29b-7482-4356-8c7b-f9af85abe424 - progress file too old (781933s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 28590d5e-6ab3-4ca7-836f-4f6453f33f30 - progress file too old (395997s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 150bb484-fd09-4879-841a-99f2e5c0ba21 - progress file too old (389221s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 2bb6d654-7c5f-4b7a-ba23-a95c921287bb - progress file too old (399849s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping b879fc91-d189-4321-86de-a2911a8ecab9 - progress file too old (787381s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 27fa18e7-6c9e-4fa9-a5e1-a947d85f1d6e - progress file too old (391485s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 2234793b-4c40-4352-b7ed-ffbdaa5e8929 - progress file too old (482713s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 1519dce5-ca8b-403f-aa18-3f187e5db2fc - progress file too old (357251s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3db58467-aecc-4c16-bc07-613132c3568f - progress file too old (6022s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 4870b0aa-1756-4cdd-a6ce-b9b576677617 - progress file too old (682213s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 6b1d4af5-1d71-4332-82e6-a5e11608c8bf - progress file too old (336469s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 1f6b4848-359a-4c33-8d65-cab029941b74 - progress file too old (346795s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping c9251ea6-58e9-454f-93d0-5f1c93c5d683 - progress file too old (54340s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping eeb25b9f-a82e-4fde-bbda-aa14e3c71b09 - progress file too old (1197781s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 48478811-a73c-41ef-b80e-cfabed63b398 - progress file too old (401089s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 2ce0e8c1-7e06-471e-a59b-e31394ca3592 - progress file too old (327495s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 4311cb10-36e8-4bf0-aa63-c6b16b2b7b2e - progress file too old (405151s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3b61cffd-8c4b-426a-bb9f-332df17e2ed8 - progress file too old (486595s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 13e9416f-65d6-4d1e-8757-0980cb6fb77f - progress file too old (657395s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 418fb99f-ae1f-48fd-9f45-f616e1489e43 - progress file too old (1189015s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 6f5e8f37-4fa5-4dac-884c-e2625c27042c - progress file too old (317583s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 11faa289-5d36-4317-b457-7f3601c5f18b - progress file too old (487611s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 842cf8d6-3fe8-474d-a982-28757c305c07 - progress file too old (337249s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 6a35c10b-d3c4-4c3a-9a7c-a3b0ad640679 - progress file too old (1180675s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping b019592d-8159-4b67-893e-fd6e9762eb48 - progress file too old (11839s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 7f5bbfe5-c58b-40e0-abfb-79942d976dbb - progress file too old (400751s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 23d4f06b-315a-48f5-9652-ffcba0dcc3f4 - progress file too old (388959s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 78672957-dfbf-408e-a33c-2a42489bf16c - progress file too old (663347s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 7236b49b-5cc3-4256-bcbe-82f3cba97753 - progress file too old (745021s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping cc311807-8c6b-4c0a-8f07-c36b8bbd2e66 - progress file too old (1184383s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 1dc59d35-76b7-47fd-8b8c-f1cf8918b6de - progress file too old (335997s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 03b82c0b-b788-4267-94ba-2bc7710e26a7 - progress file too old (338751s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 1fea3dd8-61dc-41ae-8763-380fe7e80032 - progress file too old (342315s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 78734d82-080e-46ba-b013-852acf6fc05a - progress file too old (411373s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 5973208e-c3d3-4301-a87c-e145a84476e6 - progress file too old (356541s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 3a5eeda6-499e-40b1-a7c4-5bd26b46f07f - progress file too old (424041s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 053d6c9d-0684-43ce-82e5-4a612b541258 - progress file too old (486951s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 0acb4ca0-7401-48eb-b632-5797a6a4a96f - progress file too old (820675s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 02d07572-69d8-468c-9403-5512179affa7 - progress file too old (786609s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 8d0d8022-44ab-425c-87fd-e3f9db795384 - progress file too old (764471s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 560b8a9e-0b8f-4279-8346-336f4d10d1ba - progress file too old (398863s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 98c8d873-e411-449a-93d8-b06e96839b23 - progress file too old (341431s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 7186d5e3-20d2-4395-8d6e-29ed6aaa1344 - progress file too old (339259s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 20035c8e-2950-400d-a313-63d90356af38 - progress file too old (620359s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 6c96bdf7-1f00-47e2-9103-d34433f6c974 - progress file too old (326557s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping a3188d62-bf80-4a9c-a28e-2749676016d4 - progress file too old (393637s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 469e6aa2-5be3-4722-b364-35652ae5821f - progress file too old (484285s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Skipping 932e264a-b142-4597-8971-c830b1ea389e - progress file too old (334405s)
+[2025-11-10 15:45:48] [training_server] [WARNING] [Reconnect] Job may have crashed or been killed
+[2025-11-10 15:45:48] [training_server] [INFO] [Reconnect] Reconnection complete - 0 active job(s)
+[2025-11-10 15:45:48] [training_server] [INFO] [Startup] Server initialization complete
+[2025-11-10 15:45:48] [training_server] [INFO] [QueueWorker] Started - monitoring queue for jobs
+INFO:     Application startup complete.

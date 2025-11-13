@@ -1,0 +1,17 @@
+[
+  {
+    "text": "Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed. It uses algorithms to analyze data, learn from it, and make predictions or decisions."
+  },
+  {
+    "text": "Neural networks are computing systems inspired by biological neural networks. They consist of interconnected nodes (neurons) organized in layers that process information through weighted connections."
+  },
+  {
+    "text": "Deep learning is a subset of machine learning that uses neural networks with multiple layers (deep neural networks) to learn hierarchical representations of data. It excels at tasks like image recognition and natural language processing."
+  },
+  {
+    "text": "Python is a high-level programming language known for its simplicity and readability. To write a function, use the 'def' keyword followed by the function name and parameters in parentheses, then add a colon and indent the function body."
+  },
+  {
+    "text": "A list comprehension is a concise way to create lists in Python. It consists of brackets containing an expression followed by a for clause, and optionally additional for or if clauses. For example: [x**2 for x in range(10)]"
+  }
+]
