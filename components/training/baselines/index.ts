@@ -1,7 +1,19 @@
-// Baselines Components Exports
-// Phase: Phase 4 - Regression Gates
-// Date: 2025-10-28
+export { ModelSelector, KNOWN_MODELS } from './ModelSelector';
+export type { ModelInfo } from './ModelSelector';
 
-export { BaselineManagerUI } from './BaselineManagerUI';
-export { BaselinesList } from './BaselinesList';
-export { ValidationHistoryView } from './ValidationHistoryView';
+export { LoRAConfigComponent } from './LoRAConfig';
+export type { LoRAConfig } from './LoRAConfig';
+
+export { DataStrategySelector } from './DataStrategySelector';
+export type { DataStrategy } from './DataStrategySelector';
+
+export { DatasetValidator, detectDatasetFormat } from './DatasetValidator';
+export type { DatasetExample } from './DatasetValidator';
+
+export { TrainingParamsComponent } from './TrainingParams';
+export type { TrainingParams } from './TrainingParams';
+
+export { ValidationSummary } from './ValidationSummary';
+export type { ValidationResult } from './ValidationSummary';
+
+export { PreSubmitModal } from './PreSubmitModal';
