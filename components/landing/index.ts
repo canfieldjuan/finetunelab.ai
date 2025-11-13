@@ -1,0 +1,13 @@
+export { Hero } from "./Hero";
+export { Problem } from "./Problem";
+export { Comparison } from "./Comparison";
+export { Solution } from "./Solution";
+export { AdvancedAnalytics } from "./AdvancedAnalytics";
+export { NaturalLanguage } from "./NaturalLanguage";
+export { Features } from "./Features";
+export { Pricing } from "./Pricing";
+export { UseCases } from "./UseCases";
+export { FAQ } from "./FAQ";
+export { CTA } from "./CTA";
+export { Footer } from "./Footer";
+export { LandingPage } from "./LandingPage";

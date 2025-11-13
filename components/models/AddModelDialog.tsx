@@ -104,10 +104,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, userId, sessionToke
     if (!formData.model_id?.trim()) return 'Model ID is required';
     if (!formData.auth_type) return 'Auth type is required';
 
-    // API key required for most auth types
-    if (formData.auth_type !== 'none' && !formData.api_key?.trim()) {
-      return 'API key is required for this auth type';
-    }
+    // API key is now optional - will use provider secret if not provided
 
     return null;
   };
@@ -158,9 +155,13 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, userId, sessionToke
         });
       } else {
         console.warn('[AddModelDialog] Connection test failed:', data.error);
+        // Extract error message - handle both string and object formats
+        const errorMessage = typeof data.error === 'string'
+          ? data.error
+          : (data.error?.message || JSON.stringify(data.error) || 'Connection failed');
         setTestResult({
           success: false,
-          message: data.error || 'Connection failed',
+          message: errorMessage,
         });
       }
     } catch (err) {
@@ -467,7 +468,7 @@ function TemplateForm({
               <strong>API Token:</strong> Get it from <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">huggingface.co/settings/tokens</a>
             </p>
             <p className="text-xs">
-              💡 For Tiny Tool Use models, use the model path you pushed to HuggingFace Hub
+              💡 For FineTune Lab models, use the model path you pushed to HuggingFace Hub
             </p>
           </div>
         </div>
@@ -516,18 +517,18 @@ function TemplateForm({
         {/* API Key */}
         <div>
           <label className="block text-sm font-medium mb-2">
-            API Key <span className="text-destructive">*</span>
+            API Key <span className="text-muted-foreground text-xs">(Optional - uses provider secret if empty)</span>
           </label>
           <input
             type="password"
             value={formData.api_key || ''}
             onChange={(e) => onChange('api_key', e.target.value)}
-            placeholder={`Your ${template.provider} API key`}
+            placeholder={`Your ${template.provider} API key (or leave empty)`}
             className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
             disabled={submitting}
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Your API key will be encrypted before storage
+            Leave empty to use the provider secret configured in <a href="/secrets" className="text-primary hover:underline">Provider Secrets</a>
           </p>
         </div>
 
@@ -573,7 +574,7 @@ function TemplateForm({
         <Button
           variant="outline"
           onClick={onTest}
-          disabled={testing || submitting || !formData.api_key}
+          disabled={testing || submitting}
           className="flex-1"
         >
           {testing ? 'Testing...' : 'Test Connection'}
@@ -704,16 +705,19 @@ function ManualForm({
         {/* API Key */}
         <div>
           <label className="block text-sm font-medium mb-2">
-            API Key {formData.auth_type !== 'none' && <span className="text-destructive">*</span>}
+            API Key <span className="text-muted-foreground text-xs">(Optional - uses provider secret if empty)</span>
           </label>
           <input
             type="password"
             value={formData.api_key || ''}
             onChange={(e) => onChange('api_key', e.target.value)}
-            placeholder="sk-..."
+            placeholder="sk-... (or leave empty)"
             className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
             disabled={submitting || formData.auth_type === 'none'}
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Leave empty to use the provider secret configured in <a href="/secrets" className="text-primary hover:underline">Provider Secrets</a>
+          </p>
         </div>
 
         {/* Description */}
@@ -821,7 +825,7 @@ function ManualForm({
         <Button
           variant="outline"
           onClick={onTest}
-          disabled={testing || submitting || (formData.auth_type !== 'none' && !formData.api_key)}
+          disabled={testing || submitting}
           className="flex-1"
         >
           {testing ? 'Testing...' : 'Test Connection'}
