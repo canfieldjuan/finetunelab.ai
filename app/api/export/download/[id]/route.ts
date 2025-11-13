@@ -98,3 +98,92 @@ export async function GET(
     );
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    // Authenticate user
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json(
+        { error: 'Unauthorized - no auth header' },
+        { status: 401 }
+      );
+    }
+
+    // Create authenticated Supabase client
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
+
+    // Verify user authentication
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - invalid token' },
+        { status: 401 }
+      );
+    }
+
+    // Get export ID from params
+    const { id: exportId } = await params;
+    if (!exportId) {
+      return NextResponse.json(
+        { error: 'Missing export ID' },
+        { status: 400 }
+      );
+    }
+
+    console.log('[Delete] Deleting export:', exportId, 'for user:', user.id);
+
+    // Get export info (includes security check)
+    const exportInfo = await exportService.getExport(exportId, user.id);
+    if (!exportInfo) {
+      return NextResponse.json(
+        { error: 'Export not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    // Delete file
+    const fs = require('fs/promises');
+    try {
+      await fs.unlink(exportInfo.filePath);
+    } catch (fileError) {
+      console.warn('[Delete] File already deleted:', fileError);
+    }
+
+    // Delete database record
+    const { error: dbError } = await supabase
+      .from('conversation_exports')
+      .delete()
+      .eq('id', exportId)
+      .eq('user_id', user.id);
+
+    if (dbError) {
+      throw new Error(`Failed to delete export record: ${dbError.message}`);
+    }
+
+    console.log('[Delete] Export deleted successfully');
+
+    return NextResponse.json({
+      success: true,
+      message: 'Export deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('[Delete] Error:', error);
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : 'Internal server error'
+      },
+      { status: 500 }
+    );
+  }
+}

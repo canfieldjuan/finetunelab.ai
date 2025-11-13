@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { documentService } from '@/lib/graphrag';
 
+export const runtime = 'nodejs';
+
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<Record<string, string | string[] | undefined>> }

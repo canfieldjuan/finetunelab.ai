@@ -23,29 +23,50 @@ export async function GET(request: NextRequest) {
     let userId: string | null = null;
     let supabase = null;
 
+    console.log('[ModelsAPI] Auth header present:', !!authHeader);
+    
     // If authenticated, get user ID to include personal models
-    if (authHeader) {
-      try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-        supabase = createClient(supabaseUrl, supabaseAnonKey, {
-          global: {
-            headers: {
-              Authorization: authHeader,
+    // Validate auth header format before using it (JWT should have 3 parts: header.payload.signature)
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '');
+      const tokenParts = token.split('.');
+      console.log('[ModelsAPI] Token parts:', tokenParts.length);
+
+      // Only proceed if we have a valid JWT structure
+      if (tokenParts.length === 3) {
+        try {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+          const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+          supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            global: {
+              headers: {
+                Authorization: authHeader,
+              },
             },
-          },
-        });
+          });
 
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+          console.log('[ModelsAPI] Validating token with Supabase...');
+          const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-        if (!authError && user) {
-          userId = user.id;
-          console.log('[ModelsAPI] Authenticated user:', userId);
+          if (!authError && user) {
+            userId = user.id;
+            console.log('[ModelsAPI] ✓ Authenticated user:', userId);
+          } else {
+            console.log('[ModelsAPI] ❌ Auth validation failed:', authError?.message || 'No user returned');
+            console.log('[ModelsAPI] Returning global models only');
+            supabase = null;
+          }
+        } catch (authCheckError) {
+          console.log('[ModelsAPI] ❌ Auth check exception:', authCheckError);
+          console.log('[ModelsAPI] Returning global models only');
+          supabase = null; // Reset if auth failed
         }
-      } catch (error) {
-        console.log('[ModelsAPI] Auth check failed, returning global models only');
-        supabase = null; // Reset if auth failed
+      } else {
+        console.log('[ModelsAPI] ❌ Invalid JWT format (expected 3 parts, got', tokenParts.length, ')');
+        console.log('[ModelsAPI] Returning global models only');
       }
+    } else {
+      console.log('[ModelsAPI] No auth header or invalid format, returning global models only');
     }
 
     // List models (global + user's personal if authenticated)
@@ -168,6 +189,17 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('[ModelsAPI] POST error:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg === 'DUPLICATE_MODEL_NAME') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'A model with this name already exists for your account.',
+          code: 'DUPLICATE_MODEL_NAME',
+        },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       {
         success: false,

@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('[TrainingAPI] GET: Found', data.length, 'configs');
+    console.log('[TrainingAPI] GET: Sample config fields:', data[0] ? Object.keys(data[0]) : 'no configs');
+    console.log('[TrainingAPI] GET: public_id values:', data.map(c => ({ id: c.id, name: c.name, public_id: c.public_id })));
     return NextResponse.json({ configs: data });
   } catch (error) {
     console.error('[TrainingAPI] GET: Error:', error);
@@ -120,7 +122,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[TrainingAPI] POST: Config created:', data.id);
-    return NextResponse.json({ config: data });
+    return NextResponse.json({ config: data }, { status: 201 });
   } catch (error) {
     console.error('[TrainingAPI] POST: Error:', error);
     return NextResponse.json(

@@ -26,9 +26,10 @@ async function extractId(
 
 // ============================================================================
 // Helper function to authenticate user
+// Returns both userId and authenticated Supabase client for RLS
 // ============================================================================
 
-async function authenticateUser(request: NextRequest): Promise<string | null> {
+async function authenticateUser(request: NextRequest): Promise<{ userId: string; supabase: ReturnType<typeof createClient> } | null> {
   const authHeader = request.headers.get('authorization');
   if (!authHeader) {
     return null;
@@ -37,7 +38,8 @@ async function authenticateUser(request: NextRequest): Promise<string | null> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase: any = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
           Authorization: authHeader,
@@ -51,7 +53,8 @@ async function authenticateUser(request: NextRequest): Promise<string | null> {
       return null;
     }
 
-    return user.id;
+    // Return both userId and authenticated client
+    return { userId: user.id, supabase };
   } catch (error) {
     console.error('[ModelsAPI] Auth error:', error);
     return null;
@@ -80,8 +83,13 @@ export async function GET(
 
     console.log('[ModelsAPI] Getting model:', id);
 
+    // Authenticate to get user's Supabase client (for RLS)
+    const auth = await authenticateUser(request);
+    const supabaseClient = auth?.supabase;
+
     // Get model (includes API key preview, not encrypted value)
-    const model = await modelManager.getModel(id);
+    // Pass authenticated client to bypass RLS if user is authenticated
+    const model = await modelManager.getModel(id, supabaseClient);
 
     if (!model) {
       console.log('[ModelsAPI] Model not found:', id);
@@ -131,8 +139,8 @@ export async function PATCH(
     }
 
     // Require authentication
-    const userId = await authenticateUser(request);
-    if (!userId) {
+    const auth = await authenticateUser(request);
+    if (!auth) {
       console.log('[ModelsAPI] Unauthorized - no valid auth');
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -140,8 +148,11 @@ export async function PATCH(
       );
     }
 
+    const { userId, supabase } = auth;
+
     // Verify model exists and user has permission
-    const existingModel = await modelManager.getModel(id);
+    // Pass authenticated client to bypass RLS
+    const existingModel = await modelManager.getModel(id, supabase);
     if (!existingModel) {
       console.log('[ModelsAPI] Model not found:', id);
       return NextResponse.json(
@@ -183,8 +194,8 @@ export async function PATCH(
 
     console.log('[ModelsAPI] Updating model:', id, 'with fields:', Object.keys(dto));
 
-    // Update model
-    const updatedModel = await modelManager.updateModel(id, dto);
+    // Update model - pass authenticated client to bypass RLS
+    const updatedModel = await modelManager.updateModel(id, dto, supabase);
 
     console.log('[ModelsAPI] Model updated successfully');
     return NextResponse.json({
@@ -232,8 +243,8 @@ export async function DELETE(
     }
 
     // Require authentication
-    const userId = await authenticateUser(request);
-    if (!userId) {
+    const auth = await authenticateUser(request);
+    if (!auth) {
       console.log('[ModelsAPI] Unauthorized - no valid auth');
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -241,8 +252,11 @@ export async function DELETE(
       );
     }
 
+    const { userId, supabase } = auth;
+
     // Verify model exists and user has permission
-    const existingModel = await modelManager.getModel(id);
+    // Pass authenticated client to bypass RLS
+    const existingModel = await modelManager.getModel(id, supabase);
     if (!existingModel) {
       console.log('[ModelsAPI] Model not found:', id);
       return NextResponse.json(
@@ -262,8 +276,8 @@ export async function DELETE(
 
     console.log('[ModelsAPI] Deleting model:', id);
 
-    // Delete model
-    await modelManager.deleteModel(id);
+    // Delete model - pass authenticated client to bypass RLS
+    await modelManager.deleteModel(id, supabase);
 
     console.log('[ModelsAPI] Model deleted successfully');
     return NextResponse.json({

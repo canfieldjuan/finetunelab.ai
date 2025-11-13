@@ -101,9 +101,10 @@ export async function POST(req: NextRequest) {
 
     // 4. Save citations (async, don't block)
     if (contentJson && typeof contentJson === 'object' && 'citations' in contentJson) {
-      const citations = (contentJson as any).citations;
+      const citations = (contentJson as Record<string, unknown>).citations;
       if (Array.isArray(citations) && citations.length > 0) {
-        citationsService.saveCitations(messageId, contentJson).catch(err => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        citationsService.saveCitations(messageId, contentJson as any).catch((err: Error) => {
           console.error('[EvaluateMessage] Error saving citations:', err);
         });
       }

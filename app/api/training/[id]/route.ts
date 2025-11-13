@@ -10,8 +10,9 @@ import { configValidator } from '@/lib/training/config-validator';
 
 export const runtime = 'nodejs';
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  console.log('[TrainingAPI] GET [id]:', params.id);
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  console.log('[TrainingAPI] GET [id]:', id);
 
   try {
     const authHeader = request.headers.get('authorization');
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { data, error } = await supabase
       .from('training_configs')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('user_id', user.id)
       .single();
 
@@ -54,8 +55,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  console.log('[TrainingAPI] PUT: Updating config:', params.id);
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  console.log('[TrainingAPI] PUT: Updating config:', id);
 
   try {
     const authHeader = request.headers.get('authorization');
@@ -82,6 +84,18 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const body = await request.json();
     const { name, description, config_json } = body;
 
+    console.log('[TrainingAPI] PUT: Received config_json keys:', config_json ? Object.keys(config_json) : 'none');
+    console.log('[TrainingAPI] PUT: Training config keys:', config_json?.training ? Object.keys(config_json.training) : 'none');
+    console.log('[TrainingAPI] PUT: New parameters check:', {
+      lr_scheduler_type: config_json?.training?.lr_scheduler_type,
+      warmup_ratio: config_json?.training?.warmup_ratio,
+      save_steps: config_json?.training?.save_steps,
+      save_total_limit: config_json?.training?.save_total_limit,
+      evaluation_strategy: config_json?.training?.evaluation_strategy,
+      packing: config_json?.training?.packing,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {};
     if (name) updateData.name = name;
     if (description !== undefined) updateData.description = description;
@@ -95,7 +109,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const { data, error } = await supabase
       .from('training_configs')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('user_id', user.id)
       .select()
       .single();
@@ -113,8 +127,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  console.log('[TrainingAPI] DELETE: Deleting config:', params.id);
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  console.log('[TrainingAPI] DELETE: Deleting config:', id);
 
   try {
     const authHeader = request.headers.get('authorization');
@@ -141,7 +156,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const { error } = await supabase
       .from('training_configs')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('user_id', user.id);
 
     if (error) {

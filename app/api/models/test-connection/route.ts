@@ -121,24 +121,22 @@ async function testHuggingFaceConnection(config: ModelConfig): Promise<{
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${config.base_url}/${config.model_id}`, {
+    // HuggingFace now uses OpenAI-compatible API format
+    const response = await fetch(`${config.base_url}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(config.api_key ? { 'Authorization': `Bearer ${config.api_key}` } : {}),
       },
       body: JSON.stringify({
-        inputs: 'test',
-        parameters: { max_new_tokens: 5 },
+        model: config.model_id,
+        messages: [{ role: 'user', content: 'test' }],
+        max_tokens: 5,
       }),
     });
 
     const latency = Date.now() - startTime;
 
-    // For HuggingFace, consider these status codes as "successful connection":
-    // - 200: Model generated response
-    // - 401: Endpoint exists, but needs valid API key (connection is valid)
-    // - 503: Model is loading (endpoint exists, model is valid)
     if (response.ok) {
       return {
         success: true,
@@ -147,56 +145,64 @@ async function testHuggingFaceConnection(config: ModelConfig): Promise<{
       };
     }
 
-    const errorData = await response.json().catch(() => ({}));
+    // Try to parse JSON error, else fallback to text
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let errorData: any = {};
+    try {
+      errorData = await response.json();
+    } catch {
+      try {
+        const text = await response.text();
+        errorData = { error: text };
+      } catch {
+        errorData = {};
+      }
+    }
 
-    // 401: Authentication required - but endpoint and model are valid
+    // 401: Authentication required/invalid
     if (response.status === 401) {
       return {
-        success: true,
-        message: config.api_key
-          ? 'Connection successful - invalid API key, but model endpoint is valid'
-          : 'Connection successful - model endpoint exists (API key may be required for inference)',
+        success: false,
+        message: 'Unauthorized - missing or invalid HuggingFace API token',
+        error: errorData.error || 'Provide a valid HuggingFace token or save a provider secret',
         latency,
       };
     }
 
-    // 400: Could be endpoint paused or other issue
+    // 400: Bad request (paused endpoints, invalid payload, etc.)
     if (response.status === 400) {
-      const errorMsg = errorData.error || '';
-
-      // Endpoint paused - model exists but is suspended
-      if (errorMsg.includes('paused') || errorMsg.includes('restart')) {
+      const errorMsg = errorData.error || 'Invalid request';
+      const informative = /paused|pause|resume|restart|loading/i.test(errorMsg);
+      if (informative) {
         return {
           success: true,
-          message: 'Connection successful - model endpoint exists but is paused (will auto-resume on first use)',
+          message: 'Endpoint reachable but paused/loading on HuggingFace (try again or wake the model).',
           latency,
         };
       }
-
-      // Other 400 errors
       return {
         success: false,
         message: 'Bad request',
-        error: errorMsg || 'Invalid request format',
+        error: errorMsg,
         latency,
       };
     }
 
-    // 503: Model is loading (cold start) - this is normal for HuggingFace
+    // 503: Model loading (cold start)
     if (response.status === 503) {
       return {
         success: true,
-        message: 'Connection successful - model is loading (this is normal, try again in 30 seconds)',
+        message: 'Endpoint reachable - model is loading (cold start)',
         latency,
       };
     }
 
-    // 404: Model not found - this is a real error
+    // 404: Model not found
     if (response.status === 404) {
       return {
         success: false,
         message: 'Model not found',
-        error: `Model "${config.model_id}" does not exist on HuggingFace`,
+        error: `Model "${config.model_id}" does not exist or is private`,
         latency,
       };
     }
@@ -329,7 +335,7 @@ async function testAzureConnection(config: ModelConfig): Promise<{
 
 // ============================================================================
 // POST /api/models/test-connection - Test model configuration
-// Does NOT require authentication (allows testing before saving)
+// Supports provider secret fallback if no API key provided
 // ============================================================================
 
 export async function POST(request: NextRequest) {
@@ -350,6 +356,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // API key resolution: use provided key OR look up provider secret
+    let apiKey = body.api_key;
+
+    // If no API key provided, try to look up provider secret
+    if (!apiKey || apiKey.trim() === '') {
+      console.log('[ModelsAPI] No API key in request, checking for provider secret');
+
+      const authHeader = request.headers.get('authorization');
+      if (authHeader) {
+        try {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+          const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+          const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            global: {
+              headers: {
+                Authorization: authHeader,
+              },
+            },
+          });
+
+          const { data: { user } } = await supabase.auth.getUser();
+
+          if (user) {
+            // Import secrets manager and get provider secret
+            const { secretsManager } = await import('@/lib/secrets/secrets-manager.service');
+            // Pass authenticated client to bypass RLS
+            const providerKey = await secretsManager.getDecryptedApiKey(user.id, body.provider, supabase);
+
+            if (providerKey) {
+              apiKey = providerKey;
+              console.log('[ModelsAPI] Using provider secret for test connection');
+            } else {
+              console.log('[ModelsAPI] No provider secret found for:', body.provider);
+            }
+          }
+        } catch (error) {
+          console.log('[ModelsAPI] Could not lookup provider secret:', error);
+          // Continue without API key - test will likely fail but that's informative
+        }
+      }
+    }
+
     // Build config from request
     const config: ModelConfig = {
       id: 'test',
@@ -357,8 +405,9 @@ export async function POST(request: NextRequest) {
       provider: body.provider,
       base_url: body.base_url,
       model_id: body.model_id,
+      served_model_name: body.served_model_name || null,
       auth_type: body.auth_type,
-      api_key: body.api_key,
+      api_key: apiKey,
       auth_headers: body.auth_headers || {},
       supports_streaming: body.supports_streaming ?? true,
       supports_functions: body.supports_functions ?? false,
