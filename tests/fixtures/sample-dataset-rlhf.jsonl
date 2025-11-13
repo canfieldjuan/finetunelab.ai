@@ -1,0 +1,3 @@
+{"prompt":"What is machine learning?","response":"Machine learning is a subset of artificial intelligence that focuses on training algorithms to learn patterns from data, enabling systems to improve their performance on tasks without explicit programming.","reward":0.95}
+{"prompt":"Explain deep learning.","response":"Deep learning is a specialized branch of machine learning that uses neural networks with multiple layers to learn hierarchical representations of data, allowing for complex pattern recognition.","reward":0.88}
+{"prompt":"What is supervised learning?","response":"Supervised learning is a type of machine learning where models are trained on labeled datasets, with each example including input features and correct outputs.","reward":0.92}
