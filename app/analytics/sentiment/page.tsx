@@ -1,20 +1,32 @@
+/**
+ * Sentiment Analysis Dashboard Page
+ *
+ * Dedicated page for comprehensive sentiment analysis and insights.
+ * Provides detailed views of sentiment trends, patterns, and anomalies.
+ *
+ * Phase 3.4: Sentiment Dashboard
+ * Date: 2025-10-25
+ */
+
 'use client';
 
 import React, { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { AppSidebar } from '@/components/layout/AppSidebar';
-import { AnalyticsDashboard } from '@/components/analytics/AnalyticsDashboard';
+import { SentimentDashboard } from '@/components/analytics/SentimentDashboard';
 
-export default function AnalyticsPage() {
+export default function SentimentAnalyticsPage() {
+  console.log('[SentimentAnalyticsPage] Rendering');
+
   const { user, signOut, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    console.log('[AnalyticsPage] Auth state:', { user: user?.email, loading });
+    console.log('[SentimentAnalyticsPage] Auth state:', { user: user?.email, loading });
 
     if (!loading && !user) {
-      console.warn('[AnalyticsPage] No authenticated user, redirecting to login');
+      console.warn('[SentimentAnalyticsPage] No authenticated user, redirecting to login');
       router.push('/login');
     }
   }, [user, loading, router]);
@@ -35,7 +47,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md">
           <h2 className="text-xl font-bold text-yellow-800 mb-2">Authentication Required</h2>
-          <p className="text-yellow-700 mb-4">You must be logged in to access analytics.</p>
+          <p className="text-yellow-700 mb-4">You must be logged in to access sentiment analytics.</p>
           <p className="text-sm text-gray-600">Redirecting to login...</p>
         </div>
       </div>
@@ -46,7 +58,7 @@ export default function AnalyticsPage() {
     <div className="flex h-screen overflow-hidden">
       <AppSidebar currentPage="analytics" user={user} signOut={signOut} />
       <div className="flex-1 overflow-y-auto">
-        <AnalyticsDashboard />
+        <SentimentDashboard />
       </div>
     </div>
   );
