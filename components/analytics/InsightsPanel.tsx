@@ -1,15 +1,24 @@
 "use client";
 
 // Insights Panel Component - Displays AI-generated insights
-// Phase 12: Analytics Tools Integration
-// Date: October 13, 2025
+// Phase 3 Task 3.5: Enhanced AI Insights
+// Enhanced with root cause analysis and recommendations
+// Date: October 25, 2025
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Sparkles, RefreshCw, Loader2 } from 'lucide-react';
+import { Sparkles, RefreshCw, Loader2, Brain } from 'lucide-react';
 import { useAnalyticsInsights } from '@/hooks/useAnalyticsInsights';
 import { InsightCard } from './InsightCard';
+import RootCauseTimeline from './RootCauseTimeline';
+import RecommendationCard from './RecommendationCard';
+import ContributingFactorsList from './ContributingFactorsList';
+import type {
+  RootCauseAnalysis,
+  Recommendation,
+  Pattern
+} from '@/lib/services/ai-insights.service';
 
 interface InsightsPanelProps {
   userId: string;
@@ -17,8 +26,24 @@ interface InsightsPanelProps {
 }
 
 export function InsightsPanel({ userId, timeRange }: InsightsPanelProps) {
+  console.log('[InsightsPanel] Rendering with enhanced AI insights');
+
   const { insights, loading, error, isCached, generateInsights, clearInsights } =
     useAnalyticsInsights(userId, timeRange);
+
+  const [rootCauseAnalysis, setRootCauseAnalysis] = useState<RootCauseAnalysis | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+
+  const handleAcceptRecommendation = (id: string) => {
+    console.log('[InsightsPanel] Accepting recommendation:', id);
+  };
+
+  const handleDismissRecommendation = (id: string) => {
+    console.log('[InsightsPanel] Dismissing recommendation:', id);
+    setRecommendations(prev => prev.filter(rec => rec.id !== id));
+  };
 
   return (
     <Card>
@@ -48,8 +73,9 @@ export function InsightsPanel({ userId, timeRange }: InsightsPanelProps) {
             {!insights && (
               <Button
                 onClick={generateInsights}
-                variant="default"
+                variant="secondary"
                 size="sm"
+                className="border border-gray-300"
                 disabled={loading}
               >
                 {loading ? (
@@ -84,10 +110,71 @@ export function InsightsPanel({ userId, timeRange }: InsightsPanelProps) {
         )}
 
         {insights && insights.length > 0 && (
-          <div className="grid gap-4 md:grid-cols-2">
-            {insights.map((insight) => (
-              <InsightCard key={insight.id} insight={insight} />
-            ))}
+          <div className="space-y-6">
+            {/* Existing Insights */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {insights.map((insight) => (
+                <InsightCard key={insight.id} insight={insight} />
+              ))}
+            </div>
+
+            {/* Root Cause Analysis Section */}
+            {rootCauseAnalysis && (
+              <div className="border-t pt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Brain className="w-5 h-5 text-purple-600" />
+                  <h3 className="text-lg font-semibold">Root Cause Analysis</h3>
+                </div>
+                <div className="space-y-6">
+                  <ContributingFactorsList factors={rootCauseAnalysis.primary_causes} />
+                  <RootCauseTimeline analysis={rootCauseAnalysis} />
+                </div>
+              </div>
+            )}
+
+            {/* Recommendations Section */}
+            {recommendations.length > 0 && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Recommended Actions</h3>
+                <div className="grid gap-4">
+                  {recommendations.map(rec => (
+                    <RecommendationCard
+                      key={rec.id}
+                      recommendation={rec}
+                      onAccept={handleAcceptRecommendation}
+                      onDismiss={handleDismissRecommendation}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pattern Detection Section */}
+            {patterns.length > 0 && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Detected Patterns</h3>
+                <div className="space-y-2">
+                  {patterns.map(pattern => (
+                    <div
+                      key={pattern.id}
+                      className="bg-blue-50 border border-blue-200 rounded-lg p-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-medium text-blue-900 capitalize">
+                            {pattern.pattern_type} Pattern
+                          </div>
+                          <p className="text-sm text-blue-700 mt-1">{pattern.description}</p>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-blue-100 rounded">
+                          {(pattern.confidence * 100).toFixed(0)}% confidence
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

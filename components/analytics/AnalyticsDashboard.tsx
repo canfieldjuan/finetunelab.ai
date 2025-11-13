@@ -1,32 +1,332 @@
 "use client";
 
-import React, { useState } from 'react';
+/**
+ * Analytics Dashboard Component
+ * Phase 4.1: Added lazy loading for performance optimization
+ */
+
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import { useAnalytics, type AnalyticsFilters, type AnalyticsSettings } from '@/hooks/useAnalytics';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Download, Smile, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
-import {
-  MetricsOverview,
-  RatingDistribution,
-  SuccessRateChart,
-  TokenUsageChart,
-  ToolPerformanceChart,
-  ErrorBreakdownChart,
-  CostTrackingChart,
-  ConversationLengthChart,
-  ResponseTimeChart,
-  InsightsPanel
-} from './index';
+import type { BenchmarkAnalysis } from '@/lib/tools/evaluation-metrics/types';
+
+// Lazy load heavy chart components for better performance
+const MetricsOverview = lazy(() => import('./MetricsOverview').then(m => ({ default: m.MetricsOverview })));
+const RatingDistribution = lazy(() => import('./RatingDistribution').then(m => ({ default: m.RatingDistribution })));
+const SuccessRateChart = lazy(() => import('./SuccessRateChart').then(m => ({ default: m.SuccessRateChart })));
+const TokenUsageChart = lazy(() => import('./TokenUsageChart').then(m => ({ default: m.TokenUsageChart })));
+const ToolPerformanceChart = lazy(() => import('./ToolPerformanceChart').then(m => ({ default: m.ToolPerformanceChart })));
+const ErrorBreakdownChart = lazy(() => import('./ErrorBreakdownChart').then(m => ({ default: m.ErrorBreakdownChart })));
+const CostTrackingChart = lazy(() => import('./CostTrackingChart').then(m => ({ default: m.CostTrackingChart })));
+const ConversationLengthChart = lazy(() => import('./ConversationLengthChart').then(m => ({ default: m.ConversationLengthChart })));
+const ResponseTimeChart = lazy(() => import('./ResponseTimeChart').then(m => ({ default: m.ResponseTimeChart })));
+const InsightsPanel = lazy(() => import('./InsightsPanel').then(m => ({ default: m.InsightsPanel })));
+const ModelPerformanceTable = lazy(() => import('./ModelPerformanceTable').then(m => ({ default: m.ModelPerformanceTable })));
+const SessionComparisonTable = lazy(() => import('./SessionComparisonTable').then(m => ({ default: m.SessionComparisonTable })));
+const TrainingEffectivenessChart = lazy(() => import('./TrainingEffectivenessChart').then(m => ({ default: m.TrainingEffectivenessChart })));
+const BenchmarkAnalysisChart = lazy(() => import('./BenchmarkAnalysisChart').then(m => ({ default: m.BenchmarkAnalysisChart })));
+const SLABreachChart = lazy(() => import('./SLABreachChart').then(m => ({ default: m.SLABreachChart })));
+const JudgmentsBreakdown = lazy(() => import('./JudgmentsBreakdown').then(m => ({ default: m.JudgmentsBreakdown })));
+const JudgmentsTable = lazy(() => import('./JudgmentsTable').then(m => ({ default: m.JudgmentsTable })));
+const AnomalyFeed = lazy(() => import('./AnomalyFeed'));
+const QualityForecastChart = lazy(() => import('./QualityForecastChart'));
+const SentimentAnalyzer = lazy(() => import('./SentimentAnalyzer'));
+const SentimentTrendChart = lazy(() => import('./SentimentTrendChart'));
+const ProviderTelemetryPanel = lazy(() => import('./ProviderTelemetryPanel').then(m => ({ default: m.ProviderTelemetryPanel })));
+const ResearchJobsPanel = lazy(() => import('./ResearchJobsPanel').then(m => ({ default: m.ResearchJobsPanel })));
+
+// Keep FilterPanel and ExportModal as regular imports (lightweight UI components)
+import { FilterPanel, ExportModal } from './index';
+import { Card, CardContent } from '../ui/card';
+
+// Loading fallback component
+function ChartLoader() {
+  return (
+    <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg">
+      <div className="text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-2" />
+        <p className="text-sm text-gray-500">Loading chart...</p>
+      </div>
+    </div>
+  );
+}
+
+// Collapsible Section Component
+interface CollapsibleSectionProps {
+  title: string;
+  icon?: React.ReactNode;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function CollapsibleSection({ title, icon, collapsed, onToggle, children }: CollapsibleSectionProps) {
+  if (collapsed) {
+    return (
+      <Card 
+        className="shadow-none border border-gray-300 dark:border-gray-600 cursor-pointer hover:bg-muted/50 transition-colors"
+        onClick={onToggle}
+      >
+        <CardContent className="flex items-center justify-between py-4">
+          <div className="flex items-center gap-2">
+            {icon && <span className="text-xl">{icon}</span>}
+            <h2 className="text-xl font-semibold">{title}</h2>
+          </div>
+          <ChevronRight className="h-5 w-5" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div>
+      <div 
+        className="flex items-center justify-between mb-3 pl-4 cursor-pointer hover:opacity-70 transition-opacity"
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-2">
+          {icon && <span className="text-xl">{icon}</span>}
+          <h2 className="text-xl font-semibold">{title}</h2>
+        </div>
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <ChevronDown className="h-5 w-5" />
+        </Button>
+      </div>
+      <div className="space-y-6">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export function AnalyticsDashboard() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
+  // Filter state (data selection)
+  const [filters, setFilters] = useState<AnalyticsFilters>({
+    ratings: [],
+    models: [],
+    successFilter: 'all',
+    trainingMethods: [],
+    sessions: [],
+    widgetSessionFilter: 'all'
+  });
+
+  // Settings state (computation/visualization)
+  const [settings, setSettings] = useState<AnalyticsSettings>({});
+  
+  // Local state for provider/model pricing editors
+  const [provKey, setProvKey] = useState('');
+  const [provIn, setProvIn] = useState('');
+  const [provOut, setProvOut] = useState('');
+  const [modelKey, setModelKey] = useState('');
+  const [modelIn, setModelIn] = useState('');
+  const [modelOut, setModelOut] = useState('');
+
+  // Collapse state
+  const [showFilters, setShowFilters] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Section collapse states
+  const [modelTrainingCollapsed, setModelTrainingCollapsed] = useState(false);
+  const [qualityCollapsed, setQualityCollapsed] = useState(false);
+  const [performanceCollapsed, setPerformanceCollapsed] = useState(true);
+  const [costCollapsed, setCostCollapsed] = useState(true);
+  const [operationsCollapsed, setOperationsCollapsed] = useState(true);
+
+  // Export modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+
+  // NEW: Benchmark analysis state
+  const [benchmarkData, setBenchmarkData] = useState<BenchmarkAnalysis | null>(null);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const [benchmarkLoading, setBenchmarkLoading] = useState<boolean>(false);
+
   const { data, loading, error } = useAnalytics({
     userId: user?.id || '',
-    timeRange
+    timeRange,
+    filters,
+    settings
   });
+
+  console.log('[AnalyticsDashboard] State:', {
+    timeRange,
+    selectedModelId,
+    selectedSessionId,
+    dataLoaded: !!data,
+    modelCount: data?.modelPerformance?.length || 0,
+    sessionCount: data?.sessionMetrics?.length || 0,
+    filtersActive: filters
+  });
+
+  // Extract available filter options from data
+  const availableModels = useMemo(() => {
+    if (!data?.modelPerformance) return [];
+    return data.modelPerformance.map(m => ({
+      id: m.modelId,
+      name: m.modelName
+    }));
+  }, [data?.modelPerformance]);
+
+  const availableSessions = useMemo(() => {
+    if (!data?.sessionMetrics) return [];
+    return data.sessionMetrics.map(s => ({
+      id: s.sessionId,
+      name: s.experimentName || s.sessionId
+    }));
+  }, [data?.sessionMetrics]);
+
+  const availableTrainingMethods = useMemo(() => {
+    if (!data?.trainingEffectiveness) return [];
+    return data.trainingEffectiveness.map(t => t.trainingMethod);
+  }, [data?.trainingEffectiveness]);
+
+  // Calculate date range for sentiment chart
+  const sentimentDateRange = useMemo(() => {
+    const endDate = new Date();
+    const startDate = new Date();
+
+    switch (timeRange) {
+      case '7d':
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case '30d':
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+      case '90d':
+        startDate.setDate(startDate.getDate() - 90);
+        break;
+      case 'all':
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        break;
+    }
+
+    return {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    };
+  }, [timeRange]);
+
+  // NEW: Keep filters in sync with table selections (model)
+  useEffect(() => {
+    setFilters((prev) => {
+      const next = {
+        ...prev,
+        models: selectedModelId ? [selectedModelId] : []
+      };
+      if (JSON.stringify(prev.models) !== JSON.stringify(next.models)) {
+        console.log('[AnalyticsDashboard] Applied model filter from selection:', next.models);
+      }
+      return next;
+    });
+  }, [selectedModelId]);
+
+  // NEW: Keep filters in sync with table selections (session)
+  useEffect(() => {
+    setFilters((prev) => {
+      const next = {
+        ...prev,
+        sessions: selectedSessionId ? [selectedSessionId] : []
+      };
+      if (JSON.stringify(prev.sessions) !== JSON.stringify(next.sessions)) {
+        console.log('[AnalyticsDashboard] Applied session filter from selection:', next.sessions);
+      }
+      return next;
+    });
+  }, [selectedSessionId]);
+
+  // Load saved filters + settings from localStorage when user changes
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const rawF = localStorage.getItem(`analytics:filters:${user.id}`);
+      if (rawF) {
+        const saved = JSON.parse(rawF);
+        if (saved && typeof saved === 'object') setFilters((prev) => ({ ...prev, ...saved }));
+      }
+      const rawS = localStorage.getItem(`analytics:settings:${user.id}`);
+      if (rawS) {
+        const savedS = JSON.parse(rawS);
+        if (savedS && typeof savedS === 'object') setSettings((prev) => ({ ...prev, ...savedS }));
+      }
+    } catch (e) {
+      console.warn('[AnalyticsDashboard] Failed to restore prefs', e);
+    }
+  }, [user?.id]);
+
+  // Persist filters + settings
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      localStorage.setItem(`analytics:filters:${user.id}`, JSON.stringify(filters));
+      localStorage.setItem(`analytics:settings:${user.id}`, JSON.stringify(settings));
+    } catch (e) {
+      console.warn('[AnalyticsDashboard] Failed to persist prefs', e);
+    }
+  }, [filters, settings, user?.id]);
+
+  // Helper: compute date range from timeRange
+  const computeDateRange = (range: '7d' | '30d' | '90d' | 'all') => {
+    const end = new Date();
+    if (range === 'all') {
+      return { startDate: undefined, endDate: undefined };
+    }
+    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+    const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+    return { startDate: start.toISOString(), endDate: end.toISOString() };
+  };
+
+  // Fetch benchmark analysis when auth/timeRange changes
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchBenchmarks = async () => {
+      try {
+        setBenchmarkLoading(true);
+        setBenchmarkError(null);
+        const { startDate, endDate } = computeDateRange(timeRange);
+        const params = new URLSearchParams();
+        if (startDate) params.set('startDate', startDate);
+        if (endDate) params.set('endDate', endDate);
+        // Fallback to period if no dates
+        if (!startDate && !endDate) params.set('period', 'all');
+
+        console.log('[AnalyticsDashboard] Fetching benchmark analysis with params:', Object.fromEntries(params.entries()));
+
+        const res = await fetch(`/api/analytics/benchmark-analysis?${params.toString()}`, {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error('[AnalyticsDashboard] Benchmark API error:', res.status, text);
+          throw new Error(`Benchmark API ${res.status}`);
+        }
+
+        const json = await res.json();
+        const data = json?.data as BenchmarkAnalysis | undefined;
+        setBenchmarkData(data || null);
+        console.log('[AnalyticsDashboard] Benchmark analysis loaded:', {
+          hasData: !!data,
+          benchmarksAnalyzed: data?.benchmarksAnalyzed || 0,
+          totalJudgments: data?.totalJudgments || 0,
+        });
+      } catch (err) {
+        setBenchmarkError(err instanceof Error ? err.message : 'Failed to load benchmarks');
+      } finally {
+        setBenchmarkLoading(false);
+      }
+    };
+
+    fetchBenchmarks();
+  }, [user, session?.access_token, timeRange]);
 
   if (loading) {
     return (
@@ -62,85 +362,529 @@ export function AnalyticsDashboard() {
 
   return (
     <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="space-y-4">
+          {/* Top Row: Back Button + Action Buttons */}
+          <div className="flex items-center justify-between">
             <Link href="/chat">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Chat
               </Button>
             </Link>
-            <div>
-              <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
-              <p className="text-muted-foreground">
-                Insights from your conversations and evaluations
-              </p>
+
+            <div className="flex items-center gap-4">
+              {/* Analytics Chat Button */}
+              <Link href="/analytics/chat">
+                <Button variant="secondary" size="sm" className="gap-2 border border-gray-300">
+                  <MessageSquare className="w-4 h-4" />
+                  Analytics Assistant
+                </Button>
+              </Link>
+
+              {/* Sentiment Dashboard Button */}
+              <Link href="/analytics/sentiment">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Smile className="w-4 h-4" />
+                  Sentiment
+                </Button>
+              </Link>
+
+              {/* Export Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExportModal(true)}
+                className="gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export Data
+              </Button>
+
+              {/* Time Range Filter */}
+              <Select value={timeRange} onValueChange={(value: '7d' | '30d' | '90d' | 'all') => setTimeRange(value)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="90d">Last 90 days</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          {/* Time Range Filter */}
-          <Select value={timeRange} onValueChange={(value: any) => setTimeRange(value)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="all">All time</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Page Title - Now on its own row below */}
+          <div>
+            <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
+            <p className="text-muted-foreground mt-1">
+              Insights from your conversations and evaluations
+            </p>
+          </div>
         </div>
 
-        {/* Overview Cards */}
-        <MetricsOverview
-          totalMessages={data.overview.totalMessages}
-          totalConversations={data.overview.totalConversations}
-          totalEvaluations={data.overview.totalEvaluations}
-          avgRating={data.overview.avgRating}
-          successRate={data.overview.successRate}
-        />
+        {/* Controls: Filters and Settings (collapsible) */}
+        <div className="flex flex-col gap-3">
+          {/* Filters */}
+          <div className="bg-card border rounded-lg">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div className="font-medium">Filters</div>
+              <button className="text-sm text-blue-600 cursor-pointer" onClick={() => setShowFilters(v => !v)}>
+                {showFilters ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showFilters && (
+              <div className="p-4">
+                <div className="text-xs text-muted-foreground mb-3">
+                  Filters choose which data is included in charts and tables. Clearing filters does not change Settings.
+                </div>
+                <FilterPanel
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  availableModels={availableModels}
+                  availableSessions={availableSessions}
+                  availableTrainingMethods={availableTrainingMethods}
+                />
+              </div>
+            )}
+          </div>
 
-        {/* Evaluation Charts */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <RatingDistribution data={data.ratingDistribution} />
-          <SuccessRateChart data={data.successFailure} />
+          {/* Settings */}
+          <div className="bg-card border rounded-lg">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div className="font-medium">Settings</div>
+              <button className="text-sm text-blue-600 cursor-pointer" onClick={() => setShowSettings(v => !v)}>
+                {showSettings ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showSettings && (
+              <div className="p-4 space-y-6">
+                <div className="text-xs text-muted-foreground">
+                  Settings control how metrics are computed and displayed (e.g., SLA thresholds, pricing). They do not affect which data is included.
+                </div>
+                {/* SLA + Default Pricing */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-xs text-muted-foreground">SLA Threshold (ms)</div>
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="2000"
+                      value={settings.slaThresholdMs ?? ''}
+                      onChange={(e) => setSettings(s => ({ ...s, slaThresholdMs: Number(e.target.value) || undefined }))}
+                      className="w-full border rounded px-2 py-1 text-sm"
+                    />
+                    <div className="text-[11px] text-muted-foreground">Used for breach-rate and percentile analysis.</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-xs text-muted-foreground">Default Pricing ($ per 1K tokens)</div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-[11px] block mb-1">Input</label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          min={0}
+                          placeholder="0.03"
+                          value={settings.priceBook?.default?.inputPer1K ?? ''}
+                          onChange={(e) => setSettings(s => ({
+                            ...s,
+                            priceBook: {
+                              default: { inputPer1K: Number(e.target.value) || 0, outputPer1K: s.priceBook?.default?.outputPer1K ?? 0.06 },
+                              providers: s.priceBook?.providers ?? {},
+                              models: s.priceBook?.models ?? {}
+                            }
+                          }))}
+                          className="w-full border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[11px] block mb-1">Output</label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          min={0}
+                          placeholder="0.06"
+                          value={settings.priceBook?.default?.outputPer1K ?? ''}
+                          onChange={(e) => setSettings(s => ({
+                            ...s,
+                            priceBook: {
+                              default: { inputPer1K: s.priceBook?.default?.inputPer1K ?? 0.03, outputPer1K: Number(e.target.value) || 0 },
+                              providers: s.priceBook?.providers ?? {},
+                              models: s.priceBook?.models ?? {}
+                            }
+                          }))}
+                          className="w-full border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Provider Overrides */}
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">Provider Override</div>
+                  <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+                    <div>
+                      <label className="text-[11px] block mb-1">Provider (e.g., openai, anthropic)</label>
+                      <input
+                        type="text"
+                        value={provKey}
+                        onChange={(e) => setProvKey(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-sm"
+                        placeholder="provider"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] block mb-1">Input $/1K</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min={0}
+                        value={provIn}
+                        onChange={(e) => setProvIn(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-sm"
+                        placeholder="0.03"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] block mb-1">Output $/1K</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min={0}
+                        value={provOut}
+                        onChange={(e) => setProvOut(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-sm"
+                        placeholder="0.06"
+                      />
+                    </div>
+                    <button
+                      className="text-sm px-3 py-1 border rounded"
+                      onClick={() => {
+                        if (!provKey.trim()) return;
+                        const inRate = Number(provIn);
+                        const outRate = Number(provOut);
+                        if (!Number.isFinite(inRate) || !Number.isFinite(outRate)) return;
+                        const key = provKey.trim().toLowerCase();
+                        setSettings(s => ({
+                          ...s,
+                          priceBook: {
+                            default: s.priceBook?.default ?? { inputPer1K: 0.03, outputPer1K: 0.06 },
+                            providers: { ...(s.priceBook?.providers ?? {}), [key]: { inputPer1K: inRate, outputPer1K: outRate } },
+                            models: s.priceBook?.models ?? {}
+                          }
+                        }));
+                        setProvKey(''); setProvIn(''); setProvOut('');
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {settings.priceBook && Object.keys(settings.priceBook.providers || {}).length > 0 && (
+                    <div className="text-[11px] text-muted-foreground">
+                      Active providers: {Object.keys(settings.priceBook.providers || {}).join(', ')}
+                    </div>
+                  )}
+                </div>
+
+                {/* Model Overrides */}
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">Model Override</div>
+                  <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+                    <div>
+                      <label className="text-[11px] block mb-1">Model ID (exact match)</label>
+                      <input
+                        type="text"
+                        value={modelKey}
+                        onChange={(e) => setModelKey(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-sm"
+                        placeholder="model_id"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] block mb-1">Input $/1K</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min={0}
+                        value={modelIn}
+                        onChange={(e) => setModelIn(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-sm"
+                        placeholder="0.03"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] block mb-1">Output $/1K</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min={0}
+                        value={modelOut}
+                        onChange={(e) => setModelOut(e.target.value)}
+                        className="w-full border rounded px-2 py-1 text-sm"
+                        placeholder="0.06"
+                      />
+                    </div>
+                    <button
+                      className="text-sm px-3 py-1 border rounded"
+                      onClick={() => {
+                        if (!modelKey.trim()) return;
+                        const inRate = Number(modelIn);
+                        const outRate = Number(modelOut);
+                        if (!Number.isFinite(inRate) || !Number.isFinite(outRate)) return;
+                        const key = modelKey.trim();
+                        setSettings(s => ({
+                          ...s,
+                          priceBook: {
+                            default: s.priceBook?.default ?? { inputPer1K: 0.03, outputPer1K: 0.06 },
+                            providers: s.priceBook?.providers ?? {},
+                            models: { ...(s.priceBook?.models ?? {}), [key]: { inputPer1K: inRate, outputPer1K: outRate } }
+                          }
+                        }));
+                        setModelKey(''); setModelIn(''); setModelOut('');
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {settings.priceBook && Object.keys(settings.priceBook.models || {}).length > 0 && (
+                    <div className="text-[11px] text-muted-foreground">
+                      Active models: {Object.keys(settings.priceBook.models || {}).join(', ')}
+                    </div>
+                  )}
+                </div>
+
+                {/* Reset Buttons */}
+                <div className="mt-2 flex items-center gap-4 pt-4 border-t">
+                  <button
+                    className="text-sm text-red-600 underline cursor-pointer"
+                    onClick={() => setSettings(s => ({ ...s, priceBook: undefined }))}
+                    title="Clear all pricing overrides"
+                  >
+                    Reset Pricing to Default
+                  </button>
+                  <button
+                    className="text-sm text-red-600 underline cursor-pointer"
+                    onClick={() => setSettings({})}
+                    title="Reset SLA and all Pricing to defaults"
+                  >
+                    Reset All Settings
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Tool & Error Analytics */}
-        <div className="grid gap-6 md:grid-cols-2">
-          {data.toolPerformance.length > 0 && (
-            <ToolPerformanceChart data={data.toolPerformance} />
-          )}
-          {data.errorBreakdown.length > 0 && (
-            <ErrorBreakdownChart data={data.errorBreakdown} />
-          )}
-        </div>
+        {/* Overview Cards - Phase 4.1: Lazy loaded */}
+        <Suspense fallback={<ChartLoader />}>
+          <MetricsOverview
+            totalMessages={data.overview.totalMessages}
+            totalConversations={data.overview.totalConversations}
+            totalEvaluations={data.overview.totalEvaluations}
+            avgRating={data.overview.avgRating}
+            successRate={data.overview.successRate}
+            totalCost={data.overview.totalCost}
+            costPerMessage={data.overview.costPerMessage}
+          />
+        </Suspense>
 
-        {/* Token Usage */}
-        {data.tokenUsage.length > 0 && (
-          <TokenUsageChart data={data.tokenUsage} />
-        )}
-
-        {/* Cost Tracking */}
-        {data.costTracking.length > 0 && (
-          <CostTrackingChart data={data.costTracking} />
-        )}
-
-        {/* Performance Metrics */}
-        <div className="grid gap-6 md:grid-cols-2">
-          {data.conversationLengths.some(c => c.count > 0) && (
-            <ConversationLengthChart data={data.conversationLengths} />
+        {/* Section 1: Model & Training Performance */}
+        <CollapsibleSection
+          title="Model & Training Performance"
+          icon="🎯"
+          collapsed={modelTrainingCollapsed}
+          onToggle={() => setModelTrainingCollapsed(!modelTrainingCollapsed)}
+        >
+          {/* Model Performance Table - Phase 4.1: Lazy loaded */}
+          {data.modelPerformance && data.modelPerformance.length > 0 && (
+            <Suspense fallback={<ChartLoader />}>
+              <ModelPerformanceTable
+                data={data.modelPerformance}
+                selectedModelId={selectedModelId}
+                onModelSelect={setSelectedModelId}
+              />
+            </Suspense>
           )}
+
+          {/* Session Comparison Table - Phase 4.1: Lazy loaded */}
+          <Suspense fallback={<ChartLoader />}>
+            <SessionComparisonTable
+              data={data.sessionMetrics}
+              selectedSessionId={selectedSessionId}
+              onSessionSelect={setSelectedSessionId}
+            />
+          </Suspense>
+
+          {/* Training Effectiveness Chart - Phase 4.1: Lazy loaded */}
+          {data.trainingEffectiveness && data.trainingEffectiveness.length > 0 && (
+            <Suspense fallback={<ChartLoader />}>
+              <TrainingEffectivenessChart data={data.trainingEffectiveness} />
+            </Suspense>
+          )}
+
+          {/* Benchmark Analysis Chart - Phase 4.1: Lazy loaded */}
+          {benchmarkLoading ? (
+            <div className="bg-card border rounded-lg p-4 text-sm text-muted-foreground">
+              Loading benchmark analysis...
+            </div>
+          ) : benchmarkError ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+              Failed to load benchmark analysis: {benchmarkError}
+            </div>
+          ) : (
+            <Suspense fallback={<ChartLoader />}>
+              <BenchmarkAnalysisChart data={benchmarkData} />
+            </Suspense>
+          )}
+        </CollapsibleSection>
+
+        {/* Section 2: Quality & Evaluation Metrics */}
+        <CollapsibleSection
+          title="Quality & Evaluation Metrics"
+          icon="⭐"
+          collapsed={qualityCollapsed}
+          onToggle={() => setQualityCollapsed(!qualityCollapsed)}
+        >
+          {/* Evaluation Charts - Phase 4.1: Lazy loaded */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Suspense fallback={<ChartLoader />}>
+              <RatingDistribution data={data.ratingDistribution} />
+            </Suspense>
+            <Suspense fallback={<ChartLoader />}>
+              <SuccessRateChart data={data.successFailure} />
+            </Suspense>
+          </div>
+
+          {/* Judgments Breakdown - Phase 4.1: Lazy loaded */}
+          {data.failureTags.length > 0 && (
+            <>
+              <Suspense fallback={<ChartLoader />}>
+                <JudgmentsBreakdown data={data.failureTags} />
+              </Suspense>
+              <Suspense fallback={<ChartLoader />}>
+                <JudgmentsTable data={data.failureTags} timeRange={timeRange} />
+              </Suspense>
+            </>
+          )}
+
+          {/* Sentiment Analysis - Phase 4.1: Lazy loaded */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Suspense fallback={<ChartLoader />}>
+              <SentimentAnalyzer lookbackDays={timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365} />
+            </Suspense>
+            <Suspense fallback={<ChartLoader />}>
+              <SentimentTrendChart
+                startDate={sentimentDateRange.startDate}
+                endDate={sentimentDateRange.endDate}
+              />
+            </Suspense>
+          </div>
+        </CollapsibleSection>
+
+        {/* Section 3: Performance & SLA Metrics */}
+        <CollapsibleSection
+          title="Performance & SLA Metrics"
+          icon="⚡"
+          collapsed={performanceCollapsed}
+          onToggle={() => setPerformanceCollapsed(!performanceCollapsed)}
+        >
+          {/* Performance Metrics - Phase 4.1: Lazy loaded */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {data.conversationLengths.some(c => c.count > 0) && (
+              <Suspense fallback={<ChartLoader />}>
+                <ConversationLengthChart data={data.conversationLengths} />
+              </Suspense>
+            )}
+            {data.responseTimeTrends.length > 0 && (
+              <Suspense fallback={<ChartLoader />}>
+                <ResponseTimeChart data={data.responseTimeTrends} />
+              </Suspense>
+            )}
+          </div>
+
+          {/* SLABreach Rate - Phase 4.1: Lazy loaded */}
           {data.responseTimeTrends.length > 0 && (
-            <ResponseTimeChart data={data.responseTimeTrends} />
+            <Suspense fallback={<ChartLoader />}>
+              <SLABreachChart data={data.responseTimeTrends.map(d => ({ date: d.date, slaBreachRate: d.slaBreachRate, sampleSize: d.sampleSize }))} />
+            </Suspense>
           )}
-        </div>
+        </CollapsibleSection>
 
-        {/* AI Insights Panel */}
-        {user?.id && <InsightsPanel userId={user.id} timeRange={timeRange} />}
+        {/* Section 4: Cost & Resource Analysis */}
+        <CollapsibleSection
+          title="Cost & Resource Analysis"
+          icon="💰"
+          collapsed={costCollapsed}
+          onToggle={() => setCostCollapsed(!costCollapsed)}
+        >
+          {/* Token Usage - Phase 4.1: Lazy loaded */}
+          {data.tokenUsage.length > 0 && (
+            <Suspense fallback={<ChartLoader />}>
+              <TokenUsageChart data={data.tokenUsage} />
+            </Suspense>
+          )}
+
+          {/* Cost Tracking - Phase 4.1: Lazy loaded */}
+          {data.costTracking.length > 0 && (
+            <Suspense fallback={<ChartLoader />}>
+              <CostTrackingChart data={data.costTracking} />
+            </Suspense>
+          )}
+        </CollapsibleSection>
+
+        {/* Section 5: Operations & Monitoring */}
+        <CollapsibleSection
+          title="Operations & Monitoring"
+          icon="🛠️"
+          collapsed={operationsCollapsed}
+          onToggle={() => setOperationsCollapsed(!operationsCollapsed)}
+        >
+          {/* Proactive Monitoring & Predictive Intelligence - Phase 4.1: Lazy loaded */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Suspense fallback={<ChartLoader />}>
+              <AnomalyFeed maxItems={10} autoRefresh={true} refreshInterval={30000} />
+            </Suspense>
+            <Suspense fallback={<ChartLoader />}>
+              <QualityForecastChart metricName="Success Rate" timeRange={timeRange === 'all' ? '90d' : timeRange} forecastDays={7} />
+            </Suspense>
+          </div>
+
+          {/* Tool & Error Analytics - Phase 4.1: Lazy loaded */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {data.toolPerformance.length > 0 && (
+              <Suspense fallback={<ChartLoader />}>
+                <ToolPerformanceChart data={data.toolPerformance} />
+              </Suspense>
+            )}
+            {data.errorBreakdown.length > 0 && (
+              <Suspense fallback={<ChartLoader />}>
+                <ErrorBreakdownChart data={data.errorBreakdown} />
+              </Suspense>
+            )}
+          </div>
+
+          {/* AI Insights Panel - Phase 4.1: Lazy loaded */}
+          {user?.id && (
+            <Suspense fallback={<ChartLoader />}>
+              <InsightsPanel userId={user.id} timeRange={timeRange} />
+            </Suspense>
+          )}
+
+          {/* Operations Panels */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Suspense fallback={<ChartLoader />}>
+              <ProviderTelemetryPanel hours={24} />
+            </Suspense>
+            <Suspense fallback={<ChartLoader />}>
+              <ResearchJobsPanel limit={20} />
+            </Suspense>
+          </div>
+        </CollapsibleSection>
 
         {/* Additional Info */}
         {data.overview.totalEvaluations === 0 && (
@@ -151,6 +895,12 @@ export function AnalyticsDashboard() {
           </div>
         )}
       </div>
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        data={data}
+      />
     </div>
   );
 }

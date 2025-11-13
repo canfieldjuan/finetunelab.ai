@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { File, Trash2, CheckCircle, Clock, AlertCircle, Search } from 'lucide-react';
 import { useDocuments } from '@/hooks/useDocuments';
 import type { Document } from '@/lib/graphrag/types';
@@ -12,12 +12,60 @@ interface DocumentListProps {
 export function DocumentList({ userId }: DocumentListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProcessed, setFilterProcessed] = useState<boolean | undefined>(undefined);
-  
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
   const { documents, loading, error, refetch, deleteDocument } = useDocuments({
     userId,
     search: searchQuery || undefined,
     processed: filterProcessed,
   });
+
+  // Track initial load completion
+  useEffect(() => {
+    if (!loading && !initialLoadComplete) {
+      setInitialLoadComplete(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  // Memoize whether there are processing documents to avoid effect loop
+  const hasProcessingDocs = useMemo(
+    () => documents.some(doc => !doc.processed),
+    [documents]
+  );
+
+  // Auto-refresh every 3 seconds if there are processing documents
+  // Stop after 5 minutes to prevent infinite polling
+  useEffect(() => {
+    // Only set up interval if there are processing docs and no error
+    if (!hasProcessingDocs || error) {
+      console.log('[DocumentList] No processing docs or error present, skipping auto-refresh');
+      return;
+    }
+
+    console.log('[DocumentList] Setting up auto-refresh for processing documents');
+    const startTime = Date.now();
+    const MAX_POLLING_DURATION = 5 * 60 * 1000; // 5 minutes
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+
+      if (elapsed > MAX_POLLING_DURATION) {
+        console.warn('[DocumentList] Polling timeout reached (5 minutes). Stopping auto-refresh.');
+        console.warn('[DocumentList] Documents may still be processing. Please refresh manually.');
+        clearInterval(interval);
+        return;
+      }
+
+      console.log('[DocumentList] Auto-refreshing for processing documents');
+      refetch();
+    }, 3000);
+
+    return () => {
+      console.log('[DocumentList] Clearing auto-refresh interval');
+      clearInterval(interval);
+    };
+  }, [hasProcessingDocs, error, refetch]);
 
   const handleDelete = async (id: string, filename: string) => {
     if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
@@ -78,9 +126,13 @@ export function DocumentList({ userId }: DocumentListProps) {
             value={filterProcessed === undefined ? 'all' : filterProcessed ? 'processed' : 'processing'}
             onChange={(e) => {
               const value = e.target.value;
-              setFilterProcessed(
-                value === 'all' ? undefined : value === 'processed'
-              );
+              if (value === 'all') {
+                setFilterProcessed(undefined);
+              } else if (value === 'processed') {
+                setFilterProcessed(true);
+              } else {
+                setFilterProcessed(false);
+              }
             }}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
@@ -99,8 +151,8 @@ export function DocumentList({ userId }: DocumentListProps) {
         </div>
       )}
 
-      {/* Loading State */}
-      {loading && (
+      {/* Loading State - Only show on initial load */}
+      {loading && !initialLoadComplete && (
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading documents...</p>
@@ -108,7 +160,7 @@ export function DocumentList({ userId }: DocumentListProps) {
       )}
 
       {/* Empty State */}
-      {!loading && documents.length === 0 && (
+      {initialLoadComplete && documents.length === 0 && (
         <div className="text-center py-12">
           <File className="w-16 h-16 mx-auto text-gray-400 mb-4" />
           <p className="text-gray-600 dark:text-gray-400">
@@ -120,7 +172,7 @@ export function DocumentList({ userId }: DocumentListProps) {
       )}
 
       {/* Document List */}
-      {!loading && documents.length > 0 && (
+      {initialLoadComplete && documents.length > 0 && (
         <div className="space-y-3">
           {documents.map((doc: Document) => (
             <div
@@ -165,7 +217,7 @@ export function DocumentList({ userId }: DocumentListProps) {
       )}
 
       {/* Refresh Button */}
-      {!loading && documents.length > 0 && (
+      {initialLoadComplete && documents.length > 0 && (
         <div className="mt-6 text-center">
           <button
             onClick={() => refetch()}
