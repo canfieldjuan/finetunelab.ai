@@ -40,6 +40,7 @@ import { ExportDialog } from "./export/ExportDialog";
 import {
   Archive,
   Database,
+  Download,
   MoreVertical,
   CheckSquare,
   Trash2,
@@ -48,8 +49,10 @@ import {
   StopCircle,
   Mic,
   MicOff,
+  Settings,
   Send,
-  Plus
+  Plus,
+  RefreshCw
 } from "lucide-react";
 import { EvaluationModal } from "./evaluation/EvaluationModal";
 import { ModelSelector } from "./models/ModelSelector";
@@ -926,6 +929,50 @@ export default function Chat({ widgetConfig }: ChatProps) {
   };
 
   const hasActiveConversation = !!activeId;
+  const sidebarMenuItems = [
+    {
+      id: "settings",
+      label: "Settings",
+      icon: Settings,
+      onClick: () => setOpenModal('settings'),
+      disabled: false
+    },
+    {
+      id: "archive-manager",
+      label: "Archived Conversations",
+      icon: Archive,
+      onClick: () => setOpenModal('archive-manager'),
+      disabled: archiveLoading
+    },
+    {
+      id: "context-inspector",
+      label: "Context Inspector",
+      icon: Search,
+      onClick: () => setOpenModal('context-inspector'),
+      disabled: !hasActiveConversation
+    },
+    {
+      id: "model-comparison",
+      label: "Compare Models",
+      icon: RefreshCw,
+      onClick: () => setOpenModal('model-comparison'),
+      disabled: false
+    },
+    {
+      id: "export-conversation",
+      label: "Export Conversation",
+      icon: Download,
+      onClick: () => setOpenModal('export-dialog'),
+      disabled: !hasActiveConversation
+    },
+    {
+      id: "knowledge-base",
+      label: "Add to KGraph",
+      icon: Database,
+      onClick: () => setOpenModal('knowledge-base'),
+      badge: documents.length > 0 ? String(documents.length) : undefined
+    }
+  ];
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -992,6 +1039,15 @@ export default function Chat({ widgetConfig }: ChatProps) {
           currentPage="chat"
           user={user}
           signOut={signOut}
+          menuItems={sidebarMenuItems}
+          onNewConversation={handleNewConversation}
+          onPromoteConversation={handlePromoteConversation}
+          onArchiveConversation={handleArchiveConversation}
+          onDeleteConversation={handleDeleteConversation}
+          onBulkArchive={() => {
+            // AppSidebar may pass IDs, but our handleBulkArchive uses selectedConvIds from state
+            handleBulkArchive();
+          }}
           modelSelector={
             <ModelSelector
               value={selectedModelId}
