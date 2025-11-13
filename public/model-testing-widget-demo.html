@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Model Testing Widget Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .demo-container {
+      background: white;
+      border-radius: 24px;
+      padding: 48px;
+      max-width: 900px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      font-size: 42px;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    p {
+      font-size: 18px;
+      color: #6b7280;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    .demo-section {
+      background: #f9fafb;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .demo-section h2 {
+      font-size: 20px;
+      margin-bottom: 12px;
+      color: #1f2937;
+    }
+
+    .demo-section p {
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .code-block {
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      white-space: pre-wrap;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      margin-right: 12px;
+    }
+
+    .button:hover {
+      background: #1d4ed8;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+
+    .button.secondary {
+      background: #6b7280;
+    }
+
+    .button.secondary:hover {
+      background: #4b5563;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+
+    .input-field.mono {
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .status.success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #6ee7b7;
+    }
+
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+
+    .status.info {
+      background: #dbeafe;
+      color: #1e40af;
+      border: 1px solid #93c5fd;
+    }
+
+    .console-log {
+      background: #1f2937;
+      color: #10b981;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      padding: 16px;
+      border-radius: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 16px;
+    }
+
+    .console-log div {
+      margin-bottom: 4px;
+      padding: 4px;
+    }
+
+    .console-log .timestamp {
+      color: #9ca3af;
+    }
+
+    @media (max-width: 640px) {
+      .demo-container {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-container">
+    <h1>🧪 Model Testing Widget Demo</h1>
+    <p>
+      Test your production AI models with real users. This widget embeds a chat interface
+      that connects to your custom model endpoint, allowing you to collect training data
+      for continuous model improvement.
+    </p>
+
+    <div class="demo-section">
+      <h2>🔑 Configuration</h2>
+      <p>Enter your Widget API Key and Model ID to test:</p>
+
+      <input
+        type="text"
+        id="api-key-input"
+        class="input-field mono"
+        placeholder="wak_your_widget_api_key_here"
+        value="wak_test_demo_key"
+      />
+
+      <input
+        type="text"
+        id="model-id-input"
+        class="input-field mono"
+        placeholder="your-model-id (e.g., custom_gpt4_prod)"
+        value="gpt-4o-mini"
+      />
+
+      <input
+        type="text"
+        id="user-id-input"
+        class="input-field mono"
+        placeholder="Optional: user-123 (for tracking)"
+        value=""
+      />
+
+      <div id="status-message" style="display: none;"></div>
+
+      <button onclick="initializeWidget()" class="button">
+        🚀 Initialize Widget
+      </button>
+
+      <button onclick="clearConsole()" class="button secondary">
+        🗑️ Clear Console
+      </button>
+    </div>
+
+    <div class="demo-section">
+      <h2>📋 How to Embed</h2>
+      <p>Add this code to your website to integrate the model testing widget:</p>
+
+      <div class="code-block">&lt;!-- Model Testing Widget --&gt;
+&lt;script src="https://your-domain.com/widget.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  ModelTestingWidget.init({
+    apiKey: 'wak_your_widget_api_key',
+    modelId: 'your-custom-model-id',
+    userId: 'user-123', // Optional
+    theme: 'light', // Optional: 'light' or 'dark'
+    baseUrl: 'https://your-domain.com', // Optional
+    buttonText: 'Test Model' // Optional
+  });
+&lt;/script&gt;</div>
+    </div>
+
+    <div class="demo-section">
+      <h2>🔍 Console Output</h2>
+      <p>Watch the console below to see postMessage communication between parent window and iframe:</p>
+
+      <div id="console-output" class="console-log">
+        <div>[Console] Waiting for widget initialization...</div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h2>✨ Features</h2>
+      <ul style="list-style: none; padding: 0;">
+        <li style="margin-bottom: 8px;">🔌 <strong>Custom Models</strong> - Connect any OpenAI-compatible API</li>
+        <li style="margin-bottom: 8px;">📊 <strong>Real-time Analytics</strong> - Track usage and performance</li>
+        <li style="margin-bottom: 8px;">📥 <strong>Export Training Data</strong> - Download in CSV or JSONL format</li>
+        <li style="margin-bottom: 8px;">🔐 <strong>Secure</strong> - API key validation and rate limiting</li>
+        <li style="margin-bottom: 8px;">🎨 <strong>Customizable</strong> - Theme and button text options</li>
+        <li style="margin-bottom: 8px;">📱 <strong>Responsive</strong> - Works on all devices</li>
+      </ul>
+    </div>
+
+    <div class="demo-section">
+      <h2>🚀 Try It Now</h2>
+      <p>
+        After initializing the widget, look for the <strong style="color: #2563eb;">Test Model</strong>
+        button in the bottom-right corner. Click it to open the chat interface and test your model!
+      </p>
+    </div>
+  </div>
+
+  <!-- Load the model testing widget -->
+  <script src="/widget.js"></script>
+  <script>
+    // Console logging helper
+    function logToConsole(message, type = 'info') {
+      const consoleOutput = document.getElementById('console-output');
+      const timestamp = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+
+      let color = '#10b981'; // green
+      if (type === 'error') color = '#ef4444'; // red
+      if (type === 'warning') color = '#f59e0b'; // orange
+      if (type === 'success') color = '#22c55e'; // bright green
+
+      div.innerHTML = `<span class="timestamp">[${timestamp}]</span> <span style="color: ${color}">${message}</span>`;
+      consoleOutput.appendChild(div);
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+
+    // Override console.log for ModelTestingWidget messages
+    const originalConsoleLog = console.log;
+    const originalConsoleWarn = console.warn;
+    const originalConsoleError = console.error;
+
+    console.log = function(...args) {
+      originalConsoleLog.apply(console, args);
+      const message = args.join(' ');
+      if (message.includes('[ModelTestingWidget]') || message.includes('[Chat]')) {
+        logToConsole(message, 'info');
+      }
+    };
+
+    console.warn = function(...args) {
+      originalConsoleWarn.apply(console, args);
+      const message = args.join(' ');
+      if (message.includes('[ModelTestingWidget]') || message.includes('[Chat]')) {
+        logToConsole(message, 'warning');
+      }
+    };
+
+    console.error = function(...args) {
+      originalConsoleError.apply(console, args);
+      const message = args.join(' ');
+      if (message.includes('[ModelTestingWidget]') || message.includes('[Chat]')) {
+        logToConsole(message, 'error');
+      }
+    };
+
+    function initializeWidget() {
+      const apiKey = document.getElementById('api-key-input').value.trim();
+      const modelId = document.getElementById('model-id-input').value.trim();
+      const userId = document.getElementById('user-id-input').value.trim();
+      const statusEl = document.getElementById('status-message');
+
+      logToConsole('=== Widget Initialization Started ===', 'success');
+
+      if (!apiKey) {
+        showStatus('error', '⚠️ Please enter an API key');
+        logToConsole('Error: Missing API key', 'error');
+        return;
+      }
+
+      if (!modelId) {
+        showStatus('error', '⚠️ Please enter a Model ID');
+        logToConsole('Error: Missing Model ID', 'error');
+        return;
+      }
+
+      if (!apiKey.startsWith('wak_')) {
+        showStatus('error', '⚠️ Invalid API key format. Should start with "wak_"');
+        logToConsole('Error: Invalid API key format', 'error');
+        return;
+      }
+
+      try {
+        logToConsole(`Initializing with Model: ${modelId}, User: ${userId || 'anonymous'}`, 'info');
+
+        // Remove existing widget if any
+        const existingBtn = document.getElementById('model-testing-widget-btn');
+        const existingIframe = document.getElementById('model-testing-widget-iframe');
+        if (existingBtn) existingBtn.remove();
+        if (existingIframe) existingIframe.remove();
+
+        // Initialize widget
+        const result = ModelTestingWidget.init({
+          apiKey: apiKey,
+          modelId: modelId,
+          userId: userId || undefined,
+          theme: 'light',
+          baseUrl: window.location.origin,
+          buttonText: 'Test Model'
+        });
+
+        if (result.success) {
+          showStatus('success', `✅ Widget initialized! Session: ${result.sessionId}`);
+          logToConsole(`Widget initialized successfully!`, 'success');
+          logToConsole(`Session ID: ${result.sessionId}`, 'info');
+          logToConsole(`Model ID: ${result.modelId}`, 'info');
+          logToConsole('Look for the "Test Model" button in the bottom-right corner', 'success');
+        } else {
+          showStatus('error', '❌ Widget initialization failed');
+          logToConsole('Widget initialization failed', 'error');
+        }
+      } catch (error) {
+        showStatus('error', '❌ Error: ' + error.message);
+        logToConsole(`Error: ${error.message}`, 'error');
+      }
+    }
+
+    function clearConsole() {
+      const consoleOutput = document.getElementById('console-output');
+      consoleOutput.innerHTML = '<div>[Console] Cleared</div>';
+    }
+
+    function showStatus(type, message) {
+      const statusEl = document.getElementById('status-message');
+      statusEl.className = `status ${type}`;
+      statusEl.textContent = message;
+      statusEl.style.display = 'block';
+
+      if (type === 'success') {
+        setTimeout(() => {
+          statusEl.style.display = 'none';
+        }, 5000);
+      }
+    }
+
+    // Log page load
+    window.addEventListener('DOMContentLoaded', () => {
+      logToConsole('Demo page loaded. Configure and initialize the widget above.', 'info');
+    });
+  </script>
+</body>
+</html>

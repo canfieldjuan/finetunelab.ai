@@ -3,7 +3,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
-import { appConfig } from "../lib/config/app";
 
 interface AuthContextType {
   user: User | null;
@@ -25,15 +24,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logSessionEvent = useCallback(
     async (event: string) => {
       if (!user) {
-        if (appConfig.debug.auth) {
-          console.log('[AuthContext] Skipping session log - no user');
-        }
+        console.log('[AuthContext] Skipping session log - no user');
         return;
       }
 
-      if (appConfig.debug.auth) {
-        console.log('[AuthContext] Logging session event:', event, 'for user:', user.id);
-      }
+      console.log('[AuthContext] Logging session event:', event, 'for user:', user.id);
       const { error } = await supabase
         .from('session_logs')
         .insert({ user_id: user.id, event });
@@ -46,85 +41,120 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (appConfig.debug.auth) {
-      console.log('[AuthContext] Setting up auth state listener');
-    }
+    console.log('[AuthContext] Setting up auth state listener');
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (appConfig.debug.auth) {
-        console.log('[AuthContext] Auth state changed:', event, 'user:', session?.user);
-      }
+      console.log('[AuthContext] Auth state changed:', event, 'user:', session?.user?.email);
       setSession(session);
-      if (session?.user && typeof session.user === 'object' && 'id' in session.user) {
-        setUser(session.user);
-      } else {
-        console.warn('[AuthContext] Invalid user object in session:', session?.user);
-        setUser(null);
-      }
+      setUser(session?.user ?? null);
       setLoading(false);
+
+      // Log relevant events
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
         logSessionEvent(event.toLowerCase());
       }
+
+      // Handle token refresh
+      if (event === "TOKEN_REFRESHED") {
+        console.log('[AuthContext] Token refreshed successfully');
+        logSessionEvent('token_refreshed');
+      }
     });
 
-    if (appConfig.debug.auth) {
-      console.log('[AuthContext] Getting initial session');
-    }
+    console.log('[AuthContext] Getting initial session');
     supabase.auth.getSession().then(({ data, error }) => {
       if (error) {
         console.error('[AuthContext] Error getting session:', error);
-      } else if (appConfig.debug.auth) {
-        console.log('[AuthContext] Initial session:', data.session?.user);
+      } else {
+        console.log('[AuthContext] Initial session:', data.session?.user?.email || 'no user');
       }
       setSession(data.session);
-      if (data.session?.user && typeof data.session.user === 'object' && 'id' in data.session.user) {
-        setUser(data.session.user);
-      } else {
-        console.warn('[AuthContext] Invalid user object in initial session:', data.session?.user);
-        setUser(null);
-      }
+      setUser(data.session?.user ?? null);
       setLoading(false);
     });
-    
+
     return () => {
-      if (appConfig.debug.auth) {
-        console.log('[AuthContext] Cleaning up auth listener');
-      }
+      console.log('[AuthContext] Cleaning up auth listener');
       listener.subscription.unsubscribe();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // NOTE: logSessionEvent intentionally excluded to prevent infinite loop from recreating auth listener
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run once on mount, logSessionEvent is used in closure
+
+  // Proactive token refresh - check every 5 minutes and refresh if needed
+  useEffect(() => {
+    const checkAndRefreshToken = async () => {
+      try {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('[AuthContext] Error checking session:', error);
+          return;
+        }
+
+        if (!currentSession) {
+          // No session, skip silently (user not logged in)
+          return;
+        }
+
+        // Check if token expires in next 10 minutes
+        const expiresAt = currentSession.expires_at;
+        if (expiresAt) {
+          const expiresIn = expiresAt - Math.floor(Date.now() / 1000);
+          const tenMinutes = 10 * 60;
+
+          if (expiresIn < tenMinutes) {
+            console.log('[AuthContext] Token expires soon (in', Math.floor(expiresIn / 60), 'minutes), refreshing...');
+            const { data, error: refreshError } = await supabase.auth.refreshSession();
+
+            if (refreshError) {
+              console.error('[AuthContext] Error refreshing token:', refreshError);
+            } else if (data.session) {
+              console.log('[AuthContext] Token refreshed proactively. New expiry:', new Date(data.session.expires_at! * 1000).toLocaleTimeString());
+              // Don't manually set session/user - onAuthStateChange will handle it
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[AuthContext] Exception during token refresh check:', err);
+      }
+    };
+
+    // Check immediately on mount
+    checkAndRefreshToken();
+
+    // Then check every 5 minutes
+    const interval = setInterval(checkAndRefreshToken, 5 * 60 * 1000);
+
+    return () => {
+      console.log('[AuthContext] Cleaning up token refresh interval');
+      clearInterval(interval);
+    };
+  }, []); // Empty deps - run once on mount, interval persists for component lifetime
 
   async function signUp(email: string, password: string) {
-    if (appConfig.debug.auth) {
-      console.log('[AuthContext] Attempting signup for:', email);
-    }
+    console.log('[AuthContext] Attempting signup for:', email);
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) {
       console.error('[AuthContext] Signup error:', error);
-    } else if (appConfig.debug.auth) {
+    } else {
       console.log('[AuthContext] Signup successful for:', email);
     }
     return { error: error?.message || null };
   }
 
   async function signIn(email: string, password: string) {
-    if (appConfig.debug.auth) {
-      console.log('[AuthContext] Attempting sign in for:', email);
-    }
+    console.log('[AuthContext] Attempting sign in for:', email);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       console.error('[AuthContext] Sign in error:', error);
-    } else if (appConfig.debug.auth) {
+    } else {
       console.log('[AuthContext] Sign in successful for:', email);
     }
     return { error: error?.message || null };
   }
 
   async function signInWithOAuth(provider: 'github' | 'google', scopes?: string[]) {
-    if (appConfig.debug.auth) {
-      console.log('[AuthContext] OAuth sign in with:', provider, 'scopes:', scopes);
-    }
+    console.log('[AuthContext] OAuth sign in with:', provider, 'scopes:', scopes);
 
     const options: { redirectTo: string; scopes?: string } = {
       redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/chat`,
@@ -148,13 +178,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    if (appConfig.debug.auth) {
-      console.log('[AuthContext] Signing out user:', user?.email);
-    }
+    console.log('[AuthContext] Signing out user:', user?.email);
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('[AuthContext] Sign out error:', error);
-    } else if (appConfig.debug.auth) {
+    } else {
       console.log('[AuthContext] Sign out successful');
     }
   }
