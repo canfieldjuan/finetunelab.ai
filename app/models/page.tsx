@@ -12,18 +12,23 @@
  * - Test model connections
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModelCard } from '@/components/models/ModelCard';
 import { AddModelDialog } from '@/components/models/AddModelDialog';
 import type { LLMModelDisplay } from '@/lib/models/llm-model.types';
+import { AppSidebar } from '@/components/layout/AppSidebar';
+import { toast } from 'sonner';
 
 export default function ModelsPage() {
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, signOut, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightedModelId = searchParams?.get('modelId');
+  const modelRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const [models, setModels] = useState<LLMModelDisplay[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +39,7 @@ export default function ModelsPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
 
   console.log('[ModelsPage] Auth state:', { user: user?.email, authLoading });
+  console.log('[ModelsPage] Highlighted model ID from URL:', highlightedModelId);
 
   // Auth check - redirect if not authenticated
   useEffect(() => {
@@ -50,6 +56,37 @@ export default function ModelsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, session?.access_token]); // Only depend on stable IDs, not entire objects
+
+  // Scroll to and highlight newly deployed model
+  useEffect(() => {
+    if (highlightedModelId && models.length > 0 && !loading) {
+      console.log('[ModelsPage] Scrolling to highlighted model:', highlightedModelId);
+      
+      // Find the model in the list
+      const deployedModel = models.find(m => m.id === highlightedModelId);
+      
+      if (deployedModel) {
+        // Show success toast
+        toast.success('Model Deployed Successfully!', {
+          description: `${deployedModel.name} is now available in your models list.`,
+          duration: 5000,
+        });
+
+        // Scroll to the model card after a short delay
+        setTimeout(() => {
+          const modelElement = modelRefs.current[highlightedModelId];
+          if (modelElement) {
+            modelElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+
+        // Remove the modelId from URL after handling
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('modelId');
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [highlightedModelId, models, loading]);
 
   async function fetchModels() {
     console.log('[ModelsPage] Fetching models...');
@@ -133,8 +170,8 @@ export default function ModelsPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading authentication...</p>
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading authentication...</p>
         </div>
       </div>
     );
@@ -144,10 +181,10 @@ export default function ModelsPage() {
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md">
-          <h2 className="text-xl font-bold text-yellow-800 mb-2">Authentication Required</h2>
-          <p className="text-yellow-700 mb-4">You must be logged in to manage models.</p>
-          <p className="text-sm text-gray-600">Redirecting to login...</p>
+        <div className="text-center border rounded-lg p-6 max-w-md">
+          <h2 className="text-xl font-bold mb-2">Authentication Required</h2>
+          <p className="text-muted-foreground mb-4">You must be logged in to manage models.</p>
+          <p className="text-sm text-muted-foreground">Redirecting to login...</p>
         </div>
       </div>
     );
@@ -157,15 +194,17 @@ export default function ModelsPage() {
   const providers = Array.from(new Set(models.map(m => m.provider)));
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Model Management</h1>
-          <p className="text-muted-foreground">
-            Manage LLM models for your chat interface. Add custom models, test connections, and configure settings.
-          </p>
-        </div>
+    <div className="flex h-screen overflow-hidden">
+      <AppSidebar currentPage="models" user={user} signOut={signOut} />
+      <div className="flex-1 overflow-y-auto bg-background">
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-2">Model Management</h1>
+            <p className="text-muted-foreground">
+              Manage LLM models for your chat interface. Add custom models, test connections, and configure settings.
+            </p>
+          </div>
 
         {/* Filters and Search */}
         <div className="mb-6 space-y-4">
@@ -220,7 +259,10 @@ export default function ModelsPage() {
             </div>
 
             {/* Add Model Button */}
-            <Button onClick={() => setShowAddDialog(true)} className="gap-2">
+            <Button 
+              onClick={() => setShowAddDialog(true)} 
+              className="gap-2 bg-white text-black hover:bg-gray-100 dark:bg-white dark:text-black dark:hover:bg-gray-200 border border-black"
+            >
               <Plus className="h-4 w-4" />
               Add Model
             </Button>
@@ -247,7 +289,7 @@ export default function ModelsPage() {
         {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
-              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
               <p className="text-muted-foreground">Loading models...</p>
             </div>
           </div>
@@ -283,33 +325,47 @@ export default function ModelsPage() {
 
         {/* Model Grid */}
         {!loading && filteredModels.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="space-y-3">
             {filteredModels.map((model) => (
-              <ModelCard
+              <div
                 key={model.id}
-                model={model}
-                onEdit={handleEditModel}
-                onDelete={handleDeleteModel}
-                currentUserId={user?.id}
-              />
+                ref={(el) => {
+                  if (el) {
+                    modelRefs.current[model.id] = el;
+                  }
+                }}
+                className={`transition-all duration-500 ${
+                  highlightedModelId === model.id
+                    ? 'ring-2 ring-primary ring-offset-2 ring-offset-background rounded-lg'
+                    : ''
+                }`}
+              >
+                <ModelCard
+                  model={model}
+                  onEdit={handleEditModel}
+                  onDelete={handleDeleteModel}
+                  currentUserId={user?.id}
+                />
+              </div>
             ))}
           </div>
         )}
-      </div>
 
-      {/* Add Model Dialog */}
-      {user && session?.access_token && (
-        <AddModelDialog
-          isOpen={showAddDialog}
-          onClose={() => setShowAddDialog(false)}
-          onSuccess={() => {
-            setShowAddDialog(false);
-            fetchModels(); // Refresh the list
-          }}
-          userId={user.id}
-          sessionToken={session.access_token}
-        />
-      )}
+        {/* Add Model Dialog */}
+        {user && session?.access_token && (
+          <AddModelDialog
+            isOpen={showAddDialog}
+            onClose={() => setShowAddDialog(false)}
+            onSuccess={() => {
+              setShowAddDialog(false);
+              fetchModels(); // Refresh the list
+            }}
+            userId={user.id}
+            sessionToken={session.access_token}
+          />
+        )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -32,7 +32,12 @@ function LoginClient() {
   async function handleOAuthSignIn(provider: 'github' | 'google') {
     console.log('[Login] OAuth sign in with:', provider);
     setError(null);
-    const { error } = await signInWithOAuth(provider);
+
+    // Request 'gist' scope for GitHub to enable Gist creation for Colab notebooks
+    const scopes = provider === 'github' ? ['gist'] : undefined;
+    console.log('[Login] Requesting scopes:', scopes);
+
+    const { error } = await signInWithOAuth(provider, scopes);
     if (error) {
       console.error('[Login] OAuth failed:', error);
       setError(error);
