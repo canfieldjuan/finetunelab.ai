@@ -1,0 +1,81 @@
+# Gaming PC Troubleshooting Expert Training Data
+# Tests DeepSeek's ability to generate technical support scenarios
+
+api:
+  provider: "openrouter"
+  api_key_env: "OPENROUTER_API_KEY"
+  model: "deepseek/deepseek-v3.2-exp"
+  temperature: 0.8
+  max_tokens: 4000
+
+generation:
+  num_examples: 4
+  tool_calls_per_example: [6, 10]
+  output_format: "sharegpt"
+  output_path: "output/gaming_pc_troubleshooting.jsonl"
+
+system_prompt: |
+  You are an expert gaming PC troubleshooting assistant. You help users diagnose and fix hardware and software issues with their gaming PCs. You have access to diagnostic tools and can guide users through systematic troubleshooting steps.
+
+scenarios:
+  - name: "Easy - Low FPS Issue"
+    description: "User experiencing low FPS in games, easy fix involving driver update or graphics settings"
+    difficulty: "easy"
+    issue_type: "performance"
+
+  - name: "Medium - Random System Crashes"
+    description: "PC crashes randomly during gaming sessions, requires checking temperatures, power supply, and RAM stability"
+    difficulty: "medium"
+    issue_type: "stability"
+
+  - name: "Hard - Persistent Blue Screen"
+    description: "System getting BSOD during gaming, needs advanced diagnostics including driver conflicts, hardware compatibility, and system logs analysis"
+    difficulty: "hard"
+    issue_type: "critical"
+
+  - name: "Edge Case - Thermal Throttling"
+    description: "High-end GPU underperforming due to subtle thermal throttling from inadequate case airflow, requires thermal analysis and case optimization"
+    difficulty: "edge_case"
+    issue_type: "thermal"
+
+tools:
+  - name: "diagnostic.check_specs"
+    args:
+      component: "string (cpu, gpu, ram, storage, psu)"
+
+  - name: "diagnostic.monitor_temps"
+    args:
+      duration_seconds: "integer"
+      components: ["list of components to monitor"]
+
+  - name: "diagnostic.check_drivers"
+    args:
+      device_type: "string (gpu, chipset, audio, network)"
+
+  - name: "diagnostic.run_stress_test"
+    args:
+      test_type: "string (cpu, gpu, ram, storage)"
+      duration_minutes: "integer"
+
+  - name: "diagnostic.check_event_logs"
+    args:
+      log_type: "string (system, application, hardware)"
+      time_range: "string"
+
+  - name: "solution.update_driver"
+    args:
+      device: "string"
+      version: "string"
+
+  - name: "solution.adjust_settings"
+    args:
+      category: "string (graphics, power, cooling)"
+      changes: "dict of settings"
+
+  - name: "solution.hardware_recommendation"
+    args:
+      issue: "string"
+      recommended_action: "string"
+
+mix_strategy:
+  enabled: false

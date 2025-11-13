@@ -1,13 +1,16 @@
 # GraphRAG API Routes - Wiring Complete
 
 ## Summary
+
 All 4 GraphRAG API routes have been successfully wired to the existing service layer.
 
 ## Changes Made
 
 ### 1. `/app/api/graphrag/upload/route.ts` ✅
+
 **Service Wired:** `documentService.uploadAndProcess()`
 **Features:**
+
 - Authentication via Supabase
 - File upload and parsing (PDF, DOCX, TXT)
 - Automatic processing with Graphiti knowledge graph
@@ -15,6 +18,7 @@ All 4 GraphRAG API routes have been successfully wired to the existing service l
 - Returns: `{ success, document, message }`
 
 **Flow:**
+
 1. Validate file exists
 2. Authenticate user via bearer token
 3. Call `documentService.uploadAndProcess({ userId, file, metadata })`
@@ -24,14 +28,17 @@ All 4 GraphRAG API routes have been successfully wired to the existing service l
 ---
 
 ### 2. `/app/api/graphrag/documents/route.ts` ✅
+
 **Service Wired:** `documentStorage.getUserDocuments()`
 **Features:**
+
 - Authentication via Supabase
 - Lists all user's uploaded documents
 - Sorted by creation date (newest first)
 - Returns: `{ documents[], total }`
 
 **Flow:**
+
 1. Authenticate user via bearer token
 2. Call `documentStorage.getUserDocuments(userId)`
 3. Return document list with count
@@ -39,14 +46,17 @@ All 4 GraphRAG API routes have been successfully wired to the existing service l
 ---
 
 ### 3. `/app/api/graphrag/search/route.ts` ✅
+
 **Service Wired:** `searchService.search()`
 **Features:**
+
 - Authentication via Supabase
 - Hybrid search (vector + knowledge graph)
 - Query validation
 - Returns: `{ context, sources, metadata, query, limit }`
 
 **Flow:**
+
 1. Validate query string exists
 2. Authenticate user via bearer token
 3. Call `searchService.search(query, userId)`
@@ -56,8 +66,10 @@ All 4 GraphRAG API routes have been successfully wired to the existing service l
 ---
 
 ### 4. `/app/api/graphrag/delete/[id]/route.ts` ✅
+
 **Service Wired:** `documentService.deleteDocument()`
 **Features:**
+
 - Authentication via Supabase
 - Deletes from Supabase storage
 - Deletes from Neo4j knowledge graph
@@ -65,6 +77,7 @@ All 4 GraphRAG API routes have been successfully wired to the existing service l
 - Returns: `{ success, id, message }`
 
 **Flow:**
+
 1. Validate document ID
 2. Authenticate user via bearer token
 3. Call `documentService.deleteDocument(id, { deleteFromStorage: true, deleteFromNeo4j: true })`
@@ -75,7 +88,8 @@ All 4 GraphRAG API routes have been successfully wired to the existing service l
 
 ## Service Layer Architecture
 
-### Services Used:
+### Services Used
+
 - **documentService** (`/lib/graphrag/service/document-service.ts`)
   - `uploadAndProcess()` - Complete upload workflow
   - `deleteDocument()` - Complete deletion workflow
@@ -89,8 +103,10 @@ All 4 GraphRAG API routes have been successfully wired to the existing service l
   - `search()` - Hybrid knowledge graph search
   - Uses Graphiti client for vector + graph queries
 
-### Authentication Pattern:
+### Authentication Pattern
+
 All routes use consistent auth pattern:
+
 ```typescript
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const authHeader = request.headers.get('authorization');
@@ -102,6 +118,7 @@ const { data: { user }, error } = await supabase.auth.getUser(
 ---
 
 ## Error Validation
+
 ✅ No TypeScript errors in any route
 ✅ All imports resolve correctly
 ✅ All service methods exist and are typed
@@ -111,7 +128,8 @@ const { data: { user }, error } = await supabase.auth.getUser(
 
 ## What Still Needs Implementation
 
-### Backend (External Systems):
+### Backend (External Systems)
+
 1. **Neo4j Database** - Must be running and configured
    - Connection string in `NEO4J_URI` env variable
    - Credentials in `NEO4J_USERNAME` and `NEO4J_PASSWORD`
@@ -128,7 +146,8 @@ const { data: { user }, error } = await supabase.auth.getUser(
 4. **OpenAI API** - For embeddings
    - API key in `OPENAI_API_KEY` env variable
 
-### Environment Variables Required:
+### Environment Variables Required
+
 ```env
 # Supabase (Already configured)
 NEXT_PUBLIC_SUPABASE_URL=your-url
@@ -150,7 +169,8 @@ OPENAI_API_KEY=sk-...
 
 ## Testing Checklist
 
-### Upload Route:
+### Upload Route
+
 - [ ] Upload PDF file
 - [ ] Upload DOCX file
 - [ ] Upload TXT file
@@ -158,19 +178,22 @@ OPENAI_API_KEY=sk-...
 - [ ] Check document appears in database
 - [ ] Verify processed flag updates
 
-### Documents Route:
+### Documents Route
+
 - [ ] List documents for authenticated user
 - [ ] Verify empty array for new user
 - [ ] Check unauthorized without token
 - [ ] Verify sorting (newest first)
 
-### Search Route:
+### Search Route
+
 - [ ] Search with valid query
 - [ ] Verify context and sources returned
 - [ ] Check unauthorized without token
 - [ ] Test empty query validation
 
-### Delete Route:
+### Delete Route
+
 - [ ] Delete existing document
 - [ ] Verify 400 for invalid ID
 - [ ] Check unauthorized without token

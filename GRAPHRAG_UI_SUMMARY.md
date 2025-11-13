@@ -9,8 +9,10 @@ I've reviewed all GraphRAG markdown documentation and created comprehensive guid
 ## 📄 New Documentation Created
 
 ### 1. **GRAPHRAG_UI_FEATURES.md**
+
 **Purpose:** Complete feature list and implementation guide  
 **Contents:**
+
 - Current state (what exists)
 - New features needed (3 phases)
 - Component specifications
@@ -20,8 +22,10 @@ I've reviewed all GraphRAG markdown documentation and created comprehensive guid
 - Implementation checklist
 
 ### 2. **GRAPHRAG_UI_MOCKUPS.md**
+
 **Purpose:** Visual designs and button specifications  
 **Contents:**
+
 - Before/After mockups
 - Button specifications with code
 - Modal/sidebar layouts
@@ -37,6 +41,7 @@ I've reviewed all GraphRAG markdown documentation and created comprehensive guid
 ### **Must Add to Chat Page:**
 
 #### 1. **Knowledge Base Button** (Top Right)
+
 ```tsx
 <button className="btn-primary">
   <Database className="w-5 h-5" />
@@ -44,32 +49,38 @@ I've reviewed all GraphRAG markdown documentation and created comprehensive guid
   <span className="badge">{docCount}</span>
 </button>
 ```
+
 **Opens:** Sidebar with DocumentList + DocumentUpload
 
 ---
 
 #### 2. **Quick Upload Button** (Chat Input)
+
 ```tsx
 <button className="btn-icon">
   <Paperclip className="w-5 h-5" />
 </button>
 ```
+
 **Opens:** Upload dialog inline
 
 ---
 
 #### 3. **GraphRAG Status** (Below Input)
+
 ```tsx
 <div className="status-line">
   <CheckCircle className="w-4 h-4 text-green-500" />
   <span>GraphRAG enabled • {docCount} docs indexed</span>
 </div>
 ```
+
 **Shows:** Active status and document count
 
 ---
 
 #### 4. **Enhanced Citations** (In Messages)
+
 **Already exists as GraphRAGIndicator**  
 **Needs:** Better integration + click-to-view
 
@@ -77,12 +88,14 @@ I've reviewed all GraphRAG markdown documentation and created comprehensive guid
 
 ## 🛠️ Components Already Built
 
-### ✅ Ready to Use:
+### ✅ Ready to Use
+
 1. **DocumentUpload** - Full upload UI with drag-drop
 2. **DocumentList** - List with search, filter, delete
 3. **GraphRAGIndicator** - Citation display with confidence
 
-### ✅ Hooks Available:
+### ✅ Hooks Available
+
 1. **useDocuments** - Fetch, filter, delete documents
 2. **useGraphRAG** - Search knowledge graph
 
@@ -90,29 +103,33 @@ I've reviewed all GraphRAG markdown documentation and created comprehensive guid
 
 ## 📋 What You Need to Build
 
-### New Components (Priority Order):
+### New Components (Priority Order)
 
-#### Phase 1 (Essential):
+#### Phase 1 (Essential)
+
 1. **KnowledgeBaseButton.tsx** - Floating action button with badge
 2. **QuickUploadButton.tsx** - Inline upload trigger
 3. **GraphRAGStatus.tsx** - Status indicator component
 4. **KnowledgeBaseSidebar.tsx** - Slide-out panel
 
-#### Phase 2 (Enhanced):
-5. **GraphRAGSettings.tsx** - Settings panel with toggles
-6. **UploadQueue.tsx** - Multi-file upload tracker
-7. **DocumentPreview.tsx** - PDF/text viewer modal
+#### Phase 2 (Enhanced)
 
-#### Phase 3 (Advanced):
-8. **KnowledgeGraphViewer.tsx** - Interactive graph
-9. **SmartSuggestions.tsx** - Question suggestions
-10. **DocumentTable.tsx** - Enhanced table with bulk actions
+1. **GraphRAGSettings.tsx** - Settings panel with toggles
+2. **UploadQueue.tsx** - Multi-file upload tracker
+3. **DocumentPreview.tsx** - PDF/text viewer modal
+
+#### Phase 3 (Advanced)
+
+1. **KnowledgeGraphViewer.tsx** - Interactive graph
+2. **SmartSuggestions.tsx** - Question suggestions
+3. **DocumentTable.tsx** - Enhanced table with bulk actions
 
 ---
 
 ## 🎨 Design System
 
-### Colors:
+### Colors
+
 ```css
 --graphrag-blue: #3b82f6;      /* Primary actions */
 --graphrag-green: #10b981;     /* Success/processed */
@@ -120,7 +137,8 @@ I've reviewed all GraphRAG markdown documentation and created comprehensive guid
 --graphrag-red: #ef4444;       /* Errors */
 ```
 
-### Icons (lucide-react):
+### Icons (lucide-react)
+
 - `Database` - Knowledge base
 - `Paperclip` - Upload
 - `BookOpen` - Citations
@@ -132,7 +150,7 @@ I've reviewed all GraphRAG markdown documentation and created comprehensive guid
 
 ## 🚀 30-Minute Quick Start
 
-### Add GraphRAG to Chat (Minimal):
+### Add GraphRAG to Chat (Minimal)
 
 ```tsx
 // /app/chat/page.tsx
@@ -182,6 +200,7 @@ export default function ChatPage() {
 ```
 
 **Done!** Users can now:
+
 - Click "Knowledge" button
 - Upload documents
 - See them in the list
@@ -192,9 +211,11 @@ export default function ChatPage() {
 ## 📊 Implementation Roadmap
 
 ### Week 1: Core Features
+
 **Goal:** Basic GraphRAG integration in chat
 
 **Tasks:**
+
 - [ ] Add Knowledge Base button to `/app/chat/page.tsx`
 - [ ] Create slide-out sidebar component
 - [ ] Integrate DocumentUpload + DocumentList
@@ -207,9 +228,11 @@ export default function ChatPage() {
 ---
 
 ### Week 2: Settings & Polish
+
 **Goal:** Configuration and better UX
 
 **Tasks:**
+
 - [ ] Create GraphRAG settings tab in Settings page
 - [ ] Add enable/disable toggle
 - [ ] Add search configuration (top-K, method, etc.)
@@ -222,9 +245,11 @@ export default function ChatPage() {
 ---
 
 ### Week 3: Advanced Features
+
 **Goal:** Power user features
 
 **Tasks:**
+
 - [ ] Build knowledge graph visualization
 - [ ] Add smart question suggestions
 - [ ] Create dedicated /documents page
@@ -238,23 +263,27 @@ export default function ChatPage() {
 
 ## 🔗 Quick Links
 
-### Documentation Files:
+### Documentation Files
+
 - `GRAPHRAG_UI_FEATURES.md` - Full feature list (this is comprehensive!)
 - `GRAPHRAG_UI_MOCKUPS.md` - Visual designs and specs
 - `GRAPHRAG_WIRING_COMPLETE.md` - API routes status
 - `/lib/graphrag/README.md` - GraphRAG library docs
 - `/docs/GRAPHRAG_QUICKSTART.md` - Setup guide
 
-### Existing Components:
+### Existing Components
+
 - `/components/graphrag/DocumentUpload.tsx`
 - `/components/graphrag/DocumentList.tsx`
 - `/components/graphrag/GraphRAGIndicator.tsx`
 
-### Hooks:
+### Hooks
+
 - `/hooks/useDocuments.ts`
 - `/hooks/useGraphRAG.ts`
 
-### API Routes:
+### API Routes
+
 - `POST /api/graphrag/upload` ✅
 - `GET /api/graphrag/documents` ✅
 - `POST /api/graphrag/search` ✅
@@ -264,7 +293,7 @@ export default function ChatPage() {
 
 ## 💡 Key Insights
 
-### From Documentation Review:
+### From Documentation Review
 
 1. **Auto-Enhancement Works:**
    - GraphRAG can automatically inject context into chat prompts
@@ -296,7 +325,7 @@ export default function ChatPage() {
 
 ## ⚠️ Important Notes
 
-### Before Building UI:
+### Before Building UI
 
 1. **External Dependencies Required:**
    - Neo4j database must be running
@@ -324,7 +353,9 @@ export default function ChatPage() {
 ## 🎯 Recommended Starting Point
 
 ### Option A: Minimal Integration (1 day)
+
 **Add to chat page:**
+
 1. Knowledge base button (top right)
 2. Sidebar with existing components
 3. Status indicator
@@ -334,7 +365,9 @@ export default function ChatPage() {
 ---
 
 ### Option B: Full Integration (1 week)
+
 **Complete chat integration:**
+
 1. Knowledge base button + sidebar
 2. Quick upload button
 3. Status indicator
@@ -346,7 +379,9 @@ export default function ChatPage() {
 ---
 
 ### Option C: Advanced (2-3 weeks)
+
 **Everything + power features:**
+
 1. All from Option B
 2. Knowledge graph viewer
 3. Smart suggestions
@@ -360,7 +395,7 @@ export default function ChatPage() {
 
 ## 📝 Next Steps
 
-### To Start Implementation:
+### To Start Implementation
 
 1. **Choose starting point** (A, B, or C above)
 2. **Create branch:** `feature/graphrag-ui`
@@ -368,7 +403,7 @@ export default function ChatPage() {
 4. **Use mockups** from GRAPHRAG_UI_MOCKUPS.md as reference
 5. **Test with real documents** to verify functionality
 
-### Testing Checklist:
+### Testing Checklist
 
 - [ ] Upload document via UI
 - [ ] See it in document list
@@ -383,13 +418,15 @@ export default function ChatPage() {
 
 ## 🆘 Need Help?
 
-### Reference These Docs:
+### Reference These Docs
+
 1. **GRAPHRAG_UI_FEATURES.md** - What to build
 2. **GRAPHRAG_UI_MOCKUPS.md** - How it should look
 3. **/lib/graphrag/README.md** - How services work
 4. **/docs/GRAPHRAG_QUICKSTART.md** - Setup instructions
 
-### Check Existing Code:
+### Check Existing Code
+
 - Look at DocumentUpload.tsx for upload patterns
 - Look at DocumentList.tsx for list/filter patterns
 - Look at GraphRAGIndicator.tsx for citation display
@@ -399,4 +436,3 @@ export default function ChatPage() {
 **You now have everything you need to build the GraphRAG UI!**
 
 Start with the Knowledge Base button in the chat page, and build from there. All the backend services are ready and waiting.
-
