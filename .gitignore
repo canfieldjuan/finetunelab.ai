@@ -47,8 +47,10 @@ __pycache__/
 /lib/training/llama.cpp/
 /lib/training/__pycache__/
 
-# graphiti (large dependencies)
-/graphiti-wrapper/
+# graphiti (large dependencies - keep venv and pycache ignored)
+/graphiti-wrapper/venv/
+/graphiti-wrapper/__pycache__/
+/graphiti-wrapper/.env
 /graphiti-main/
 
 # llmops widget build
