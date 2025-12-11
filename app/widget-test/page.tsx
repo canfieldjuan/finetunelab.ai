@@ -2,13 +2,33 @@
 
 import { useState } from 'react';
 import Script from 'next/script';
-import type { LLMOpsSDK as LLMOpsSDKClass, LLMOpsConfig, LLMEvent } from '@/lib/llmops-widget/src/llmops-sdk';
 
-// Type for the SDK instance methods we use in this page
-type LLMOpsSDKInstance = InstanceType<typeof LLMOpsSDKClass>;
+// Type definitions for the LLMOps SDK (loaded via script tag)
+interface LLMOpsConfig {
+  appId: string;
+  endpoint: string;
+  token: string;
+  debug?: boolean;
+  flushIntervalMs?: number;
+  maxBatch?: number;
+  onBeforeSend?: (event: LLMEvent) => LLMEvent | null;
+}
 
-// Use the actual SDK class type for the constructor
-type LLMOpsSDKConstructor = typeof LLMOpsSDKClass;
+interface LLMEvent {
+  type: string;
+  data: Record<string, unknown>;
+  timestamp?: number;
+}
+
+interface LLMOpsSDKInstance {
+  track: (eventType: string, data: Record<string, unknown>) => void;
+  identify: (data: { userId: string; traits?: Record<string, unknown> }) => void;
+  flush: () => void;
+}
+
+interface LLMOpsSDKConstructor {
+  new (config: LLMOpsConfig): LLMOpsSDKInstance;
+}
 
 declare global {
   interface Window {
