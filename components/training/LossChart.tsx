@@ -49,12 +49,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <p className="font-semibold text-gray-700 mb-2">Step: {label}</p>
       {trainLoss !== null && (
         <p className="text-blue-600 text-sm">
-          Train Loss: {trainLoss.toFixed(4)}
+          Train Loss: {(trainLoss as number).toFixed(4)}
         </p>
       )}
       {evalLoss !== null && (
         <p className="text-green-600 text-sm">
-          Eval Loss: {evalLoss.toFixed(4)}
+          Eval Loss: {(evalLoss as number).toFixed(4)}
         </p>
       )}
     </div>
