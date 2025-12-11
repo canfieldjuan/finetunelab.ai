@@ -5,13 +5,14 @@ import { labNotes } from '../data';
 import { generateArticleSchema } from '../schema';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     slug: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const article = labNotes.find((note) => note.slug === params.slug);
+  const { slug } = await params;
+  const article = labNotes.find((note) => note.slug === slug);
 
   if (!article) {
     return {
@@ -38,8 +39,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default function LabNoteArticlePage({ params }: PageProps) {
-  const article = labNotes.find((note) => note.slug === params.slug);
+export default async function LabNoteArticlePage({ params }: PageProps) {
+  const { slug } = await params;
+  const article = labNotes.find((note) => note.slug === slug);
   const jsonLd = article ? generateArticleSchema(article) : null;
 
   return (
