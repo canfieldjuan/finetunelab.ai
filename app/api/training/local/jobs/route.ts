@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     }
     const {
       job_id,
-      user_id,
+      user_id: body_user_id,
       model_name,
       dataset_path,
       status,
@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Extract user_id from token if missing
+    let user_id = body_user_id;
     if (!user_id) {
       const authHeader = request.headers.get('authorization');
       if (authHeader) {
