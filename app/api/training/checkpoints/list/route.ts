@@ -121,8 +121,8 @@ export async function GET(req: NextRequest) {
         .eq('config->>job_id', jobId)
         .maybeSingle();
 
-      isCloudJob = !!cloudDeployment;
-      if (isCloudJob) {
+      if (cloudDeployment) {
+        isCloudJob = true;
         console.log('[CheckpointListAPI] Job is a cloud deployment on', cloudDeployment.platform);
       }
     } catch (err) {
