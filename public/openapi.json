@@ -1,0 +1,3618 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Fine-Tune Labs API",
+    "version": "1.0.0",
+    "description": "\n# Fine-Tune Labs Public API\n\nProduction-grade API for LLMOps, model training, and monitoring.\n\n## Features\n\n- 🎯 **Widget Apps** - Deploy production monitoring widgets\n- 📊 **Analytics & Metrics** - Real-time model performance tracking\n- 🚀 **Inference Deployment** - Deploy and manage model endpoints\n- 🤖 **Model Management** - CRUD operations for LLM models\n- 📈 **Training Jobs** - Monitor fine-tuning progress\n\n## Authentication\n\nAll endpoints require Bearer token authentication:\n\n```\nAuthorization: Bearer YOUR_API_TOKEN\n```\n\nGet your API token from the Fine-Tune Labs dashboard.\n\n## Base URL\n\n- **Development**: `http://localhost:3000`\n- **Production**: `https://finetunelab.ai`\n\n## Rate Limits\n\n- 1000 requests per minute per API key\n- 10,000 requests per day per API key\n\n## Support\n\n- Documentation: https://finetunelab.ai/docs\n- Email: support@finetunelab.ai\n",
+    "contact": {
+      "name": "Fine-Tune Labs API Support",
+      "email": "support@finetunelab.ai",
+      "url": "https://finetunelab.ai/support"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://finetunelab.ai/terms"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://finetunelab.ai",
+      "description": "Production server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token from Supabase authentication"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          },
+          "details": {
+            "type": "string",
+            "description": "Additional error details"
+          },
+          "code": {
+            "type": "string",
+            "description": "Error code"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Model": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Model ID",
+            "example": "model_abc123"
+          },
+          "name": {
+            "type": "string",
+            "description": "Model name",
+            "example": "GPT-4 Turbo"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "google",
+              "local"
+            ],
+            "description": "LLM provider"
+          },
+          "model_id": {
+            "type": "string",
+            "description": "Provider-specific model identifier",
+            "example": "gpt-4-turbo-preview"
+          },
+          "base_url": {
+            "type": "string",
+            "description": "API base URL",
+            "example": "https://api.openai.com/v1"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether model is enabled"
+          },
+          "context_length": {
+            "type": "integer",
+            "description": "Maximum context window size",
+            "example": 128000
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "description": "Maximum output tokens",
+            "example": 4096
+          },
+          "supports_streaming": {
+            "type": "boolean",
+            "description": "Supports streaming responses"
+          },
+          "supports_functions": {
+            "type": "boolean",
+            "description": "Supports function calling"
+          },
+          "supports_vision": {
+            "type": "boolean",
+            "description": "Supports vision/image inputs"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TrainingConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cfg_abc123"
+          },
+          "name": {
+            "type": "string",
+            "example": "Llama 2 7B LoRA Fine-tune"
+          },
+          "description": {
+            "type": "string",
+            "example": "Customer support chatbot training config"
+          },
+          "template_type": {
+            "type": "string",
+            "enum": [
+              "lora",
+              "qlora",
+              "full_finetune",
+              "dpo",
+              "rlhf"
+            ],
+            "example": "lora"
+          },
+          "config_json": {
+            "type": "object",
+            "description": "Training hyperparameters and settings"
+          },
+          "is_validated": {
+            "type": "boolean",
+            "example": true
+          },
+          "validation_errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TrainingJob": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "job_abc123"
+          },
+          "model_name": {
+            "type": "string",
+            "example": "meta-llama/Llama-2-7b-hf"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "example": "running"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TrainingDataset": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "ds_xyz789"
+          },
+          "name": {
+            "type": "string",
+            "example": "Customer Support Conversations"
+          },
+          "description": {
+            "type": "string",
+            "example": "10K customer support interactions from Q4 2024"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "chatml",
+              "sharegpt",
+              "jsonl",
+              "dpo",
+              "rlhf"
+            ],
+            "example": "chatml"
+          },
+          "total_examples": {
+            "type": "integer",
+            "example": 1000
+          },
+          "avg_input_length": {
+            "type": "number",
+            "example": 245.5
+          },
+          "avg_output_length": {
+            "type": "number",
+            "example": 128.3
+          },
+          "file_size_bytes": {
+            "type": "integer",
+            "example": 2457600
+          },
+          "storage_path": {
+            "type": "string",
+            "example": "user123/private/dataset_xyz.jsonl.gz"
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "original_format": {
+                "type": "string"
+              },
+              "normalized": {
+                "type": "boolean"
+              },
+              "compressed": {
+                "type": "boolean"
+              },
+              "compression_type": {
+                "type": "string"
+              }
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TrainingMetricsPoint": {
+        "type": "object",
+        "description": "Single training metrics data point",
+        "properties": {
+          "step": {
+            "type": "integer",
+            "example": 100
+          },
+          "epoch": {
+            "type": "integer",
+            "example": 1
+          },
+          "train_loss": {
+            "type": "number",
+            "example": 0.345
+          },
+          "eval_loss": {
+            "type": "number",
+            "example": 0.298
+          },
+          "learning_rate": {
+            "type": "number",
+            "example": 0.00002
+          },
+          "grad_norm": {
+            "type": "number",
+            "example": 0.512
+          },
+          "gpu_memory_allocated_gb": {
+            "type": "number",
+            "example": 22.1
+          },
+          "gpu_memory_reserved_gb": {
+            "type": "number",
+            "example": 24
+          },
+          "gpu_utilization_percent": {
+            "type": "number",
+            "example": 97.5
+          },
+          "samples_per_second": {
+            "type": "number",
+            "example": 12.5
+          },
+          "tokens_per_second": {
+            "type": "number",
+            "example": 2500
+          },
+          "train_perplexity": {
+            "type": "number",
+            "example": 1.41
+          },
+          "perplexity": {
+            "type": "number",
+            "example": 1.35
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RunPodDeployment": {
+        "type": "object",
+        "properties": {
+          "deployment_id": {
+            "type": "string",
+            "example": "pod_abc123"
+          },
+          "pod_id": {
+            "type": "string",
+            "example": "pod_abc123"
+          },
+          "pod_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://pod-abc123.runpod.io"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "RUNNING",
+              "EXITED",
+              "FAILED"
+            ],
+            "example": "RUNNING"
+          },
+          "gpu_type": {
+            "type": "string",
+            "example": "NVIDIA_A100_80GB"
+          },
+          "gpu_count": {
+            "type": "integer",
+            "example": 1
+          },
+          "cost": {
+            "type": "object",
+            "properties": {
+              "estimated_cost": {
+                "type": "number",
+                "example": 25.5
+              },
+              "actual_cost": {
+                "type": "number",
+                "example": 12.45
+              },
+              "cost_per_hour": {
+                "type": "number",
+                "example": 1.89
+              }
+            }
+          }
+        }
+      },
+      "BatchTestRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "test_xyz789"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "example": "running"
+          },
+          "model_name": {
+            "type": "string",
+            "example": "gpt-4-turbo"
+          },
+          "total_prompts": {
+            "type": "integer",
+            "example": 100
+          },
+          "completed_prompts": {
+            "type": "integer",
+            "example": 67
+          },
+          "failed_prompts": {
+            "type": "integer",
+            "example": 3
+          },
+          "progress": {
+            "type": "number",
+            "description": "Progress percentage",
+            "example": 67
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "AnalyticsData": {
+        "type": "object",
+        "description": "Aggregated analytics metrics",
+        "properties": {
+          "token_usage": {
+            "type": "object",
+            "properties": {
+              "total_input_tokens": {
+                "type": "integer",
+                "example": 125000
+              },
+              "total_output_tokens": {
+                "type": "integer",
+                "example": 87500
+              },
+              "total_cost": {
+                "type": "number",
+                "example": 12.45
+              }
+            }
+          },
+          "quality_metrics": {
+            "type": "object",
+            "properties": {
+              "avg_response_quality": {
+                "type": "number",
+                "example": 0.87
+              },
+              "hallucination_rate": {
+                "type": "number",
+                "example": 0.023
+              }
+            }
+          },
+          "latency_metrics": {
+            "type": "object",
+            "properties": {
+              "p50_ms": {
+                "type": "number",
+                "example": 1234.5
+              },
+              "p95_ms": {
+                "type": "number",
+                "example": 2567.8
+              },
+              "p99_ms": {
+                "type": "number",
+                "example": 4123.2
+              }
+            }
+          },
+          "error_rate": {
+            "type": "number",
+            "example": 0.015
+          }
+        }
+      },
+      "Trace": {
+        "type": "object",
+        "description": "Execution trace for debugging",
+        "properties": {
+          "trace_id": {
+            "type": "string",
+            "example": "trace_abc123"
+          },
+          "span_id": {
+            "type": "string",
+            "example": "span_xyz789"
+          },
+          "span_name": {
+            "type": "string",
+            "example": "llm.completion"
+          },
+          "duration_ms": {
+            "type": "number",
+            "example": 1234.56
+          },
+          "operation_type": {
+            "type": "string",
+            "example": "completion"
+          },
+          "model_name": {
+            "type": "string",
+            "example": "gpt-4-turbo"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "example": "completed"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "SentimentInsight": {
+        "type": "object",
+        "description": "Sentiment analysis insight",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "sentiment_drop",
+              "sentiment_improvement",
+              "negative_pattern",
+              "positive_trend"
+            ],
+            "example": "sentiment_drop"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "example": "high"
+          },
+          "description": {
+            "type": "string",
+            "example": "Sentiment dropped by 35% in the last 24 hours"
+          },
+          "affected_conversations": {
+            "type": "integer",
+            "example": 23
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Additional context"
+          }
+        }
+      },
+      "WidgetApp": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique widget app ID",
+            "example": "widget_abc123"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID who owns this widget"
+          },
+          "name": {
+            "type": "string",
+            "description": "Widget app name",
+            "example": "Customer Support Widget"
+          },
+          "description": {
+            "type": "string",
+            "description": "Widget description",
+            "example": "Production chatbot for customer support"
+          },
+          "api_key": {
+            "type": "string",
+            "description": "API key for this widget",
+            "example": "wgt_key_xyz789abc"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Widget Apps",
+      "description": "Manage production deployment widgets"
+    },
+    {
+      "name": "Analytics",
+      "description": "Model performance analytics and metrics"
+    },
+    {
+      "name": "Batch Testing",
+      "description": "Batch testing for model performance measurement"
+    },
+    {
+      "name": "Inference",
+      "description": "Model deployment and serving"
+    },
+    {
+      "name": "Models",
+      "description": "LLM model management"
+    },
+    {
+      "name": "Training",
+      "description": "Fine-tuning and training jobs"
+    },
+    {
+      "name": "Metrics",
+      "description": "Real-time training and inference metrics"
+    }
+  ],
+  "paths": {
+    "/api/widget-apps": {
+      "get": {
+        "summary": "List widget apps",
+        "description": "Retrieve all widget apps for the authenticated user",
+        "tags": [
+          "Widget Apps"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved widget apps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "count": {
+                      "type": "integer",
+                      "example": 2
+                    },
+                    "apps": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WidgetApp"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create widget app",
+        "description": "Create a new widget app for production monitoring. Returns an API token (shown only once).",
+        "tags": [
+          "Widget Apps"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Widget app name",
+                    "example": "My Production App"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Optional description",
+                    "example": "Monitors chatbot performance"
+                  },
+                  "allowed_origins": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "CORS allowed origins",
+                    "example": [
+                      "https://myapp.com",
+                      "https://www.myapp.com"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Widget app created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "app": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "example": "app_abc123xyz"
+                        },
+                        "token": {
+                          "type": "string",
+                          "description": "API token (only shown once, save it!)",
+                          "example": "widget_xyz789abc..."
+                        },
+                        "name": {
+                          "type": "string",
+                          "example": "My Production App"
+                        },
+                        "description": {
+                          "type": "string",
+                          "example": "Monitors chatbot performance"
+                        },
+                        "allowed_origins": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "https://myapp.com"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Missing required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/data": {
+      "get": {
+        "summary": "Get production model analytics",
+        "description": "Retrieve aggregated analytics and metrics for your deployed models.\n\n**Metrics Available:**\n- Token usage (input/output tokens, costs)\n- Quality metrics (response quality, hallucination rates)\n- Tool usage statistics\n- Conversation metrics (length, turns, satisfaction)\n- Error rates and types\n- Latency measurements (p50, p95, p99)\n\n**Use Cases:**\n- Embed real-time dashboards in your application\n- Monitor production model performance\n- Track costs and usage across time periods\n- Detect anomalies and degradation\n- Generate custom reports\n\n**No UI Required** - Perfect for headless integrations!\n",
+        "tags": [
+          "Analytics"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "startDate",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Start of date range (ISO 8601)",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "End of date range (ISO 8601)",
+            "example": "2024-01-31T23:59:59Z"
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month",
+                "all"
+              ],
+              "default": "day"
+            },
+            "description": "Aggregation period",
+            "example": "day"
+          },
+          {
+            "in": "query",
+            "name": "metrics",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated metrics to fetch (or \"all\")",
+            "example": "tokens,quality,latency"
+          },
+          {
+            "in": "query",
+            "name": "model_id",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by specific model ID",
+            "example": "gpt-4-turbo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analytics data retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "dateRange": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "end": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "period": {
+                          "type": "string",
+                          "example": "day"
+                        }
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "tokens": {
+                          "type": "object",
+                          "description": "Token usage metrics",
+                          "properties": {
+                            "total_input_tokens": {
+                              "type": "integer",
+                              "example": 150000
+                            },
+                            "total_output_tokens": {
+                              "type": "integer",
+                              "example": 75000
+                            },
+                            "estimated_cost": {
+                              "type": "number",
+                              "example": 12.45
+                            }
+                          }
+                        },
+                        "quality": {
+                          "type": "object",
+                          "description": "Response quality metrics",
+                          "properties": {
+                            "avg_quality_score": {
+                              "type": "number",
+                              "example": 0.87
+                            },
+                            "hallucination_rate": {
+                              "type": "number",
+                              "example": 0.03
+                            }
+                          }
+                        },
+                        "latency": {
+                          "type": "object",
+                          "description": "Latency statistics",
+                          "properties": {
+                            "p50_ms": {
+                              "type": "number",
+                              "example": 1234.5
+                            },
+                            "p95_ms": {
+                              "type": "number",
+                              "example": 2456.8
+                            },
+                            "p99_ms": {
+                              "type": "number",
+                              "example": 3890.2
+                            }
+                          }
+                        },
+                        "errors": {
+                          "type": "object",
+                          "properties": {
+                            "total_errors": {
+                              "type": "integer",
+                              "example": 12
+                            },
+                            "error_rate": {
+                              "type": "number",
+                              "example": 0.012
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/sentiment/insights": {
+      "get": {
+        "summary": "Get sentiment insights and anomalies",
+        "description": "Detect sentiment-related patterns, anomalies, and insights from user conversations.\n\nAnalyzes conversation sentiment to identify:\n- Sudden sentiment drops (user dissatisfaction)\n- Sentiment improvement patterns\n- Recurring negative topics\n- User satisfaction trends\n- Emotional engagement patterns\n\n**Use Cases:**\n- Monitor user satisfaction in production\n- Detect quality regressions after model updates\n- Identify problematic conversation patterns\n- Track customer sentiment over time\n- Trigger alerts for negative sentiment spikes\n",
+        "tags": [
+          "Analytics"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lookback_days",
+            "schema": {
+              "type": "integer",
+              "default": 30
+            },
+            "description": "Number of days to analyze",
+            "example": 7
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sentiment insights retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "insights": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "sentiment_drop",
+                              "sentiment_improvement",
+                              "negative_pattern",
+                              "positive_trend"
+                            ],
+                            "example": "sentiment_drop"
+                          },
+                          "severity": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high",
+                              "critical"
+                            ],
+                            "example": "high"
+                          },
+                          "description": {
+                            "type": "string",
+                            "example": "Sentiment dropped by 35% in the last 24 hours"
+                          },
+                          "affected_conversations": {
+                            "type": "integer",
+                            "example": 23
+                          },
+                          "timestamp": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "description": "Additional context about the insight"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/traces": {
+      "get": {
+        "summary": "Get execution traces",
+        "description": "Retrieve detailed execution traces of LLM operations for debugging and analysis.\n\nTraces provide hierarchical view of:\n- Request/response cycles\n- Tool calls and their execution\n- Model invocations\n- Performance timing data\n- Error information\n\n**Use Cases:**\n- Debug production issues\n- Performance profiling\n- Track multi-step agent operations\n- Audit model behavior\n",
+        "tags": [
+          "Analytics"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversation_id",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by conversation ID"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Maximum traces to return"
+          },
+          {
+            "in": "query",
+            "name": "start_date",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Filter traces after this date"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Traces retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "traces": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "trace_id": {
+                            "type": "string"
+                          },
+                          "span_name": {
+                            "type": "string",
+                            "example": "llm.completion"
+                          },
+                          "duration_ms": {
+                            "type": "number",
+                            "example": 1234.56
+                          },
+                          "model_name": {
+                            "type": "string",
+                            "example": "gpt-4-turbo"
+                          },
+                          "operation_type": {
+                            "type": "string",
+                            "example": "completion"
+                          },
+                          "children": {
+                            "type": "array",
+                            "description": "Nested child traces"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Capture execution trace",
+        "description": "Send a trace event for an LLM operation. Used to track and debug production systems.\n\nTypically called automatically by your application code when integrated with\ntracing middleware.\n",
+        "tags": [
+          "Analytics"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "trace_id",
+                  "span_id",
+                  "span_name",
+                  "start_time"
+                ],
+                "properties": {
+                  "trace_id": {
+                    "type": "string",
+                    "example": "trace_abc123"
+                  },
+                  "span_id": {
+                    "type": "string",
+                    "example": "span_xyz789"
+                  },
+                  "span_name": {
+                    "type": "string",
+                    "example": "llm.completion"
+                  },
+                  "start_time": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "end_time": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "operation_type": {
+                    "type": "string",
+                    "example": "completion"
+                  },
+                  "model_name": {
+                    "type": "string",
+                    "example": "gpt-4-turbo"
+                  },
+                  "metadata": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Trace captured successfully"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/batch-testing/extract": {
+      "post": {
+        "summary": "Extract prompts from conversations",
+        "description": "Extract prompts from Claude Desktop conversation JSON files or other sources.\n\nThis is the first step before running batch tests - it extracts and validates\nprompts from your conversation history or custom JSON files.\n\n**Use Cases:**\n- Prepare test datasets from production conversations\n- Extract prompts from exported chat histories\n- Build regression test suites from real user interactions\n",
+        "tags": [
+          "Batch Testing"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "source_path"
+                ],
+                "properties": {
+                  "source_path": {
+                    "type": "string",
+                    "description": "Path to conversation JSON files",
+                    "example": "/path/to/conversations"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Maximum number of prompts to extract",
+                    "example": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Prompts extracted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Total prompts extracted",
+                      "example": 87
+                    },
+                    "prompts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "What is machine learning?",
+                        "Explain neural networks"
+                      ]
+                    },
+                    "filesProcessed": {
+                      "type": "integer",
+                      "description": "Number of files scanned",
+                      "example": 12
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid source path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/batch-testing/run": {
+      "post": {
+        "summary": "Run batch tests on model",
+        "description": "Execute batch testing to measure real-time model performance metrics.\n\nThis endpoint runs prompts through the /api/chat endpoint, automatically\ncollecting and persisting analytics data including:\n- Response quality metrics\n- Latency measurements\n- Token usage\n- Error rates\n\n**Use Cases:**\n- Continuous model monitoring\n- A/B testing different models\n- Regression testing after model updates\n- Performance benchmarking\n",
+        "tags": [
+          "Batch Testing"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "config"
+                ],
+                "properties": {
+                  "config": {
+                    "type": "object",
+                    "required": [
+                      "model_id"
+                    ],
+                    "properties": {
+                      "model_id": {
+                        "type": "string",
+                        "description": "Model ID from your registered models",
+                        "example": "gpt-4-turbo"
+                      },
+                      "dataset_id": {
+                        "type": "string",
+                        "description": "ID of saved dataset (alternative to source_path)",
+                        "example": "dataset_abc123"
+                      },
+                      "source_path": {
+                        "type": "string",
+                        "description": "File path to prompts (alternative to dataset_id)",
+                        "example": "/path/to/prompts.json"
+                      },
+                      "prompt_limit": {
+                        "type": "integer",
+                        "default": 25,
+                        "description": "Maximum number of prompts to test",
+                        "example": 100
+                      },
+                      "concurrency": {
+                        "type": "integer",
+                        "default": 3,
+                        "description": "Number of concurrent requests",
+                        "example": 5
+                      },
+                      "delay_ms": {
+                        "type": "integer",
+                        "default": 1000,
+                        "description": "Delay between requests in milliseconds",
+                        "example": 500
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch test completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "test_id": {
+                      "type": "string",
+                      "description": "Unique test run identifier",
+                      "example": "test_xyz789"
+                    },
+                    "results": {
+                      "type": "object",
+                      "properties": {
+                        "total_prompts": {
+                          "type": "integer",
+                          "example": 100
+                        },
+                        "successful": {
+                          "type": "integer",
+                          "example": 98
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "example": 2
+                        },
+                        "avg_latency_ms": {
+                          "type": "number",
+                          "example": 1234.56
+                        },
+                        "total_tokens": {
+                          "type": "integer",
+                          "example": 15000
+                        }
+                      }
+                    },
+                    "analytics_url": {
+                      "type": "string",
+                      "description": "URL to view detailed analytics",
+                      "example": "https://app.example.com/analytics/test_xyz789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Missing or invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/batch-testing/status/{id}": {
+      "get": {
+        "summary": "Get batch test status",
+        "description": "Check the status of a running or completed batch test.\n\nReturns real-time progress information including:\n- Total, completed, and failed prompts\n- Current execution stage\n- Estimated time remaining\n- Preliminary results (if available)\n\n**Use Cases:**\n- Poll for test completion\n- Monitor long-running tests\n- Display progress in your UI\n- Track test execution in real-time\n",
+        "tags": [
+          "Batch Testing"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Batch test run ID (returned from /api/batch-testing/run)",
+            "example": "test_xyz789"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "test_id": {
+                      "type": "string",
+                      "example": "test_xyz789"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "running",
+                        "completed",
+                        "failed",
+                        "cancelled"
+                      ],
+                      "example": "running"
+                    },
+                    "progress": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "example": 100
+                        },
+                        "completed": {
+                          "type": "integer",
+                          "example": 67
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "example": 3
+                        },
+                        "percentage": {
+                          "type": "number",
+                          "example": 67
+                        }
+                      }
+                    },
+                    "estimated_time_remaining_ms": {
+                      "type": "integer",
+                      "description": "Estimated milliseconds until completion",
+                      "example": 45000
+                    },
+                    "preliminary_results": {
+                      "type": "object",
+                      "description": "Partial results (only if test is running/completed)",
+                      "properties": {
+                        "avg_latency_ms": {
+                          "type": "number",
+                          "example": 1234.56
+                        },
+                        "success_rate": {
+                          "type": "number",
+                          "example": 0.96
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Test run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/deploy": {
+      "post": {
+        "summary": "Deploy model to production inference endpoint",
+        "description": "Deploy your trained models to serverless GPU inference endpoints.\n\nThis endpoint creates a production-ready, auto-scaling inference deployment on RunPod Serverless.\nYour model will be deployed with:\n- Auto-scaling GPU workers (scale to zero when idle)\n- Budget controls and spending limits\n- Production-grade load balancing\n- Per-request billing\n\n**Use Cases:**\n- Deploy fine-tuned models to production\n- Serve custom LLMs at scale\n- A/B test different model versions\n- Control infrastructure costs with budget limits\n\n**Workflow:**\n1. Train your model or upload model artifacts\n2. Store model weights in cloud storage (S3, GCS, etc.)\n3. Call this endpoint with model URL and config\n4. Use the returned endpoint_url for inference requests\n\n**Note:** Requires RunPod API key configured in Settings > Secrets\n",
+        "tags": [
+          "Inference"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "provider",
+                  "deployment_name",
+                  "base_model",
+                  "model_type",
+                  "model_storage_url",
+                  "budget_limit"
+                ],
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "runpod-serverless"
+                    ],
+                    "description": "Infrastructure provider",
+                    "example": "runpod-serverless"
+                  },
+                  "deployment_name": {
+                    "type": "string",
+                    "description": "Unique name for this deployment",
+                    "example": "my-finetuned-llama-v1"
+                  },
+                  "base_model": {
+                    "type": "string",
+                    "description": "Base model architecture",
+                    "example": "meta-llama/Llama-2-7b-hf"
+                  },
+                  "model_type": {
+                    "type": "string",
+                    "enum": [
+                      "base",
+                      "finetuned",
+                      "quantized"
+                    ],
+                    "description": "Type of model deployment",
+                    "example": "finetuned"
+                  },
+                  "model_storage_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Cloud storage URL where model weights are stored (S3, GCS, etc.)",
+                    "example": "s3://my-bucket/models/llama2-finetuned/"
+                  },
+                  "training_config_id": {
+                    "type": "string",
+                    "description": "Associated training configuration ID (optional)",
+                    "example": "config_abc123"
+                  },
+                  "training_job_id": {
+                    "type": "string",
+                    "description": "Associated training job ID (optional)",
+                    "example": "job_xyz789"
+                  },
+                  "model_artifact_id": {
+                    "type": "string",
+                    "description": "Model artifact ID from training (optional)",
+                    "example": "artifact_def456"
+                  },
+                  "gpu_type": {
+                    "type": "string",
+                    "enum": [
+                      "NVIDIA_A100_80GB",
+                      "NVIDIA_A40",
+                      "NVIDIA_RTX_A6000",
+                      "NVIDIA_RTX_A5000"
+                    ],
+                    "description": "GPU type for inference workers (defaults to optimal for model size)",
+                    "example": "NVIDIA_A100_80GB"
+                  },
+                  "min_workers": {
+                    "type": "integer",
+                    "default": 0,
+                    "description": "Minimum number of workers (0 = scale to zero when idle)",
+                    "example": 0
+                  },
+                  "max_workers": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Maximum number of workers for auto-scaling",
+                    "example": 5
+                  },
+                  "budget_limit": {
+                    "type": "number",
+                    "description": "Monthly budget limit in USD",
+                    "example": 100
+                  },
+                  "auto_stop_on_budget": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically stop deployment when budget is reached",
+                    "example": true
+                  },
+                  "environment_variables": {
+                    "type": "object",
+                    "description": "Custom environment variables for inference container",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "example": {
+                      "MAX_BATCH_SIZE": "8",
+                      "TEMPERATURE": "0.7"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deployment created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "deployment_id": {
+                      "type": "string",
+                      "description": "Unique deployment identifier",
+                      "example": "dep_abc123xyz"
+                    },
+                    "endpoint_url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Production inference endpoint URL",
+                      "example": "https://api.runpod.ai/v2/my-endpoint-abc123/runsync"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "INITIALIZING",
+                        "RUNNING",
+                        "STOPPED",
+                        "FAILED"
+                      ],
+                      "description": "Current deployment status",
+                      "example": "INITIALIZING"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Missing required fields or invalid provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "UNSUPPORTED_PROVIDER"
+                          ],
+                          "example": "VALIDATION_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Missing required field: budget_limit"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "UNAUTHORIZED",
+                            "NO_CREDENTIALS"
+                          ],
+                          "example": "NO_CREDENTIALS"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "No RunPod API key found"
+                        },
+                        "details": {
+                          "type": "string",
+                          "example": "Please add your RunPod API key in Settings > Secrets"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error - Deployment failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "DEPLOYMENT_FAILED",
+                            "INTERNAL_ERROR"
+                          ],
+                          "example": "DEPLOYMENT_FAILED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Failed to create inference endpoint"
+                        },
+                        "details": {
+                          "type": "string",
+                          "example": "RunPod API error: Invalid GPU type"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models": {
+      "get": {
+        "summary": "List available models",
+        "description": "Retrieve all available LLM models (global + user's personal models).\n\nReturns models from:\n- Global model registry (available to all users)\n- User's personal models (if authenticated)\n\n**Use Cases:**\n- Populate model selection dropdowns\n- Discover available models for testing\n- Check model availability before batch testing\n",
+        "tags": [
+          "Models"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Models retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "count": {
+                      "type": "integer",
+                      "example": 12
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Model"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Register new model",
+        "description": "Register a new LLM model in the system.\n\nSupports:\n- OpenAI models (GPT-4, GPT-3.5, etc.)\n- Anthropic models (Claude)\n- Google models (Gemini)\n- Local models\n\n**Use Cases:**\n- Add custom fine-tuned models\n- Register models with custom API keys\n- Configure model-specific settings\n",
+        "tags": [
+          "Models"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "provider",
+                  "model_id"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Display name for the model",
+                    "example": "GPT-4 Turbo"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "openai",
+                      "anthropic",
+                      "google",
+                      "local"
+                    ],
+                    "example": "openai"
+                  },
+                  "model_id": {
+                    "type": "string",
+                    "description": "Provider-specific model identifier",
+                    "example": "gpt-4-turbo-preview"
+                  },
+                  "api_key_encrypted": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "Encrypted API key (optional, uses global key if not provided)"
+                  },
+                  "context_length": {
+                    "type": "integer",
+                    "description": "Maximum context window size",
+                    "example": 128000
+                  },
+                  "max_output_tokens": {
+                    "type": "integer",
+                    "description": "Maximum output tokens",
+                    "example": 4096
+                  },
+                  "default_temperature": {
+                    "type": "number",
+                    "description": "Default temperature (0.0 - 2.0)",
+                    "example": 0.7
+                  },
+                  "default_top_p": {
+                    "type": "number",
+                    "description": "Default top_p (0.0 - 1.0)",
+                    "example": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Model registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "model": {
+                      "$ref": "#/components/schemas/Model"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/training": {
+      "get": {
+        "summary": "List training configurations",
+        "description": "Retrieve all training configurations for the authenticated user.\n\nTraining configurations define the hyperparameters, model architecture,\nand training settings for fine-tuning jobs.\n\n**Use Cases:**\n- List all saved training configurations\n- Select a config to start a training job\n- Review previously used training settings\n",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configurations retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "configs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "example": "cfg_abc123"
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "Llama 2 7B Fine-tune"
+                          },
+                          "description": {
+                            "type": "string",
+                            "example": "Customer support chatbot training config"
+                          },
+                          "template_type": {
+                            "type": "string",
+                            "enum": [
+                              "lora",
+                              "full_finetune",
+                              "qlora",
+                              "dpo",
+                              "rlhf"
+                            ],
+                            "example": "lora"
+                          },
+                          "config_json": {
+                            "type": "object",
+                            "description": "Training hyperparameters and settings"
+                          },
+                          "is_validated": {
+                            "type": "boolean",
+                            "example": true
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create training configuration",
+        "description": "Create a new training configuration with hyperparameters and settings.\n\nTraining configurations are validated before being saved. Invalid configs\nwill still be created but flagged with validation errors.\n\n**Use Cases:**\n- Save reusable training configurations\n- Create configs for different model types or use cases\n- Template configs for team members\n\n**Supported Template Types:**\n- `lora` - LoRA (Low-Rank Adaptation) fine-tuning\n- `qlora` - QLoRA (Quantized LoRA) for memory efficiency\n- `full_finetune` - Full parameter fine-tuning\n- `dpo` - Direct Preference Optimization\n- `rlhf` - Reinforcement Learning from Human Feedback\n",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "template_type",
+                  "config_json"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Configuration name",
+                    "example": "Llama 2 7B LoRA"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Optional description",
+                    "example": "LoRA fine-tuning for customer support chatbot"
+                  },
+                  "template_type": {
+                    "type": "string",
+                    "enum": [
+                      "lora",
+                      "full_finetune",
+                      "qlora",
+                      "dpo",
+                      "rlhf"
+                    ],
+                    "example": "lora"
+                  },
+                  "config_json": {
+                    "type": "object",
+                    "description": "Training hyperparameters",
+                    "properties": {
+                      "model_name": {
+                        "type": "string",
+                        "example": "meta-llama/Llama-2-7b-hf"
+                      },
+                      "training": {
+                        "type": "object",
+                        "properties": {
+                          "learning_rate": {
+                            "type": "number",
+                            "example": 0.00002
+                          },
+                          "epochs": {
+                            "type": "integer",
+                            "example": 3
+                          },
+                          "batch_size": {
+                            "type": "integer",
+                            "example": 4
+                          },
+                          "warmup_ratio": {
+                            "type": "number",
+                            "example": 0.1
+                          }
+                        }
+                      },
+                      "lora": {
+                        "type": "object",
+                        "properties": {
+                          "r": {
+                            "type": "integer",
+                            "example": 16
+                          },
+                          "alpha": {
+                            "type": "integer",
+                            "example": 32
+                          },
+                          "dropout": {
+                            "type": "number",
+                            "example": 0.05
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Configuration created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "config": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "is_validated": {
+                          "type": "boolean"
+                        },
+                        "validation_errors": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/training/{id}": {
+      "get": {
+        "summary": "Get training configuration",
+        "description": "Retrieve a specific training configuration by ID",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Training configuration ID",
+            "example": "cfg_abc123"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configuration retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "config": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Configuration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update training configuration",
+        "description": "Update an existing training configuration's settings",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "cfg_abc123"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "config_json": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuration updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "config": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete training configuration",
+        "description": "Delete a training configuration",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "cfg_abc123"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configuration deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/training/dataset": {
+      "post": {
+        "summary": "Upload training dataset",
+        "description": "Upload and validate a training dataset for fine-tuning.\n\nDatasets are automatically validated and normalized to a standard format.\nSupported formats include ChatML, ShareGPT, JSONL, DPO, and RLHF.\n\nThe system will:\n- Detect the dataset format automatically\n- Normalize to standard JSONL format\n- Compress with gzip for efficient storage\n- Validate data quality (input/output lengths, structure)\n\n**Use Cases:**\n- Upload training data for fine-tuning jobs\n- Validate dataset format before training\n- Reuse datasets across multiple training runs\n\n**Supported Formats:**\n- `chatml` - ChatML conversation format\n- `sharegpt` - ShareGPT conversation format\n- `jsonl` - JSON Lines format\n- `dpo` - Direct Preference Optimization pairs\n- `rlhf` - RLHF preference data\n",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "name",
+                  "format"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Training dataset file"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Dataset name",
+                    "example": "Customer Support Conversations"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Optional dataset description",
+                    "example": "10K customer support interactions from Q4 2024"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "chatml",
+                      "sharegpt",
+                      "jsonl",
+                      "dpo",
+                      "rlhf"
+                    ],
+                    "description": "Dataset format",
+                    "example": "chatml"
+                  },
+                  "config_id": {
+                    "type": "string",
+                    "description": "Optional training config to associate with",
+                    "example": "cfg_abc123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dataset uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dataset": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "example": "ds_xyz789"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "format": {
+                          "type": "string"
+                        },
+                        "total_examples": {
+                          "type": "integer",
+                          "example": 1000
+                        },
+                        "avg_input_length": {
+                          "type": "number",
+                          "example": 245.5
+                        },
+                        "avg_output_length": {
+                          "type": "number",
+                          "example": 128.3
+                        },
+                        "file_size_bytes": {
+                          "type": "integer"
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "properties": {
+                            "original_format": {
+                              "type": "string"
+                            },
+                            "normalized": {
+                              "type": "boolean"
+                            },
+                            "compressed": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid dataset or missing fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List training datasets",
+        "description": "Retrieve all uploaded datasets for the authenticated user.\n\n**Use Cases:**\n- List available datasets for training\n- Select dataset for a training job\n- Review dataset statistics\n",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Datasets retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "datasets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "format": {
+                            "type": "string"
+                          },
+                          "total_examples": {
+                            "type": "integer"
+                          },
+                          "file_size_bytes": {
+                            "type": "integer"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/training/deploy/runpod": {
+      "post": {
+        "summary": "Deploy training job to RunPod",
+        "description": "Start a fine-tuning training job on RunPod's GPU infrastructure.\n\nThis endpoint provisions a GPU pod, sets up the training environment,\nand begins model fine-tuning with your specified configuration and dataset.\n\n**Features:**\n- Auto-provisioned GPU pods (A100, A6000, RTX 4090, etc.)\n- Automatic environment setup\n- Real-time metrics reporting\n- Budget controls and cost monitoring\n- Auto-shutdown on completion\n\n**Use Cases:**\n- Start fine-tuning jobs programmatically\n- Scale training across multiple GPUs\n- Train models without local GPU hardware\n\n**Workflow:**\n1. Create training configuration\n2. Upload dataset\n3. Deploy to RunPod\n4. Monitor via status endpoint\n5. Retrieve trained model artifacts\n\n**Note:** Requires RunPod API key configured in Settings > Secrets\n",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "training_config_id"
+                ],
+                "properties": {
+                  "training_config_id": {
+                    "type": "string",
+                    "description": "Training configuration ID",
+                    "example": "cfg_abc123"
+                  },
+                  "gpu_type": {
+                    "type": "string",
+                    "enum": [
+                      "NVIDIA_A100_80GB",
+                      "NVIDIA_A100_40GB",
+                      "NVIDIA_A6000",
+                      "NVIDIA_RTX_A5000",
+                      "NVIDIA_RTX_4090"
+                    ],
+                    "description": "GPU type to use",
+                    "example": "NVIDIA_A100_80GB"
+                  },
+                  "gpu_count": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Number of GPUs",
+                    "example": 1
+                  },
+                  "docker_image": {
+                    "type": "string",
+                    "description": "Custom Docker image (optional)",
+                    "example": "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel"
+                  },
+                  "volume_size_gb": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Persistent volume size in GB",
+                    "example": 100
+                  },
+                  "budget_limit": {
+                    "type": "number",
+                    "description": "Maximum budget in USD",
+                    "example": 50
+                  },
+                  "environment_variables": {
+                    "type": "object",
+                    "description": "Custom environment variables",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "example": {
+                      "WANDB_API_KEY": "your-wandb-key",
+                      "HF_TOKEN": "your-hf-token"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Training job deployed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deployment_id": {
+                      "type": "string",
+                      "example": "pod_abc123"
+                    },
+                    "pod_id": {
+                      "type": "string",
+                      "example": "pod_abc123"
+                    },
+                    "pod_url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://pod-abc123.runpod.io"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "CREATED",
+                        "RUNNING",
+                        "EXITED",
+                        "FAILED"
+                      ],
+                      "example": "RUNNING"
+                    },
+                    "gpu_type": {
+                      "type": "string",
+                      "example": "NVIDIA_A100_80GB"
+                    },
+                    "gpu_count": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "cost": {
+                      "type": "object",
+                      "properties": {
+                        "estimated_cost": {
+                          "type": "number",
+                          "example": 25.5
+                        },
+                        "cost_per_hour": {
+                          "type": "number",
+                          "example": 1.89
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "RunPod deployment created successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required fields or RunPod API key not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "RunPod API key not configured"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Training configuration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get RunPod deployment status",
+        "description": "Check the status of a running or completed RunPod training deployment.\n\nReturns real-time information about:\n- Pod status (running, stopped, failed)\n- Training metrics\n- Cost information\n- Resource usage\n",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "deployment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "RunPod deployment/pod ID",
+            "example": "pod_abc123"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deployment_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "CREATED",
+                        "RUNNING",
+                        "EXITED",
+                        "FAILED"
+                      ]
+                    },
+                    "pod_url": {
+                      "type": "string"
+                    },
+                    "cost": {
+                      "type": "object",
+                      "properties": {
+                        "actual_cost": {
+                          "type": "number",
+                          "example": 12.45
+                        }
+                      }
+                    },
+                    "metrics": {
+                      "type": "object",
+                      "description": "Training metrics (if available)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing deployment_id parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Stop RunPod deployment",
+        "description": "Stop a running RunPod training deployment.\n\nThis will:\n- Stop the training process\n- Terminate the GPU pod\n- Save final model checkpoints (if configured)\n- Update cost tracking\n",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "deployment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "RunPod deployment/pod ID",
+            "example": "pod_abc123"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployment stopped successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deployment_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "stopped"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "RunPod deployment stopped successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing deployment_id parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/training/jobs": {
+      "get": {
+        "summary": "List training jobs",
+        "description": "Retrieve all training jobs for the authenticated user.\n\nReturns recent training jobs with their current status, including jobs\nrunning locally, on RunPod, Lambda Labs, or other platforms.\n\nThe system automatically reconciles job statuses with the backend to\ndetect stale or orphaned jobs.\n\n**Use Cases:**\n- Monitor all training jobs in one place\n- Check job status and progress\n- Review training history\n- Filter and search past jobs\n",
+        "tags": [
+          "Training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Jobs retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "count": {
+                      "type": "integer",
+                      "example": 15
+                    },
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "example": "job_abc123"
+                          },
+                          "model_name": {
+                            "type": "string",
+                            "example": "meta-llama/Llama-2-7b-hf"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "queued",
+                              "running",
+                              "completed",
+                              "failed",
+                              "cancelled"
+                            ],
+                            "example": "running"
+                          },
+                          "started_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "completed_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/training/local/{jobId}/status": {
+      "get": {
+        "summary": "Get real-time training job status",
+        "description": "Monitor a training job in real-time with comprehensive status and performance metrics.\n\nThis endpoint provides everything you need to build a live training dashboard:\n- **Progress tracking** - Current step, epoch, and percentage complete\n- **Loss metrics** - Training and validation loss with trend analysis\n- **Performance metrics** - Throughput, GPU usage, and estimated time remaining\n- **Quality indicators** - Perplexity calculations and improvement tracking\n- **Health monitoring** - Stale job detection and error reporting\n\n**Use Cases:**\n- Build real-time training dashboards\n- Monitor long-running fine-tuning jobs\n- Track training progress programmatically\n- Detect training failures early\n- Display live metrics in your application\n\n**Metrics Included:**\n- Progress: steps, epochs, percentage, time estimates\n- Loss: train_loss, eval_loss, best_eval_loss, trend analysis\n- GPU: memory usage (allocated/reserved), utilization %\n- Throughput: samples/second, tokens/second\n- Quality: perplexity, epochs without improvement\n",
+        "tags": [
+          "Metrics"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Training job ID",
+            "example": "job_abc123"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Training status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string",
+                      "example": "job_abc123"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "running",
+                        "completed",
+                        "failed",
+                        "cancelled"
+                      ],
+                      "example": "running"
+                    },
+                    "model_name": {
+                      "type": "string",
+                      "example": "meta-llama/Llama-2-7b-hf"
+                    },
+                    "model_display_name": {
+                      "type": "string",
+                      "example": "Llama 2 7B"
+                    },
+                    "job_name": {
+                      "type": "string",
+                      "example": "Customer Support Fine-tune"
+                    },
+                    "dataset_name": {
+                      "type": "string",
+                      "example": "support-conversations-v2"
+                    },
+                    "current_step": {
+                      "type": "integer",
+                      "example": 450
+                    },
+                    "current_epoch": {
+                      "type": "integer",
+                      "example": 2
+                    },
+                    "total_steps": {
+                      "type": "integer",
+                      "example": 1000
+                    },
+                    "total_epochs": {
+                      "type": "integer",
+                      "example": 3
+                    },
+                    "progress": {
+                      "type": "integer",
+                      "description": "Percentage complete (0-100)",
+                      "example": 45
+                    },
+                    "loss": {
+                      "type": "number",
+                      "description": "Current training loss",
+                      "example": 0.234
+                    },
+                    "eval_loss": {
+                      "type": "number",
+                      "description": "Current validation loss",
+                      "example": 0.198
+                    },
+                    "best_eval_loss": {
+                      "type": "number",
+                      "description": "Best validation loss achieved",
+                      "example": 0.187
+                    },
+                    "loss_trend": {
+                      "type": "string",
+                      "enum": [
+                        "improving",
+                        "stable",
+                        "degrading"
+                      ],
+                      "example": "improving"
+                    },
+                    "train_perplexity": {
+                      "type": "number",
+                      "example": 1.26
+                    },
+                    "eval_perplexity": {
+                      "type": "number",
+                      "example": 1.22
+                    },
+                    "learning_rate": {
+                      "type": "number",
+                      "example": 0.00002
+                    },
+                    "gpu_memory_allocated_gb": {
+                      "type": "number",
+                      "example": 22.4
+                    },
+                    "gpu_memory_reserved_gb": {
+                      "type": "number",
+                      "example": 24
+                    },
+                    "gpu_utilization_percent": {
+                      "type": "number",
+                      "example": 98.5
+                    },
+                    "samples_per_second": {
+                      "type": "number",
+                      "example": 12.3
+                    },
+                    "tokens_per_second": {
+                      "type": "number",
+                      "example": 2450
+                    },
+                    "elapsed_seconds": {
+                      "type": "integer",
+                      "example": 3600
+                    },
+                    "remaining_seconds": {
+                      "type": "integer",
+                      "example": 4400
+                    },
+                    "epochs_without_improvement": {
+                      "type": "integer",
+                      "description": "Epochs since last validation improvement",
+                      "example": 0
+                    },
+                    "warning": {
+                      "type": "string",
+                      "description": "Warning message for stale jobs",
+                      "example": "⚠️ No updates received in 12 minute(s). The training process may have terminated unexpectedly."
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Error message if status is failed",
+                      "example": "CUDA out of memory"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Training job not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/training/local/{jobId}/metrics": {
+      "get": {
+        "summary": "Get training metrics history",
+        "description": "Retrieve the complete training metrics history for visualization and analysis.\n\nThis endpoint returns all metric points collected during training, perfect for:\n- **Loss curves** - Plot training and validation loss over time\n- **Performance charts** - Visualize GPU usage, throughput, and learning rate\n- **Trend analysis** - Analyze perplexity, gradient norms, and other metrics\n- **Export data** - Download full training history for external analysis\n\nEach metric point includes:\n- Step and epoch numbers\n- Loss metrics (train_loss, eval_loss)\n- GPU metrics (memory, utilization)\n- Performance metrics (samples/sec, tokens/sec)\n- Training parameters (learning_rate, grad_norm)\n- Quality metrics (perplexity)\n\n**Use Cases:**\n- Build interactive training charts\n- Export metrics to TensorBoard, W&B, or MLflow\n- Analyze training dynamics post-hoc\n- Compare multiple training runs\n",
+        "tags": [
+          "Metrics"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Training job ID",
+            "example": "job_abc123"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Metrics history retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string",
+                      "example": "job_abc123"
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "description": "Array of metric points ordered by step",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "integer",
+                            "example": 100
+                          },
+                          "epoch": {
+                            "type": "integer",
+                            "example": 1
+                          },
+                          "train_loss": {
+                            "type": "number",
+                            "example": 0.345
+                          },
+                          "eval_loss": {
+                            "type": "number",
+                            "example": 0.298
+                          },
+                          "learning_rate": {
+                            "type": "number",
+                            "example": 0.00002
+                          },
+                          "grad_norm": {
+                            "type": "number",
+                            "example": 0.512
+                          },
+                          "gpu_memory_allocated_gb": {
+                            "type": "number",
+                            "example": 22.1
+                          },
+                          "gpu_memory_reserved_gb": {
+                            "type": "number",
+                            "example": 24
+                          },
+                          "gpu_utilization_percent": {
+                            "type": "number",
+                            "example": 97.5
+                          },
+                          "samples_per_second": {
+                            "type": "number",
+                            "example": 12.5
+                          },
+                          "tokens_per_second": {
+                            "type": "number",
+                            "example": 2500
+                          },
+                          "train_perplexity": {
+                            "type": "number",
+                            "example": 1.41
+                          },
+                          "perplexity": {
+                            "type": "number",
+                            "example": 1.35
+                          },
+                          "timestamp": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/training/local/{jobId}/logs": {
+      "get": {
+        "summary": "Get training logs",
+        "description": "Stream training logs in real-time with pagination support.\n\nAccess the raw console output from your training job, including:\n- Model initialization logs\n- Training progress messages\n- Warning and error messages\n- Debug output\n- Checkpoint save notifications\n\n**Use Cases:**\n- Debug training failures\n- Monitor training progress in detail\n- Tail logs in real-time\n- Export logs for troubleshooting\n- Build log viewers in your application\n\n**Pagination:**\n- Use `limit` and `offset` to paginate through large log files\n- Default limit: 100 lines\n- Logs are returned in chronological order\n",
+        "tags": [
+          "Metrics"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Training job ID",
+            "example": "job_abc123"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Maximum number of log lines to return",
+            "example": 50
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            },
+            "description": "Line offset to start from (for pagination)",
+            "example": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logs retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "logs": {
+                      "type": "array",
+                      "description": "Array of log lines",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "[2024-11-15 10:23:45] Loading model meta-llama/Llama-2-7b-hf...",
+                        "[2024-11-15 10:24:12] Model loaded successfully",
+                        "[2024-11-15 10:24:15] Starting training...",
+                        "[2024-11-15 10:24:30] Step 1/1000 | Loss: 2.456"
+                      ]
+                    },
+                    "total_lines": {
+                      "type": "integer",
+                      "description": "Total number of log lines available",
+                      "example": 1523
+                    },
+                    "offset": {
+                      "type": "integer",
+                      "description": "Current offset",
+                      "example": 0
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "description": "Current limit",
+                      "example": 100
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Training server unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Failed to connect to local training server"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

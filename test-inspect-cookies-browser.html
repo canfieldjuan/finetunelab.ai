@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cookie Inspection Test</title>
+</head>
+<body>
+    <h1>Supabase Cookie Inspection Test</h1>
+    <p>Instructions:</p>
+    <ol>
+        <li>Make sure you are logged into the app (open main app in another tab)</li>
+        <li>Click the button below to inspect cookies</li>
+        <li>Check browser console and server logs for results</li>
+    </ol>
+    <button onclick="testCookies()">Inspect Cookies</button>
+    <pre id="result"></pre>
+
+    <script>
+    async function testCookies() {
+        console.log('[Test] Starting cookie inspection...');
+
+        try {
+            const response = await fetch('http://localhost:3000/api/training/inspect-cookies', {
+                method: 'POST',
+                credentials: 'include',  // CRITICAL: This sends cookies
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('[Test] Response status:', response.status);
+
+            const data = await response.json();
+            console.log('[Test] Response data:', data);
+
+            document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+
+            if (response.status === 200) {
+                console.log('[Test] SUCCESS! Found cookies:', data.cookieNames);
+                console.log('[Test] Supabase cookies:', data.supabaseCookieNames);
+            }
+
+        } catch (error) {
+            console.error('[Test] ERROR:', error);
+            document.getElementById('result').textContent = 'Error: ' + error.message;
+        }
+    }
+    </script>
+</body>
+</html>

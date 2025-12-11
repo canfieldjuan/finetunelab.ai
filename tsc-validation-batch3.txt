@@ -1,0 +1,461 @@
+.next/types/validator.ts(724,31): error TS2344: Type 'typeof import("C:/Users/Juan/Desktop/Dev_Ops/web-ui/app/api/research/[jobId]/results/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/research/[jobId]/results">'.
+  Types of property 'GET' are incompatible.
+    Type '(req: NextRequest, { params }: { params: { jobId: string; }; }) => Promise<NextResponse<{ error: string; }> | NextResponse<{ jobId: string; status: "completed"; report: string | ResearchReport; completedAt: string | undefined; }>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ jobId: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ jobId: string; }>; }' is not assignable to type '{ params: { jobId: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'jobId' is missing in type 'Promise<{ jobId: string; }>' but required in type '{ jobId: string; }'.
+.next/types/validator.ts(733,31): error TS2344: Type 'typeof import("C:/Users/Juan/Desktop/Dev_Ops/web-ui/app/api/research/[jobId]/status/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/research/[jobId]/status">'.
+  Types of property 'GET' are incompatible.
+    Type '(req: NextRequest, { params }: { params: { jobId: string; }; }) => Promise<NextResponse<{ error: string; }> | NextResponse<{ status: ResearchJobStatus; currentStep: string; completedSteps: number; totalSteps: number; error: string | undefined; }>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ jobId: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ jobId: string; }>; }' is not assignable to type '{ params: { jobId: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'jobId' is missing in type 'Promise<{ jobId: string; }>' but required in type '{ jobId: string; }'.
+.next/types/validator.ts(1327,31): error TS2344: Type 'typeof import("C:/Users/Juan/Desktop/Dev_Ops/web-ui/app/api/web-search/research/[id]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/web-search/research/[id]">'.
+  Types of property 'GET' are incompatible.
+    Type '(_req: NextRequest, { params }: { params: { id: string; }; }) => Promise<NextResponse<{ error: string; }> | NextResponse<{ success: boolean; id: any; query: any; status: any; steps: { id: any; type: any; status: any; startedAt: any; completedAt: any; }[]; collectedCount: number; report: { ...; } | null; updatedAt: a...' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+.next/types/validator.ts(1336,31): error TS2344: Type 'typeof import("C:/Users/Juan/Desktop/Dev_Ops/web-ui/app/api/web-search/research/[id]/steps/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/web-search/research/[id]/steps">'.
+  Types of property 'GET' are incompatible.
+    Type '(_req: NextRequest, { params }: { params: { id: string; }; }) => Promise<NextResponse<{ error: string; }> | NextResponse<{ success: boolean; steps: { id: any; type: any; status: any; started_at: any; completed_at: any; }[]; }>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(51,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(77,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(128,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(193,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(236,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(287,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(304,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(323,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/batch-testing/[id]/validators/route.test.ts(363,55): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(100,57): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(119,57): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(141,57): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(169,57): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(208,57): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(237,57): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(262,58): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(277,58): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(292,58): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(315,58): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+__tests__/api/benchmarks/[id]/route.test.ts(339,58): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'Promise<{ id: string; }>'.
+app/training/page.tsx(490,35): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+components/analytics/AnalyticsDashboard.tsx(688,61): error TS2322: Type '"7d" | "30d" | "90d" | "all"' is not assignable to type '"7d" | "30d" | "90d" | undefined'.
+  Type '"all"' is not assignable to type '"7d" | "30d" | "90d" | undefined'.
+components/analytics/CohortTrendChart.tsx(87,36): error TS2339: Property 'average_cost_per_session' does not exist on type 'CohortSnapshot'.
+components/chat/MessageContent.tsx(22,21): error TS2503: Cannot find namespace 'JSX'.
+components/training/ConfigEditor.tsx(188,40): error TS2339: Property 'template_type' does not exist on type 'TrainingConfig'.
+components/training/ConfigEditor.tsx(880,36): error TS2339: Property 'distributed' does not exist on type 'BaseTrainingConfig | AdvancedTrainingConfig'.
+  Property 'distributed' does not exist on type 'BaseTrainingConfig'.
+components/training/dag/DagSidebar.tsx(127,15): error TS2741: Property 'provider' is missing in type 'Record<string, unknown>' but required in type 'TrainingConfig'.
+components/training/workflow/useWorkflowState.ts(268,9): error TS2322: Type 'T' is not assignable to type '(Step4DeployData & Step1ModelData & Step2ConfigData & Step3DatasetData) | null'.
+  Type 'T' is not assignable to type 'Step4DeployData & Step1ModelData & Step2ConfigData & Step3DatasetData'.
+    Type 'T' is not assignable to type 'Step4DeployData'.
+components/training/workflow/useWorkflowState.ts(295,7): error TS2322: Type '{ status: "error" | "completed"; validation: ValidationResult; lastModified: Date; data: Step1ModelData | null; errors?: string[] | undefined; } | { ...; } | { ...; } | { ...; }' is not assignable to type 'StepState<Step4DeployData> & StepState<Step1ModelData> & StepState<Step2ConfigData> & StepState<...>'.
+  Type '{ status: "error" | "completed"; validation: ValidationResult; lastModified: Date; data: Step1ModelData | null; errors?: string[]; }' is not assignable to type 'StepState<Step4DeployData> & StepState<Step1ModelData> & StepState<Step2ConfigData> & StepState<...>'.
+    Type '{ status: "error" | "completed"; validation: ValidationResult; lastModified: Date; data: Step1ModelData | null; errors?: string[]; }' is not assignable to type 'StepState<Step4DeployData>'.
+      Types of property 'data' are incompatible.
+        Type 'Step1ModelData | null' is not assignable to type 'Step4DeployData | null'.
+          Type 'Step1ModelData' is missing the following properties from type 'Step4DeployData': packageName, deploymentTarget, enableTensorboard, saveCheckpointInterval, and 2 more.
+components/training/workflow/useWorkflowState.ts(320,7): error TS2322: Type '{ status: "error"; errors: string[]; lastModified: Date; data: Step1ModelData | null; validation: ValidationResult; } | { status: "error"; errors: string[]; lastModified: Date; data: Step2ConfigData | null; validation: ValidationResult; } | { ...; } | { ...; }' is not assignable to type 'StepState<Step4DeployData> & StepState<Step1ModelData> & StepState<Step2ConfigData> & StepState<...>'.
+  Type '{ status: "error"; errors: string[]; lastModified: Date; data: Step1ModelData | null; validation: ValidationResult; }' is not assignable to type 'StepState<Step4DeployData> & StepState<Step1ModelData> & StepState<Step2ConfigData> & StepState<...>'.
+    Type '{ status: "error"; errors: string[]; lastModified: Date; data: Step1ModelData | null; validation: ValidationResult; }' is not assignable to type 'StepState<Step4DeployData>'.
+      Types of property 'data' are incompatible.
+        Type 'Step1ModelData | null' is not assignable to type 'Step4DeployData | null'.
+          Type 'Step1ModelData' is missing the following properties from type 'Step4DeployData': packageName, deploymentTarget, enableTensorboard, saveCheckpointInterval, and 2 more.
+components/training/workflow/useWorkflowState.ts(347,7): error TS2322: Type '{ validation: ValidationResult; status: StepStatus; data: Step1ModelData | null; lastModified: Date; errors?: string[] | undefined; } | { ...; } | { ...; } | { ...; }' is not assignable to type 'StepState<Step4DeployData> & StepState<Step1ModelData> & StepState<Step2ConfigData> & StepState<...>'.
+  Type '{ validation: ValidationResult; status: StepStatus; data: Step1ModelData | null; lastModified: Date; errors?: string[]; }' is not assignable to type 'StepState<Step4DeployData> & StepState<Step1ModelData> & StepState<Step2ConfigData> & StepState<...>'.
+    Type '{ validation: ValidationResult; status: StepStatus; data: Step1ModelData | null; lastModified: Date; errors?: string[]; }' is not assignable to type 'StepState<Step4DeployData>'.
+      Types of property 'data' are incompatible.
+        Type 'Step1ModelData | null' is not assignable to type 'Step4DeployData | null'.
+          Type 'Step1ModelData' is missing the following properties from type 'Step4DeployData': packageName, deploymentTarget, enableTensorboard, saveCheckpointInterval, and 2 more.
+lib/services/cohort-criteria-evaluator.ts(318,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort-criteria-evaluator.ts(450,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(160,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(200,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(237,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(284,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(317,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(354,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(393,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(426,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(467,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(507,20): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(516,40): error TS2339: Property 'raw' does not exist on type 'SupabaseClient<any, "public", "public", any, any>'.
+lib/services/cohort.service.ts(529,20): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(538,40): error TS2339: Property 'raw' does not exist on type 'SupabaseClient<any, "public", "public", any, any>'.
+lib/services/cohort.service.ts(556,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(610,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(688,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/services/cohort.service.ts(736,22): error TS2554: Expected 2-3 arguments, but got 0.
+lib/tools/dataset-manager/test-runner.ts(4,10): error TS2459: Module '"./test"' declares 'testDatasetManager' locally, but it is not exported.
+lib/tools/dataset-manager/test-runner.ts(19,28): error TS7006: Parameter 'error' implicitly has an 'any' type.
+lib/tools/datetime/datetime-v2-test.ts(82,47): error TS18046: 'result' is of type 'unknown'.
+lib/tools/datetime/datetime-v2-test.ts(102,47): error TS18046: 'result' is of type 'unknown'.
+lib/tools/system-monitor/__tests__/validate_db_stats.test.ts(4,10): error TS2724: '"../monitor.service"' has no exported member named 'SystemMonitorService'. Did you mean 'systemMonitorService'?
+lib/tools/system-monitor/validate_db_stats.ts(4,10): error TS2724: '"./monitor.service.js"' has no exported member named 'SystemMonitorService'. Did you mean 'systemMonitorService'?
+lib/tools/web-search/search.service.ts(591,10): error TS2339: Property 'catch' does not exist on type 'PromiseLike<void>'.
+lib/tools/web-search/search.service.ts(591,17): error TS7006: Parameter 'e' implicitly has an 'any' type.
+lib/training/dag-examples.ts(88,41): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'JobType'.
+lib/training/dag-examples.ts(311,62): error TS2339: Property 'metrics' does not exist on type '{}'.
+lib/training/dag-examples.ts(312,62): error TS2339: Property 'metrics' does not exist on type '{}'.
+lib/training/dataset-validator.ts(90,28): error TS18046: 'example.text' is of type 'unknown'.
+lib/training/dataset-validator.ts(287,90): error TS2367: This comparison appears to be unintentional because the types '"gpt"' and '"user"' have no overlap.
+lib/training/dataset-validator.ts(288,86): error TS2367: This comparison appears to be unintentional because the types '"human"' and '"assistant"' have no overlap.
+lib/training/format-normalizer.ts(113,12): error TS2352: Conversion of type 'Record<string, unknown>' to type 'NormalizedExample' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'messages' is missing in type 'Record<string, unknown>' but required in type 'NormalizedExample'.
+lib/training/format-normalizer.ts(125,9): error TS2322: Type '{}' is not assignable to type 'string'.
+lib/training/format-normalizer.ts(222,5): error TS2741: Property 'messages' is missing in type 'Record<string, unknown>' but required in type 'NormalizedExample'.
+lib/training/job-handlers.ts(476,61): error TS2345: Argument of type '{ config_id: string; dataset_id?: string | undefined; model_name?: string | undefined; dataset_path?: string | undefined; lora_config?: Record<string, unknown> | undefined; name: string; num_epochs?: number | undefined; batch_size?: number | undefined; learning_rate?: number | undefined; method?: string | undefined; }' is not assignable to parameter of type 'TrainingJobRequest'.
+  Type '{ config_id: string; dataset_id?: string | undefined; model_name?: string | undefined; dataset_path?: string | undefined; lora_config?: Record<string, unknown> | undefined; name: string; num_epochs?: number | undefined; batch_size?: number | undefined; learning_rate?: number | undefined; method?: string | undefined; }' is missing the following properties from type 'TrainingJobRequest': config, execution_id
+lib/training/job-handlers.ts(729,11): error TS2322: Type '{}' is not assignable to type 'string'.
+lib/training/job-handlers.ts(730,11): error TS2322: Type 'unknown' is not assignable to type 'string | undefined'.
+lib/training/llama.cpp/tools/server/webui/e2e/demo.test.ts(1,30): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/e2e/demo.test.ts(3,44): error TS7031: Binding element 'page' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/playwright.config.ts(1,30): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/chat/ChatSidebar/handle-mobile-sidebar-item-click.ts(1,28): error TS2307: Cannot find module '$lib/components/ui/sidebar' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(1,48): error TS2307: Cannot find module './chat/ChatAttachments/ChatAttachmentsList.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(2,54): error TS2307: Cannot find module './chat/ChatAttachments/ChatAttachmentFilePreview.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(3,55): error TS2307: Cannot find module './chat/ChatAttachments/ChatAttachmentImagePreview.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(4,56): error TS2307: Cannot find module './chat/ChatAttachments/ChatAttachmentPreviewDialog.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(6,37): error TS2307: Cannot find module './chat/ChatForm/ChatForm.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(7,45): error TS2307: Cannot find module './chat/ChatForm/ChatFormTextarea.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(8,44): error TS2307: Cannot find module './chat/ChatForm/ChatFormActions.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(9,58): error TS2307: Cannot find module './chat/ChatForm/ChatFormActionFileAttachments.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(10,49): error TS2307: Cannot find module './chat/ChatForm/ChatFormActionRecord.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(11,50): error TS2307: Cannot find module './chat/ChatForm/ChatFormModelSelector.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(12,47): error TS2307: Cannot find module './chat/ChatForm/ChatFormHelperText.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(13,55): error TS2307: Cannot find module './chat/ChatForm/ChatFormFileInputInvisible.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(15,40): error TS2307: Cannot find module './chat/ChatMessages/ChatMessage.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(16,41): error TS2307: Cannot find module './chat/ChatMessages/ChatMessages.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(17,53): error TS2307: Cannot find module './chat/ChatMessages/ChatMessageThinkingBlock.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(18,53): error TS2307: Cannot find module './chat/ChatMessages/ChatMessageBranchingControls.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(20,47): error TS2307: Cannot find module './chat/ChatProcessingInfo.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(22,45): error TS2307: Cannot find module './chat/ChatScreen/ChatScreenHeader.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(23,46): error TS2307: Cannot find module './chat/ChatScreen/ChatScreenWarning.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(24,39): error TS2307: Cannot find module './chat/ChatScreen/ChatScreen.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(26,47): error TS2307: Cannot find module './chat/ChatSettings/ChatSettingsDialog.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(27,47): error TS2307: Cannot find module './chat/ChatSettings/ChatSettingsFooter.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(28,47): error TS2307: Cannot find module './chat/ChatSettings/ChatSettingsFields.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(29,44): error TS2307: Cannot find module './chat/ChatSettings/ImportExportTab.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(30,56): error TS2307: Cannot find module './chat/ChatSettings/ConversationSelectionDialog.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(31,53): error TS2307: Cannot find module './chat/ChatSettings/ParameterSourceIndicator.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(33,40): error TS2307: Cannot find module './chat/ChatSidebar/ChatSidebar.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(34,56): error TS2307: Cannot find module './chat/ChatSidebar/ChatSidebarConversationItem.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(35,46): error TS2307: Cannot find module './chat/ChatSidebar/ChatSidebarSearch.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(36,44): error TS2307: Cannot find module './dialogs/ChatErrorDialog.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(37,49): error TS2307: Cannot find module './dialogs/EmptyFileAlertDialog.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(39,58): error TS2307: Cannot find module './dialogs/ConversationTitleUpdateDialog.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(41,49): error TS2307: Cannot find module './misc/KeyboardShortcutInfo.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(43,44): error TS2307: Cannot find module './misc/MarkdownContent.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(45,41): error TS2307: Cannot find module './server/ServerStatus.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(46,46): error TS2307: Cannot find module './server/ServerErrorSplash.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(47,48): error TS2307: Cannot find module './server/ServerLoadingSplash.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(48,39): error TS2307: Cannot find module './server/ServerInfo.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(51,41): error TS2307: Cannot find module './misc/ActionButton.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(52,43): error TS2307: Cannot find module './misc/ActionDropdown.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/app/index.ts(53,47): error TS2307: Cannot find module './dialogs/ConfirmationDialog.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(1,53): error TS2307: Cannot find module 'bits-ui' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(2,21): error TS2307: Cannot find module './alert-dialog-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(3,19): error TS2307: Cannot find module './alert-dialog-title.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(4,20): error TS2307: Cannot find module './alert-dialog-action.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(5,20): error TS2307: Cannot find module './alert-dialog-cancel.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(6,20): error TS2307: Cannot find module './alert-dialog-footer.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(7,20): error TS2307: Cannot find module './alert-dialog-header.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(8,21): error TS2307: Cannot find module './alert-dialog-overlay.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(9,21): error TS2307: Cannot find module './alert-dialog-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/alert-dialog/index.ts(10,25): error TS2307: Cannot find module './alert-dialog-description.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/badge/index.ts(1,34): error TS2307: Cannot find module './badge.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/badge/index.ts(2,50): error TS2307: Cannot find module './badge.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/button/index.ts(6,8): error TS2307: Cannot find module './button.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/card/index.ts(1,18): error TS2307: Cannot find module './card.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/card/index.ts(2,21): error TS2307: Cannot find module './card-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/card/index.ts(3,25): error TS2307: Cannot find module './card-description.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/card/index.ts(4,20): error TS2307: Cannot find module './card-footer.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/card/index.ts(5,20): error TS2307: Cannot find module './card-header.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/card/index.ts(6,19): error TS2307: Cannot find module './card-title.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/card/index.ts(7,20): error TS2307: Cannot find module './card-action.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/checkbox/index.ts(1,18): error TS2307: Cannot find module './checkbox.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/collapsible/index.ts(1,18): error TS2307: Cannot find module './collapsible.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/collapsible/index.ts(2,21): error TS2307: Cannot find module './collapsible-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/collapsible/index.ts(3,21): error TS2307: Cannot find module './collapsible-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(1,43): error TS2307: Cannot find module 'bits-ui' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(3,19): error TS2307: Cannot find module './dialog-title.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(4,20): error TS2307: Cannot find module './dialog-footer.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(5,20): error TS2307: Cannot find module './dialog-header.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(6,21): error TS2307: Cannot find module './dialog-overlay.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(7,21): error TS2307: Cannot find module './dialog-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(8,25): error TS2307: Cannot find module './dialog-description.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(9,21): error TS2307: Cannot find module './dialog-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dialog/index.ts(10,19): error TS2307: Cannot find module './dialog-close.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(1,55): error TS2307: Cannot find module 'bits-ui' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(2,26): error TS2307: Cannot find module './dropdown-menu-checkbox-item.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(3,21): error TS2307: Cannot find module './dropdown-menu-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(4,19): error TS2307: Cannot find module './dropdown-menu-group.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(5,18): error TS2307: Cannot find module './dropdown-menu-item.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(6,19): error TS2307: Cannot find module './dropdown-menu-label.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(7,24): error TS2307: Cannot find module './dropdown-menu-radio-group.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(8,23): error TS2307: Cannot find module './dropdown-menu-radio-item.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(9,23): error TS2307: Cannot find module './dropdown-menu-separator.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(10,22): error TS2307: Cannot find module './dropdown-menu-shortcut.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(11,21): error TS2307: Cannot find module './dropdown-menu-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(12,24): error TS2307: Cannot find module './dropdown-menu-sub-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(13,24): error TS2307: Cannot find module './dropdown-menu-sub-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/dropdown-menu/index.ts(14,26): error TS2307: Cannot find module './dropdown-menu-group-heading.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/input/index.ts(1,18): error TS2307: Cannot find module './input.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/label/index.ts(1,18): error TS2307: Cannot find module './label.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/scroll-area/index.ts(1,23): error TS2307: Cannot find module './scroll-area-scrollbar.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/scroll-area/index.ts(2,18): error TS2307: Cannot find module './scroll-area.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(1,43): error TS2307: Cannot find module 'bits-ui' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(3,19): error TS2307: Cannot find module './select-group.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(4,19): error TS2307: Cannot find module './select-label.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(5,18): error TS2307: Cannot find module './select-item.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(6,21): error TS2307: Cannot find module './select-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(7,21): error TS2307: Cannot find module './select-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(8,23): error TS2307: Cannot find module './select-separator.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(9,30): error TS2307: Cannot find module './select-scroll-down-button.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(10,28): error TS2307: Cannot find module './select-scroll-up-button.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/select/index.ts(11,26): error TS2307: Cannot find module './select-group-heading.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/separator/index.ts(1,18): error TS2307: Cannot find module './separator.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(1,42): error TS2307: Cannot find module 'bits-ui' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(2,21): error TS2307: Cannot find module './sheet-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(3,19): error TS2307: Cannot find module './sheet-close.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(4,21): error TS2307: Cannot find module './sheet-overlay.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(5,21): error TS2307: Cannot find module './sheet-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(6,20): error TS2307: Cannot find module './sheet-header.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(7,20): error TS2307: Cannot find module './sheet-footer.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(8,19): error TS2307: Cannot find module './sheet-title.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sheet/index.ts(9,25): error TS2307: Cannot find module './sheet-description.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/context.svelte.ts(1,26): error TS2307: Cannot find module '$lib/hooks/is-mobile.svelte.js' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/context.svelte.ts(2,40): error TS2307: Cannot find module 'svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/context.svelte.ts(25,9): error TS2304: Cannot find name '$derived'.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/context.svelte.ts(26,15): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/context.svelte.ts(29,10): error TS2304: Cannot find name '$derived'.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(2,21): error TS2307: Cannot find module './sidebar-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(3,20): error TS2307: Cannot find module './sidebar-footer.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(4,25): error TS2307: Cannot find module './sidebar-group-action.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(5,26): error TS2307: Cannot find module './sidebar-group-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(6,24): error TS2307: Cannot find module './sidebar-group-label.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(7,19): error TS2307: Cannot find module './sidebar-group.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(8,20): error TS2307: Cannot find module './sidebar-header.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(9,19): error TS2307: Cannot find module './sidebar-input.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(10,19): error TS2307: Cannot find module './sidebar-inset.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(11,24): error TS2307: Cannot find module './sidebar-menu-action.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(12,23): error TS2307: Cannot find module './sidebar-menu-badge.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(13,24): error TS2307: Cannot find module './sidebar-menu-button.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(14,22): error TS2307: Cannot find module './sidebar-menu-item.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(15,26): error TS2307: Cannot find module './sidebar-menu-skeleton.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(16,27): error TS2307: Cannot find module './sidebar-menu-sub-button.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(17,25): error TS2307: Cannot find module './sidebar-menu-sub-item.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(18,21): error TS2307: Cannot find module './sidebar-menu-sub.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(19,18): error TS2307: Cannot find module './sidebar-menu.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(20,22): error TS2307: Cannot find module './sidebar-provider.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(21,18): error TS2307: Cannot find module './sidebar-rail.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(22,23): error TS2307: Cannot find module './sidebar-separator.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(23,21): error TS2307: Cannot find module './sidebar-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/sidebar/index.ts(24,18): error TS2307: Cannot find module './sidebar.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/skeleton/index.ts(1,18): error TS2307: Cannot find module './skeleton.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/textarea/index.ts(1,18): error TS2307: Cannot find module './textarea.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/tooltip/index.ts(1,45): error TS2307: Cannot find module 'bits-ui' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/tooltip/index.ts(2,21): error TS2307: Cannot find module './tooltip-trigger.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/components/ui/tooltip/index.ts(3,21): error TS2307: Cannot find module './tooltip-content.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/constants/supported-file-types.ts(19,8): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/hooks/is-mobile.svelte.ts(1,43): error TS2307: Cannot find module '$lib/constants/viewport' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/hooks/is-mobile.svelte.ts(2,28): error TS2307: Cannot find module 'svelte/reactivity' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/hooks/use-processing-state.svelte.ts(1,30): error TS2307: Cannot find module '$lib/services' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/hooks/use-processing-state.svelte.ts(2,24): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/hooks/use-processing-state.svelte.ts(30,21): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/hooks/use-processing-state.svelte.ts(31,24): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/hooks/use-processing-state.svelte.ts(32,23): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/hooks/use-processing-state.svelte.ts(40,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/markdown/literal-html.ts(4,65): error TS2307: Cannot find module '$lib/constants/literal-html' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/chat.ts(1,24): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/chat.ts(2,35): error TS2307: Cannot find module '$lib/stores/models.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/models.ts(1,22): error TS2307: Cannot find module '$app/paths' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/models.ts(2,24): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/models.ts(3,43): error TS2307: Cannot find module '$lib/types/api' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/parameter-sync.spec.ts(3,45): error TS2307: Cannot find module '$lib/types/api' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/parameter-sync.ts(15,45): error TS2307: Cannot find module '$lib/types/api' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/parameter-sync.ts(16,40): error TS2307: Cannot find module '$lib/utils/precision' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/slots.ts(1,24): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/services/slots.ts(292,39): error TS2307: Cannot find module '$lib/stores/chat.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1,31): error TS2307: Cannot find module '$lib/stores/database' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(2,43): error TS2307: Cannot find module '$lib/services' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(3,24): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(4,29): error TS2307: Cannot find module '$lib/stores/server.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(5,36): error TS2307: Cannot find module '$lib/utils/model-names' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(6,74): error TS2307: Cannot find module '$lib/utils/branching' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(7,25): error TS2307: Cannot find module '$app/environment' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(8,22): error TS2307: Cannot find module '$app/navigation' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(9,23): error TS2307: Cannot find module 'svelte-sonner' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(10,27): error TS2307: Cannot find module 'svelte/reactivity' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(11,44): error TS2307: Cannot find module '$lib/types/database' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(48,23): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(49,19): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(50,18): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(51,20): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(52,21): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(53,18): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(54,14): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(187,44): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(385,13): error TS7006: Parameter 'error' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(415,7): error TS7006: Parameter 'error' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(551,61): error TS7006: Parameter 'cleanupError' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(593,41): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(637,51): error TS7006: Parameter 'c' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(851,42): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(979,52): error TS7006: Parameter 'c' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1109,33): error TS7006: Parameter 'conv' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1183,54): error TS7006: Parameter 'item' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1207,52): error TS7006: Parameter 'c' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1238,48): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1272,46): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1285,46): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1291,7): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1296,45): error TS7006: Parameter 'latest' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1296,53): error TS7006: Parameter 'sibling' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1354,24): error TS7006: Parameter 'latest' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1354,32): error TS7006: Parameter 'msg' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1371,41): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1373,5): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1386,6): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1497,42): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1504,43): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/chat.svelte.ts(1575,53): error TS7006: Parameter 'm' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/database.ts(1,41): error TS2307: Cannot find module 'dexie' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/database.ts(2,60): error TS2307: Cannot find module '$lib/utils/branching' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/database.ts(11,8): error TS2339: Property 'version' does not exist on type 'LlamacppDatabase'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/database.ts(104,19): error TS2339: Property 'transaction' does not exist on type 'LlamacppDatabase'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/database.ts(170,12): error TS2339: Property 'transaction' does not exist on type 'LlamacppDatabase'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/database.ts(182,12): error TS2339: Property 'transaction' does not exist on type 'LlamacppDatabase'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/database.ts(212,19): error TS2339: Property 'transaction' does not exist on type 'LlamacppDatabase'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/database.ts(362,19): error TS2339: Property 'transaction' does not exist on type 'LlamacppDatabase'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(1,31): error TS2307: Cannot find module '$lib/services/models' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(2,27): error TS2307: Cannot find module '$lib/stores/persisted.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(3,49): error TS2307: Cannot find module '$lib/constants/localstorage-keys' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(4,34): error TS2307: Cannot find module '$lib/types/models' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(12,20): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(13,21): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(14,22): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(15,19): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(16,29): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(17,31): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(18,32): error TS2301: Initializer of instance member variable '_persistedSelection' cannot reference identifier 'persisted' declared in the constructor.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(60,29): error TS7006: Parameter 'model' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(73,53): error TS7006: Parameter 'item' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(73,59): error TS7006: Parameter 'index' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(85,44): error TS7006: Parameter 'value' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/models.svelte.ts(118,37): error TS7006: Parameter 'model' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/persisted.svelte.ts(1,25): error TS2307: Cannot find module '$app/environment' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(1,25): error TS2307: Cannot find module '$app/environment' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(2,47): error TS2307: Cannot find module '$lib/constants/localstorage-keys' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(3,29): error TS2307: Cannot find module '$lib/services/chat' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(4,24): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(50,25): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(51,21): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(52,19): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(53,27): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/server.svelte.ts(54,36): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(34,25): error TS2307: Cannot find module '$app/environment' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(35,40): error TS2307: Cannot find module '$lib/constants/settings-config' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(36,40): error TS2307: Cannot find module '$lib/utils/precision' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(37,38): error TS2307: Cannot find module '$lib/services/parameter-sync' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(38,29): error TS2307: Cannot find module '$lib/stores/server.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(39,73): error TS2307: Cannot find module '$lib/utils/config-helpers' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(42,11): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(43,10): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(44,18): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/stores/settings.svelte.ts(45,18): error TS2304: Cannot find name '$state'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/api-key-validation.ts(1,23): error TS2307: Cannot find module '@sveltejs/kit' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/api-key-validation.ts(2,25): error TS2307: Cannot find module '$app/environment' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/api-key-validation.ts(3,24): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/audio-recording.ts(1,31): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/config-helpers.ts(8,41): error TS2307: Cannot find module '$lib/types/settings' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/convert-files-to-extra.ts(4,34): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/convert-files-to-extra.ts(5,39): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/convert-files-to-extra.ts(6,32): error TS2307: Cannot find module '$lib/stores/server.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/convert-files-to-extra.ts(7,37): error TS2307: Cannot find module '$lib/utils/file-type' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/convert-files-to-extra.ts(9,23): error TS2307: Cannot find module 'svelte-sonner' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/copy.ts(1,23): error TS2307: Cannot find module 'svelte-sonner' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(6,8): error TS2307: Cannot find module '$lib/constants/supported-file-types' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(7,34): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(12,5): error TS18046: 'type' is of type 'unknown'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(20,5): error TS18046: 'type' is of type 'unknown'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(28,5): error TS18046: 'type' is of type 'unknown'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(36,5): error TS18046: 'type' is of type 'unknown'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(49,8): error TS18046: 'type' is of type 'unknown'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(55,8): error TS18046: 'type' is of type 'unknown'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(61,8): error TS18046: 'type' is of type 'unknown'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/file-type.ts(67,8): error TS18046: 'type' is of type 'unknown'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(6,37): error TS2307: Cannot find module '$lib/utils/file-type' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(7,47): error TS2307: Cannot find module '$lib/stores/server.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(18,8): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(166,26): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(167,25): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(168,26): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(169,25): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(173,27): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(174,26): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(179,27): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/modality-file-validation.ts(180,26): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/pdf-processing.ts(6,25): error TS2307: Cannot find module '$app/environment' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/pdf-processing.ts(7,52): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/pdf-processing.ts(16,9): error TS2307: Cannot find module 'pdfjs-dist/build/pdf.worker.min.mjs?raw' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/precision.ts(8,38): error TS2307: Cannot find module '$lib/constants/precision' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/process-uploaded-files.ts(4,34): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/process-uploaded-files.ts(5,37): error TS2307: Cannot find module '$lib/utils/file-type' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/process-uploaded-files.ts(6,32): error TS2307: Cannot find module '$lib/stores/server.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/process-uploaded-files.ts(7,31): error TS2307: Cannot find module '$lib/stores/settings.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/process-uploaded-files.ts(8,23): error TS2307: Cannot find module 'svelte-sonner' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/svg-to-png.ts(1,31): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/text-files.ts(9,8): error TS2307: Cannot find module '$lib/constants/binary-detection' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/text-files.ts(10,35): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/lib/utils/webp-to-png.ts(1,51): error TS2307: Cannot find module '$lib/enums/files' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/routes/+page.ts(1,31): error TS2307: Cannot find module './$types' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/routes/+page.ts(2,32): error TS2307: Cannot find module '$lib/utils/api-key-validation' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/routes/+page.ts(4,40): error TS7031: Binding element 'fetch' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/routes/chat/[id]/+page.ts(1,31): error TS2307: Cannot find module './$types' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/routes/chat/[id]/+page.ts(2,32): error TS2307: Cannot find module '$lib/utils/api-key-validation' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/routes/chat/[id]/+page.ts(4,40): error TS7031: Binding element 'fetch' implicitly has an 'any' type.
+lib/training/llama.cpp/tools/server/webui/src/routes/page.svelte.test.ts(2,24): error TS2307: Cannot find module 'vitest-browser-svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/routes/page.svelte.test.ts(3,18): error TS2307: Cannot find module './+page.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/src/stories/fixtures/storybook-mocks.ts(1,29): error TS2307: Cannot find module '$lib/stores/server.svelte' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/vite.config.ts(1,25): error TS2307: Cannot find module '@tailwindcss/vite' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/vite.config.ts(2,27): error TS2307: Cannot find module '@sveltejs/kit/vite' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/vite.config.ts(7,26): error TS2307: Cannot find module 'vite-plugin-devtools-json' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/vite.config.ts(8,31): error TS2307: Cannot find module '@storybook/addon-vitest/vitest-plugin' or its corresponding type declarations.
+lib/training/llama.cpp/tools/server/webui/vite.config.ts(93,7): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type 'string' is not assignable to type 'BrowserProviderOption<object>'.
+      Type 'string' is not assignable to type 'BrowserProviderOption<object>'.
+lib/training/llama.cpp/tools/server/webui/vite.config.ts(117,7): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type 'string' is not assignable to type 'BrowserProviderOption<object>'.
+      Type 'string' is not assignable to type 'BrowserProviderOption<object>'.
+lib/training/llama.cpp/tools/server/webui/vitest-setup-client.ts(1,23): error TS2688: Cannot find type definition file for '@vitest/browser/matchers'.
+lib/training/llama.cpp/tools/server/webui/vitest-setup-client.ts(2,23): error TS2688: Cannot find type definition file for '@vitest/browser/providers/playwright'.
+lib/training/time-estimation.ts(245,23): error TS18048: 'estimatedSamples' is possibly 'undefined'.
+lib/training/time-estimation.ts(248,32): error TS18048: 'estimatedSamples' is possibly 'undefined'.
+scripts/test-api-endpoints.ts(142,34): error TS18047: 'testApiKey' is possibly 'null'.
+scripts/test-dag-orchestrator.ts(55,55): error TS2339: Property 'processedItems' does not exist on type '{}'.
+scripts/test-tool-execution.ts(41,26): error TS18048: 'tool' is possibly 'undefined'.
+scripts/test-tool-execution.ts(44,53): error TS18046: 'result' is of type 'unknown'.
+tests/integration/dag-backfill.e2e.test.ts(42,34): error TS2345: Argument of type '"echo"' is not assignable to parameter of type 'JobType'.
+tests/integration/dag-backfill.e2e.test.ts(114,11): error TS2322: Type '"echo"' is not assignable to type 'JobType'.
+tests/integration/dag-backfill.e2e.test.ts(144,11): error TS2322: Type '"echo"' is not assignable to type 'JobType'.
+tests/integration/dag-backfill.e2e.test.ts(162,14): error TS2571: Object is of type 'unknown'.
+tests/integration/dag-backfill.e2e.test.ts(163,14): error TS2571: Object is of type 'unknown'.
+tests/integration/dag-backfill.e2e.test.ts(171,11): error TS2322: Type '"echo"' is not assignable to type 'JobType'.
+tests/integration/dag-backfill.e2e.test.ts(197,11): error TS2322: Type '"echo"' is not assignable to type 'JobType'.
+tests/integration/dag-backfill.e2e.test.ts(233,11): error TS2322: Type '"echo"' is not assignable to type 'JobType'.
+tests/integration/dag-backfill.e2e.test.ts(242,11): error TS2322: Type '"nonexistent_handler"' is not assignable to type 'JobType'.
+tests/integration/dag-backfill.e2e.test.ts(272,36): error TS2345: Argument of type '"slow_echo"' is not assignable to parameter of type 'JobType'.
+tests/integration/dag-backfill.e2e.test.ts(284,11): error TS2322: Type '"slow_echo"' is not assignable to type 'JobType'.

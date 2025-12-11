@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Next.js Web UI
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_TRAINING_BACKEND_URL=http://training-server:8000
+      - NEXT_PUBLIC_ENABLE_VLLM=true
+      - NEXT_PUBLIC_ENABLE_LOCAL_TRAINING=true
+    depends_on:
+      - training-server
+    networks:
+      - fine-tune-labs
+
+  # Python Training Server
+  training-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.training
+    ports:
+      - "8000:8000"
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./lib/training/logs:/app/logs
+      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ./AI_Models:/app/AI_Models
+    networks:
+      - fine-tune-labs
+
+networks:
+  fine-tune-labs:
+    driver: bridge

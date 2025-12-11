@@ -1,0 +1,166 @@
+# Tier 3: Troubleshooting & Diagnostics Dataset Configuration
+
+tier_info:
+  tier: 3
+  tier_name: "troubleshooting_diagnostics"
+  goal: "systematic_problem_solving"
+  description: "Real hardware troubleshooting scenarios from customer experiences"
+  target_model: "qwen-based-marcus"
+  prerequisites:
+    - "tier1_hardware_specs"
+    - "tier2_pc_building"
+
+input:
+  source_file: "output/extracted_reviews.jsonl"
+  total_available: 175934
+
+output:
+  selected_reviews: "output/tier3_selected_5k.jsonl"
+  batch_directory: "output/batches_for_deepseek/tier3"
+  batch_prefix: "tier3_batch"
+  batch_size: 1000
+
+quality_scoring:
+  minimum_score: 70
+  target_examples: 5000
+
+  weights:
+    problem_complexity: 30
+    diagnostic_context: 25
+    review_length: 20
+    hardware_category: 15
+    issue_type: 10
+
+  problem_complexity:
+    single_symptom: 10
+    multiple_symptoms: 20
+    cause_effect_chain: 30
+    indicators:
+      multiple_keywords: 5
+      timeline_mentioned: 8
+      progression_described: 10
+
+  diagnostic_context:
+    troubleshooting_attempted: 15
+    error_codes_mentioned: 20
+    timeline_of_failure: 25
+    keywords:
+      attempted:
+        - "tried"
+        - "tested"
+        - "checked"
+        - "replaced"
+        - "swapped"
+        - "installed"
+      error_codes:
+        - "error"
+        - "code"
+        - "0x"
+        - "bsod"
+        - "blue screen"
+        - "message"
+      timeline:
+        - "after"
+        - "month"
+        - "year"
+        - "day"
+        - "week"
+        - "suddenly"
+        - "started"
+
+  review_length:
+    short: 300    # 10 points
+    medium: 500   # 15 points
+    long: 1000    # 20 points
+
+  hardware_category_priority:
+    high_value:
+      - storage
+      - motherboard
+      - gpu
+      - psu
+    medium_value:
+      - ram
+      - cpu
+      - cooling
+    low_value:
+      - peripherals
+
+  issue_type_priority:
+    complex:
+      - crashes
+      - thermal
+      - compatibility
+      - artifacts
+    simple:
+      - failure
+      - performance
+
+category_distribution:
+  storage: 1200
+  motherboard: 800
+  gpu: 700
+  cooling: 600
+  ram: 700
+  psu: 500
+  cpu: 400
+  peripherals: 100
+
+batch_organization:
+  - name: "tier3_batch_001_storage.jsonl"
+    categories:
+      storage: 1000
+
+  - name: "tier3_batch_002_mobo_gpu.jsonl"
+    categories:
+      motherboard: 500
+      gpu: 500
+
+  - name: "tier3_batch_003_psu_cooling.jsonl"
+    categories:
+      psu: 500
+      cooling: 500
+
+  - name: "tier3_batch_004_ram_cpu.jsonl"
+    categories:
+      ram: 700
+      cpu: 300
+
+  - name: "tier3_batch_005_complex_multi.jsonl"
+    description: "High-scoring multi-issue scenarios across all categories"
+    categories:
+      storage: 200
+      motherboard: 300
+      gpu: 200
+      cooling: 100
+      ram: 100
+      cpu: 100
+
+system_prompt: |
+  You are Marcus, an expert PC hardware specialist with 15+ years building and
+  troubleshooting systems. You diagnose hardware failures systematically, explain
+  root causes with technical depth, and provide comprehensive solutions.
+
+  When responding to hardware issues, provide detailed troubleshooting guidance
+  (3000-5000 tokens) that includes:
+
+  1. Problem Summary: Acknowledge the issue and identify primary component/system
+  2. Root Cause Analysis: Explain WHY the failure occurs (physics, electronics,
+     design flaws, known issues with specific models)
+  3. Systematic Diagnostics: Step-by-step troubleshooting with tools, expected
+     results, and what each test reveals
+  4. Solutions & Fixes: Multiple approaches (immediate, proper fix, workarounds)
+     with cost/benefit analysis
+  5. Prevention & Related Issues: How to prevent recurrence, related problems to
+     monitor, and component alternatives
+
+  Reference real specifications (voltages, thermals, power draw, timings),
+  diagnostic tools (CrystalDiskInfo, MemTest86, GPU-Z), and manufacturer-specific
+  failure patterns. Teach users the underlying principles, not just quick fixes.
+
+deepseek_settings:
+  model: "deepseek/deepseek-v3.2-exp"
+  temperature: 0.7
+  max_tokens: 5000
+  target_tokens: 4000
+  top_p: 0.95

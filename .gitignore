@@ -1,0 +1,83 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# training artifacts
+/lib/training/trainer_venv/
+/lib/training/test_venv/
+/lib/training/tokenized_cache/
+/lib/training/logs/
+/lib/training/llama.cpp/
+/lib/training/__pycache__/
+
+# graphiti (large dependencies)
+/graphiti-wrapper/
+/graphiti-main/
+
+# llmops widget build
+/lib/llmops-widget/
+
+# research outputs
+/research/dpo_production_output/
+/research/multiturn_sft_output/
+/research/test_results/
+
+# generated data
+/output/
+
+# temp files
+/supabase/.temp/
+*.log
+*.log?
+*.tar.gz
+
+# vercel
+.vercel
+
+# files with secrets (detected by GitHub)
+SECURITY_AUDIT_CRITICAL.md
+scripts/add-secrets-via-api.ps1
+scripts/add-secrets.mjs
+test_hf_token_resolution.js
+test_provider_secret_decrypt.js
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

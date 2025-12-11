@@ -1,0 +1,7 @@
+app/api/analytics/cohorts/[id]/members/route.ts
+app/api/analytics/cohorts/[id]/metrics/route.ts
+app/api/analytics/cohorts/[id]/refresh/route.ts
+app/api/analytics/download/[id]/route.ts
+app/api/analytics/sentiment/conversations/[id]/route.ts
+app/api/conversations/[id]/context/route.ts
+app/api/widget-apps/[id]/route.ts

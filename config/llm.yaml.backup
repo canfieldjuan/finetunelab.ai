@@ -1,0 +1,27 @@
+# LLM Provider Configuration
+
+# Provider to use: 'openai', 'anthropic', 'ollama'
+provider: openai
+
+# OpenAI Configuration
+openai:
+  api_key: ${OPENAI_API_KEY}  # Set in .env.local
+  model: gpt-4o-mini  # Options: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo
+  temperature: 0.7
+  max_tokens: 2000
+  stream: true
+
+# Anthropic Configuration (for future use)
+anthropic:
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-3-5-sonnet-20241022
+  temperature: 0.7
+  max_tokens: 2000
+  stream: true
+
+# Ollama Configuration (for future local use)
+ollama:
+  base_url: http://localhost:11434
+  model: llama3.1
+  temperature: 0.7
+  stream: true

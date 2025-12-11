@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 0 0% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 95%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 35%;
+    --accent: 217 91% 95%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  }
+
+  body:has(.page-wrapper) {
+    overflow: hidden;
+  }
+
+  .main-content::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  .main-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  .main-content::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 6px;
+  }
+  .main-content::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+
+  /* Lab Academy Article Styles */
+  .prose {
+    max-width: 65ch;
+  }
+  
+  .prose .lead {
+    font-size: 1.25em;
+    line-height: 1.6;
+    margin-top: 1.2em;
+    margin-bottom: 1.2em;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .prose h2 {
+    font-size: 1.875em;
+    margin-top: 2em;
+    margin-bottom: 1em;
+    line-height: 1.3333333;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+
+  .prose h3 {
+    font-size: 1.5em;
+    margin-top: 1.6em;
+    margin-bottom: 0.6em;
+    line-height: 1.6;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .prose p {
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+    line-height: 1.75;
+  }
+
+  .prose ul, .prose ol {
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+    padding-left: 1.625em;
+  }
+
+  .prose li {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    line-height: 1.75;
+  }
+
+  .prose li > p {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+  }
+
+  .prose strong {
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .prose em {
+    font-style: italic;
+  }
+
+  .prose a {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    font-weight: 500;
+  }
+
+  .prose a:hover {
+    opacity: 0.8;
+  }
+
+  .prose code {
+    font-size: 0.875em;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    background-color: hsl(var(--muted));
+    padding: 0.2em 0.4em;
+    border-radius: 0.25rem;
+  }
+
+  .prose blockquote {
+    font-weight: 500;
+    font-style: italic;
+    color: hsl(var(--foreground));
+    border-left: 0.25rem solid hsl(var(--border));
+    quotes: "\201C""\201D""\2018""\2019";
+    margin-top: 1.6em;
+    margin-bottom: 1.6em;
+    padding-left: 1em;
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "model": {
+    "name": "meta-llama/Llama-3.2-3B-Instruct",
+    "device_map": "auto",
+    "torch_dtype": "bfloat16",
+    "trust_remote_code": true
+  },
+  "tokenizer": {
+    "name": "meta-llama/Llama-3.2-3B-Instruct",
+    "trust_remote_code": true
+  },
+  "data": {
+    "strategy": "standard",
+    "eval_split": 0.05,
+    "train_split": 0.85,
+    "generation_type": "real"
+  },
+  "training": {
+    "bf16": true,
+    "fp16": false,
+    "optim": "paged_adamw_8bit",
+    "method": "sft",
+    "packing": false,
+    "use_lora": true,
+    "batch_size": 4,
+    "eval_steps": 200,
+    "max_length": 4096,
+    "num_epochs": 3,
+    "save_steps": 200,
+    "lora_config": {
+      "r": 16,
+      "bias": "none",
+      "task_type": "CAUSAL_LM",
+      "lora_alpha": 32,
+      "lora_dropout": 0.1,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    },
+    "pretokenize": true,
+    "quantization": {
+      "load_in_4bit": true,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_use_double_quant": true
+    },
+    "warmup_ratio": 0.1,
+    "warmup_steps": 100,
+    "weight_decay": 0.01,
+    "learning_rate": 1e-05,
+    "logging_steps": 10,
+    "max_grad_norm": 1,
+    "save_strategy": "steps",
+    "eval_batch_size": 2,
+    "group_by_length": true,
+    "save_total_limit": 10,
+    "lr_scheduler_type": "cosine",
+    "evaluation_strategy": "steps",
+    "dataloader_pin_memory": true,
+    "dataloader_num_workers": 1,
+    "gradient_checkpointing": false,
+    "dataloader_prefetch_factor": 1,
+    "gradient_accumulation_steps": 4
+  },
+  "predictions": {
+    "enabled": false,
+    "sample_count": 0,
+    "sample_frequency": "epoch"
+  },
+  "lora": {
+    "r": 16,
+    "alpha": 32,
+    "dropout": 0.1
+  },
+  "dataset_path": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/datasets/job_3b8af5d9-0a99-44db-b329-58219e4dff06/b44e7154-b763-4ed5-82e2-c0904510c104.jsonl",
+  "output_dir": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/job_3b8af5d9-0a99-44db-b329-58219e4dff06",
+  "execution_id": "3b8af5d9-0a99-44db-b329-58219e4dff06",
+  "eval_split": 0.2
+}

@@ -1,0 +1,85 @@
+{
+  "model": {
+    "name": "mistralai/Mistral-7B-Instruct-v0.3",
+    "device_map": "auto",
+    "torch_dtype": "bfloat16",
+    "trust_remote_code": true
+  },
+  "tokenizer": {
+    "name": "mistralai/Mistral-7B-Instruct-v0.3",
+    "trust_remote_code": true
+  },
+  "data": {
+    "strategy": "standard",
+    "eval_split": 0.05,
+    "train_split": 0.99,
+    "generation_type": "real"
+  },
+  "training": {
+    "bf16": true,
+    "fp16": false,
+    "optim": "paged_adamw_8bit",
+    "method": "sft",
+    "packing": false,
+    "use_lora": true,
+    "batch_size": 4,
+    "eval_steps": 50,
+    "max_length": 4000,
+    "num_epochs": 16,
+    "save_steps": 50,
+    "lora_config": {
+      "r": 16,
+      "bias": "none",
+      "task_type": "CAUSAL_LM",
+      "lora_alpha": 32,
+      "lora_dropout": 0.1,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    },
+    "quantization": {
+      "load_in_4bit": true,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_use_double_quant": true
+    },
+    "warmup_ratio": 0.03,
+    "warmup_steps": 100,
+    "weight_decay": 0.01,
+    "learning_rate": 1e-06,
+    "logging_steps": 10,
+    "max_grad_norm": 0.3,
+    "save_strategy": "steps",
+    "eval_batch_size": 1,
+    "group_by_length": true,
+    "save_total_limit": 10,
+    "lr_scheduler_type": "cosine",
+    "evaluation_strategy": "steps",
+    "dataloader_pin_memory": true,
+    "dataloader_num_workers": 0,
+    "gradient_checkpointing": true,
+    "dataloader_prefetch_factor": null,
+    "gradient_accumulation_steps": 6,
+    "pretokenize": true
+  },
+  "predictions": {
+    "enabled": false,
+    "sample_count": 0,
+    "sample_frequency": "epoch"
+  },
+  "lora": {
+    "r": 32,
+    "alpha": 64,
+    "dropout": 0.2
+  },
+  "dataset_path": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/datasets/job_35d03d5b-5bf5-42e5-81b2-229fa4940fbd/a923965a-7618-49a2-875f-e47bc81bdcd8.jsonl",
+  "output_dir": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/job_35d03d5b-5bf5-42e5-81b2-229fa4940fbd",
+  "execution_id": "35d03d5b-5bf5-42e5-81b2-229fa4940fbd",
+  "eval_split": 0.2
+}

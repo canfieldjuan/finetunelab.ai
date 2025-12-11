@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logger Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; margin-bottom: 10px; }
+    .status { padding: 15px; margin: 15px 0; border-radius: 4px; }
+    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+      font-size: 14px;
+    }
+    button:hover { background: #0056b3; }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+    pre {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    code { color: #e83e8c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Logger System Test</h1>
+    <p>Testing the structured logging system - Open DevTools Console (F12) to see results</p>
+
+    <div class="status success">
+      <strong>✅ Page Loaded Successfully</strong><br>
+      Logger file compiled with zero TypeScript errors.
+    </div>
+
+    <div class="test-section">
+      <h3>Test 1: Basic Logging</h3>
+      <p>Test all log levels (ERROR, WARN, INFO, DEBUG, TRACE)</p>
+      <button onclick="testBasicLogging()">Run Basic Test</button>
+    </div>
+
+    <div class="test-section">
+      <h3>Test 2: Module Filtering</h3>
+      <p>Filter to show only Chat logs</p>
+      <button onclick="testModuleFiltering()">Run Filter Test</button>
+      <button onclick="resetFilters()">Reset Filters</button>
+    </div>
+
+    <div class="test-section">
+      <h3>Test 3: Log Level Control</h3>
+      <p>Set different log levels</p>
+      <button onclick="setLevelError()">ERROR Only</button>
+      <button onclick="setLevelInfo()">INFO+</button>
+      <button onclick="setLevelDebug()">DEBUG+ (Default)</button>
+      <button onclick="setLevelTrace()">TRACE (All)</button>
+    </div>
+
+    <div class="status info">
+      <strong>📝 Configuration is stored in localStorage</strong><br>
+      Changes persist across page reloads. Check your browser's Application tab → Local Storage to see the config.
+    </div>
+
+    <div class="test-section">
+      <h3>Manual Testing</h3>
+      <p>Copy and run these in the browser console:</p>
+      <pre><code>// Import the logger (simulated - actual import happens in app)
+// In real app: import { log } from '@/lib/utils/logger';
+
+// Test logging
+log.error('Chat', 'Test error message', { userId: '123' });
+log.warn('API', 'Test warning', { endpoint: '/api/test' });
+log.info('System', 'Test info message');
+log.debug('GraphRAG', 'Test debug', { query: 'test query' });
+log.trace('Chat', 'Test trace - renders only');
+
+// Check current configuration
+configureLogger.getConfig();
+
+// Set ERROR only mode
+configureLogger.onlyErrors();
+location.reload();
+
+// Show only specific modules
+configureLogger.setModules(['Chat', 'API']);
+location.reload();
+
+// Reset to defaults
+localStorage.removeItem('logger_config');
+location.reload();</code></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    // This simulates how the logger would work when imported in the app
+    // In production, it would be: import { log, configureLogger } from '@/lib/utils/logger';
+    
+    // Inline simplified version for testing (actual file is in lib/utils/logger.ts)
+    const LogLevel = {
+      ERROR: 0,
+      WARN: 1,
+      INFO: 2,
+      DEBUG: 3,
+      TRACE: 4
+    };
+
+    function getConfig() {
+      try {
+        const stored = localStorage.getItem('logger_config');
+        if (stored) {
+          return JSON.parse(stored);
+        }
+      } catch (e) {}
+      return {
+        level: LogLevel.DEBUG,
+        enabledModules: 'all',
+        enableTimestamp: false
+      };
+    }
+
+    function shouldLog(level, module, config) {
+      if (level > config.level) return false;
+      if (config.enabledModules !== 'all') {
+        if (!config.enabledModules.includes(module)) return false;
+      }
+      return true;
+    }
+
+    function formatMessage(level, module, message) {
+      const levelNames = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'];
+      return `[${levelNames[level]}] [${module}] ${message}`;
+    }
+
+    window.log = {
+      error: (module, msg, data) => {
+        const config = getConfig();
+        if (!shouldLog(LogLevel.ERROR, module, config)) return;
+        const formatted = formatMessage(LogLevel.ERROR, module, msg);
+        data !== undefined ? console.error(formatted, data) : console.error(formatted);
+      },
+      warn: (module, msg, data) => {
+        const config = getConfig();
+        if (!shouldLog(LogLevel.WARN, module, config)) return;
+        const formatted = formatMessage(LogLevel.WARN, module, msg);
+        data !== undefined ? console.warn(formatted, data) : console.warn(formatted);
+      },
+      info: (module, msg, data) => {
+        const config = getConfig();
+        if (!shouldLog(LogLevel.INFO, module, config)) return;
+        const formatted = formatMessage(LogLevel.INFO, module, msg);
+        data !== undefined ? console.info(formatted, data) : console.info(formatted);
+      },
+      debug: (module, msg, data) => {
+        const config = getConfig();
+        if (!shouldLog(LogLevel.DEBUG, module, config)) return;
+        const formatted = formatMessage(LogLevel.DEBUG, module, msg);
+        data !== undefined ? console.log(formatted, data) : console.log(formatted);
+      },
+      trace: (module, msg, data) => {
+        const config = getConfig();
+        if (!shouldLog(LogLevel.TRACE, module, config)) return;
+        const formatted = formatMessage(LogLevel.TRACE, module, msg);
+        data !== undefined ? console.log(formatted, data) : console.log(formatted);
+      }
+    };
+
+    window.configureLogger = {
+      setLevel: (level) => {
+        const config = getConfig();
+        config.level = level;
+        localStorage.setItem('logger_config', JSON.stringify(config));
+        console.log('✅ Log level set to:', level, '- Reload page to apply');
+      },
+      setModules: (modules) => {
+        const config = getConfig();
+        config.enabledModules = modules;
+        localStorage.setItem('logger_config', JSON.stringify(config));
+        console.log('✅ Modules set to:', modules, '- Reload page to apply');
+      },
+      getConfig: () => {
+        const config = getConfig();
+        console.log('Current logger configuration:', config);
+        return config;
+      },
+      onlyErrors: () => {
+        const config = getConfig();
+        config.level = LogLevel.ERROR;
+        localStorage.setItem('logger_config', JSON.stringify(config));
+        console.log('✅ Set to ERROR only - Reload page to apply');
+      }
+    };
+
+    // Test functions
+    window.testBasicLogging = function() {
+      console.log('\n--- Running Basic Logging Test ---');
+      log.error('Chat', 'This is an ERROR message', { code: 500 });
+      log.warn('API', 'This is a WARN message', { endpoint: '/api/test' });
+      log.info('Settings', 'This is an INFO message');
+      log.debug('GraphRAG', 'This is a DEBUG message', { query: 'test' });
+      log.trace('Chat', 'This is a TRACE message');
+      console.log('--- Test Complete - Check logs above ---\n');
+    };
+
+    window.testModuleFiltering = function() {
+      console.log('\n--- Setting filter to Chat module only ---');
+      configureLogger.setModules(['Chat']);
+      console.log('Reload the page and click "Run Basic Test" again');
+      console.log('You should ONLY see Chat logs\n');
+    };
+
+    window.resetFilters = function() {
+      localStorage.removeItem('logger_config');
+      console.log('✅ Filters reset - Reload page to apply');
+    };
+
+    window.setLevelError = function() {
+      configureLogger.setLevel(LogLevel.ERROR);
+    };
+
+    window.setLevelInfo = function() {
+      configureLogger.setLevel(LogLevel.INFO);
+    };
+
+    window.setLevelDebug = function() {
+      configureLogger.setLevel(LogLevel.DEBUG);
+    };
+
+    window.setLevelTrace = function() {
+      configureLogger.setLevel(LogLevel.TRACE);
+    };
+
+    // Show current config on load
+    console.log('%c🔍 Logger Test Page Loaded', 'color: #007bff; font-size: 16px; font-weight: bold');
+    console.log('Current configuration:', getConfig());
+    console.log('\n📝 Instructions:');
+    console.log('1. Click the test buttons on the page');
+    console.log('2. Watch the console for formatted log messages');
+    console.log('3. Try filtering by module or log level');
+    console.log('4. Configuration persists across reloads\n');
+  </script>
+</body>
+</html>

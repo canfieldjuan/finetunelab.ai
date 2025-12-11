@@ -1,0 +1,434 @@
+/**
+ * API Route: LLM-Judge Evaluation
+ * POST /api/evaluation/judge
+ *
+ * Evaluates AI messages using GPT-4.1 or Claude as judges
+ * Uses GraphRAG to fetch ground truth from user's documents
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { LLMJudge, STANDARD_CRITERIA, LLMJudgeCriterion, LLMJudgmentResult } from '@/lib/evaluation/llm-judge';
+import { graphragService } from '@/lib/graphrag';
+
+export const runtime = 'nodejs';
+
+interface EvaluationRequest {
+  message_id: string;
+  message_content?: string; // Optional - will fetch from DB if not provided
+  context?: string;
+  criteria?: string[] | LLMJudgeCriterion[]; // Criterion names or full objects
+  judge_model?: 'gpt-4.1' | 'claude-sonnet-4-5-20250929' | 'claude-haiku-4-5-20251001';
+  save_to_db?: boolean; // Whether to save results to database
+}
+
+interface BatchEvaluationRequest {
+  message_ids: string[];
+  criteria?: string[] | LLMJudgeCriterion[];
+  judge_model?: 'gpt-4.1' | 'claude-sonnet-4-5-20250929' | 'claude-haiku-4-5-20251001';
+  save_to_db?: boolean;
+}
+
+/**
+ * POST /api/evaluation/judge
+ * Evaluate single or multiple messages
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    
+    // Check authentication
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Determine if batch or single evaluation
+    const isBatch = 'message_ids' in body;
+
+    if (isBatch) {
+      return await handleBatchEvaluation(supabase, user.id, body as BatchEvaluationRequest);
+    } else {
+      return await handleSingleEvaluation(supabase, user.id, body as EvaluationRequest);
+    }
+  } catch (error) {
+    console.error('[EvaluationJudge] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(
+      {
+        error: 'Evaluation failed',
+        details: errorMessage,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Handle single message evaluation
+ */
+async function handleSingleEvaluation(
+  supabase: SupabaseClient,
+  userId: string,
+  request: EvaluationRequest
+) {
+  console.log('[EvaluationJudge] Single evaluation:', request.message_id);
+
+  // Fetch message content AND the preceding user prompt
+  let messageContent = request.message_content;
+  let userPrompt = '';
+  let conversationId = '';
+
+  if (!messageContent) {
+    // Get the assistant message with conversation context
+    const { data: message, error } = await supabase
+      .from('messages')
+      .select('content, conversation_id, created_at')
+      .eq('id', request.message_id)
+      .single();
+
+    if (error || !message) {
+      return NextResponse.json(
+        { error: 'Message not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    messageContent = message.content;
+    conversationId = message.conversation_id;
+
+    // Fetch the user message that preceded this assistant response
+    const { data: prevMessage } = await supabase
+      .from('messages')
+      .select('content')
+      .eq('conversation_id', conversationId)
+      .eq('role', 'user')
+      .lt('created_at', message.created_at)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (prevMessage) {
+      userPrompt = prevMessage.content;
+    }
+  }
+
+  // Ensure we have message content
+  if (!messageContent) {
+    return NextResponse.json(
+      { error: 'Message content is required' },
+      { status: 400 }
+    );
+  }
+
+  // Fetch GraphRAG ground truth for accuracy validation
+  let groundTruthContext = '';
+  if (userPrompt) {
+    console.log(`[EvaluationJudge] Fetching GraphRAG context for: "${userPrompt.slice(0, 100)}..."`);
+    console.log(`[EvaluationJudge] User ID for GraphRAG: ${userId}`);
+
+    try {
+      const graphragResult = await graphragService.enhancePrompt(
+        userId,
+        userPrompt,
+        { maxSources: 15, includeMetadata: true }
+      );
+
+      console.log(`[EvaluationJudge] GraphRAG result:`, {
+        contextUsed: graphragResult.contextUsed,
+        sourcesCount: graphragResult.sources?.length || 0,
+        metadata: graphragResult.metadata
+      });
+
+      if (graphragResult.contextUsed && graphragResult.sources?.length) {
+        const facts = graphragResult.sources.map(s =>
+          `- ${s.fact} (entity: ${s.entity}, confidence: ${(s.confidence * 100).toFixed(0)}%)`
+        ).join('\n');
+
+        groundTruthContext = `
+
+**GROUND TRUTH FROM USER'S KNOWLEDGE BASE:**
+The following facts are verified from the user's uploaded documents:
+${facts}
+
+IMPORTANT: If the response aligns with these facts, it is ACCURATE. Do NOT penalize for matching documented behavior.`;
+
+        console.log(`[EvaluationJudge] Added ${graphragResult.sources.length} ground truth facts`);
+      } else {
+        console.log(`[EvaluationJudge] No GraphRAG context found - contextUsed: ${graphragResult.contextUsed}`);
+      }
+    } catch (err) {
+      console.error('[EvaluationJudge] GraphRAG error:', err);
+    }
+  } else {
+    console.log('[EvaluationJudge] No userPrompt available for GraphRAG lookup');
+  }
+
+  // Build full context with user question + ground truth
+  const fullContext = userPrompt
+    ? `**USER QUESTION:**\n${userPrompt}${groundTruthContext}`
+    : request.context || '';
+
+  // Log what we're sending to the judge
+  console.log('[EvaluationJudge] === JUDGE CONTEXT ===');
+  console.log('[EvaluationJudge] Has ground truth:', groundTruthContext.length > 0);
+  console.log('[EvaluationJudge] Full context length:', fullContext.length);
+  console.log('[EvaluationJudge] Context preview:', fullContext.slice(0, 500));
+  console.log('[EvaluationJudge] ======================');
+
+  // Prepare criteria
+  const criteria = prepareCriteria(request.criteria);
+
+  // Initialize judge with correct model
+  const judge = new LLMJudge(request.judge_model || 'gpt-4.1');
+
+  // Perform evaluation with ground truth context
+  const results = await judge.judgeMessage({
+    message_id: request.message_id,
+    message_content: messageContent,
+    context: fullContext,
+    criteria,
+    judge_model: request.judge_model,
+  });
+
+  // Save to database if requested
+  if (request.save_to_db !== false) {
+    // Default to true
+    await saveJudgmentsToDatabase(supabase, results);
+  }
+
+  return NextResponse.json({
+    success: true,
+    message_id: request.message_id,
+    evaluations: results,
+    summary: {
+      total_criteria: results.length,
+      passed: results.filter((r) => r.passed).length,
+      failed: results.filter((r) => !r.passed).length,
+      average_score: results.reduce((sum, r) => sum + r.score, 0) / results.length / 10, // Normalize to 0-1
+      average_confidence: results.reduce((sum, r) => sum + r.confidence, 0) / results.length,
+    },
+  });
+}
+
+/**
+ * Handle batch message evaluation
+ */
+async function handleBatchEvaluation(
+  supabase: SupabaseClient,
+  userId: string,
+  request: BatchEvaluationRequest
+) {
+  console.log('[EvaluationJudge] Batch evaluation:', request.message_ids.length, 'messages');
+
+  // Fetch messages with conversation context
+  const { data: messages, error } = await supabase
+    .from('messages')
+    .select('id, content, conversation_id, created_at, role')
+    .in('id', request.message_ids);
+
+  if (error || !messages || messages.length === 0) {
+    return NextResponse.json(
+      { error: 'Messages not found or access denied' },
+      { status: 404 }
+    );
+  }
+
+  // For each assistant message, find the preceding user question
+  const messageContextMap = new Map<string, { userPrompt: string; conversationId: string }>();
+
+  for (const msg of messages) {
+    if (msg.role === 'assistant' && msg.conversation_id) {
+      const { data: prevMessage } = await supabase
+        .from('messages')
+        .select('content')
+        .eq('conversation_id', msg.conversation_id)
+        .eq('role', 'user')
+        .lt('created_at', msg.created_at)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (prevMessage) {
+        messageContextMap.set(msg.id, {
+          userPrompt: prevMessage.content,
+          conversationId: msg.conversation_id
+        });
+      }
+    }
+  }
+
+  // Prepare criteria
+  const criteria = prepareCriteria(request.criteria);
+
+  // Initialize judge with correct model
+  const judge = new LLMJudge(request.judge_model || 'gpt-4.1');
+
+  // Prepare batch requests with GraphRAG context
+  const batchRequests = await Promise.all(
+    messages.map(async (msg: { id: string; content: string; role: string }) => {
+      let context = '';
+      const msgContext = messageContextMap.get(msg.id);
+
+      if (msgContext?.userPrompt) {
+        // Fetch GraphRAG ground truth
+        try {
+          const graphragResult = await graphragService.enhancePrompt(
+            userId,
+            msgContext.userPrompt,
+            { maxSources: 10, includeMetadata: true }
+          );
+
+          if (graphragResult.contextUsed && graphragResult.sources?.length) {
+            const facts = graphragResult.sources.map(s =>
+              `- ${s.fact} (entity: ${s.entity}, confidence: ${(s.confidence * 100).toFixed(0)}%)`
+            ).join('\n');
+
+            context = `**USER QUESTION:**
+${msgContext.userPrompt}
+
+**GROUND TRUTH FROM KNOWLEDGE BASE:**
+${facts}
+
+IMPORTANT: If response aligns with these facts, it is ACCURATE.`;
+          } else {
+            context = `**USER QUESTION:**\n${msgContext.userPrompt}`;
+          }
+        } catch {
+          context = `**USER QUESTION:**\n${msgContext.userPrompt}`;
+        }
+      }
+
+      return {
+        message_id: msg.id,
+        message_content: msg.content,
+        context,
+        criteria,
+        judge_model: request.judge_model,
+      };
+    })
+  );
+
+  console.log(`[EvaluationJudge] Prepared ${batchRequests.length} requests with GraphRAG context`);
+
+  // Perform batch evaluation
+  const results = await judge.batchJudge(batchRequests);
+
+  // Convert Map to object for JSON response
+  const resultsObject: Record<string, LLMJudgmentResult[]> = {};
+  results.forEach((judgments, messageId) => {
+    resultsObject[messageId] = judgments;
+  });
+
+  // Save to database if requested
+  if (request.save_to_db !== false) {
+    const allJudgments = Array.from(results.values()).flat();
+    await saveJudgmentsToDatabase(supabase, allJudgments);
+  }
+
+  // Calculate summary statistics
+  const allJudgments = Array.from(results.values()).flat();
+  const summary = {
+    total_messages: messages.length,
+    total_evaluations: allJudgments.length,
+    passed: allJudgments.filter((r) => r.passed).length,
+    failed: allJudgments.filter((r) => !r.passed).length,
+    average_score: allJudgments.reduce((sum, r) => sum + r.score, 0) / allJudgments.length / 10, // Normalize to 0-1
+    average_confidence:
+      allJudgments.reduce((sum, r) => sum + r.confidence, 0) / allJudgments.length,
+  };
+
+  return NextResponse.json({
+    success: true,
+    results: resultsObject,
+    summary,
+  });
+}
+
+/**
+ * Prepare criteria from request
+ */
+function prepareCriteria(
+  criteria?: string[] | LLMJudgeCriterion[]
+): LLMJudgeCriterion[] {
+  if (!criteria || criteria.length === 0) {
+    // Default to all standard criteria
+    return STANDARD_CRITERIA;
+  }
+
+  // Check if array of criterion names or full objects
+  if (typeof criteria[0] === 'string') {
+    // Map criterion names to standard criteria
+    return (criteria as string[])
+      .map((name) => STANDARD_CRITERIA.find((c) => c.name === name))
+      .filter((c): c is LLMJudgeCriterion => c !== undefined);
+  }
+
+  // Already full criterion objects
+  return criteria as LLMJudgeCriterion[];
+}
+
+/**
+ * Save judgments to database
+ */
+async function saveJudgmentsToDatabase(supabase: SupabaseClient, judgments: LLMJudgmentResult[]) {
+  const records = judgments.map((judgment) => ({
+    message_id: judgment.message_id,
+    judge_type: 'llm',
+    judge_name: judgment.judge_model,
+    criterion: judgment.criterion,
+    score: judgment.score / 10, // Normalize 1-10 scale to 0-1 for consistency with rule validators
+    passed: judgment.passed,
+    evidence_json: {
+      reasoning: judgment.reasoning,
+      confidence: judgment.confidence,
+      positive_aspects: judgment.evidence.positive_aspects,
+      negative_aspects: judgment.evidence.negative_aspects,
+      improvement_suggestions: judgment.evidence.improvement_suggestions,
+      original_score: judgment.score, // Store original 1-10 score for reference
+    },
+    notes: `AI evaluation: ${judgment.score}/10 (${(judgment.confidence * 100).toFixed(0)}% confidence)`,
+  }));
+
+  const { error } = await supabase.from('judgments').insert(records);
+
+  if (error) {
+    console.error('[EvaluationJudge] Failed to save judgments:', error);
+    throw new Error(`Database save failed: ${error.message}`);
+  }
+
+  console.log('[EvaluationJudge] Saved', records.length, 'judgments to database');
+}
+
+/**
+ * GET /api/evaluation/judge/criteria
+ * Get available evaluation criteria
+ */
+export async function GET() {
+  return NextResponse.json({
+    success: true,
+    standard_criteria: STANDARD_CRITERIA.map((c) => ({
+      name: c.name,
+      description: c.description,
+      min_score: c.min_score,
+      max_score: c.max_score,
+      passing_score: c.passing_score,
+    })),
+    available_models: ['gpt-4', 'gpt-4-turbo', 'claude-3-opus', 'claude-3-sonnet'],
+  });
+}

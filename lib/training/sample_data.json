@@ -1,0 +1,11 @@
+[
+  {
+    "text": "User: What is the capital of France?\nAssistant: The capital of France is Paris."
+  },
+  {
+    "text": "User: What is 2 + 2?\nAssistant: 2 + 2 equals 4."
+  },
+  {
+    "text": "User: Who wrote Romeo and Juliet?\nAssistant: William Shakespeare wrote Romeo and Juliet."
+  }
+]

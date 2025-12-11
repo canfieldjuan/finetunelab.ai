@@ -1,0 +1,23 @@
+FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
+
+# Install Python 3.10
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy training server requirements
+COPY lib/training/requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy training code
+COPY lib/training/ ./lib/training/
+
+# Expose port
+EXPOSE 8000
+
+# Run training server
+CMD ["python3", "lib/training/training_server.py"]

@@ -1,0 +1,657 @@
+features:
+- category: Cloud Training
+  feature: One-click RunPod deployment
+  benefit_short: Skip DevOps - no SSH, Docker, or GPU drivers
+  benefit_long: 'Start a full GPU training environment from the UI with a single action.
+    No SSH keys, Docker builds, or driver installs. When the job starts, you land
+    in a ready-to-use environment with your code, dependencies, and storage already
+    mounted, so the experience is: click → job spins up → logs and metrics appear
+    → you start training.'
+- category: Cloud Training
+  feature: GPU selection (A4000 → H100)
+  benefit_short: Match budget to needs, pay only for what you use
+  benefit_long: Choose the GPU type from a list (A4000, A5000, A6000, A100, H100,
+    etc.) and immediately see estimated cost and capacity. The interface shows hourly
+    price, VRAM, and expected throughput, so users can visually trade off cheaper
+    vs faster and see how the choice impacts total estimated run cost.
+- category: Cloud Training
+  feature: Training methods (SFT/DPO/ORPO/RLHF)
+  benefit_short: Right tool for the job without rewriting code
+  benefit_long: Pick a training method from a dropdown instead of rewriting the training
+    loop. Selecting SFT, DPO, ORPO, or RLHF wires up the correct loss, data format
+    expectations, and evaluation flow. The UI shows which method is active, which
+    datasets are attached, and which metrics are tracked, so it is obvious how this
+    run differs from a standard fine-tune.
+- category: Cloud Training
+  feature: LoRA/QLoRA
+  benefit_short: Train 70B models on consumer GPUs
+  benefit_long: Enable LoRA or QLoRA in the config and see reduced trainable parameters
+    and memory footprint in the run summary. The interface shows which layers are
+    frozen, which are adapted, and the effective adapter size, making it clear that
+    a 70B model is being fine-tuned with a small adapter that fits on a small number
+    of GPUs.
+- category: Cloud Training
+  feature: 4-bit/8-bit quantization
+  benefit_short: Cut memory 75% without quality loss
+  benefit_long: Toggle 4-bit or 8-bit loading and watch the memory usage indicator
+    drop. The dashboard shows approximate VRAM savings and the new maximum batch size
+    or context length the run can use. Users can visually verify that quantization
+    is active while training still reports healthy validation metrics.
+- category: Cloud Training
+  feature: Multi-format datasets
+  benefit_short: No tedious reformatting
+  benefit_long: Upload JSONL, CSV, Parquet, or chat logs and see a schema preview
+    in the browser. Users map columns or fields into roles (prompt, response, label,
+    metadata) via a visual mapping step, so the final training dataset is visible
+    as a table before the job starts, with sample rows to confirm there is no formatting
+    error.
+- category: Cloud Training
+  feature: Job lifecycle control
+  benefit_short: Pause, resume, cancel without losing progress
+  benefit_long: Each training run shows clear controls for Start, Pause, Resume, and
+    Cancel, plus a status history. When a user pauses, the UI shows “Paused at step
+    X” with the latest checkpoint. When they resume, the run continues from that point.
+    The lifecycle panel makes it clear which jobs are active, idle, or terminated.
+- category: Cloud Training
+  feature: Checkpoint management
+  benefit_short: Crash recovery, checkpoint comparison
+  benefit_long: Checkpoints are listed by timestamp, step, and key metrics in a dedicated
+    view. Users can click a checkpoint to restore it, mark it as preferred, or compare
+    metrics across checkpoints in a table or chart. It is visually clear which checkpoints
+    are best, which are experimental, and which can be safely pruned.
+- category: Cloud Training
+  feature: Real-time cost tracking
+  benefit_short: Budget limits, auto-shutdown, no surprise bills
+  benefit_long: Each job page shows a cost so far counter and a projected total cost
+    based on current runtime and GPU rate. Users can see this number increment in
+    real time and configure hard limits (for example, stop at $50 or 10 hours). When
+    a limit is close, the UI surfaces warnings, so there is no hidden overspend.
+- category: Cloud Training
+  feature: Multi-cloud providers
+  benefit_short: Not locked in, find best prices
+  benefit_long: A provider panel lists available clouds and regions (such as RunPod,
+    AWS, GCP) with GPU types and prices. Users can switch providers for a new run
+    while keeping the same code and config. The interface makes it clear which provider
+    is used for each job and lets users visually compare price and availability before
+    launching.
+- category: Monitoring
+  feature: Real-time loss tracking
+  benefit_short: Catch overfitting immediately
+  benefit_long: The training page shows a live loss curve that updates as batches
+    complete. Users can see if loss is trending down, flattening out, or increasing
+    in near real time, without waiting for the entire epoch. If a run looks wrong,
+    they can stop or adjust quickly based on what they see.
+- category: Monitoring
+  feature: GPU memory monitoring
+  benefit_short: Prevent OOM crashes
+  benefit_long: A live VRAM bar or chart shows current and peak memory usage per GPU.
+    When usage approaches the limit, the bar visually approaches full, indicating
+    a high risk of out-of-memory errors. This lets users adjust batch size or sequence
+    length before an actual crash.
+- category: Monitoring
+  feature: GPU utilization
+  benefit_short: Optimize cost by right-sizing
+  benefit_long: A utilization chart displays how busy each GPU is. Low utilization
+    indicates a bottleneck elsewhere such as I/O or dataloading. Users can see this
+    directly and know when they are wasting GPU capacity versus when the hardware
+    is fully used.
+- category: Monitoring
+  feature: Learning rate visualization
+  benefit_short: Verify schedulers work correctly
+  benefit_long: The UI overlays the learning rate schedule on the same timeline as
+    the loss curve. Users can see when warmup starts and ends, when decay begins,
+    and whether these patterns align with changes in loss. Misconfigured schedules
+    become obvious when the learning rate plot does not match expectations.
+- category: Monitoring
+  feature: Gradient norm tracking
+  benefit_short: Catch exploding gradients before NaN
+  benefit_long: Gradient norms are plotted over time with clear thresholds. Sudden
+    spikes or collapse to near zero show up visually, giving an early warning for
+    exploding or vanishing gradients. Users can correlate these patterns with changes
+    in loss or configuration.
+- category: Monitoring
+  feature: Throughput metrics
+  benefit_short: Compare config performance
+  benefit_long: Tokens per second and samples per second are shown as time series
+    and summary statistics. Users see how throughput changes when they adjust batch
+    size, sequence length, or model size. This makes it clear which configuration
+    gives the best speed per dollar.
+- category: Monitoring
+  feature: Perplexity tracking
+  benefit_short: More interpretable than loss
+  benefit_long: Perplexity is calculated and displayed alongside loss for language
+    models. Users see how confused the model is on validation data and can directly
+    compare perplexity across runs and datasets. This makes model quality easier to
+    interpret for non-experts.
+- category: Monitoring
+  feature: WebSocket streaming
+  benefit_short: Instant updates, not polling
+  benefit_long: Metrics, logs, and charts update instantly through WebSockets. There
+    is no manual refresh or slow polling behavior; users see changes immediately after
+    each step, which is important for diagnosing issues early or observing sensitive
+    runs.
+- category: Monitoring
+  feature: Supabase Realtime
+  benefit_short: Multi-tab and team sync
+  benefit_long: When multiple users or browser tabs are open, they all see the same
+    dashboard updates in sync. If one person pauses a job or updates a setting, it
+    is reflected everywhere. This avoids confusion from stale, out-of-sync views across
+    a team.
+- category: Monitoring
+  feature: Terminal monitor
+  benefit_short: Full visibility via SSH
+  benefit_long: 'The job page includes an embedded terminal-like view showing what
+    you would normally see over SSH: stdout, stderr, and process logs. Users can observe
+    fine-grained behavior without opening a separate SSH session.'
+- category: Monitoring
+  feature: Log streaming
+  benefit_short: Debug without downloading logs
+  benefit_long: Logs stream into the UI with scrolling and filtering controls. Users
+    can search by keywords such as ERROR or WARNING and jump directly to relevant
+    sections, instead of downloading and parsing large log files locally.
+- category: Monitoring
+  feature: Time estimation
+  benefit_short: Plan your day around actual estimates
+  benefit_long: The system estimates time remaining based on current progress and
+    throughput, presenting a simple ETA such as two hours remaining. Users can see
+    when a run is likely to finish and plan around it instead of guessing from steps
+    or epochs alone.
+- category: Analytics
+  feature: Model performance comparison
+  benefit_short: Compare with hard numbers, not gut feelings
+  benefit_long: Runs are grouped and compared on consistent metrics in tables and
+    charts. Users can sort and filter by accuracy, perplexity, latency, or custom
+    scores and immediately see which model version performs best on which benchmark
+    or dataset.
+- category: Analytics
+  feature: Training effectiveness
+  benefit_short: Was DPO worth the complexity?
+  benefit_long: 'For advanced methods such as DPO, ORPO, or RLHF, the UI shows before
+    and after comparisons: performance versus baseline, cost versus baseline, and
+    change in user feedback. This makes it clear whether the extra complexity delivered
+    a measurable improvement.'
+- category: Analytics
+  feature: Cost tracking charts
+  benefit_short: Spot spending spikes early
+  benefit_long: Spend over time is displayed as a line or bar chart, broken down by
+    project, model, or environment. Users can pinpoint when costs spiked, identify
+    which jobs caused it, and confirm that interventions such as smaller models or
+    shorter context actually reduced spend.
+- category: Analytics
+  feature: Token usage analytics
+  benefit_short: Optimize verbose responses
+  benefit_long: Token consumption is broken down by prompts versus completions and
+    by endpoint or app. Dashboards show which workflows are the heaviest token consumers
+    and where context is being wasted. Users can then adjust prompts or limits with
+    a clear visual before and after.
+- category: Analytics
+  feature: A/B testing
+  benefit_short: Statistical significance, not guessing
+  benefit_long: Experiments show side-by-side metrics with confidence intervals, such
+    as win rate or conversion. Users do not have to interpret raw counts; they see
+    which variant is statistically better and how strong that conclusion is.
+- category: Analytics
+  feature: Sentiment analysis
+  benefit_short: Track user happiness trends
+  benefit_long: User messages are aggregated into sentiment scores over time, displayed
+    as trends and distributions. Spikes in negative sentiment or drops in positive
+    sentiment are visible and can be tied to specific releases, prompts, or models.
+- category: Analytics
+  feature: Anomaly detection
+  benefit_short: Alerts before users complain
+  benefit_long: The analytics layer flags unusual patterns such as sudden latency
+    spikes, error bursts, or sentiment drops and marks them on time-series charts.
+    Users see exactly when an anomaly started and can drill into the underlying logs
+    or traces.
+- category: Analytics
+  feature: Quality forecasting
+  benefit_short: Predict issues before they happen
+  benefit_long: Trendlines and simple forecasts show where key metrics such as error
+    rate or satisfaction are heading if nothing changes. This gives an early warning
+    that quality is degrading or stabilizing, not just a static snapshot.
+- category: Analytics
+  feature: Cohort analysis
+  benefit_short: Target improvements where they matter
+  benefit_long: Metrics can be sliced by segment such as plan, region, customer group,
+    or custom labels. Users can see, for example, that one segment has higher error
+    rates or lower satisfaction and prioritize fixes accordingly, rather than treating
+    all traffic as uniform.
+- category: Analytics
+  feature: Benchmark tracking
+  benefit_short: Prove improvement with objective metrics
+  benefit_long: Scores on internal or external benchmarks are logged over model versions.
+    Graphs show how each new release compares to earlier ones, making regression or
+    improvement obvious. This supports release decisions with visible data, not memory.
+- category: Analytics
+  feature: Trace visualization
+  benefit_short: Debug slow responses
+  benefit_long: Request traces show end-to-end timing across components such as prompt
+    building, model calls, post-processing, and external APIs. The UI highlights which
+    step dominates latency, so users can see whether the model, prompt assembly, or
+    an external service is the bottleneck.
+- category: Analytics
+  feature: Judgment analytics
+  benefit_short: Turn feedback into actionable data
+  benefit_long: Human and automated ratings (thumbs up or down, scores, labels) are
+    aggregated into dashboards. Users can see which query types or flows generate
+    the most negative judgments and drill into specific examples to understand the
+    failure patterns.
+- category: Analytics
+  feature: Natural language analytics
+  benefit_short: Ask questions in plain English
+  benefit_long: Users can type questions such as which model has the highest win rate
+    for enterprise users this month and get charts or tables back. This removes the
+    need to write SQL or build custom dashboards for every question.
+- category: Reporting
+  feature: Conversation export
+  benefit_short: Your data, your format
+  benefit_long: Conversations can be exported with consistent structure, including
+    user and assistant turns, timestamps, and metadata. Users can select ranges, filters,
+    or tags and get a file that is immediately usable for audits, support reviews,
+    or model training.
+- category: Reporting
+  feature: Analytics export
+  benefit_short: Board-ready reports in one click
+  benefit_long: Charts and metric tables can be exported in report-friendly formats
+    such as PDFs, images, or data files. Teams can move a view directly from the analytics
+    screen into presentations or internal reports with minimal manual formatting.
+- category: Reporting
+  feature: CSV exports
+  benefit_short: Drop into Excel immediately
+  benefit_long: Metrics, run metadata, and aggregated stats can be downloaded as CSV
+    and opened directly in spreadsheets. Columns are labeled and stable so operations,
+    finance, or data teams can build their own pivots and models without engineering
+    involvement.
+- category: Reporting
+  feature: JSON exports
+  benefit_short: Feed your data pipeline
+  benefit_long: Raw data such as events, metrics, and configuration can be exported
+    as JSON for ingestion into external pipelines. The structure is documented and
+    consistent, allowing automated processing or long-term storage in data lakes and
+    warehouses.
+- category: Reporting
+  feature: Executive reports
+  benefit_short: Stop spending hours in PowerPoint
+  benefit_long: 'Auto-generated summaries pull key metrics and trends into a concise
+    report: core KPIs, changes versus previous period, and notable incidents. This
+    gives leadership a single document that reflects the same underlying data as the
+    detailed dashboards.'
+- category: Reporting
+  feature: Training package download
+  benefit_short: Run anywhere, not just FineTune Lab
+  benefit_long: Users can download a reproducible training package that includes configuration,
+    scripts, and required metadata. This package can be run on other infrastructure
+    to reproduce training behavior without manually reconstructing the pipeline.
+- category: Reporting
+  feature: Checkpoint download
+  benefit_short: Get the exact checkpoint you need
+  benefit_long: Any checkpoint from the checkpoint list can be downloaded directly.
+    The interface shows which run and step it belongs to and the metrics at that point,
+    so users know exactly what they are loading into downstream workflows.
+- category: Reporting
+  feature: Secure dataset download
+  benefit_short: Share without exposing credentials
+  benefit_long: Datasets can be shared through scoped, secure links instead of raw
+    credentials or wide-open buckets. The UI clearly indicates who can access each
+    dataset export, reducing accidental data exposure.
+- category: Reporting
+  feature: Search summaries export
+  benefit_short: Create docs from research
+  benefit_long: Summaries produced by research or search workflows can be exported
+    as standalone documents. Teams can turn exploratory work into shareable briefs
+    or knowledge base entries with minimal manual editing.
+- category: Reporting
+  feature: Conversation archiving
+  benefit_short: Clean up without losing forever
+  benefit_long: Older conversations can be archived from the active workspace into
+    long-term storage while remaining searchable. The UI stays clean and performant
+    for day-to-day use, but historical data remains accessible for compliance, analysis,
+    or retraining.
+- category: Chat Portal Testing
+  feature: Instant post-training testing
+  benefit_short: Know in 30 seconds if your $50 run was worth it
+  benefit_long: Right after a training run finishes, users can open the chat portal,
+    select the new model, and send real prompts within seconds. They see full responses,
+    logs, and basic metrics in one place, so they can answer whether the run helped
+    by actually talking to the model instead of waiting for a separate deployment
+    process.
+- category: Chat Portal Testing
+  feature: One-click model switching
+  benefit_short: Compare base vs fine-tuned back-to-back
+  benefit_long: Inside the chat UI, there is a simple selector for models. Users can
+    switch between base and fine-tuned variants with a single click and resend the
+    same prompt. The responses appear stacked or in separate tabs, making it visually
+    obvious how the fine-tune changed behavior compared to the original.
+- category: Chat Portal Testing
+  feature: Model capability badges
+  benefit_short: See streaming/functions/vision at a glance
+  benefit_long: Each model is labeled with badges such as Streaming, Tools, Vision,
+    or JSON mode. Users can glance at the chat header or model list and immediately
+    know which models support functions, images, or structured output without digging
+    into configuration files or docs.
+- category: Chat Portal Testing
+  feature: Response time tracking
+  benefit_short: Catch latency issues before production
+  benefit_long: Every chat message shows response latency and the portal includes
+    a small latency history graph. Users can see if a model is consistently slow,
+    if latency spikes under certain prompts, and whether a new fine-tune or tool setup
+    made responses faster or slower before rolling it into production.
+- category: Chat Portal Testing
+  feature: Token usage per message
+  benefit_short: Know exactly what each response costs
+  benefit_long: Each interaction exposes token counts and cost estimates per message,
+    including prompt tokens, completion tokens, and totals. Users see exactly how
+    much each query costs and can compare different prompt styles or models directly
+    in the chat, instead of guessing based on monthly bills.
+- category: Model Comparison Lab
+  feature: Side-by-side A/B (2-4 models)
+  benefit_short: One prompt, four responses, pick the winner
+  benefit_long: Users enter one prompt and the lab shows two to four model responses
+    in a grid. Each column is a model and each row is a test prompt. This makes it
+    easy to visually scan, scroll, and decide which model is best for a specific use
+    case without juggling multiple windows or sessions.
+- category: Model Comparison Lab
+  feature: Multi-axis rating (clarity/accuracy/conciseness/overall)
+  benefit_short: Nuanced evaluation, not just good/bad
+  benefit_long: For each response, evaluators can rate multiple dimensions separately,
+    such as clarity, accuracy, conciseness, and overall quality. The UI aggregates
+    these axes into averages and distributions so teams see more nuanced feedback
+    than a single good or bad label.
+- category: Model Comparison Lab
+  feature: Prefer/Reject voting
+  benefit_short: Build DPO dataset while testing
+  benefit_long: Instead of just rating, users can mark one response as preferred and
+    others as rejected for a given prompt. These decisions are stored and linked to
+    the underlying prompt and response pairs, so the same testing workflow doubles
+    as data collection for preference-based training such as DPO.
+- category: Model Comparison Lab
+  feature: Export as JSONL preference data
+  benefit_short: 50 comparisons = 50 training pairs
+  benefit_long: At any time, the system can export the collected comparisons as JSONL
+    in a preference-friendly format with chosen, rejected, and prompt fields. If there
+    are fifty comparison tasks, users get fifty ready-to-use pairs for preference
+    training with minimal extra processing.
+- category: Model Comparison Lab
+  feature: Parallel model execution
+  benefit_short: All models respond in time of slowest
+  benefit_long: When a user runs a comparison, the lab triggers all selected models
+    in parallel. The UI waits for the slowest model and then displays all responses
+    together. This keeps the workflow fast and predictable, instead of manually waiting
+    for each model one by one.
+- category: Evaluation & Feedback
+  feature: Thumbs up/down
+  benefit_short: One click feeds quality metrics
+  benefit_long: Every model response has simple thumbs up or down controls. A single
+    click records the user judgment, aggregates it into quality metrics, and links
+    it to the prompt and model version. This lowers the friction to capture feedback
+    during normal usage, not just in dedicated tests.
+- category: Evaluation & Feedback
+  feature: Detailed evaluation modal
+  benefit_short: Tag WHY it failed (hallucination, incomplete, etc.)
+  benefit_long: Clicking an Evaluate button opens a modal where users can label the
+    reason for failure or success, such as hallucination, incomplete answer, off-topic,
+    or formatting issue. This structured data goes beyond a binary rating and gives
+    the system clear signals about the type of error.
+- category: Evaluation & Feedback
+  feature: 7 failure tag categories
+  benefit_short: 'Aggregate patterns: "40% are hallucinations"'
+  benefit_long: The modal exposes a fixed set of failure tags. The analytics view
+    aggregates these tags and surfaces patterns like forty percent of failures are
+    hallucinations. This lets teams prioritize fixes for the most common failure type.
+- category: Evaluation & Feedback
+  feature: Groundedness scoring
+  benefit_short: Score how well model grounds answers
+  benefit_long: For responses that should rely on external context such as RAG, the
+    system computes and displays a groundedness score. Users see a numeric or color-coded
+    indicator showing how well the answer matches the provided sources and can use
+    this when evaluating retrieval setups.
+- category: Evaluation & Feedback
+  feature: Citation validation
+  benefit_short: Verify each citation is correct
+  benefit_long: The evaluation logic checks each citation or reference against the
+    underlying context. The UI flags citations that do not match or are unsupported.
+    Users can quickly see where the model invented references or misused sources.
+- category: Evaluation & Feedback
+  feature: Expected vs actual behavior
+  benefit_short: Document gaps for training improvement
+  benefit_long: For specific test prompts, users can store an expected behavior description
+    or reference answer. When the model responds, the evaluation view shows expected
+    versus actual side by side. This makes gaps explicit and creates a structured
+    list of examples that can be fed back into training.
+- category: LLM Judge System
+  feature: LLM-as-Judge (GPT-4/Claude)
+  benefit_short: Automated scoring that scales infinitely
+  benefit_long: Instead of relying only on humans, users can configure a strong external
+    model to score responses. The system sends the prompt and response to the judge,
+    which returns scores and rationales. This enables large-scale evaluation runs
+    without requiring a human in every loop.
+- category: LLM Judge System
+  feature: 5-criterion framework
+  benefit_short: Helpful? Accurate? Clear? Safe? Complete?
+  benefit_long: The judge uses a consistent rubric of Helpful, Accurate, Clear, Safe,
+    and Complete. Each response gets scored along these five dimensions. The UI shows
+    these as separate fields and aggregated scores so comparisons across models and
+    runs use the same evaluation yardstick.
+- category: LLM Judge System
+  feature: Confidence with evidence
+  benefit_short: See why it passed/failed, not just score
+  benefit_long: Alongside scores, the judge returns a confidence estimate and a brief
+    explanation of why something is inaccurate, unsafe, or low quality. Evaluators
+    can read this explanation in the UI to understand why the judge gave a particular
+    rating, instead of trusting a raw number blindly.
+- category: LLM Judge System
+  feature: Batch evaluation (5 concurrent)
+  benefit_short: 100 evaluations in time of 20
+  benefit_long: Users can submit a batch of prompts and responses for automated judging.
+    The system processes several at a time and updates a progress view. This allows
+    large numbers of evaluations to complete in roughly the time it would take to
+    run a much smaller set serially.
+- category: Rule-Based Validators
+  feature: Must-cite-if-claims
+  benefit_short: Catches uncited factual claims
+  benefit_long: Responses are scanned for factual claims such as dates, numbers, and
+    named entities and checked for associated citations or references. If claims lack
+    evidence, the validator flags them. The UI surfaces these failures, so teams know
+    where the model is making unsupported statements.
+- category: Rule-Based Validators
+  feature: Format validation
+  benefit_short: Catches malformed JSON before it breaks apps
+  benefit_long: When a response must follow a strict structure such as JSON, XML,
+    or custom schemas, the validator parses the output and checks it against the expected
+    format. Invalid outputs trigger visible warnings and can be blocked from flowing
+    into downstream apps before they cause runtime errors.
+- category: Rule-Based Validators
+  feature: Domain-specific rules
+  benefit_short: Legal needs stricter rules than creative
+  benefit_long: Teams can define rule sets per domain, such as legal, medical, or
+    internal policy, with stricter conditions than generic chat. The validator applies
+    the appropriate rules based on context, so legal-oriented flows can be held to
+    higher safety and completeness standards than casual or creative ones.
+- category: Batch Testing
+  feature: Test suite management
+  benefit_short: Build regression suite once, run after every training
+  benefit_long: Users can create named test suites consisting of prompts, expected
+    behaviors, and validators. These suites can be reused after every training run.
+    The UI lists suites, shows when they were last executed, and tracks pass or fail
+    history across model versions.
+- category: Batch Testing
+  feature: Drag-drop upload
+  benefit_short: 500 prompts? Drag, drop, done
+  benefit_long: Users can upload large sets of test prompts via drag-and-drop for
+    CSV, JSONL, and similar files. The system parses them, shows a preview, and turns
+    them into a batch test without requiring manual entry or complicated API calls.
+- category: Batch Testing
+  feature: Batch execution
+  benefit_short: Click Run, get coffee, return to results
+  benefit_long: Once a suite is prepared, users click a single Run button to execute
+    all tests. The system processes each prompt, records results, and shows a status
+    view. Users do not have to manually run each case; they can focus on the summary.
+- category: Batch Testing
+  feature: Real-time progress
+  benefit_short: See failures as they happen
+  benefit_long: During a batch run, the UI shows progress indicators and surfaces
+    failures as they occur. Users can start reviewing failing cases before the entire
+    batch completes, reducing downtime and speeding up diagnosis.
+- category: Batch Testing
+  feature: Validator breakdown
+  benefit_short: 95% overall but 60% citations = fix citations
+  benefit_long: After a batch finishes, results are grouped by validator such as format,
+    citations, or safety. A summary might show high overall pass rate but low pass
+    rate for citation validation. This quickly highlights where to focus fixes instead
+    of combing through raw logs.
+- category: Batch Testing
+  feature: Bulk operations
+  benefit_short: Archive, restore, delete test runs
+  benefit_long: Users can archive, restore, or delete entire sets of test runs from
+    a management view. This keeps the environment organized, allowing old runs to
+    be hidden from day-to-day views while still being accessible for audits or comparisons.
+- category: Predictions Tracking
+  feature: Track across epochs
+  benefit_short: 'Watch model learn: gibberish → coherent → perfect'
+  benefit_long: For selected prompts, the system records model outputs at different
+    training checkpoints or epochs. Users can scroll through the timeline and see
+    how answers evolve from early poor outputs to later improved ones.
+- category: Predictions Tracking
+  feature: Compare same prompt across epochs
+  benefit_short: Concrete evidence of improvement
+  benefit_long: For a given prompt, the UI shows responses from multiple checkpoints
+    side by side. This gives concrete evidence of improvement or regression instead
+    of relying solely on aggregate metrics.
+- category: Predictions Tracking
+  feature: Trend indicators
+  benefit_short: Green arrow = improving, red = regressing
+  benefit_long: The system assigns trend markers to key metrics and prompts. A green
+    arrow indicates that performance on that prompt or category is improving over
+    checkpoints; a red arrow signals regression. Users get a quick visual sense of
+    direction.
+- category: Predictions Tracking
+  feature: Cost estimation
+  benefit_short: Know tracking costs before enabling
+  benefit_long: Predictions tracking itself has a cost, because of stored generations
+    and extra evaluations. The UI shows estimated costs before enabling it for large
+    prompt sets. Users see how much monitoring specific prompts or suites will add
+    to their bill and can scope tracking accordingly.
+- category: AI Assistant Guidance
+  feature: Natural language analytics
+  benefit_short: Ask "why did tests fail?" in English
+  benefit_long: Users can ask questions such as which tests are failing most often
+    this week or why quality dropped yesterday in plain language. The assistant returns
+    charts, summaries, or filtered views, avoiding the need to learn query languages
+    or dig through multiple dashboards.
+- category: AI Assistant Guidance
+  feature: Root cause analysis
+  benefit_short: 'Primary cause: hallucinations (85% confidence)'
+  benefit_long: Given failure data such as tags, validators, and judge scores, the
+    assistant analyzes patterns and summarizes likely primary causes, for example
+    hallucinations combined with missing citations. This points teams to the real
+    underlying problem rather than just listing symptoms.
+- category: AI Assistant Guidance
+  feature: Improvement recommendations
+  benefit_short: Specific next steps, not just "model is bad"
+  benefit_long: Instead of saying quality is low, the assistant suggests concrete
+    next steps, such as tightening system prompts for safety, adding more training
+    data with multi-turn clarifications, or reducing temperature for a specific endpoint.
+    These recommendations are tied to observed patterns in the evaluation data.
+- category: AI Assistant Guidance
+  feature: Tool impact analysis
+  benefit_short: 'Responses with RAG: 4.2 rating. Without: 3.1'
+  benefit_long: The system can compare outcomes for responses that used specific tools,
+    such as RAG, calculators, or APIs, versus those that did not. The assistant then
+    summarizes tool impact, for example responses with RAG have higher average ratings,
+    so teams see how much tools actually help.
+- category: AI Assistant Guidance
+  feature: Quality forecasting
+  benefit_short: Quality drops below threshold in 5 days
+  benefit_long: Using recent trends, the assistant estimates where quality metrics
+    are heading. It can report that at the current trajectory a model's pass rate
+    will drop below a threshold in a set number of days, enabling preemptive action.
+- category: AI Assistant Guidance
+  feature: Dataset recommendations
+  benefit_short: Add more user turns for better flow
+  benefit_long: Based on observed failures and usage patterns, the assistant suggests
+    specific data collection efforts, such as adding more multi-turn conversations
+    for troubleshooting flows or expanding examples involving a particular topic.
+    This connects abstract metrics to concrete dataset changes.
+- category: GraphRAG Context
+  feature: Smart context injection
+  benefit_short: Answers grounded in YOUR documents
+  benefit_long: The system uses a graph-based representation of documents to select
+    and inject the most relevant nodes and sections into the prompt. Users see which
+    documents and relationships were used for each answer, helping them trust that
+    responses are grounded in their content.
+- category: GraphRAG Context
+  feature: Citation with confidence
+  benefit_short: 95% relevance score per source
+  benefit_long: Each citation includes a relevance score that appears alongside the
+    source. Users can quickly see which citations are strongly supported and which
+    are borderline, making it easier to judge the quality of the grounding for each
+    answer.
+- category: GraphRAG Context
+  feature: Context usage tracking
+  benefit_short: Know if model used the context
+  benefit_long: For each request, the system logs whether and how the provided context
+    was used. Analytics views show how often context is retrieved but ignored or heavily
+    relied upon. This helps teams tune retrieval strategies and identify wasteful
+    or ineffective context injection.
+- category: Research Assistance
+  feature: Deep research workflows
+  benefit_short: Multi-source synthesis, report generation
+  benefit_long: 'Users can run multi-step research flows from chat: gather sources,
+    extract key points, compare viewpoints, and generate structured reports. The assistant
+    keeps track of intermediate findings and presents final summaries that reference
+    the underlying sources.'
+- category: Research Assistance
+  feature: Query refinement
+  benefit_short: Auto-rephrases bad searches
+  benefit_long: When users submit vague or low-quality queries, the system automatically
+    suggests or applies improved search queries by adding keywords, rephrasing, or
+    scoping by date or domain. This leads to better sources and more accurate final
+    summaries without requiring users to be search experts.
+- category: Research Assistance
+  feature: 14+ integrated tools
+  benefit_short: Calculate, analyze, search from chat
+  benefit_long: The research assistant can call multiple tools such as web search,
+    code execution, document analyzers, and calculators from a single chat. Users
+    issue a single instruction, and the assistant orchestrates the necessary tools
+    behind the scenes, returning a consolidated answer.
+- category: Training Data Creation
+  feature: Export comparisons as DPO data
+  benefit_short: Testing becomes training data
+  benefit_long: All the preferences collected in testing, such as chosen versus rejected
+    responses, can be exported in a format directly usable for DPO or other preference-based
+    training. Evaluation work becomes a growing, structured preference dataset without
+    extra labeling passes.
+- category: Training Data Creation
+  feature: Convert chats to training format
+  benefit_short: Good convos = training examples
+  benefit_long: The system can transform selected conversation logs into training-ready
+    examples, such as instruction–response format. Users can filter by tags or channels,
+    preview the result, and export only the segments that are suitable for supervised
+    fine-tuning.
+- category: Training Data Creation
+  feature: Filter exports by feedback
+  benefit_short: Export only thumbs-up for SFT
+  benefit_long: Exports can be restricted to interactions with positive feedback such
+    as thumbs up or high judge scores. This lets teams create high-quality supervised
+    fine-tuning datasets from real usage by pulling only the best examples instead
+    of the entire raw history.
+- category: Judgment Persistence
+  feature: Unified storage
+  benefit_short: Rule + human + LLM judges in one table
+  benefit_long: All judgments, including rule-based validator results, human ratings,
+    and LLM-judge scores, are stored in a single schema. Each response has a unified
+    record that shows every type of evaluation, simplifying analysis and preventing
+    fragmented datasets.
+- category: Judgment Persistence
+  feature: Aggregate statistics
+  benefit_short: Pass rates by judge type
+  benefit_long: The system can compute pass rates and scores by judge type, model
+    version, prompt category, or time window. Users see how each judge behaves and
+    how models perform across different evaluation modes.
+- category: Judgment Persistence
+  feature: Failure pattern analysis
+  benefit_short: '"60% failures are citation issues"'
+  benefit_long: Because all judgments are centralized, the platform can generate summaries
+    such as sixty percent of failures are citation-related or a model regresses mainly
+    on safety. These insights are presented as charts and tables, guiding where to
+    focus future training and validation work.

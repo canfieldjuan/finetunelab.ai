@@ -1,0 +1,79 @@
+{
+  "data": {
+    "strategy": "standard",
+    "eval_split": 0.05,
+    "train_split": 0.8,
+    "generation_type": "real"
+  },
+  "model": {
+    "name": "Qwen/Qwen3-1.7B",
+    "device_map": "auto",
+    "torch_dtype": "bfloat16",
+    "trust_remote_code": true
+  },
+  "training": {
+    "bf16": true,
+    "fp16": false,
+    "optim": "paged_adamw_8bit",
+    "lora_r": 32,
+    "method": "sft",
+    "packing": false,
+    "use_lora": true,
+    "batch_size": 12,
+    "eval_steps": 100,
+    "lora_alpha": 64,
+    "max_length": 2048,
+    "num_epochs": 5,
+    "save_steps": 200,
+    "lora_config": {
+      "r": 16,
+      "bias": "none",
+      "task_type": "CAUSAL_LM",
+      "lora_alpha": 32,
+      "lora_dropout": 0.1,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj"
+      ]
+    },
+    "lora_dropout": 0.1,
+    "quantization": {
+      "load_in_4bit": true,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_use_double_quant": true
+    },
+    "warmup_ratio": 0,
+    "warmup_steps": 200,
+    "weight_decay": 0.01,
+    "learning_rate": 0.0001,
+    "logging_steps": 10,
+    "max_grad_norm": 1,
+    "eval_batch_size": 2,
+    "group_by_length": true,
+    "save_total_limit": 10,
+    "lr_scheduler_type": "cosine",
+    "evaluation_strategy": "steps",
+    "dataloader_pin_memory": true,
+    "dataloader_num_workers": 0,
+    "gradient_checkpointing": false,
+    "dataloader_prefetch_factor": null,
+    "gradient_accumulation_steps": 3,
+    "pretokenize": true
+  },
+  "tokenizer": {
+    "name": "Qwen/Qwen3-1.7B",
+    "trust_remote_code": true
+  },
+  "predictions": {
+    "enabled": true,
+    "sample_count": 8,
+    "sample_frequency": "epoch"
+  },
+  "dataset_path": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/datasets/job_6027d0fb-0520-48d9-9820-78c1a68b22ee/9dd3a1d4-62b6-492c-a8fd-ab95b6b7b2b5.jsonl",
+  "output_dir": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/job_6027d0fb-0520-48d9-9820-78c1a68b22ee",
+  "execution_id": "6027d0fb-0520-48d9-9820-78c1a68b22ee",
+  "eval_split": 0.2
+}

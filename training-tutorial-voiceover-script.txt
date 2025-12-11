@@ -1,0 +1,98 @@
+TRAINING PLATFORM TUTORIAL - VOICE OVER SCRIPT
+================================================
+
+Total Length: ~2.5-3 minutes
+Sections: 16 scenes
+Pacing: Moderate, suitable for demonstration video
+
+================================================
+
+SCENE 1: Landing on Training Page (5-8 seconds)
+================================================
+"Welcome to the Training Platform. This is where you configure, manage, and launch your model training jobs. Let's walk through creating your first training run."
+
+
+SCENE 2: Overview of Interface (8-10 seconds)
+================================================
+"At the top, you'll see five tabs: Training Configs, Public Packages, Datasets, Batch Testing, and Regression Gates. We'll start in the Training Configs tab, which is your main workflow area."
+
+
+SCENE 3: Model Selection Section (12-15 seconds)
+================================================
+"First, we need to choose a base model. Click on the Model Selection card. You have two options here: Local models that are already on your machine, or HuggingFace models you can download. Let's select the Local tab and search for a model."
+
+
+SCENE 4: Searching for Local Model (10-12 seconds)
+================================================
+"Type at least three characters to search. In this example, I'll search for 'llama'. The system scans your local directories and shows available models with their size and format. Click on a model to select it."
+
+
+SCENE 5: Model Selected Confirmation (6-8 seconds)
+================================================
+"Once selected, you'll see a confirmation at the top showing your chosen model with its source type and category. Now we can move on to configuration."
+
+
+SCENE 6: Training Configuration Section (10-12 seconds)
+================================================
+"Next is the Training Configuration section. Here you have two choices: select an existing configuration or create a new one. For this tutorial, let's create a new configuration from scratch."
+
+
+SCENE 7: Creating New Config (12-15 seconds)
+================================================
+"Click 'Create New Config'. First, choose a template type from the dropdown. Options include Standard LoRA Fine-tune, Chat Model Fine-tune, and several others. Each template comes pre-configured with best-practice settings."
+
+
+SCENE 8: Naming Configuration (8-10 seconds)
+================================================
+"After selecting your template, give your configuration a descriptive name, like 'Fine-tune Llama for Code'. Then click 'Create Configuration'. The system saves this config and automatically selects it."
+
+
+SCENE 9: Editing Configuration (Optional) (10-12 seconds)
+================================================
+"If you need to adjust hyperparameters, click 'Edit Configuration'. This opens the config editor where you can modify learning rate, batch size, LoRA settings, and advanced options. When finished, click 'Save Changes'."
+
+
+SCENE 10: Dataset & Package Generation Section (8-10 seconds)
+================================================
+"With your model and config ready, the final section appears: 'Add Dataset and Generate Package'. This is where we attach training data and create a deployable package."
+
+
+SCENE 11: Attaching Dataset (12-15 seconds)
+================================================
+"You can upload a new dataset or select from existing ones. Supported formats include JSONL, CSV, and Parquet. The system validates your dataset format automatically. Once attached, you'll see a preview of your training data."
+
+
+SCENE 12: Generating Training Package (10-12 seconds)
+================================================
+"Finally, click 'Generate Training Package'. The system bundles your model configuration, dataset, and all dependencies into a portable package. You can deploy this to Google Colab, RunPod, Kaggle, or run it locally."
+
+
+SCENE 13: Package Options (10-12 seconds)
+================================================
+"After generation, you'll see options to download the package, get a public shareable link, or open it directly in Colab. The package includes everything needed to start training immediately."
+
+
+SCENE 14: Saved Configurations (8-10 seconds)
+================================================
+"Below the workflow, you'll find your Saved Configurations. These are all the configs you've created, displayed in a searchable grid. You can clone, edit, delete, or load them back into the workflow anytime."
+
+
+SCENE 15: Monitoring Training (8-10 seconds)
+================================================
+"Once training starts, switch to the Terminal Monitor to watch real-time logs, metrics, and GPU utilization. You can pause, resume, or cancel jobs at any time."
+
+
+SCENE 16: Closing (6-8 seconds)
+================================================
+"And that's it! You've successfully created a training configuration, attached data, and generated a deployment package. Happy training!"
+
+
+================================================
+RECORDING NOTES:
+================================================
+- Pause briefly between sections for video transitions
+- Emphasize action words like "click", "select", "choose"
+- Keep tone conversational but professional
+- Adjust timing based on your actual screen recording pace
+- Consider adding music bed underneath at 20-30% volume
+- End each section with a slight pause for editing flexibility

@@ -1,0 +1,3 @@
+{"instruction": "Given a list of numbers, return the sum", "instances": [{"input": "[1, 2, 3, 4, 5]", "output": "15"}, {"input": "[10, 20, 30]", "output": "60"}]}
+{"instruction": "Convert temperature from Celsius to Fahrenheit", "instances": [{"input": "0°C", "output": "32°F"}, {"input": "100°C", "output": "212°F"}]}
+{"instruction": "Identify the programming language", "instances": [{"input": "print('Hello')", "output": "Python"}, {"input": "console.log('Hello')", "output": "JavaScript"}]}

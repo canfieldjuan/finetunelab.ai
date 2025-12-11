@@ -1,0 +1,19 @@
+{
+  "name": "Test Validation Set - Phase 1",
+  "description": "Testing GraphRAG integration for validation sets",
+  "test_cases": [
+    {
+      "prompt": "How do I reset my password?",
+      "expected_response": "To reset your password:\n1. Click 'Forgot Password' on the login page\n2. Enter your email address\n3. Check your email for the reset link\n4. Click the link and create a new password\n\nThe link expires after 24 hours.",
+      "keywords_required": ["Forgot Password", "email", "reset link"],
+      "tone": "helpful, clear",
+      "max_length": 300
+    },
+    {
+      "prompt": "What are your business hours?",
+      "expected_response": "Our support team is available:\n- Monday-Friday: 9am-6pm EST\n- Saturday: 10am-4pm EST\n- Sunday: Closed\n\nFor urgent issues outside these hours, please use our emergency contact form.",
+      "keywords_required": ["Monday-Friday", "9am-6pm", "EST"],
+      "tone": "informative"
+    }
+  ]
+}

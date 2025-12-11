@@ -1,0 +1,93 @@
+{
+  "data": {
+    "strategy": "manual_templates",
+    "train_split": 0.8,
+    "generation_type": "synthetic"
+  },
+  "seed": 42,
+  "model": {
+    "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "device_map": "auto",
+    "torch_dtype": "bfloat16",
+    "trust_remote_code": true
+  },
+  "training": {
+    "bf16": true,
+    "fp16": false,
+    "optim": "paged_adamw_32bit",
+    "lora_r": 16,
+    "method": "dpo",
+    "packing": false,
+    "use_lora": true,
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "batch_size": 2,
+    "eval_steps": 100,
+    "lora_alpha": 32,
+    "max_length": 512,
+    "num_epochs": 3,
+    "save_steps": 100,
+    "lora_config": {
+      "r": 16,
+      "bias": "none",
+      "task_type": "CAUSAL_LM",
+      "lora_alpha": 32,
+      "lora_dropout": 0.1,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj"
+      ]
+    },
+    "adam_epsilon": 1e-08,
+    "lora_dropout": 0.1,
+    "quantization": {
+      "load_in_4bit": true,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_use_double_quant": true
+    },
+    "warmup_steps": 100,
+    "weight_decay": 0.01,
+    "learning_rate": 1e-06,
+    "logging_steps": 10,
+    "max_grad_norm": 0.3,
+    "eval_batch_size": 2,
+    "group_by_length": true,
+    "save_total_limit": 7,
+    "evaluation_strategy": "steps",
+    "dataloader_pin_memory": true,
+    "dataloader_num_workers": 4,
+    "gradient_checkpointing": true,
+    "dataloader_prefetch_factor": 2,
+    "gradient_accumulation_steps": 16,
+    "pretokenize": true
+  },
+  "tokenizer": {
+    "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "padding_side": "left",
+    "trust_remote_code": true
+  },
+  "evaluation": {
+    "metrics": [
+      "tool_accuracy",
+      "response_quality",
+      "tool_format_correctness"
+    ],
+    "eval_steps": 100
+  },
+  "predictions": {
+    "enabled": false,
+    "sample_count": 0,
+    "sample_frequency": "epoch"
+  },
+  "tensorboard": {
+    "enabled": true,
+    "log_dir": "outputs/runs"
+  },
+  "dataset_path": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/datasets/job_80d4844c-ad2c-4989-bb85-9e39ffbd68e9/c5b19b29-35fb-4f2d-8609-59944c143aad.jsonl",
+  "output_dir": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/job_80d4844c-ad2c-4989-bb85-9e39ffbd68e9",
+  "execution_id": "80d4844c-ad2c-4989-bb85-9e39ffbd68e9",
+  "eval_split": 0.2
+}

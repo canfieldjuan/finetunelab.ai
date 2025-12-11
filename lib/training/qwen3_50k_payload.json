@@ -1,0 +1,26 @@
+{
+  "execution_id": "qwen3-50k-full-run",
+  "dataset_path": "C:/Users/Juan/Desktop/Dev_Ops/finetune-lab/hybrid_training_50k_balanced.json",
+  "config": {
+    "model": {
+      "name": "Qwen/Qwen3-0.6B"
+    },
+    "lora": {
+      "r": 8,
+      "alpha": 16,
+      "dropout": 0.05,
+      "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj"]
+    },
+    "data": {
+      "strategy": "chat"
+    },
+    "training": {
+      "method": "sft",
+      "num_epochs": 1,
+      "batch_size": 4,
+      "learning_rate": 0.0002,
+      "warmup_steps": 100,
+      "logging_steps": 50
+    }
+  }
+}

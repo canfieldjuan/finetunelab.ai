@@ -1,0 +1,47 @@
+/home/juan-canfield/Desktop/web-ui/lib/training/dataset_pipeline.py:153: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "generated_at": datetime.utcnow().isoformat() + "Z",
+
+================================================================================
+DATASET PROCESSING PIPELINE
+================================================================================
+
+📂 Step 1: Loading datasets...
+  ✓ Loaded 5287 ChatML examples
+  ✓ Loaded 541 ShareGPT examples
+
+🔄 Step 2: Converting 541 ShareGPT → ChatML...
+  ✓ Converted 541 examples
+
+🔗 Step 3: Combining datasets...
+  ✓ Combined total: 5828 examples
+
+🧹 Step 4: Removing duplicates...
+  ✓ Removed 550 duplicates
+  ✓ Unique examples: 5278
+
+✅ Step 5: Validating ChatML format...
+  ✓ Valid examples: 5278
+  ✗ Invalid examples: 0
+
+💾 Step 6: Saving final dataset...
+💾 Saved 5278 examples to: /home/juan-canfield/Desktop/web-ui/output/In_progress/finetune_lab_final_dataset.jsonl
+
+📊 Step 7: Generating dataset report...
+📊 Report saved to: /home/juan-canfield/Desktop/web-ui/output/In_progress/dataset_report_20251118_012817.json
+
+================================================================================
+PIPELINE COMPLETE
+================================================================================
+
+📈 Final Statistics:
+  Total examples: 5278
+  Average tokens: 179.6
+  Average turns: 4.0
+  Examples with system message: 2991
+  Valid examples: 5278
+
+📁 Output Files:
+  Dataset: /home/juan-canfield/Desktop/web-ui/output/In_progress/finetune_lab_final_dataset.jsonl
+  Report: /home/juan-canfield/Desktop/web-ui/output/In_progress/dataset_report_20251118_012817.json
+
+✨ Ready for training!

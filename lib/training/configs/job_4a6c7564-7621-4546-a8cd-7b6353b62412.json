@@ -1,0 +1,79 @@
+{
+  "data": {
+    "strategy": "standard",
+    "eval_split": 0.05,
+    "train_split": 0.8,
+    "generation_type": "real"
+  },
+  "model": {
+    "name": "Qwen/Qwen3-8B",
+    "device_map": "auto",
+    "torch_dtype": "bfloat16",
+    "trust_remote_code": true
+  },
+  "training": {
+    "bf16": true,
+    "fp16": false,
+    "optim": "paged_adamw_8bit",
+    "lora_r": 32,
+    "method": "sft",
+    "packing": false,
+    "use_lora": true,
+    "batch_size": 4,
+    "eval_steps": 100,
+    "lora_alpha": 64,
+    "max_length": 2048,
+    "num_epochs": 10,
+    "save_steps": 100,
+    "lora_config": {
+      "r": 16,
+      "bias": "none",
+      "task_type": "CAUSAL_LM",
+      "lora_alpha": 32,
+      "lora_dropout": 0.1,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj"
+      ]
+    },
+    "pretokenize": true,
+    "lora_dropout": 0.1,
+    "quantization": {
+      "load_in_4bit": true,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_use_double_quant": true
+    },
+    "warmup_ratio": 0.1,
+    "warmup_steps": 100,
+    "weight_decay": 0.02,
+    "learning_rate": 1e-05,
+    "logging_steps": 10,
+    "max_grad_norm": 1,
+    "eval_batch_size": 2,
+    "group_by_length": true,
+    "save_total_limit": 25,
+    "lr_scheduler_type": "cosine",
+    "evaluation_strategy": "steps",
+    "dataloader_pin_memory": true,
+    "dataloader_num_workers": 1,
+    "gradient_checkpointing": true,
+    "dataloader_prefetch_factor": 1,
+    "gradient_accumulation_steps": 10
+  },
+  "tokenizer": {
+    "name": "Qwen/Qwen3-8B",
+    "trust_remote_code": true
+  },
+  "eval_split": 0.2,
+  "output_dir": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/job_4a6c7564-7621-4546-a8cd-7b6353b62412",
+  "predictions": {
+    "enabled": false,
+    "sample_count": 0,
+    "sample_frequency": "epoch"
+  },
+  "dataset_path": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/datasets/job_4a6c7564-7621-4546-a8cd-7b6353b62412/a6d94494-7bc4-4d4a-84e3-d94ad07d3967.jsonl",
+  "execution_id": "4a6c7564-7621-4546-a8cd-7b6353b62412"
+}

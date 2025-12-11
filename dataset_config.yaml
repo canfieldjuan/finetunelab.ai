@@ -1,0 +1,92 @@
+# Dataset Generation Configuration
+# Configure what type of training data to generate
+
+# API Configuration
+api:
+  provider: "openrouter"  # or "openai", "anthropic"
+  api_key_env: "OPENROUTER_API_KEY"  # Environment variable name
+  model: "deepseek/deepseek-v3.2-exp"
+  temperature: 0.8
+  max_tokens: 4000
+
+# Generation Settings
+generation:
+  num_examples: 5
+  tool_calls_per_example: [5, 8]  # Min and max tool calls
+  output_format: "sharegpt"  # sharegpt, chatml, or completion
+  output_path: "output/finetuning_expert_generated.jsonl"
+
+# System Prompt (defines the assistant's role)
+system_prompt: |
+  You are a finetuning expert. Your goal is to help users finetune models for their specific tasks.
+  You have access to a set of tools to help you with this. You should always follow the MLOps best practices,
+  including: infrastructure planning, data engineering, deployment architecture, monitoring, security, and continuous learning.
+
+# Scenarios (what use cases to generate)
+scenarios:
+  - name: "Customer Support Classification"
+    description: "Text classification on customer support tickets"
+    categories: ["billing", "technical", "account", "general inquiry"]
+
+  - name: "Medical NER"
+    description: "Named entity recognition on medical records"
+    entities: ["conditions", "medications", "dosages", "procedures"]
+
+  - name: "Company QA System"
+    description: "Question answering on company documentation"
+    doc_types: ["policies", "procedures", "technical docs"]
+
+  - name: "Python Code Generation"
+    description: "Code generation for Python functions"
+
+  - name: "Imbalanced Sentiment"
+    description: "Sentiment analysis with class imbalance"
+    imbalance_ratio: "90/10"
+
+# Available Tools (defines what actions the assistant can take)
+tools:
+  - name: "project.init"
+    args:
+      project_name: "string"
+
+  - name: "data.find"
+    args:
+      task_description: "string"
+
+  - name: "data.preprocess"
+    args:
+      dataset_name: "string"
+      steps: ["list of strings"]
+
+  - name: "model.select"
+    args:
+      base_model: "string"
+      finetuning_task: "string"
+
+  - name: "hyperparameters.recommend"
+    args:
+      model: "string"
+      dataset: "string"
+
+  - name: "script.generate"
+    args:
+      model: "string"
+      dataset: "string"
+      hyperparameters: "dict"
+      is_task_type: "boolean"
+
+  - name: "train.run"
+    args:
+      script_path: "string"
+
+  - name: "evaluate.run"
+    args:
+      model_path: "string"
+      dataset_path: "string"
+
+# Advanced: Mix-and-Match Strategy
+mix_strategy:
+  enabled: false
+  bulk_model: "deepseek/deepseek-v3.2-exp"
+  quality_model: "anthropic/claude-3.5-sonnet"
+  bulk_percentage: 60  # 60% cheap, 40% expensive

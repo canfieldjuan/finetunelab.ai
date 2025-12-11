@@ -1,0 +1,79 @@
+{
+  "data": {
+    "strategy": "standard",
+    "eval_split": 0.05,
+    "train_split": 0.9,
+    "generation_type": "real"
+  },
+  "model": {
+    "name": "Qwen/Qwen3-1.7B",
+    "device_map": "auto",
+    "torch_dtype": "bfloat16",
+    "trust_remote_code": true
+  },
+  "training": {
+    "bf16": true,
+    "fp16": false,
+    "optim": "paged_adamw_8bit",
+    "lora_r": 16,
+    "method": "sft",
+    "packing": false,
+    "use_lora": true,
+    "batch_size": 4,
+    "eval_steps": 200,
+    "lora_alpha": 32,
+    "max_length": 4096,
+    "num_epochs": 2,
+    "save_steps": 200,
+    "lora_config": {
+      "r": 16,
+      "bias": "none",
+      "task_type": "CAUSAL_LM",
+      "lora_alpha": 32,
+      "lora_dropout": 0.1,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj"
+      ]
+    },
+    "lora_dropout": 0.1,
+    "quantization": {
+      "load_in_4bit": true,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_use_double_quant": true
+    },
+    "warmup_ratio": 0,
+    "warmup_steps": 500,
+    "weight_decay": 0.01,
+    "learning_rate": 0.0001,
+    "logging_steps": 10,
+    "max_grad_norm": 1,
+    "eval_batch_size": 2,
+    "group_by_length": true,
+    "save_total_limit": 15,
+    "lr_scheduler_type": "cosine",
+    "evaluation_strategy": "steps",
+    "dataloader_pin_memory": true,
+    "dataloader_num_workers": 2,
+    "gradient_checkpointing": false,
+    "dataloader_prefetch_factor": 1,
+    "gradient_accumulation_steps": 8,
+    "pretokenize": true
+  },
+  "tokenizer": {
+    "name": "Qwen/Qwen3-1.7B",
+    "trust_remote_code": true
+  },
+  "predictions": {
+    "enabled": true,
+    "sample_count": 10,
+    "sample_frequency": "epoch"
+  },
+  "dataset_path": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/datasets/job_d9dd4e89-a32e-4633-8a78-867749511f63/6e118982-9bf7-48c6-8aa8-5752dbfe039e.jsonl",
+  "output_dir": "/home/juan-canfield/Desktop/web-ui/lib/training/logs/job_d9dd4e89-a32e-4633-8a78-867749511f63",
+  "execution_id": "d9dd4e89-a32e-4633-8a78-867749511f63",
+  "eval_split": 0.2
+}

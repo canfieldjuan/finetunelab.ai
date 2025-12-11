@@ -1,0 +1,49 @@
+# Tools Configuration
+# This file configures behavior for LLM-accessible tools
+# Last updated: 2025-10-15
+
+# ============================================
+# FILESYSTEM TOOL CONFIGURATION
+# ============================================
+filesystem:
+  # Enable/disable the filesystem tool
+  enabled: true
+
+  # Security: Allowed base directories
+  # Only these directories and their subdirectories can be accessed
+  # Paths are resolved relative to project root
+  security:
+    allowedPaths:
+      - C:\Users\Juan\Desktop\Dev_Ops\web-ui  # Project directory
+      # Add more paths as needed:
+      # - C:\Users\Juan\Documents
+      # - C:\Users\Juan\Projects
+
+    # Paths explicitly blocked (takes precedence over allowedPaths)
+    blockedPaths:
+      - C:\Users\Juan\.ssh
+      - C:\Users\Juan\.aws
+      - C:\Users\Juan\.gnupg
+
+    # File extensions blocked for security
+    blockedExtensions:
+      - .exe
+      - .bat
+      - .cmd
+      - .sh
+      - .ps1
+      - .dll
+      - .so
+
+    # If specified, ONLY these extensions are allowed (empty = allow all except blocked)
+    allowedExtensions: []
+
+  # Resource limits
+  limits:
+    maxFileSize: 1048576  # 1MB in bytes (1024 * 1024)
+    maxDirectoryItems: 1000  # Maximum files to list in a directory
+
+  # Operational settings
+  options:
+    followSymlinks: false  # Whether to follow symbolic links
+    readOnly: true  # Tool is read-only (no write operations)

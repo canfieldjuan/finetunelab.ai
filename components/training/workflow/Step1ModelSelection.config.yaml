@@ -1,0 +1,202 @@
+# Step1ModelSelection Configuration
+# Controls model browsing, searching, and selection behavior
+# Last updated: 2025-01-31
+
+# HuggingFace API Configuration
+api:
+  baseUrl: https://huggingface.co
+  modelsEndpoint: /api/models
+  searchEndpoint: /api/models
+  timeout: 10000  # milliseconds
+  retries: 3
+  retryDelay: 1000  # milliseconds
+
+# Popular/Featured Models List
+# These appear at the top of the model selector
+popularModels:
+  - id: Qwen/Qwen2.5-0.5B
+    name: Qwen2.5 0.5B
+    author: Qwen
+    sizeGB: 1.0
+    category: small
+    supportsChatTemplate: true
+    supportsLoRA: true
+    parameterCount: 500000000
+    description: Smallest Qwen model, great for testing and development
+
+  - id: Qwen/Qwen2.5-1.5B
+    name: Qwen2.5 1.5B
+    author: Qwen
+    sizeGB: 3.0
+    category: small
+    supportsChatTemplate: true
+    supportsLoRA: true
+    parameterCount: 1500000000
+    description: Compact model with strong performance
+
+  - id: meta-llama/Llama-3.2-1B
+    name: Llama 3.2 1B
+    author: Meta
+    sizeGB: 2.5
+    category: small
+    supportsChatTemplate: true
+    supportsLoRA: true
+    parameterCount: 1000000000
+    description: Efficient Llama model for resource-constrained environments
+
+  - id: meta-llama/Llama-3.2-3B
+    name: Llama 3.2 3B
+    author: Meta
+    sizeGB: 6.0
+    category: medium
+    supportsChatTemplate: true
+    supportsLoRA: true
+    parameterCount: 3000000000
+    description: Balanced performance and efficiency
+
+  - id: Qwen/Qwen2.5-7B
+    name: Qwen2.5 7B
+    author: Qwen
+    sizeGB: 14.0
+    category: large
+    supportsChatTemplate: true
+    supportsLoRA: true
+    parameterCount: 7000000000
+    description: High-performance model with extensive capabilities
+
+  - id: mistralai/Mistral-7B-v0.3
+    name: Mistral 7B v0.3
+    author: Mistral AI
+    sizeGB: 14.5
+    category: large
+    supportsChatTemplate: true
+    supportsLoRA: true
+    parameterCount: 7000000000
+    description: State-of-the-art open model from Mistral AI
+
+# Model Categories
+categories:
+  small:
+    label: Small (< 2B)
+    description: Models under 2 billion parameters, suitable for testing
+    maxSizeGB: 5
+    icon: zap
+
+  medium:
+    label: Medium (2-7B)
+    description: Balanced models with good performance
+    maxSizeGB: 15
+    icon: cpu
+
+  large:
+    label: Large (> 7B)
+    description: High-performance models requiring more resources
+    maxSizeGB: 100
+    icon: server
+
+# Search and Filter Limits
+limits:
+  maxSearchResults: 50
+  maxPopularModels: 10
+  minNameLength: 3
+  maxPageSize: 20
+  defaultPageSize: 10
+
+# Search Filters Configuration
+filters:
+  # Allowed task types from HuggingFace
+  allowedTaskTypes:
+    - text-generation
+    - text2text-generation
+    - conversational
+
+  # Minimum thresholds for quality filtering
+  minDownloads: 100
+  minLikes: 10
+
+  # Size categories (in GB)
+  sizeCategories:
+    - label: Tiny (< 1GB)
+      max: 1
+    - label: Small (1-5GB)
+      max: 5
+    - label: Medium (5-15GB)
+      max: 15
+    - label: Large (15-30GB)
+      max: 30
+    - label: XLarge (> 30GB)
+      max: 1000
+
+# Caching Configuration
+cache:
+  enabled: true
+  ttl: 3600  # seconds (1 hour)
+  maxEntries: 1000
+  localModelCheckInterval: 60000  # milliseconds (1 minute)
+
+# UI Configuration
+ui:
+  # Model card display settings
+  showDownloadCount: true
+  showLikes: true
+  showAuthor: true
+  showSize: true
+  showLastUpdated: true
+  showDescription: true
+
+  # Grid/List view settings
+  defaultView: grid
+  cardsPerRow: 3
+  cardMinHeight: 200  # pixels
+
+  # Search debounce
+  searchDebounceMs: 300
+
+  # Loading states
+  skeletonCards: 6
+
+# Validation Rules
+validation:
+  # Warn if model is larger than this
+  warnSizeGB: 20
+
+  # Block selection if model is larger than this
+  maxSizeGB: 100
+
+  # Require confirmation for models larger than this
+  confirmSizeGB: 30
+
+# Logging Configuration
+logging:
+  level: info
+  logSearchQueries: true
+  logModelSelections: true
+  logCacheHits: true
+  includeTimestamps: true
+
+# Feature Flags
+features:
+  enableLocalModelDetection: true
+  enableHFSearch: true
+  enableUpload: false
+  enableSizeWarnings: true
+  enableCategoryFilters: true
+  enableSortOptions: true
+
+# Sort Options
+sortOptions:
+  - id: trending
+    label: Trending
+    description: Most popular recently
+
+  - id: downloads
+    label: Downloads
+    description: Most downloaded
+
+  - id: likes
+    label: Likes
+    description: Most liked
+
+  - id: recent
+    label: Recently Updated
+    description: Latest updates

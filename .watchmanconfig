@@ -1,0 +1,15 @@
+{
+  "ignore_dirs": [
+    ".next",
+    ".git",
+    "node_modules",
+    "migrations.backup",
+    "docs.backup",
+    ".venv",
+    "venv",
+    "trainer_venv",
+    "graphiti-wrapper",
+    "graphiti-main",
+    "__pycache__"
+  ]
+}

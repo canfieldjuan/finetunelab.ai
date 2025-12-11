@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Logs API</title>
+</head>
+<body>
+    <h1>Testing Logs API</h1>
+    <button onclick="testLogsAPI()">Test Logs API</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testLogsAPI() {
+            const output = document.getElementById('output');
+            output.textContent = 'Fetching logs...\n';
+
+            try {
+                const response = await fetch('http://localhost:8000/api/training/logs/659e3cb0-4fbb-40fa-9bdb-122ad14159ac?limit=5');
+                output.textContent += `Response status: ${response.status}\n`;
+                output.textContent += `Response OK: ${response.ok}\n`;
+
+                const data = await response.json();
+                output.textContent += `Data: ${JSON.stringify(data, null, 2)}\n`;
+            } catch (err) {
+                output.textContent += `Error: ${err.message}\n`;
+                output.textContent += `Error details: ${JSON.stringify(err, null, 2)}\n`;
+            }
+        }
+    </script>
+</body>
+</html>

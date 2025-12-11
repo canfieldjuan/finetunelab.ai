@@ -1,0 +1,25 @@
+# Test Commands - Copy & Paste Ready
+
+# Test 1: Python CLI
+.\scripts\test-trainer-cli.ps1
+
+# Test 2: Unit Tests  
+npm test -- __tests__/api/training/execute.test.ts
+
+# Test 3: Integration (Terminal 1 - Start server)
+npm run dev
+
+# Test 3: Integration (Terminal 2 - Run test)
+.\scripts\test-local-training-integration.ps1
+
+# Verify environment
+.\scripts\test-trainer-import.ps1
+
+# Check for orphaned config files
+Get-ChildItem lib/training/config_*.json
+
+# Kill hung process (replace PID)
+Stop-Process -Id 12345
+
+# Check GPU status
+nvidia-smi

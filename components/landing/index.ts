@@ -1,0 +1,15 @@
+export { Hero } from "./Hero";
+export { Demo } from "./Demo";
+export { Problem } from "./Problem";
+export { Comparison } from "./Comparison";
+export { Solution } from "./Solution";
+export { AdvancedAnalytics } from "./AdvancedAnalytics";
+export { NaturalLanguage } from "./NaturalLanguage";
+export { Features } from "./Features";
+export { Pricing } from "./Pricing";
+export { UseCases } from "./UseCases";
+export { FAQ } from "./FAQ";
+export { CTA } from "./CTA";
+export { Footer } from "./Footer";
+export { VideoModal } from "./VideoModal";
+export { LandingPage } from "./LandingPage";

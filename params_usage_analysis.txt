@@ -1,0 +1,36 @@
+=== app/api/analytics/cohorts/[id]/members/route.ts ===
+32:  console.log('[Cohort Members API] GET request for cohort:', params.id);
+73:    const result = await getCohortMembers(params.id, options);
+94:  console.log('[Cohort Members API] POST request for cohort:', params.id);
+150:        await addCohortMember(params.id, userId, addedMethod);
+181:  console.log('[Cohort Members API] DELETE request for cohort:', params.id);
+
+=== app/api/analytics/cohorts/[id]/metrics/route.ts ===
+30:  console.log('[Cohort Metrics API] GET request for cohort:', params.id);
+70:      const comparison = await compareToBaseline(params.id);
+80:      response.metrics = await calculateCohortMetrics(params.id);
+91:      const snapshots = await getSnapshots(params.id, { dateRange });
+
+=== app/api/analytics/cohorts/[id]/refresh/route.ts ===
+33:  console.log('[Cohort Refresh API] POST request for cohort:', params.id);
+61:    const cohort = await getCohort(params.id);
+93:    const { members: currentMembers } = await getCohortMembers(params.id, {
+110:        await addCohortMember(params.id, userId, 'criteria_match');
+118:        await removeCohortMember(params.id, userId, 'No longer matches criteria');
+
+=== app/api/analytics/download/[id]/route.ts ===
+103:    const exportId = params.id;
+
+=== app/api/analytics/sentiment/conversations/[id]/route.ts ===
+24:  console.log('[Conversation Sentiment API] GET request for conversation:', params.id);
+52:    const conversationId = params.id;
+
+=== app/api/conversations/[id]/context/route.ts ===
+45:    const conversationId = params.id;
+122:    const conversationId = params.id;
+
+=== app/api/widget-apps/[id]/route.ts ===
+23:  console.log('[Widget App API] DELETE request for:', params.id);
+52:      .eq('id', params.id)
+77:      .eq('id', params.id);
+

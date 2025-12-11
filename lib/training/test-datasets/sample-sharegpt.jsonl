@@ -1,0 +1,3 @@
+{"conversations": [{"from": "human", "value": "How do I learn Python?"}, {"from": "gpt", "value": "Start with basic syntax, then practice with small projects. Resources like Python.org tutorials are great for beginners."}]}
+{"conversations": [{"from": "human", "value": "What is machine learning?"}, {"from": "gpt", "value": "Machine learning is a subset of AI where computers learn patterns from data without being explicitly programmed."}]}
+{"conversations": [{"from": "human", "value": "Explain recursion"}, {"from": "gpt", "value": "Recursion is when a function calls itself to solve smaller instances of the same problem until reaching a base case."}]}

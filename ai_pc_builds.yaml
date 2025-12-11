@@ -1,0 +1,80 @@
+# AI PC Build Troubleshooting Expert Training Data
+# Tests DeepSeek's knowledge of AI/ML workstation requirements
+
+api:
+  provider: "openrouter"
+  api_key_env: "OPENROUTER_API_KEY"
+  model: "deepseek/deepseek-v3.2-exp"
+  temperature: 0.8
+  max_tokens: 4000
+
+generation:
+  num_examples: 4
+  tool_calls_per_example: [6, 10]
+  output_format: "sharegpt"
+  output_path: "output/ai_pc_builds.jsonl"
+
+system_prompt: |
+  You are an expert AI/ML workstation builder and troubleshooter. You help users build and optimize PCs specifically for AI development, machine learning training, and deep learning workloads. You understand GPU compute, VRAM requirements, PCIe bandwidth, and CUDA/ROCm compatibility.
+
+scenarios:
+  - name: "Easy - Insufficient VRAM"
+    description: "User running out of VRAM during model training on small datasets, needs to optimize batch size or upgrade GPU"
+    difficulty: "easy"
+    issue_type: "memory"
+
+  - name: "Medium - Multi-GPU Setup Issues"
+    description: "User has 2x RTX 4090 but experiencing PCIe bandwidth bottleneck and uneven GPU utilization during distributed training"
+    difficulty: "medium"
+    issue_type: "configuration"
+
+  - name: "Hard - CUDA Out of Memory"
+    description: "Training large language models causing persistent CUDA OOM errors despite having 24GB VRAM, requires memory optimization strategies and gradient checkpointing"
+    difficulty: "hard"
+    issue_type: "optimization"
+
+  - name: "Edge Case - NVLink vs PCIe"
+    description: "User needs to decide between NVLink bridge for 2x A6000 GPUs vs standard PCIe setup for their transformer training workload, performance vs cost trade-off"
+    difficulty: "edge_case"
+    issue_type: "architecture"
+
+tools:
+  - name: "diagnostic.check_gpu_specs"
+    args:
+      gpu_model: "string"
+      metrics: ["vram", "cuda_cores", "tensor_cores", "bandwidth"]
+
+  - name: "diagnostic.monitor_training"
+    args:
+      framework: "string (pytorch, tensorflow, jax)"
+      metrics: ["gpu_util", "vram_usage", "throughput"]
+
+  - name: "diagnostic.check_cuda_compatibility"
+    args:
+      gpu_model: "string"
+      cuda_version: "string"
+      framework_version: "string"
+
+  - name: "optimization.reduce_memory"
+    args:
+      technique: "string (gradient_checkpointing, mixed_precision, batch_size)"
+      parameters: "dict"
+
+  - name: "optimization.multi_gpu_config"
+    args:
+      strategy: "string (data_parallel, model_parallel, pipeline_parallel)"
+      num_gpus: "integer"
+
+  - name: "recommendation.hardware_upgrade"
+    args:
+      current_bottleneck: "string"
+      workload_type: "string (training, inference, both)"
+      budget: "string"
+
+  - name: "recommendation.software_config"
+    args:
+      issue: "string"
+      recommended_settings: "dict"
+
+mix_strategy:
+  enabled: false

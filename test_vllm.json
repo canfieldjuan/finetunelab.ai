@@ -1,0 +1,7 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "messages": [
+    {"role": "user", "content": "Say 'Hello from vLLM!'"}
+  ],
+  "max_tokens": 20
+}

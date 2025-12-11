@@ -1,0 +1,33 @@
+{
+  "name": "Customer Support Quality Validation",
+  "description": "Expected responses for common customer support scenarios",
+  "test_cases": [
+    {
+      "prompt": "My order hasn't arrived yet",
+      "expected_response": "I understand your concern about your order. Let me help you track it down. Could you please provide your order number so I can check the status?",
+      "keywords_required": ["order number", "track", "status"],
+      "tone": "empathetic, helpful",
+      "max_length": 200
+    },
+    {
+      "prompt": "How do I return an item?",
+      "expected_response": "To return an item:\n1. Go to your Orders page\n2. Select the item you want to return\n3. Click 'Return Item'\n4. Choose your reason and preferred refund method\n5. Print the return label\n\nYou have 30 days from delivery to initiate a return.",
+      "keywords_required": ["30 days", "return label", "Orders page"],
+      "tone": "clear, instructional",
+      "max_length": 300
+    },
+    {
+      "prompt": "I was charged twice",
+      "expected_response": "I apologize for this billing error. I'll help resolve this immediately. Can you please provide:\n1. Your order number\n2. The amount you were charged\n3. The date of the transactions\n\nI'll investigate and process a refund if there was indeed a duplicate charge.",
+      "keywords_required": ["apologize", "refund", "investigate"],
+      "tone": "apologetic, action-oriented",
+      "max_length": 250
+    },
+    {
+      "prompt": "What's your refund policy?",
+      "expected_response": "Our refund policy:\n- 30-day return window from delivery\n- Item must be unused and in original packaging\n- Refund processed within 5-7 business days\n- Original shipping costs are non-refundable\n- Return shipping is free for defective items\n\nWould you like help starting a return?",
+      "keywords_required": ["30-day", "original packaging", "5-7 business days"],
+      "tone": "informative, helpful"
+    }
+  ]
+}

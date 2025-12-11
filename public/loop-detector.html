@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loop Detection Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            background: #0a0a0a;
+        }
+        .warning { color: #ff6b35; }
+        .error { color: #ff0000; font-weight: bold; }
+        .success { color: #00ff00; }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #00ff00;
+            color: #000;
+        }
+        pre {
+            background: #000;
+            padding: 10px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Infinite Loop Detector</h1>
+    
+    <div class="section">
+        <h2>Instructions:</h2>
+        <ol>
+            <li>Open your main app (localhost:3000)</li>
+            <li>Open browser DevTools (F12)</li>
+            <li>Run these commands in the Console tab</li>
+        </ol>
+    </div>
+
+    <div class="section">
+        <h2>🎯 Quick Commands (Browser Console)</h2>
+        
+        <h3>Show All Available Commands:</h3>
+        <pre>__logger.help()</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+        
+        <h3>Check for Active Loops:</h3>
+        <pre>__logger.getLoopDiagnostics()</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+        
+        <h3>View Loop Statistics:</h3>
+        <pre>__logger.getStats()</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+        
+        <h3>Get Error Logs Only:</h3>
+        <pre>__logger.getErrorLogs()</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+        
+        <h3>Download Full Diagnostic Report:</h3>
+        <pre>__logger.downloadLogs('freeze-diagnostic.json')</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+    </div>
+
+    <div class="section">
+        <h2>🔧 Loop Detection Settings</h2>
+        
+        <h3>Lower Threshold (more sensitive):</h3>
+        <pre>__logger.setLoopThreshold(20) // Alert after 20 calls/sec</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+        
+        <h3>Reset Loop Counters:</h3>
+        <pre>__logger.resetLoopDetection()</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+    </div>
+
+    <div class="section">
+        <h2>📊 What to Look For</h2>
+        
+        <h3 class="warning">Signs of Infinite Loop:</h3>
+        <ul>
+            <li>Same log appearing 50+ times per second</li>
+            <li>Console shows "🔁 INFINITE LOOP DETECTED!"</li>
+            <li>Page freezes or becomes unresponsive</li>
+            <li>CPU usage spikes to 100%</li>
+        </ul>
+        
+        <h3 class="success">Normal Behavior:</h3>
+        <ul>
+            <li>Logs appear occasionally (1-10 per second)</li>
+            <li>Different messages each time</li>
+            <li>Page remains responsive</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>🚨 Emergency Commands</h2>
+        
+        <h3>Stop All Logging (if console is overwhelmed):</h3>
+        <pre>__logger.onlyErrors() // Only show ERRORs</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+        
+        <h3>Clear Log History (free up memory):</h3>
+        <pre>__logger.clearHistory()</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+        
+        <h3>Enable Development Mode:</h3>
+        <pre>__logger.developmentMode()</pre>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">Copy</button>
+    </div>
+
+    <div class="section">
+        <h2>🐛 Debugging Workflow</h2>
+        <ol>
+            <li><strong>Before page freezes:</strong> Run <code>getLoopDiagnostics()</code></li>
+            <li><strong>If freeze happens:</strong> Check browser console for "🔁 LOOP DETECTED"</li>
+            <li><strong>Identify culprit:</strong> Look at stack trace in error message</li>
+            <li><strong>Download evidence:</strong> <code>downloadLogs('freeze-report.json')</code></li>
+            <li><strong>Share with dev:</strong> Attach the JSON file to bug report</li>
+        </ol>
+    </div>
+
+    <div class="section">
+        <h2>✅ Fixed Issues</h2>
+        <div class="success">
+            <h3>Issue: Debug logs in component render body</h3>
+            <p><strong>Location:</strong> Chat.tsx lines 271-288</p>
+            <p><strong>Problem:</strong> <code>log.debug()</code> called on every render → infinite loop</p>
+            <p><strong>Fix:</strong> Moved logs into <code>useEffect</code> hooks with proper dependencies</p>
+            <p><strong>Status:</strong> ✅ FIXED</p>
+        </div>
+    </div>
+
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text.trim()).then(() => {
+                alert('Copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>

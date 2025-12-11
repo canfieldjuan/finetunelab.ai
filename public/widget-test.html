@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLMOps Widget Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-top: 0;
+    }
+    .input-group {
+      margin: 20px 0;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      color: #666;
+      font-weight: 500;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    textarea {
+      min-height: 100px;
+      font-family: monospace;
+    }
+    button {
+      background: #0070f3;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      margin-right: 10px;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #0051cc;
+    }
+    button.secondary {
+      background: #666;
+    }
+    button.secondary:hover {
+      background: #555;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      background: #f0f0f0;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .config-section {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+      border-left: 3px solid #0070f3;
+    }
+    .config-section h3 {
+      margin-top: 0;
+      color: #0070f3;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left-color: #ffc107;
+      color: #856404;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 LLMOps Widget Test Page</h1>
+    
+    <div class="config-section warning">
+      <h3>⚠️ Setup Required</h3>
+      <p><strong>Before testing:</strong></p>
+      <ol>
+        <li>Go to <a href="http://localhost:3000/secrets" target="_blank">http://localhost:3000/secrets</a></li>
+        <li>Create a new Widget App</li>
+        <li>Copy the App ID and Token</li>
+        <li>Paste them in the configuration below</li>
+      </ol>
+    </div>
+
+    <div class="config-section">
+      <h3>📝 Widget Configuration</h3>
+      <div class="input-group">
+        <label>App ID:</label>
+        <input type="text" id="appId" placeholder="e.g., wapp_abc123xyz" />
+      </div>
+      <div class="input-group">
+        <label>Token:</label>
+        <input type="text" id="token" placeholder="Your widget app token" />
+      </div>
+      <div class="input-group">
+        <label>API Endpoint:</label>
+        <input type="text" id="endpoint" value="http://localhost:3000/api/v1/ingest" />
+      </div>
+      <button onclick="initWidget()">Initialize Widget</button>
+    </div>
+
+    <div class="config-section">
+      <h3>🧪 Test Actions</h3>
+      <button onclick="trackCustomEvent()">Track Custom Event</button>
+      <button onclick="trackLLMRequest()">Track LLM Request</button>
+      <button onclick="trackLLMResponse()">Track LLM Response</button>
+      <button onclick="identifyUser()">Identify User</button>
+      <button class="secondary" onclick="flushNow()">Flush Events Now</button>
+    </div>
+
+    <div class="config-section">
+      <h3>📊 Advanced Test</h3>
+      <div class="input-group">
+        <label>Custom Event Data (JSON):</label>
+        <textarea id="customEventData">{
+  "action": "button_click",
+  "buttonId": "submit",
+  "value": "test"
+}</textarea>
+      </div>
+      <button onclick="trackCustomJSON()">Send Custom Event</button>
+    </div>
+
+    <div class="status" id="status">
+      <strong>Status:</strong> Ready. Initialize the widget to start testing.
+    </div>
+  </div>
+
+  <!-- Load the widget SDK -->
+  <script src="/llmops.min.js"></script>
+  
+  <script>
+    let sdk = null;
+    const statusEl = document.getElementById('status');
+    
+    function log(message, data = null) {
+      const timestamp = new Date().toLocaleTimeString();
+      let logMsg = `[${timestamp}] ${message}`;
+      if (data) {
+        logMsg += '\n' + JSON.stringify(data, null, 2);
+      }
+      statusEl.innerHTML = logMsg + '\n\n' + statusEl.innerHTML;
+      console.log(message, data);
+    }
+
+    function initWidget() {
+      const appId = document.getElementById('appId').value.trim();
+      const token = document.getElementById('token').value.trim();
+      const endpoint = document.getElementById('endpoint').value.trim();
+
+      if (!appId || !token) {
+        alert('Please enter both App ID and Token');
+        return;
+      }
+
+      try {
+        sdk = new window.LLMOpsSDK({
+          appId: appId,
+          endpoint: endpoint,
+          token: token,
+          debug: true,
+          flushIntervalMs: 2000, // Flush every 2 seconds for testing
+          maxBatch: 10,
+          onBeforeSend: (event) => {
+            log('📤 Sending event:', event);
+            return event; // Return null to block the event
+          }
+        });
+
+        log('✅ Widget initialized successfully!', { appId, endpoint });
+        
+        // Track page view automatically
+        sdk.track('page_view', {
+          path: window.location.pathname,
+          referrer: document.referrer
+        });
+        
+        log('📍 Auto-tracked page_view event');
+      } catch (error) {
+        log('❌ Error initializing widget:', error);
+      }
+    }
+
+    function trackCustomEvent() {
+      if (!sdk) {
+        alert('Please initialize the widget first');
+        return;
+      }
+      
+      sdk.track('button_click', {
+        button: 'custom_event_test',
+        timestamp: Date.now()
+      });
+      
+      log('🎯 Tracked custom event: button_click');
+    }
+
+    function trackLLMRequest() {
+      if (!sdk) {
+        alert('Please initialize the widget first');
+        return;
+      }
+      
+      const requestId = 'req_' + Math.random().toString(36).substr(2, 9);
+      
+      sdk.track('llm.request', {
+        requestId: requestId,
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'user', content: 'What is the capital of France?' }
+        ],
+        temperature: 0.7,
+        maxTokens: 100
+      });
+      
+      log('🤖 Tracked LLM request:', { requestId });
+    }
+
+    function trackLLMResponse() {
+      if (!sdk) {
+        alert('Please initialize the widget first');
+        return;
+      }
+      
+      const requestId = 'req_' + Math.random().toString(36).substr(2, 9);
+      
+      sdk.track('llm.response', {
+        requestId: requestId,
+        content: 'The capital of France is Paris.',
+        tokensUsed: 45,
+        latencyMs: 1234,
+        model: 'gpt-4o-mini'
+      });
+      
+      log('💬 Tracked LLM response:', { requestId });
+    }
+
+    function identifyUser() {
+      if (!sdk) {
+        alert('Please initialize the widget first');
+        return;
+      }
+      
+      const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+      
+      sdk.identify({
+        userId: userId,
+        traits: {
+          email: 'test@example.com',
+          plan: 'pro',
+          signupDate: new Date().toISOString()
+        }
+      });
+      
+      log('👤 Identified user:', { userId });
+    }
+
+    function trackCustomJSON() {
+      if (!sdk) {
+        alert('Please initialize the widget first');
+        return;
+      }
+      
+      try {
+        const data = JSON.parse(document.getElementById('customEventData').value);
+        sdk.track('custom', data);
+        log('📦 Tracked custom JSON event:', data);
+      } catch (error) {
+        alert('Invalid JSON: ' + error.message);
+      }
+    }
+
+    function flushNow() {
+      if (!sdk) {
+        alert('Please initialize the widget first');
+        return;
+      }
+      
+      sdk.flush();
+      log('🚀 Manually flushed events to server');
+    }
+
+    // Auto-track page unload
+    window.addEventListener('beforeunload', () => {
+      if (sdk) {
+        sdk.flush();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "typescript.validate.enable": true,
+  "javascript.validate.enable": true,
+  "files.associations": {
+    "*.md": "markdown"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "[markdown]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.markdownlint": "explicit"
+    }
+  },
+  "markdownlint.config": {
+    "MD013": false,
+    "MD024": {
+      "siblings_only": true
+    },
+    "MD040": true
+  },
+  // Exclude docs folder from TypeScript and JavaScript validation
+  "javascript.validate.exclude": [
+    "**/docs/**"
+  ],
+  "typescript.validate.exclude": [
+    "**/docs/**"
+  ],
+  // Don't show diagnostics for markdown files
+  "markdown.validate.enabled": false,
+  "markdown.experimental.validate.enabled": false
+}

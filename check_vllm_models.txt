@@ -1,0 +1,6 @@
+Run this command in your terminal to see what models vLLM is serving:
+
+curl http://localhost:8003/v1/models
+
+This will show you the exact model ID that vLLM recognizes.
+Then update your llm_models table to use that exact model ID.

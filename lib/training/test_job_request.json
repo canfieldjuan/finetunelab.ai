@@ -1,0 +1,40 @@
+{
+  "config": {
+    "model": {
+      "name": "gpt2",
+      "quantization": null,
+      "use_flash_attention": false
+    },
+    "data": {
+      "strategy": "standard"
+    },
+    "training": {
+      "method": "sft",
+      "num_epochs": 1,
+      "batch_size": 1,
+      "gradient_accumulation_steps": 2,
+      "learning_rate": 0.0002,
+      "warmup_ratio": 0.1,
+      "max_seq_length": 256,
+      "save_steps": 50,
+      "logging_steps": 2,
+      "eval_steps": 10,
+      "fp16": false,
+      "bf16": true,
+      "gradient_checkpointing": false
+    },
+    "lora": {
+      "r": 8,
+      "alpha": 16,
+      "dropout": 0.05,
+      "target_modules": ["c_attn", "c_proj"]
+    },
+    "output": {
+      "output_dir": "./test_training_output",
+      "save_total_limit": 2
+    }
+  },
+  "dataset_path": "C:/Users/Juan/Desktop/Dev_Ops/web-ui/lib/training/test_dataset.json",
+  "execution_id": "metrics-test-001",
+  "name": "Metrics Test Run"
+}

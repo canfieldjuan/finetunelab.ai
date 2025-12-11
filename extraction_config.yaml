@@ -1,0 +1,194 @@
+# Amazon Review Extraction Configuration
+# Phase 1: Extract hardware troubleshooting data from reviews
+
+input:
+  source_file: "C:\\Users\\Juan\\Desktop\\Dev_Ops\\finetune-lab\\datasets\\reviews_Electronics_5.json.gz"
+  encoding: "utf-8"
+
+output:
+  extracted_reviews: "output/extracted_reviews.jsonl"
+  categorized_reviews: "output/categorized_reviews.json"
+  statistics: "output/extraction_stats.json"
+  progress_checkpoint: "output/extraction_progress.json"
+
+filters:
+  rating_threshold: 3.0
+  min_review_length: 50
+  max_review_length: 5000
+
+hardware_categories:
+  storage:
+    - ssd
+    - nvme
+    - hard drive
+    - hdd
+    - seagate
+    - western digital
+    - wd
+    - samsung ssd
+    - crucial
+    - sandisk
+    - m.2
+    - sata
+
+  gpu:
+    - graphics card
+    - video card
+    - gpu
+    - rtx
+    - gtx
+    - radeon
+    - nvidia
+    - amd
+    - geforce
+    - rx 580
+    - rx 5700
+    - vega
+
+  motherboard:
+    - motherboard
+    - mobo
+    - asus
+    - msi
+    - gigabyte
+    - asrock
+    - chipset
+    - bios
+    - uefi
+
+  cpu:
+    - processor
+    - cpu
+    - intel
+    - ryzen
+    - core i5
+    - core i7
+    - core i9
+    - threadripper
+    - xeon
+
+  ram:
+    - memory
+    - ram
+    - ddr4
+    - ddr5
+    - ddr3
+    - corsair vengeance
+    - g.skill
+    - crucial memory
+    - dimm
+
+  psu:
+    - power supply
+    - psu
+    - corsair psu
+    - evga psu
+    - seasonic
+    - modular
+    - 80 plus
+    - wattage
+
+  cooling:
+    - cooler
+    - cooling
+    - liquid cooling
+    - aio
+    - thermal paste
+    - cpu cooler
+    - noctua
+    - corsair aio
+    - radiator
+    - fan
+
+  peripherals:
+    - keyboard
+    - mouse
+    - monitor
+    - headset
+    - webcam
+    - microphone
+    - speakers
+    - gaming mouse
+    - mechanical keyboard
+
+issue_types:
+  crashes:
+    - crash
+    - crashes
+    - crashed
+    - freeze
+    - freezes
+    - frozen
+    - blue screen
+    - bsod
+    - system crash
+    - hang
+    - hangs
+    - unresponsive
+
+  thermal:
+    - overheat
+    - overheating
+    - hot
+    - thermal
+    - temperature
+    - thermal throttle
+    - throttling
+    - burn
+    - melted
+
+  compatibility:
+    - compatibility
+    - incompatible
+    - driver
+    - drivers
+    - bios
+    - not compatible
+    - wont work with
+    - doesnt work with
+
+  performance:
+    - slow
+    - sluggish
+    - lag
+    - lagging
+    - fps drop
+    - bottleneck
+    - underperform
+    - poor performance
+    - low fps
+
+  failure:
+    - died
+    - dead
+    - stopped working
+    - wont turn on
+    - defective
+    - rma
+    - warranty
+    - broken
+    - failed
+    - failure
+
+  artifacts:
+    - artifact
+    - artifacts
+    - glitch
+    - glitches
+    - screen tear
+    - tearing
+    - coil whine
+    - flicker
+    - flickering
+    - distortion
+
+processing:
+  checkpoint_interval: 10000
+  batch_size: 1000
+  resume_enabled: true
+
+statistics:
+  track_keywords: true
+  track_categories: true
+  track_ratings: true
+  track_processing_speed: true
