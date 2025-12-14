@@ -121,7 +121,9 @@ class TrainingPredictionsCallback(TrainerCallback):
         **kwargs
     ):
         """Generate predictions at end of each epoch"""
+        logger.info(f'[PredictionsCallback] on_epoch_end called - enabled={self.enabled}, frequency={self.frequency}')
         if not self.enabled or self.frequency != 'epoch':
+            logger.info(f'[PredictionsCallback] on_epoch_end skipped (frequency={self.frequency}, need "epoch")')
             return
 
         self._generate_predictions(state, **kwargs)
@@ -134,11 +136,12 @@ class TrainingPredictionsCallback(TrainerCallback):
         **kwargs
     ):
         """Generate predictions during evaluation steps"""
+        logger.info(f'[PredictionsCallback] on_evaluate called - enabled={self.enabled}, frequency={self.frequency}')
         if not self.enabled or self.frequency != 'eval':
+            logger.info(f'[PredictionsCallback] on_evaluate skipped (frequency={self.frequency}, need "eval")')
             return
 
-        # HuggingFace already passes model/processing_class in kwargs, don't duplicate
-        logger.debug(f'[PredictionsCallback] on_evaluate called, kwargs keys: {list(kwargs.keys())}')
+        logger.info(f'[PredictionsCallback] on_evaluate generating predictions, kwargs keys: {list(kwargs.keys())}')
         self._generate_predictions(state, **kwargs)
 
     def on_step_end(
@@ -153,6 +156,7 @@ class TrainingPredictionsCallback(TrainerCallback):
             return
 
         if state.global_step % self.step_interval == 0:
+            logger.info(f'[PredictionsCallback] on_step_end generating at step {state.global_step}')
             self._generate_predictions(state, **kwargs)
 
     def _generate_predictions(self, state: TrainerState, **kwargs):
