@@ -22,6 +22,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, profileData?: UserProfileData) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signInWithOAuth: (provider: 'github' | 'google', scopes?: string[]) => Promise<{ error: string | null }>;
+  signInWithSSO: (domain: string) => Promise<{ error: string | null; url?: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -217,6 +218,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }
 
+  async function signInWithSSO(domain: string): Promise<{ error: string | null; url?: string }> {
+    console.log('[AuthContext] SSO sign in for domain:', domain);
+
+    const { data, error } = await supabase.auth.signInWithSSO({
+      domain: domain,
+      options: {
+        redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/chat`,
+      },
+    });
+
+    if (error) {
+      console.error('[AuthContext] SSO error:', error);
+      // Provide user-friendly error messages
+      if (error.message.includes('No SSO provider') || error.message.includes('not found')) {
+        return { error: 'SSO is not configured for this domain. Please contact your administrator or use a different sign-in method.' };
+      }
+      return { error: error.message };
+    }
+
+    console.log('[AuthContext] SSO redirect URL:', data?.url);
+    return { error: null, url: data?.url };
+  }
+
   async function signOut() {
     console.log('[AuthContext] Signing out user:', user?.email);
     const { error } = await supabase.auth.signOut();
@@ -229,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signInWithOAuth, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signInWithOAuth, signInWithSSO, signOut }}>
       {children}
     </AuthContext.Provider>
   );
