@@ -145,7 +145,24 @@ export class RunPodService {
       `;
 
       const podName = `training-${request.training_config_id.substring(0, 8)}`;
-      
+
+      // Compress and base64 encode the training script to reduce payload size
+      // The training script is ~100KB, gzip reduces it to ~20-30KB
+      const zlib = await import('zlib');
+      const compressedScript = zlib.gzipSync(Buffer.from(trainingScript));
+      const scriptBase64 = compressedScript.toString('base64');
+
+      // Bootstrap decodes and decompresses the script from environment variable
+      const bootstrapScript = 'echo "$TRAINING_SCRIPT_B64" | base64 -d | gunzip > /workspace/run_training.sh && chmod +x /workspace/run_training.sh && /workspace/run_training.sh';
+
+      console.log('[RunPodService] Script sizes:', {
+        originalLength: trainingScript.length,
+        compressedLength: compressedScript.length,
+        base64Length: scriptBase64.length,
+        compressionRatio: ((1 - compressedScript.length / trainingScript.length) * 100).toFixed(1) + '%',
+        bootstrapLength: bootstrapScript.length
+      });
+
       const variables = {
         input: {
           cloudType: 'SECURE',
@@ -157,12 +174,13 @@ export class RunPodService {
           containerDiskInGb: 100,
           env: [
             { key: 'TRAINING_CONFIG_ID', value: request.training_config_id },
+            { key: 'TRAINING_SCRIPT_B64', value: scriptBase64 },
             ...(request.environment_variables
               ? Object.entries(request.environment_variables).map(([key, value]) => ({ key, value }))
               : []
             ),
           ],
-          dockerArgs: `bash -c '${trainingScript.replace(/'/g, "'\\''")}'`,
+          dockerArgs: bootstrapScript,
           ports: '8080/http',
           volumeMountPath: '/workspace',
         },
