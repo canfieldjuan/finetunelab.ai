@@ -408,7 +408,7 @@ echo ""
 
 # Install dependencies
 echo "[$(date)] Installing dependencies..."
-if pip install -q transformers datasets accelerate peft bitsandbytes trl supabase huggingface_hub; then
+if pip install -q --upgrade transformers datasets accelerate peft bitsandbytes "trl>=0.9.0" supabase huggingface_hub; then
   echo "[$(date)] ✓ Dependencies installed successfully"
 else
   echo "[$(date)] ✗ ERROR: Failed to install dependencies"
