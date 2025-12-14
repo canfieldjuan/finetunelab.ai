@@ -153,12 +153,15 @@ export async function GET(
       });
 
     } catch (execError: unknown) {
+      // Type guard for exec errors with additional properties
+      const err = execError as { message?: string; code?: string; stdout?: string; stderr?: string };
+
       console.error('[AnalyzeFailure] CLI execution error:', execError);
       console.error('[AnalyzeFailure] Error details:', {
-        message: execError?.message,
-        code: execError?.code,
-        stdout: execError?.stdout,
-        stderr: execError?.stderr,
+        message: err.message,
+        code: err.code,
+        stdout: err.stdout,
+        stderr: err.stderr,
       });
 
       // Check if it's a timeout
@@ -174,25 +177,24 @@ export async function GET(
 
       // Check if it's a JSON parse error (CLI returned invalid JSON)
       if (execError instanceof Error && execError.message.includes('JSON')) {
-        const stderrOutput = (execError as unknown as { stderr?: string }).stderr;
         return NextResponse.json(
           {
             error: 'Analysis failed',
             details: 'Invalid response from error analyzer',
-            stderr: stderrOutput || 'No stderr output'
+            stderr: err.stderr || 'No stderr output'
           },
           { status: 500 }
         );
       }
 
       // If Python script failed, include stderr in response
-      if (execError?.stderr) {
+      if (err.stderr) {
         return NextResponse.json(
           {
             error: 'Python analysis script failed',
-            details: execError.message,
-            stderr: execError.stderr,
-            stdout: execError.stdout || ''
+            details: err.message || 'Unknown error',
+            stderr: err.stderr,
+            stdout: err.stdout || ''
           },
           { status: 500 }
         );
