@@ -408,8 +408,11 @@ echo ""
 
 # Install dependencies
 echo "[$(date)] Installing dependencies..."
-if pip install -q --upgrade transformers datasets accelerate peft bitsandbytes "trl>=0.9.0" supabase huggingface_hub; then
+# Force reinstall trl to ensure we get >=0.9.0 (Docker image may have old version)
+if pip install -q --upgrade --force-reinstall "trl>=0.9.0" && \
+   pip install -q --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
   echo "[$(date)] ✓ Dependencies installed successfully"
+  echo "[$(date)] TRL version: $(pip show trl | grep Version)"
 else
   echo "[$(date)] ✗ ERROR: Failed to install dependencies"
   echo "[$(date)] Waiting 60s before exit for log inspection..."
