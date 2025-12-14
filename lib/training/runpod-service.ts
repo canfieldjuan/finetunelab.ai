@@ -153,7 +153,8 @@ export class RunPodService {
       const scriptBase64 = compressedScript.toString('base64');
 
       // Bootstrap decodes and decompresses the script from environment variable
-      const bootstrapScript = 'echo "$TRAINING_SCRIPT_B64" | base64 -d | gunzip > /workspace/run_training.sh && chmod +x /workspace/run_training.sh && /workspace/run_training.sh';
+      // Must be wrapped in bash -c '...' for shell expansion of env vars
+      const bootstrapScript = `bash -c 'echo "$TRAINING_SCRIPT_B64" | base64 -d | gunzip > /workspace/run_training.sh && chmod +x /workspace/run_training.sh && /workspace/run_training.sh'`;
 
       console.log('[RunPodService] Script sizes:', {
         originalLength: trainingScript.length,
