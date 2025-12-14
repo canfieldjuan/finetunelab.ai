@@ -289,7 +289,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Block 3: Insert trace into database
-    const { data: trace, error: insertError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: trace, error: insertError } = await (supabase as any)
       .from('llm_traces')
       .insert({
         user_id: userId,
@@ -426,7 +427,8 @@ export async function GET(req: NextRequest) {
     });
 
     // Block 3: Build query
-    let query = supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (supabase as any)
       .from('llm_traces')
       .select('*')
       .eq('user_id', userId)
