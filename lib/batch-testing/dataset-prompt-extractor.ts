@@ -72,7 +72,7 @@ export async function extractPromptsFromDataset(
 
     const supabase =
       auth.mode === 'session'
-        ? createClient(supabaseUrl, supabaseAnonKey, {
+        ? createClient(supabaseUrl, supabaseAnonKey!, {
             global: {
               headers: {
                 Authorization: auth.sessionToken.startsWith('Bearer ')
@@ -81,7 +81,7 @@ export async function extractPromptsFromDataset(
               },
             },
           })
-        : createClient(supabaseUrl, supabaseServiceKey);
+        : createClient(supabaseUrl, supabaseServiceKey!);
 
     // Fetch dataset record from database
     console.log('[DatasetExtractor] Fetching dataset record:', datasetId);
