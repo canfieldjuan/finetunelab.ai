@@ -437,7 +437,7 @@ echo "[$(date)] Current TRL version (before upgrade): $(pip show trl 2>/dev/null
 
 # Uninstall old trl first, then install fresh to avoid caching issues
 pip uninstall -y trl 2>/dev/null || true
-if pip install --no-cache-dir "trl>=0.9.0" && \
+if pip install --no-cache-dir "trl==0.26.0" && \
    pip install --no-cache-dir --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
   echo "[$(date)] ✓ Dependencies installed successfully"
   echo "[$(date)] TRL version (after upgrade): $(pip show trl | grep Version)"
