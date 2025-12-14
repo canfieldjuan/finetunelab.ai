@@ -10,6 +10,12 @@ interface PageProps {
   }>;
 }
 
+export async function generateStaticParams() {
+  return labNotes.map((note) => ({
+    slug: note.slug,
+  }));
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const article = labNotes.find((note) => note.slug === slug);

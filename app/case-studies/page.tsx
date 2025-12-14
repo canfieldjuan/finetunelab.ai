@@ -12,6 +12,11 @@ export const metadata: Metadata = {
     description: 'Real-world examples of fine-tuning success. See how we improved model accuracy, reduced hallucinations, and solved complex reasoning tasks.',
     type: 'website',
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Fine-Tuning Case Studies | FineTune Lab',
+    description: 'Real-world examples of fine-tuning success. See how we improved model accuracy and solved complex reasoning tasks.',
+  },
 };
 
 export default function CaseStudiesPage() {
