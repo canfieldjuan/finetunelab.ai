@@ -549,6 +549,9 @@ export async function POST(request: NextRequest) {
           SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
           DATASET_URL: datasetDownloadUrl,
           MODEL_NAME: modelName,
+          // Alert API configuration for job status notifications
+          ALERT_API_URL: `${appUrl}/api/alerts/trigger`,
+          INTERNAL_API_KEY: process.env.INTERNAL_API_KEY || '',
           ...(hfToken && hfRepoName && {
             HF_TOKEN: hfToken,
             HF_REPO_NAME: hfRepoName

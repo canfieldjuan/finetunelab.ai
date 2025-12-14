@@ -864,14 +864,55 @@ def create_preference_dataset(dataset, split_name="train"):
 # Cloud training configuration from environment
 JOB_ID = os.getenv('JOB_ID')
 JOB_TOKEN = os.getenv('JOB_TOKEN')
+USER_ID = os.getenv('USER_ID')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
 SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
+ALERT_API_URL = os.getenv('ALERT_API_URL')
+INTERNAL_API_KEY = os.getenv('INTERNAL_API_KEY', '')
 IS_CLOUD = bool(JOB_ID and JOB_TOKEN and SUPABASE_URL and (SUPABASE_ANON_KEY or SUPABASE_SERVICE_KEY))
+
+# Alert trigger function for job status notifications
+def trigger_alert(alert_type, model_name=None, error_message=None, loss=None, current_step=None, total_steps=None):
+    """Send alert to the API when job status changes."""
+    if not ALERT_API_URL or not JOB_ID or not USER_ID:
+        logger.debug(f"[Alert] Skipping alert - missing config: API={bool(ALERT_API_URL)}, JOB={bool(JOB_ID)}, USER={bool(USER_ID)}")
+        return
+
+    try:
+        import requests
+
+        payload = {
+            'type': alert_type,
+            'job_id': JOB_ID,
+            'user_id': USER_ID,
+            'model_name': model_name or os.getenv('MODEL_NAME'),
+            'status': alert_type.replace('job_', ''),
+            'error_message': error_message,
+            'loss': loss,
+            'current_step': current_step,
+            'total_steps': total_steps,
+            'progress': (current_step / total_steps * 100) if current_step and total_steps else None,
+        }
+
+        headers = {'Content-Type': 'application/json'}
+        if INTERNAL_API_KEY:
+            headers['X-API-Key'] = INTERNAL_API_KEY
+
+        response = requests.post(ALERT_API_URL, json=payload, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            logger.info(f"[Alert] Sent {alert_type} alert successfully")
+        else:
+            logger.warning(f"[Alert] Alert failed: {response.status_code} - {response.text[:200]}")
+    except Exception as e:
+        logger.warning(f"[Alert] Failed to send alert: {e}")
 
 if IS_CLOUD:
     logger.info(f"[Cloud Mode] Job ID: {JOB_ID}")
+    logger.info(f"[Cloud Mode] User ID: {USER_ID}")
     logger.info(f"[Cloud Mode] Supabase URL: {SUPABASE_URL}")
+    logger.info(f"[Cloud Mode] Alert API: {ALERT_API_URL or 'Not configured'}")
 
     # Initialize Supabase client for direct metrics updates
     try:
@@ -1015,6 +1056,8 @@ class TrainingMetricsCallback(TrainerCallback):
                     'started_at': time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
                 }).eq('id', JOB_ID).eq('job_token', JOB_TOKEN).execute()
                 logger.info("[Metrics] Job status updated to 'running'")
+                # Send job_started alert
+                trigger_alert('job_started', total_steps=self.total_steps)
             except Exception as e:
                 logger.warning(f"[Metrics] Failed to update status: {e}")
 
@@ -1783,6 +1826,8 @@ print(tokenizer.decode(outputs[0]))
             
             supabase.table('local_training_jobs').update(update_data).eq('id', JOB_ID).eq('job_token', JOB_TOKEN).execute()
             logger.info("[Metrics] Job status updated to 'completed'")
+            # Send job_completed alert
+            trigger_alert('job_completed', loss=best_eval_loss)
         except Exception as e:
             logger.warning(f"[Metrics] Failed to update completion status: {e}")
 
@@ -1800,6 +1845,8 @@ except Exception as e:
                 'completed_at': time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime()),
             }).eq('id', JOB_ID).eq('job_token', JOB_TOKEN).execute()
             logger.info("[Metrics] Job status updated to 'failed'")
+            # Send job_failed alert
+            trigger_alert('job_failed', error_message=str(e))
         except Exception as status_error:
             logger.warning(f"[Metrics] Failed to update error status: {status_error}")
 
