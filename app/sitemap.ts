@@ -3,7 +3,8 @@ import { labNotes } from './lab-notes/data';
 import { academyArticles } from '@/lib/academy/content';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://finetunelab.ai';
+  // Hardcode production URL to avoid env var parsing issues
+  const baseUrl = 'https://finetunelab.ai';
 
   const notes = labNotes.map((note) => ({
     url: `${baseUrl}/lab-notes/${note.slug}`,

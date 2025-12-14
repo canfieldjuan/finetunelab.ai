@@ -1,7 +1,8 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://finetunelab.ai';
+  // Hardcode production URL to avoid env var parsing issues
+  const baseUrl = 'https://finetunelab.ai';
 
   return {
     rules: {
