@@ -146,21 +146,17 @@ export class RunPodService {
 
       const podName = `training-${request.training_config_id.substring(0, 8)}`;
 
-      // Compress and base64 encode the training script to reduce payload size
-      // The training script is ~100KB, gzip reduces it to ~20-30KB
-      const zlib = await import('zlib');
-      const compressedScript = zlib.gzipSync(Buffer.from(trainingScript));
-      const scriptBase64 = compressedScript.toString('base64');
+      // Base64 encode the training script to pass via environment variable
+      // This avoids shell escaping issues with the large script
+      const scriptBase64 = Buffer.from(trainingScript).toString('base64');
 
-      // Bootstrap decodes and decompresses the script from environment variable
+      // Bootstrap decodes the script from environment variable and executes it
       // Must be wrapped in bash -c '...' for shell expansion of env vars
-      const bootstrapScript = `bash -c 'echo "$TRAINING_SCRIPT_B64" | base64 -d | gunzip > /workspace/run_training.sh && chmod +x /workspace/run_training.sh && /workspace/run_training.sh'`;
+      const bootstrapScript = `bash -c 'echo "$TRAINING_SCRIPT_B64" | base64 -d > /workspace/run_training.sh && chmod +x /workspace/run_training.sh && /workspace/run_training.sh'`;
 
       console.log('[RunPodService] Script sizes:', {
         originalLength: trainingScript.length,
-        compressedLength: compressedScript.length,
         base64Length: scriptBase64.length,
-        compressionRatio: ((1 - compressedScript.length / trainingScript.length) * 100).toFixed(1) + '%',
         bootstrapLength: bootstrapScript.length
       });
 
