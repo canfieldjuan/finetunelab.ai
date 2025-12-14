@@ -82,7 +82,17 @@ export class RunPodService {
     const result: RunPodGraphQLResponse<T> = await response.json();
 
     if (result.errors && result.errors.length > 0) {
-      throw new Error(`RunPod GraphQL error: ${result.errors.map(e => e.message).join(', ')}`);
+      // Log full error details for debugging
+      console.error('[RunPodService] GraphQL errors:', JSON.stringify(result.errors, null, 2));
+      const errorMessages = result.errors.map(e => {
+        // Extract any additional error details
+        const details = [];
+        if (e.message) details.push(e.message);
+        if ((e as Record<string, unknown>).extensions) details.push(`extensions: ${JSON.stringify((e as Record<string, unknown>).extensions)}`);
+        if ((e as Record<string, unknown>).path) details.push(`path: ${JSON.stringify((e as Record<string, unknown>).path)}`);
+        return details.join(' | ');
+      });
+      throw new Error(`RunPod GraphQL error: ${errorMessages.join(', ')}`);
     }
 
     if (!result.data) {
