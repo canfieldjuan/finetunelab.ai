@@ -433,11 +433,22 @@ echo ""
 
 # Install dependencies
 echo "[$(date)] Installing dependencies..."
-# Force reinstall trl to ensure we get >=0.9.0 (Docker image may have old version)
-if pip install -q --upgrade --force-reinstall "trl>=0.9.0" && \
-   pip install -q --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
+echo "[$(date)] Current TRL version (before upgrade): $(pip show trl 2>/dev/null | grep Version || echo 'not installed')"
+
+# Uninstall old trl first, then install fresh to avoid caching issues
+pip uninstall -y trl 2>/dev/null || true
+if pip install --no-cache-dir "trl>=0.9.0" && \
+   pip install --no-cache-dir --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
   echo "[$(date)] ✓ Dependencies installed successfully"
-  echo "[$(date)] TRL version: $(pip show trl | grep Version)"
+  echo "[$(date)] TRL version (after upgrade): $(pip show trl | grep Version)"
+  # Verify the import works
+  python -c "from trl import DataCollatorForCompletionOnlyLM; print('[$(date)] ✓ DataCollatorForCompletionOnlyLM import verified')" || {
+    echo "[$(date)] ✗ ERROR: DataCollatorForCompletionOnlyLM still not available after upgrade"
+    pip show trl
+    echo "[$(date)] Waiting 60s before exit for log inspection..."
+    sleep 60
+    exit 1
+  }
 else
   echo "[$(date)] ✗ ERROR: Failed to install dependencies"
   echo "[$(date)] Waiting 60s before exit for log inspection..."
