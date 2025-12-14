@@ -46,7 +46,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       integrations,
       available: availableTypes.map(type => ({
-        type,
         ...INTEGRATION_METADATA[type],
         configured: integrations.some(i => i.integration_type === type),
       })),
