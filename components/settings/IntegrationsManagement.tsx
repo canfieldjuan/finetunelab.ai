@@ -286,132 +286,10 @@ export function IntegrationsManagement({ sessionToken }: IntegrationsManagementP
         </div>
       )}
 
-      {/* Configured Integrations */}
-      {integrations.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-          {integrations.map((integration) => {
-            const metadata = available.find((a) => a.type === integration.integration_type);
-            const isExpanded = expandedConfig === integration.id;
-
-            return (
-              <div
-                key={integration.id}
-                className={`border rounded-lg ${
-                  integration.enabled ? 'border-border' : 'border-border/50 opacity-70'
-                }`}
-              >
-                <div className="p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 flex-1 min-w-0">
-                      <div className="p-1.5 bg-muted rounded shrink-0">
-                        <IntegrationIcon
-                          type={integration.integration_type}
-                          className="h-4 w-4"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-sm truncate">{metadata?.name || integration.integration_type}</span>
-                          {integration.error_count > 0 && (
-                            <span className="text-xs bg-destructive/10 text-destructive px-1 py-0.5 rounded shrink-0">
-                              {integration.error_count}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {integration.credentials_preview}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => setExpandedConfig(isExpanded ? null : integration.id)}
-                      >
-                        {isExpanded ? (
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        ) : (
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                      <button
-                        onClick={() => handleToggle(integration)}
-                        className={`relative w-8 h-4 rounded-full transition-colors ${
-                          integration.enabled ? 'bg-primary' : 'bg-muted-foreground/30'
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-                            integration.enabled ? 'translate-x-4' : ''
-                          }`}
-                        />
-                      </button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => handleTest(integration.integration_type)}
-                        disabled={testing === integration.integration_type}
-                        title="Test integration"
-                      >
-                        {testing === integration.integration_type ? (
-                          <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-primary border-t-transparent" />
-                        ) : (
-                          <TestTube className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(integration.integration_type, metadata?.name || '')}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expanded Config */}
-                {isExpanded && (
-                  <div className="border-t border-border p-3 bg-muted/30">
-                    <p className="text-xs font-medium mb-2">Events to log:</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                      {ALERT_CONFIG_OPTIONS.map(({ key, label }) => (
-                        <div key={key} className="flex items-center justify-between">
-                          <span className="text-xs">{label}</span>
-                          <button
-                            onClick={() =>
-                              handleConfigUpdate(integration.integration_type, {
-                                ...integration.config,
-                                [key]: !integration.config[key],
-                              })
-                            }
-                            className={`relative w-7 h-3.5 rounded-full transition-colors ${
-                              integration.config[key] ? 'bg-primary' : 'bg-muted-foreground/30'
-                            }`}
-                          >
-                            <span
-                              className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform ${
-                                integration.config[key] ? 'translate-x-3.5' : ''
-                              }`}
-                            />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Add New Integration */}
-      {configuringType ? (
+      {/* Add Integration - Show First */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-muted-foreground">Add Integration</h3>
+        {configuringType ? (
         <div className="border border-dashed border-border rounded-lg p-3 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -505,6 +383,134 @@ export function IntegrationsManagement({ sessionToken }: IntegrationsManagementP
               </div>
             </button>
           ))}
+        </div>
+      )}
+      </div>
+
+      {/* Configured Integrations - Show Second */}
+      {integrations.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-muted-foreground">Configured Integrations</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {integrations.map((integration) => {
+              const metadata = available.find((a) => a.type === integration.integration_type);
+              const isExpanded = expandedConfig === integration.id;
+
+              return (
+                <div
+                  key={integration.id}
+                  className={`border rounded-lg bg-card ${
+                    integration.enabled ? 'border-border' : 'border-border/50 opacity-70'
+                  }`}
+                >
+                  <div className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                        <div className="p-1.5 bg-primary/10 rounded shrink-0">
+                          <IntegrationIcon
+                            type={integration.integration_type}
+                            className="h-4 w-4"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-sm truncate">{metadata?.name || integration.integration_type}</span>
+                            {integration.error_count > 0 && (
+                              <span className="text-xs bg-destructive/10 text-destructive px-1 py-0.5 rounded shrink-0">
+                                {integration.error_count}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {integration.credentials_preview}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setExpandedConfig(isExpanded ? null : integration.id)}
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <button
+                          onClick={() => handleToggle(integration)}
+                          className={`relative w-8 h-4 rounded-full transition-colors ${
+                            integration.enabled ? 'bg-primary' : 'bg-muted-foreground/30'
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
+                              integration.enabled ? 'translate-x-4' : ''
+                            }`}
+                          />
+                        </button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => handleTest(integration.integration_type)}
+                          disabled={testing === integration.integration_type}
+                          title="Test integration"
+                        >
+                          {testing === integration.integration_type ? (
+                            <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-primary border-t-transparent" />
+                          ) : (
+                            <TestTube className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(integration.integration_type, metadata?.name || '')}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded Config */}
+                  {isExpanded && (
+                    <div className="border-t border-border p-3 bg-muted/30">
+                      <p className="text-xs font-medium mb-2">Events to log:</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        {ALERT_CONFIG_OPTIONS.map(({ key, label }) => (
+                          <div key={key} className="flex items-center justify-between">
+                            <span className="text-xs">{label}</span>
+                            <button
+                              onClick={() =>
+                                handleConfigUpdate(integration.integration_type, {
+                                  ...integration.config,
+                                  [key]: !integration.config[key],
+                                })
+                              }
+                              className={`relative w-7 h-3.5 rounded-full transition-colors ${
+                                integration.config[key] ? 'bg-primary' : 'bg-muted-foreground/30'
+                              }`}
+                            >
+                              <span
+                                className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform ${
+                                  integration.config[key] ? 'translate-x-3.5' : ''
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
