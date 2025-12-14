@@ -503,19 +503,18 @@ function AddApiKeyDialog({ sessionToken, onClose, onSuccess }: AddApiKeyDialogPr
                     const config = SCOPE_CONFIG[scope];
                     const Icon = config.icon;
                     const isSelected = selectedScopes.includes(scope);
-                    const isDisabled = scope !== 'all' && selectedScopes.includes('all');
 
                     return (
                       <button
                         key={scope}
                         type="button"
                         onClick={() => toggleScope(scope)}
-                        disabled={submitting || isDisabled}
+                        disabled={submitting}
                         className={`flex items-start gap-3 p-3 rounded-lg border-2 transition-all text-left ${
                           isSelected
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50'
-                        } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        }`}
                       >
                         <div className={`p-1.5 rounded ${config.color}`}>
                           <Icon className="h-4 w-4" />
