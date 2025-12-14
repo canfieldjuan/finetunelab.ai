@@ -408,7 +408,7 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
                   </>
                 )}
 
-                {/* Deploy to RunPod Serverless */}
+                {/* Deploy to Serverless */}
                 {isUserModel && sessionToken && (
                   <Button
                     variant="outline"
@@ -416,9 +416,10 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
                     onClick={handleDeployServerless}
                     disabled={deployingServerless}
                     className="flex-1 gap-1.5 h-8"
+                    title="Deploy model to serverless testing endpoint"
                   >
                     <Cloud className="h-3 w-3" />
-                    {deployingServerless ? 'Deploying...' : 'RunPod Serverless'}
+                    {deployingServerless ? 'Deploying...' : 'Serverless'}
                   </Button>
                 )}
 

@@ -128,10 +128,16 @@ export class LambdaLabsService {
 
       // Add cloud-init user_data if provided
       if (userDataScript) {
+        // Cloud-init requires MIME header to recognize shell scripts
+        const mimeWrappedScript = `Content-Type: text/x-shellscript; charset="utf-8"
+MIME-Version: 1.0
+
+${userDataScript}`;
+
         // Lambda Labs API requires user_data to be base64 encoded
-        launchBody.user_data = Buffer.from(userDataScript).toString('base64');
+        launchBody.user_data = Buffer.from(mimeWrappedScript).toString('base64');
         console.log('[LambdaLabsService] Cloud-init script length:', userDataScript.length);
-        console.log('[LambdaLabsService] Cloud-init script encoded length:', (launchBody.user_data as string).length);
+        console.log('[LambdaLabsService] Cloud-init script with MIME length:', mimeWrappedScript.length);
       }
 
       // Launch instance

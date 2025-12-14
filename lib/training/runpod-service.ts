@@ -1427,15 +1427,15 @@ response_template = None
 if hasattr(tokenizer, 'chat_template') and tokenizer.chat_template:
     template_str = str(tokenizer.chat_template)
     if "<|start_header_id|>assistant<|end_header_id|>" in template_str:
-        response_template = "<|start_header_id|>assistant<|end_header_id|>\n\n"
+        response_template = "<|start_header_id|>assistant<|end_header_id|>\\n\\n"
     elif "<|im_start|>assistant" in template_str:
-        response_template = "<|im_start|>assistant\n"
+        response_template = "<|im_start|>assistant\\n"
     elif "[/INST]" in template_str:
         response_template = " [/INST] "
     elif "<start_of_turn>model" in template_str:
-        response_template = "<start_of_turn>model\n"
+        response_template = "<start_of_turn>model\\n"
     elif "<|assistant|>" in template_str:
-        response_template = "<|assistant|>\n"
+        response_template = "<|assistant|>\\n"
     elif "<|CHATBOT_TOKEN|>" in template_str:
         response_template = "<|CHATBOT_TOKEN|>"
 
