@@ -792,14 +792,19 @@ class TrainingPredictionsCallback(TrainerCallback):
 
     def on_epoch_end(self, args, state, control, **kwargs):
         """Generate predictions at end of each epoch"""
+        logger.info(f'[PredictionsCallback] on_epoch_end called - enabled={self.enabled}, frequency={self.frequency}')
         if not self.enabled or self.frequency != 'epoch':
+            logger.info(f'[PredictionsCallback] on_epoch_end skipped (frequency={self.frequency}, need "epoch")')
             return
         self._generate_predictions(state, **kwargs)
 
     def on_evaluate(self, args, state, control, **kwargs):
         """Generate predictions during evaluation steps"""
+        logger.info(f'[PredictionsCallback] on_evaluate called - enabled={self.enabled}, frequency={self.frequency}')
         if not self.enabled or self.frequency != 'eval':
+            logger.info(f'[PredictionsCallback] on_evaluate skipped (frequency={self.frequency}, need "eval")')
             return
+        logger.info(f'[PredictionsCallback] on_evaluate generating predictions')
         self._generate_predictions(state, **kwargs)
 
     def on_step_end(self, args, state, control, **kwargs):
@@ -809,6 +814,7 @@ class TrainingPredictionsCallback(TrainerCallback):
 
         current_step = state.global_step
         if current_step % self.step_interval == 0:
+            logger.info(f'[PredictionsCallback] on_step_end generating at step {current_step}')
             self._generate_predictions(state, **kwargs)
 
     def _generate_predictions(self, state, **kwargs):
