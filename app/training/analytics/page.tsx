@@ -23,7 +23,13 @@ import { useTrainingJobsRealtime } from '@/lib/hooks/useTrainingJobsRealtime';
 import { useMultiJobMetrics } from '@/hooks/useMultiJobMetrics';
 import { MultiJobLossChart } from '@/components/training/comparison/MultiJobLossChart';
 import { MultiJobSummaryTable } from '@/components/training/comparison/MultiJobSummaryTable';
-import { Loader2, BarChart3, RefreshCw, Info } from 'lucide-react';
+import { MultiJobLearningRateChart } from '@/components/training/comparison/MultiJobLearningRateChart';
+import { MultiJobGradientNormChart } from '@/components/training/comparison/MultiJobGradientNormChart';
+import { MultiJobThroughputChart } from '@/components/training/comparison/MultiJobThroughputChart';
+import { MultiJobMemoryChart } from '@/components/training/comparison/MultiJobMemoryChart';
+import { MultiJobHyperparameterDiff } from '@/components/training/comparison/MultiJobHyperparameterDiff';
+import { Loader2, BarChart3, RefreshCw, Info, Search, Calendar, ArrowUpDown, Star, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Link from 'next/link';
 
@@ -42,6 +48,8 @@ function TrainingAnalyticsContent() {
   // Job selection state
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'best_loss'>('newest');
   const [metricType, setMetricType] = useState<'both' | 'train_loss' | 'eval_loss'>('both');
 
   // Fetch all jobs
@@ -50,11 +58,42 @@ function TrainingAnalyticsContent() {
     isLoading: loadingJobs,
   } = useTrainingJobsRealtime(user?.id, session?.access_token);
 
-  // Filter jobs by status
+  // Filter and sort jobs
   const filteredJobs = useMemo(() => {
-    if (statusFilter === 'all') return allJobs;
-    return allJobs.filter(job => job.status === statusFilter);
-  }, [allJobs, statusFilter]);
+    let filtered = allJobs;
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(job => job.status === statusFilter);
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(job =>
+        (job.model_name?.toLowerCase().includes(query)) ||
+        (job.dataset_path?.toLowerCase().includes(query))
+      );
+    }
+
+    // Sort
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'best_loss':
+          const aLoss = a.best_eval_loss ?? Infinity;
+          const bLoss = b.best_eval_loss ?? Infinity;
+          return aLoss - bLoss;
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [allJobs, statusFilter, searchQuery, sortBy]);
 
   // Get selected jobs
   const selectedJobs = useMemo(() => {
@@ -105,6 +144,89 @@ function TrainingAnalyticsContent() {
       color: jobColors[jm.jobId] || JOB_COLORS[0],
     }));
   }, [jobMetrics, jobColors]);
+
+  // Calculate recommendation score for each selected job
+  // Score based on: eval_loss (lower better), overfitting gap (lower better), completion status
+  const recommendedJob = useMemo(() => {
+    if (selectedJobs.length === 0) return null;
+
+    // Only consider completed jobs for recommendation
+    const completedJobs = selectedJobs.filter(j => j.status === 'completed');
+    if (completedJobs.length === 0) return null;
+
+    // Calculate scores for each job
+    const jobScores = completedJobs.map(job => {
+      const evalLoss = job.best_eval_loss ?? job.eval_loss ?? Infinity;
+      const trainLoss = job.loss ?? job.final_loss ?? Infinity;
+      const overfitGap = evalLoss !== Infinity && trainLoss !== Infinity
+        ? evalLoss - trainLoss
+        : Infinity;
+
+      // Scoring factors (all normalized to 0-100, higher is better)
+      // 1. Eval loss score (inverse, lower loss = higher score)
+      const evalLossScore = evalLoss !== Infinity ? Math.max(0, 100 - (evalLoss * 50)) : 0;
+
+      // 2. Overfitting score (penalize large gaps, ideal gap is small positive)
+      let overfitScore = 50; // neutral
+      if (overfitGap !== Infinity) {
+        if (overfitGap < 0) {
+          // Negative gap (potential data leakage) - slight penalty
+          overfitScore = 40;
+        } else if (overfitGap < 0.05) {
+          // Excellent - very small gap
+          overfitScore = 100;
+        } else if (overfitGap < 0.1) {
+          // Good
+          overfitScore = 80;
+        } else if (overfitGap < 0.2) {
+          // Moderate overfitting
+          overfitScore = 60;
+        } else {
+          // High overfitting
+          overfitScore = 30;
+        }
+      }
+
+      // Composite score (weighted)
+      const compositeScore = (evalLossScore * 0.7) + (overfitScore * 0.3);
+
+      // Build reasons for recommendation
+      const reasons: string[] = [];
+      if (evalLoss !== Infinity) {
+        reasons.push(`Eval Loss: ${evalLoss.toFixed(4)}`);
+      }
+      if (overfitGap !== Infinity && overfitGap >= 0) {
+        if (overfitGap < 0.1) {
+          reasons.push('Low overfitting');
+        } else {
+          reasons.push(`Gap: +${overfitGap.toFixed(3)}`);
+        }
+      }
+
+      return {
+        job,
+        evalLoss,
+        overfitGap,
+        compositeScore,
+        reasons,
+      };
+    });
+
+    // Sort by composite score (highest first)
+    jobScores.sort((a, b) => b.compositeScore - a.compositeScore);
+
+    // Return the best job with its reasons
+    const best = jobScores[0];
+    if (best && best.compositeScore > 0) {
+      return {
+        jobId: best.job.id,
+        reasons: best.reasons,
+        score: best.compositeScore,
+      };
+    }
+
+    return null;
+  }, [selectedJobs]);
 
   // Handle job selection toggle
   const toggleJobSelection = (jobId: string) => {
@@ -167,81 +289,139 @@ function TrainingAnalyticsContent() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Job Selection Panel - Left Side */}
         <div className="lg:col-span-1">
-          <div className="bg-card border border-border rounded-lg p-4 sticky top-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Select Runs</h3>
+          <div className="bg-card border border-border rounded-lg p-3 sticky top-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm">Select Runs</h3>
               {selectedJobIds.size > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearSelection}>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearSelection}>
                   Clear
                 </Button>
               )}
             </div>
 
-            {/* Status Filter */}
-            <div className="mb-4">
+            {/* Search */}
+            <div className="relative mb-2">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search model or dataset..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-7 h-8 text-xs"
+              />
+            </div>
+
+            {/* Filters Row */}
+            <div className="flex gap-2 mb-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Filter by status" />
+                <SelectTrigger className="flex-1 h-8 text-xs">
+                  <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="completed">Done</SelectItem>
                   <SelectItem value="running">Running</SelectItem>
                   <SelectItem value="failed">Failed</SelectItem>
                 </SelectContent>
               </Select>
+
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+                <SelectTrigger className="flex-1 h-8 text-xs">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest</SelectItem>
+                  <SelectItem value="oldest">Oldest</SelectItem>
+                  <SelectItem value="best_loss">Best Loss</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Selection count */}
-            <p className="text-sm text-muted-foreground mb-3">
-              {selectedJobIds.size}/5 selected
-            </p>
+            {/* Selection count and results */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+              <span>{selectedJobIds.size}/5 selected</span>
+              <span>{filteredJobs.length} jobs</span>
+            </div>
 
             {/* Job List */}
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            <div className="space-y-1.5 max-h-[450px] overflow-y-auto">
               {loadingJobs ? (
                 <div className="text-center py-4">
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                  <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                 </div>
               ) : filteredJobs.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No training jobs found
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  {searchQuery ? 'No matching jobs' : 'No training jobs found'}
                 </p>
               ) : (
                 filteredJobs.map((job) => {
                   const isSelected = selectedJobIds.has(job.id);
                   const selectionIndex = Array.from(selectedJobIds).indexOf(job.id);
                   const color = isSelected ? JOB_COLORS[selectionIndex] : undefined;
+                  const isRecommended = recommendedJob?.jobId === job.id;
+                  const dateStr = new Date(job.created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  });
 
                   return (
                     <div
                       key={job.id}
-                      className={`p-3 rounded-md border cursor-pointer transition-colors ${
-                        isSelected
+                      className={`p-2 rounded-md border cursor-pointer transition-colors ${
+                        isRecommended && isSelected
+                          ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
+                          : isSelected
                           ? 'border-primary bg-primary/5'
                           : 'border-border hover:bg-muted/50'
-                      }`}
+                      } ${!isSelected && selectedJobIds.size >= 5 ? 'opacity-50' : ''}`}
                       onClick={() => toggleJobSelection(job.id)}
+                      title={isRecommended ? `Recommended: ${recommendedJob.reasons.join(' | ')}` : undefined}
                     >
                       <div className="flex items-start gap-2">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleJobSelection(job.id)}
-                          disabled={!isSelected && selectedJobIds.size >= 5}
-                        />
+                        <div className="pt-0.5">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleJobSelection(job.id)}
+                            disabled={!isSelected && selectedJobIds.size >= 5}
+                            className="h-3.5 w-3.5"
+                          />
+                        </div>
                         <div className="flex-1 min-w-0">
-                          {isSelected && (
-                            <div
-                              className="w-3 h-3 rounded-full mb-1"
-                              style={{ backgroundColor: color }}
-                            />
-                          )}
-                          <p className="text-sm font-medium truncate">
-                            {job.model_name?.split('/').pop() || 'Unknown Model'}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {job.status} &bull; {job.best_eval_loss?.toFixed(4) || 'N/A'}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            {isRecommended && isSelected && (
+                              <Star className="w-3 h-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                            )}
+                            {isSelected && !isRecommended && (
+                              <div
+                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: color }}
+                              />
+                            )}
+                            <p className="text-xs font-medium truncate">
+                              {job.model_name?.split('/').pop() || 'Unknown'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span
+                              className={`text-[10px] px-1 py-0.5 rounded ${
+                                job.status === 'completed'
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                  : job.status === 'running'
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                  : job.status === 'failed'
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                              }`}
+                            >
+                              {job.status}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {job.best_eval_loss?.toFixed(4) || '-'}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground ml-auto">
+                              {dateStr}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -311,8 +491,36 @@ function TrainingAnalyticsContent() {
                     height={400}
                   />
 
+                  {/* Additional Metric Charts - 2x2 Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <MultiJobLearningRateChart
+                      jobMetrics={jobMetricsWithColors}
+                      height={250}
+                    />
+                    <MultiJobGradientNormChart
+                      jobMetrics={jobMetricsWithColors}
+                      height={250}
+                    />
+                    <MultiJobThroughputChart
+                      jobMetrics={jobMetricsWithColors}
+                      height={250}
+                    />
+                    <MultiJobMemoryChart
+                      jobMetrics={jobMetricsWithColors}
+                      height={250}
+                    />
+                  </div>
+
                   {/* Summary Table */}
                   <MultiJobSummaryTable
+                    jobs={selectedJobs}
+                    jobColors={jobColors}
+                    recommendedJobId={recommendedJob?.jobId}
+                    recommendationReasons={recommendedJob?.reasons}
+                  />
+
+                  {/* Hyperparameter Comparison */}
+                  <MultiJobHyperparameterDiff
                     jobs={selectedJobs}
                     jobColors={jobColors}
                   />
@@ -321,9 +529,9 @@ function TrainingAnalyticsContent() {
                   <Alert>
                     <Info className="w-4 h-4" />
                     <AlertDescription>
-                      <strong>Solid lines</strong> represent training loss, <strong>dashed lines</strong> represent evaluation loss.
-                      Lower loss values indicate better model performance. Look for runs where eval loss closely follows train loss
-                      without large gaps (which would indicate overfitting).
+                      <strong>Loss:</strong> Solid lines = training, dashed = evaluation. Lower is better.
+                      <strong className="ml-2">Gradient Norm:</strong> Spikes indicate instability.
+                      <strong className="ml-2">LR:</strong> Shows warmup and decay schedule.
                     </AlertDescription>
                   </Alert>
                 </>

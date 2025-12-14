@@ -1,0 +1,2 @@
+[console_scripts]
+finetune-lab = finetune_lab.cli:main

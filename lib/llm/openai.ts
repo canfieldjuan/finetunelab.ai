@@ -141,6 +141,8 @@ export async function runOpenAIWithToolCalls(
   let totalOutputTokens = 0;
   // METRIC: Track tool calls
   const toolCallsTracking: ToolCallMetadata[] = [];
+  let webSearchCalled = false;
+  let deepResearchStarted = false;
 
   const client = getOpenAIClient();
 
@@ -191,11 +193,23 @@ export async function runOpenAIWithToolCalls(
 
           console.log(`[OpenAI] [DEBUG] Tool selected: ${toolName} with args:`, args);
 
+          if (toolName === 'web_search') {
+            webSearchCalled = true;
+          }
+
           // Track of web_search is done via toolCallsTracking below (no local flag needed)
 
           // METRIC: Track tool call execution
           try {
             const result = await toolCallHandler(toolName, args);
+
+            if (toolName === 'web_search' && result && typeof result === 'object') {
+              const r = result as Record<string, unknown>;
+              const status = typeof r.status === 'string' ? r.status : '';
+              if (status === 'deep_research_started' || status === 'research_started') {
+                deepResearchStarted = true;
+              }
+            }
 
             // Check if result indicates error (safe narrowing)
             let callError: string | undefined;
@@ -259,8 +273,10 @@ export async function runOpenAIWithToolCalls(
 
     // Check if web_search was called but model returned no content
     let finalContent = msg?.content || '';
-    if (!finalContent && toolCallsTracking.some(t => t.name === 'web_search')) {
-      finalContent = '🔍 Deep research in progress. This may take 3-10 minutes depending on complexity. I will provide comprehensive results when the research is complete.';
+    if (!finalContent && webSearchCalled) {
+      finalContent = deepResearchStarted
+        ? '🔍 Deep research in progress. This may take 3-10 minutes depending on complexity.'
+        : 'I ran a web search but did not generate a response.';
       console.log('[OpenAI] Web search called but no assistant content - using fallback message');
     }
 
@@ -286,8 +302,10 @@ export async function runOpenAIWithToolCalls(
 
   // Check if web_search was called before hitting max rounds
   let maxRoundsContent = '';
-  if (toolCallsTracking.some(t => t.name === 'web_search')) {
-    maxRoundsContent = '🔍 Deep research in progress. This may take 3-10 minutes depending on complexity. I will provide comprehensive results when the research is complete.';
+  if (webSearchCalled) {
+    maxRoundsContent = deepResearchStarted
+      ? '🔍 Deep research in progress. This may take 3-10 minutes depending on complexity.'
+      : 'I ran a web search but did not generate a response.';
     console.log('[OpenAI] Max rounds hit after web_search - using fallback message');
   }
 

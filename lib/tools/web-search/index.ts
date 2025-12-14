@@ -30,7 +30,8 @@ const webSearchTool: WebSearchToolDefinition = {
       maxResults: { type: 'number', description: 'Max results for standard search' },
       deepSearch: { type: 'boolean', description: 'Enable full content fetching for standard search' },
       summarize: { type: 'boolean', description: 'Generate AI summaries of search results' },
-      research: { type: 'boolean', description: 'Perform a deep research session' },
+      research: { type: 'boolean', description: 'Perform a deep research session (legacy flag)' },
+      deepResearchConfirmed: { type: 'boolean', description: 'Confirm to start a deep research session' },
       sortBy: { type: 'string', enum: ['relevance', 'date'], description: 'Sort results by relevance or date' },
     },
     required: ['query'],
@@ -42,11 +43,12 @@ const webSearchTool: WebSearchToolDefinition = {
     const query = params.query as string;
     if (!query) throw new Error('[WebSearch] Query is required');
 
-    if (params.research) {
+    const wantsResearch = params.research === true || params.deepResearchConfirmed === true;
+    if (wantsResearch) {
       const job = await researchService.startResearch(query, userId);
       researchService.executeResearch(job.id).catch(err => console.error('Research execution failed:', err));
       return {
-        status: 'research_started',
+        status: 'deep_research_started',
         message: `Research started for "${query}". I will notify you upon completion.`,
         jobId: job.id,
       };

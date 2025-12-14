@@ -1,10 +1,8 @@
 'use client';
 
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
-import { PageWrapper } from '@/components/layout/PageWrapper';
-import { LoadingState } from '@/components/ui/LoadingState';
+import { ContentPageHeader } from '@/components/layout/ContentPageHeader';
 import {
   ArrowLeft,
   Clock,
@@ -22,20 +20,14 @@ interface LabNoteArticleViewProps {
 }
 
 export function LabNoteArticleView({ article }: LabNoteArticleViewProps) {
-  const { user, signOut, loading } = useAuth();
-  // Note: We do NOT redirect if not logged in, to allow SEO crawling.
-
-  if (loading) {
-    return <LoadingState fullScreen />;
-  }
-
   if (!article) {
     return (
-      <PageWrapper currentPage="lab-notes" user={user} signOut={signOut}>
-        <div className="max-w-3xl mx-auto py-12 text-center">
+      <div className="min-h-screen bg-background">
+        <ContentPageHeader showBack backHref="/lab-notes" backLabel="Back to Lab Notes" />
+        <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
           <h1 className="text-2xl font-bold mb-4">Article Not Found</h1>
           <p className="text-muted-foreground mb-6">
-            This lab note doesn't exist or has been moved.
+            This lab note doesn&apos;t exist or has been moved.
           </p>
           <Link href="/lab-notes">
             <Button>
@@ -43,23 +35,16 @@ export function LabNoteArticleView({ article }: LabNoteArticleViewProps) {
               Back to Lab Notes
             </Button>
           </Link>
-        </div>
-      </PageWrapper>
+        </main>
+      </div>
     );
   }
 
   return (
-    <PageWrapper currentPage="lab-notes" user={user} signOut={signOut}>
-      <div className="max-w-3xl mx-auto">
-        {/* Back Link */}
-        <Link
-          href="/lab-notes"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Lab Notes
-        </Link>
-
+    <div className="min-h-screen bg-background">
+      <ContentPageHeader showBack backHref="/lab-notes" backLabel="Back to Lab Notes" />
+      
+        <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Article Header */}
         <header className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -154,7 +139,7 @@ export function LabNoteArticleView({ article }: LabNoteArticleViewProps) {
             </Button>
           </Link>
         </div>
-      </div>
-    </PageWrapper>
+      </main>
+    </div>
   );
 }

@@ -10,6 +10,18 @@ export interface PredictionsConfig {
   sample_count: number;
   sample_frequency: 'epoch' | 'eval' | 'steps';
   step_interval?: number;
+  /** Optional path to a dedicated predictions sample file (JSON/JSONL, optionally .gz). */
+  samples_path?: string;
+
+  /** Optional output validation configuration (off by default). */
+  validators?: {
+    /** Require `prediction` to be valid JSON. */
+    json_parse?: boolean;
+    /** Optional path to a JSONSchema file used to validate parsed JSON output (legacy/local). */
+    json_schema_path?: string;
+    /** Optional inline JSONSchema (preferred for web usage; persists in config JSON). */
+    json_schema?: unknown;
+  };
 }
 
 export interface TrainingPrediction {
@@ -19,10 +31,25 @@ export interface TrainingPrediction {
   epoch: number;
   step: number;
   sample_index: number;
+  source_index?: number;
+  prompt_id?: string;
+  sample_source?: string;
+  sample_source_id?: string;
   prompt: string;
   ground_truth?: string;
   prediction: string;
   created_at: string;
+  // Generation metadata (optional)
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  latency_ms?: number;
+  max_new_tokens?: number;
+  do_sample?: boolean;
+  // Validation results (optional)
+  validation_pass?: boolean;
+  validation_kind?: string;
+  validation_errors?: unknown;
   // Quality metrics (populated when ground_truth exists)
   exact_match?: number;        // 1.0 = perfect match, 0.0 = no match
   char_error_rate?: number;    // 0.0 = perfect, 1.0 = completely wrong
@@ -67,6 +94,8 @@ export interface PredictionEpochMetrics {
   avg_word_overlap: number | null;
   min_char_error_rate: number | null;
   max_char_error_rate: number | null;
+  /** Fraction of predictions that passed validation (0..1). NULL if validation not run. */
+  validation_pass_rate?: number | null;
 }
 
 /**

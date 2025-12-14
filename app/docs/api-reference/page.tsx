@@ -2607,7 +2607,7 @@ Contains:
             <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <h3 className="font-semibold mb-2">📘 What this does:</h3>
               <p className="text-sm text-muted-foreground">
-                Gracefully stops an active inference deployment. Finalizes cost tracking, updates status to "stopped", and terminates the RunPod Serverless endpoint. Cost will be calculated up to the stop time.
+                Gracefully stops an active inference deployment. Finalizes cost tracking, updates status to &quot;stopped&quot;, and terminates the RunPod Serverless endpoint. Cost will be calculated up to the stop time.
               </p>
             </div>
 

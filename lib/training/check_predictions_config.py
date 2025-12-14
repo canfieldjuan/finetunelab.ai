@@ -69,13 +69,18 @@ def check_predictions_config(config_path=None):
 
     # Check dataset path
     dataset_path = config.get("dataset_path") or config.get("data", {}).get("dataset_path")
+    samples_path = predictions_config.get("samples_path")
     print(f"5. Dataset Path: {dataset_path or '❌ NOT SET'}")
-    if not dataset_path:
-        print("   ⚠️  No dataset_path in config (checked dataset_path and data.dataset_path)")
-    elif not os.path.exists(dataset_path):
-        print(f"   ⚠️  Dataset file not found: {dataset_path}")
+    if samples_path:
+        print(f"   Predictions Samples Path: {samples_path}")
+
+    resolved_samples_path = samples_path or dataset_path
+    if not resolved_samples_path:
+        print("   ⚠️  No samples path available (checked predictions.samples_path, dataset_path, data.dataset_path)")
+    elif not os.path.exists(resolved_samples_path):
+        print(f"   ⚠️  Samples file not found: {resolved_samples_path}")
     else:
-        print(f"   ✓ Dataset file exists")
+        print(f"   ✓ Samples file exists")
 
     # Check output paths (local API vs cloud Supabase)
     print("\n--- Output Path ---")
@@ -96,7 +101,7 @@ def check_predictions_config(config_path=None):
 
     # Final verdict
     print("\n" + "=" * 60)
-    dataset_exists = bool(dataset_path and os.path.exists(dataset_path))
+    dataset_exists = bool(resolved_samples_path and os.path.exists(resolved_samples_path))
     local_ready = (not cloud_mode) and metrics_api_url and job_token
     cloud_ready = cloud_mode and supabase_url and supabase_key
 

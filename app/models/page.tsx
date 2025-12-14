@@ -35,6 +35,11 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { toast } from 'sonner';
 import { OWNERSHIP_FILTERS, type OwnershipFilter } from '@/lib/constants';
 
+type ServerInfo = {
+  model_id?: string | null;
+  status?: string | null;
+} & Record<string, unknown>;
+
 function ModelsPageContent() {
   const { user, session, signOut, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -43,7 +48,7 @@ function ModelsPageContent() {
   const modelRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const [models, setModels] = useState<LLMModelDisplay[]>([]);
-  const [servers, setServers] = useState<Record<string, any>>({});
+  const [servers, setServers] = useState<Record<string, ServerInfo>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,9 +157,9 @@ function ModelsPageContent() {
 
       // Create lookup map: model_id -> server info
       // Prioritize running servers over stopped/error ones
-      const serverMap: Record<string, any> = {};
+      const serverMap: Record<string, ServerInfo> = {};
       if (data.servers) {
-        data.servers.forEach((server: any) => {
+        data.servers.forEach((server: ServerInfo) => {
           if (server.model_id) {
             const existing = serverMap[server.model_id];
 

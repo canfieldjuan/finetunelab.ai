@@ -80,9 +80,13 @@ class TrainingPredictionsCallback(TrainerCallback):
             from lib.training.predictions_writer import PredictionsWriter
 
             self.sampler = PredictionsSampler(random_seed=42)
+            samples_path = self.config.get('samples_path') or self.dataset_path
+            sample_source = 'prediction_set' if self.config.get('samples_path') else 'dataset'
             samples = self.sampler.load_samples(
-                self.dataset_path,
-                self.sample_count
+                samples_path,
+                self.sample_count,
+                sample_source=sample_source,
+                sample_source_id=os.path.basename(samples_path) if samples_path else None
             )
 
             if not samples:
@@ -91,6 +95,13 @@ class TrainingPredictionsCallback(TrainerCallback):
                 return
 
             self.samples = samples
+            # Attach config for optional validators (kept out of DB prompt_id)
+            try:
+                for s in self.samples:
+                    if isinstance(s, dict):
+                        s['predictions_config'] = self.config
+            except Exception:
+                pass
             self.generator = PredictionsGenerator()
             self.writer = PredictionsWriter()
 

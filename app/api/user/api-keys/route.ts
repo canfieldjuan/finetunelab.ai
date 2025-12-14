@@ -2,10 +2,14 @@
 // GET /api/user/api-keys - List user's API keys (masked)
 // POST /api/user/api-keys - Generate a new API key
 // Date: 2025-10-17
+// Updated: 2025-12-12 - Added scopes support
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateApiKey } from '@/lib/auth/api-key-generator';
+import type { ApiKeyScope } from '@/lib/auth/api-key-validator';
+
+const VALID_SCOPES: ApiKeyScope[] = ['all', 'training', 'production', 'testing'];
 
 export const runtime = 'nodejs';
 
@@ -54,7 +58,7 @@ export async function GET(request: NextRequest) {
     // Query user_api_keys table
     const { data: apiKeys, error: queryError } = await supabase
       .from('user_api_keys')
-      .select('id, name, key_prefix, is_active, request_count, last_used_at, created_at')
+      .select('id, name, key_prefix, is_active, request_count, last_used_at, created_at, scopes')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -145,7 +149,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[ApiKeysAPI] Generating API key:', body.name, 'for user:', user.id);
+    // Validate scopes if provided
+    let scopes: ApiKeyScope[] = body.scopes || ['all'];
+
+    // If empty array, default to 'all'
+    if (scopes.length === 0) {
+      scopes = ['all'];
+    }
+
+    // Validate each scope
+    const invalidScopes = scopes.filter((s: string) => !VALID_SCOPES.includes(s as ApiKeyScope));
+    if (invalidScopes.length > 0) {
+      console.log('[ApiKeysAPI] Invalid scopes:', invalidScopes);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid scopes provided',
+          invalidScopes,
+          validScopes: VALID_SCOPES,
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log('[ApiKeysAPI] Generating API key:', body.name, 'for user:', user.id, 'scopes:', scopes);
 
     // Generate API key
     const { key, keyHash, keyPrefix } = generateApiKey();
@@ -159,8 +186,9 @@ export async function POST(request: NextRequest) {
         key_hash: keyHash,
         key_prefix: keyPrefix,
         is_active: true,
+        scopes: scopes,
       })
-      .select('id, name, key_prefix, is_active, created_at')
+      .select('id, name, key_prefix, is_active, created_at, scopes')
       .single();
 
     if (insertError) {

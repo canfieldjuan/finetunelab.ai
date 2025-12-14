@@ -69,11 +69,86 @@ export function validatePredictionsConfig(
 
   const config = userConfig as Partial<PredictionsConfig>;
 
+  const samples_path = (config as Partial<PredictionsConfig>).samples_path;
+  if (samples_path !== undefined) {
+    if (typeof samples_path !== 'string' || samples_path.trim().length === 0) {
+      errors.push({
+        field: 'samples_path',
+        message: 'samples_path must be a non-empty string when provided',
+      });
+    }
+  }
+
+  const validators = (config as Partial<PredictionsConfig>).validators;
+  if (validators !== undefined) {
+    if (typeof validators !== 'object' || validators === null || Array.isArray(validators)) {
+      errors.push({
+        field: 'validators',
+        message: 'validators must be an object when provided',
+      });
+    } else {
+      const v = validators as Record<string, unknown>;
+      if (v.json_parse !== undefined && typeof v.json_parse !== 'boolean') {
+        errors.push({
+          field: 'validators.json_parse',
+          message: 'validators.json_parse must be a boolean when provided',
+        });
+      }
+      if (v.json_schema_path !== undefined) {
+        if (typeof v.json_schema_path !== 'string' || v.json_schema_path.trim().length === 0) {
+          errors.push({
+            field: 'validators.json_schema_path',
+            message: 'validators.json_schema_path must be a non-empty string when provided',
+          });
+        }
+      }
+
+      if (v.json_schema !== undefined) {
+        const schemaVal = v.json_schema;
+        if (typeof schemaVal === 'string') {
+          if (schemaVal.trim().length === 0) {
+            errors.push({
+              field: 'validators.json_schema',
+              message: 'validators.json_schema must be a non-empty JSON string or an object when provided',
+            });
+          } else {
+            try {
+              JSON.parse(schemaVal);
+            } catch {
+              errors.push({
+                field: 'validators.json_schema',
+                message: 'validators.json_schema must be valid JSON when provided as a string',
+              });
+            }
+          }
+        } else if (typeof schemaVal !== 'object' || schemaVal === null || Array.isArray(schemaVal)) {
+          errors.push({
+            field: 'validators.json_schema',
+            message: 'validators.json_schema must be an object (or JSON string) when provided',
+          });
+        }
+      }
+    }
+  }
+
   const enabled = typeof config.enabled === 'boolean'
     ? config.enabled
     : configLimits.enabled;
 
   if (!enabled) {
+    let normalizedValidators = validators as PredictionsConfig['validators'];
+    try {
+      const v = validators as Record<string, unknown> | undefined;
+      const schemaVal = v?.json_schema;
+      if (typeof schemaVal === 'string' && schemaVal.trim().length > 0) {
+        normalizedValidators = {
+          ...(validators as PredictionsConfig['validators']),
+          json_schema: JSON.parse(schemaVal),
+        };
+      }
+    } catch {
+      // Leave schema as-is; validation errors (if any) already returned above
+    }
     return {
       valid: true,
       errors: [],
@@ -81,6 +156,8 @@ export function validatePredictionsConfig(
         enabled: false,
         sample_count: 0,
         sample_frequency: configLimits.default_frequency,
+        samples_path: typeof samples_path === 'string' ? samples_path : undefined,
+        validators: normalizedValidators,
       },
     };
   }
@@ -136,6 +213,20 @@ export function validatePredictionsConfig(
     return { valid: false, errors };
   }
 
+  let normalizedValidators = validators as PredictionsConfig['validators'];
+  try {
+    const v = validators as Record<string, unknown> | undefined;
+    const schemaVal = v?.json_schema;
+    if (typeof schemaVal === 'string' && schemaVal.trim().length > 0) {
+      normalizedValidators = {
+        ...(validators as PredictionsConfig['validators']),
+        json_schema: JSON.parse(schemaVal),
+      };
+    }
+  } catch {
+    // no-op
+  }
+
   return {
     valid: true,
     errors: [],
@@ -144,6 +235,8 @@ export function validatePredictionsConfig(
       sample_count,
       sample_frequency,
       step_interval,
+      samples_path: typeof samples_path === 'string' ? samples_path : undefined,
+      validators: normalizedValidators,
     },
   };
 }

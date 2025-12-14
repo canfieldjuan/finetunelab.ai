@@ -73,6 +73,47 @@ export class DatasetValidator {
         };
       }
 
+      // Hard fail: uploading a dataset that normalizes to 0 examples is almost always user error
+      // (wrong format selection, unsupported file type like CSV/Parquet, or missing required fields).
+      if (normalized.stats.convertedCount === 0) {
+        const errors: string[] = [];
+
+        errors.push(
+          `No valid training examples could be extracted after normalization (converted 0/${normalized.stats.totalExamples}). ` +
+          `This usually means the dataset format doesn't match the content or required fields are missing.`
+        );
+
+        const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+        if (ext === '.csv' || ext === '.parquet' || ext === '.txt') {
+          errors.push(
+            `File extension ${ext} is not reliably supported for training dataset ingestion. ` +
+            `Convert to .jsonl or .json in a supported schema (ChatML/ShareGPT/Alpaca/DPO/RLHF/etc.).`
+          );
+        }
+
+        if (detectionResult.format === 'standard-text') {
+          errors.push(
+            `Detected standard text format ("text" field). This upload path expects structured training examples; ` +
+            `convert to ChatML (messages) or an instruction format (instruction/input/output).`
+          );
+        }
+
+        if (normalized.stats.errors.length > 0) {
+          // Include the normalizer errors for debugging (capped to avoid huge responses)
+          errors.push(...normalized.stats.errors.slice(0, 25));
+          if (normalized.stats.errors.length > 25) {
+            errors.push(`...and ${normalized.stats.errors.length - 25} more normalization errors`);
+          }
+        }
+
+        return {
+          valid: false,
+          errors,
+          normalized,
+          detectedFormat: detectionResult.format
+        };
+      }
+
       // Step 3: Calculate stats
       const stats: DatasetStats = {
         total_examples: normalized.stats.convertedCount,

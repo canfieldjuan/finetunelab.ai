@@ -8,7 +8,7 @@
  * Date: 2025-10-25
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AlertTriangle,
   AlertCircle,
@@ -18,6 +18,7 @@ import {
   Activity
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface Anomaly {
   id: string;
@@ -57,6 +58,12 @@ export default function AnomalyFeed({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
+
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const refetchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch anomalies
   const fetchAnomalies = useCallback(async () => {
@@ -133,19 +140,198 @@ export default function AnomalyFeed({
     fetchAnomalies();
   }, [fetchAnomalies]);
 
-  // Auto-refresh
+  // Live updates (Realtime) with fallback polling
   useEffect(() => {
-    if (!autoRefresh) {
-      console.log('[AnomalyFeed] Auto-refresh disabled');
-      return;
+    let isActive = true;
+
+    const stopFallbackPolling = () => {
+      if (pollingIntervalRef.current) {
+        console.log('[AnomalyFeed] Stopping fallback polling');
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+
+    const startFallbackPolling = () => {
+      if (pollingIntervalRef.current) {
+        return;
+      }
+
+      console.log('[AnomalyFeed] Starting fallback polling, interval:', refreshInterval);
+      const poll = async () => {
+        try {
+          await fetchAnomalies();
+        } catch {
+          // fetchAnomalies already sets error state
+        }
+      };
+
+      poll();
+      pollingIntervalRef.current = setInterval(poll, refreshInterval);
+    };
+
+    const clearReconnectTimeout = () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+
+    const cleanupChannel = async () => {
+      if (!channelRef.current) {
+        return;
+      }
+
+      try {
+        await channelRef.current.unsubscribe();
+      } catch (err) {
+        console.warn('[AnomalyFeed] Error unsubscribing channel:', err);
+      }
+
+      try {
+        supabase.removeChannel(channelRef.current);
+      } catch (err) {
+        console.warn('[AnomalyFeed] Error removing channel:', err);
+      }
+
+      channelRef.current = null;
+    };
+
+    const scheduleReconnect = () => {
+      if (reconnectTimeoutRef.current) {
+        return;
+      }
+
+      const attempt = reconnectAttemptsRef.current + 1;
+      const delay = Math.min(30000, attempt * 5000);
+      console.log(`[AnomalyFeed] Scheduling realtime reconnect attempt #${attempt} in ${delay}ms`);
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        reconnectTimeoutRef.current = null;
+        reconnectAttemptsRef.current = attempt;
+        setupRealtimeSubscription();
+      }, delay);
+    };
+
+    const scheduleRefetch = () => {
+      if (refetchDebounceRef.current) {
+        return;
+      }
+      refetchDebounceRef.current = setTimeout(() => {
+        refetchDebounceRef.current = null;
+        fetchAnomalies();
+      }, 500);
+    };
+
+    async function setupRealtimeSubscription() {
+      if (!isActive) {
+        return;
+      }
+
+      if (!autoRefresh) {
+        console.log('[AnomalyFeed] Live updates disabled');
+        clearReconnectTimeout();
+        stopFallbackPolling();
+        await cleanupChannel();
+        return;
+      }
+
+      clearReconnectTimeout();
+      stopFallbackPolling();
+      await cleanupChannel();
+
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        const userId = session?.user?.id;
+        if (!userId) {
+          console.warn('[AnomalyFeed] No session; cannot subscribe to realtime');
+          return;
+        }
+
+        const channelName = `anomaly-feed-${userId}-${Date.now()}`;
+        channelRef.current = supabase
+          .channel(channelName)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'anomaly_detections',
+              filter: `user_id=eq.${userId}`,
+            },
+            () => {
+              scheduleRefetch();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'anomaly_detections',
+              filter: `user_id=eq.${userId}`,
+            },
+            () => {
+              scheduleRefetch();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'DELETE',
+              schema: 'public',
+              table: 'anomaly_detections',
+              filter: `user_id=eq.${userId}`,
+            },
+            () => {
+              scheduleRefetch();
+            }
+          )
+          .subscribe((status, err) => {
+            if (!isActive) {
+              return;
+            }
+
+            if (status === 'SUBSCRIBED') {
+              reconnectAttemptsRef.current = 0;
+              stopFallbackPolling();
+              clearReconnectTimeout();
+              console.log('[AnomalyFeed] ✅ Realtime subscribed');
+              return;
+            }
+
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+              const message = (err && typeof err === 'object')
+                ? ((err as { message?: string }).message || JSON.stringify(err))
+                : (err || 'Realtime connection failed');
+              console.error('[AnomalyFeed] ❌ Realtime connection issue:', status, message);
+              startFallbackPolling();
+              scheduleReconnect();
+            }
+          });
+      } catch (err) {
+        console.error('[AnomalyFeed] Failed to set up realtime:', err);
+        startFallbackPolling();
+        scheduleReconnect();
+      }
     }
 
-    console.log('[AnomalyFeed] Setting up auto-refresh, interval:', refreshInterval);
-    const interval = setInterval(fetchAnomalies, refreshInterval);
+    setupRealtimeSubscription();
 
     return () => {
-      console.log('[AnomalyFeed] Clearing auto-refresh interval');
-      clearInterval(interval);
+      isActive = false;
+      clearReconnectTimeout();
+      stopFallbackPolling();
+      if (refetchDebounceRef.current) {
+        clearTimeout(refetchDebounceRef.current);
+        refetchDebounceRef.current = null;
+      }
+      void cleanupChannel();
     };
   }, [autoRefresh, refreshInterval, fetchAnomalies]);
 

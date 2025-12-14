@@ -18,6 +18,7 @@ import { TerminalGPU } from './TerminalGPU';
 import { TerminalPerformance } from './TerminalPerformance';
 import { TerminalCheckpoint } from './TerminalCheckpoint';
 import { LogStream } from './LogStream';
+import { ErrorTracePanel } from './ErrorTracePanel';
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 
 export interface TerminalMonitorProps {
@@ -137,6 +138,13 @@ export function TerminalMonitor({
               showLevels
             />
           </div>
+
+          {/* Error Trace Panel - Only shows for failed jobs */}
+          <ErrorTracePanel
+            jobId={metrics.job_id}
+            errorMessage={metrics.error}
+            status={metrics.status}
+          />
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Left column - Progress & Metrics */}

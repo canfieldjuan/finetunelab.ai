@@ -104,6 +104,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     let provider: string | null = null;
     let modelName: string | null = null;
     let deepResearchDetected = false; // Track if we've already detected deep research to avoid repeated regex
+    // Actual token counts from API (will be populated by token_usage event)
+    let actualInputTokens: number | null = null;
+    let actualOutputTokens: number | null = null;
     const THROTTLE_MS = 500;
 
     const updateMessageThrottled = () => {
@@ -193,6 +196,18 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             // OBSERVABILITY: Handle server-side research progress events
             if (parsed.type === "research_progress") {
               log.debug('useChat', 'Research progress event', { event: parsed });
+
+              // If a research job was initiated server-side, ensure the SSE viewer is activated.
+              // This avoids relying on the model echoing magic strings in assistant content.
+              if (!deepResearchDetected && parsed.status === 'started' && parsed.jobId) {
+                deepResearchDetected = true;
+                const jobId = String(parsed.jobId);
+                const query = typeof parsed.query === 'string' && parsed.query.trim().length > 0
+                  ? parsed.query
+                  : 'Research Query';
+                setActiveResearchJob({ jobId, query });
+              }
+
               setResearchProgress({
                 jobId: parsed.jobId || researchProgress?.jobId || 'unknown',
                 status: parsed.status || 'running',
@@ -234,11 +249,15 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               updateMessageThrottled();
             }
 
-            // Capture token usage for context tracking
-            if (parsed.type === "token_usage" && contextTrackerRef.current) {
+            // Capture token usage for context tracking AND message persistence
+            if (parsed.type === "token_usage") {
               const inputTokens = parsed.input_tokens || 0;
               const outputTokens = parsed.output_tokens || 0;
               const graphragTokens = parsed.graphrag_tokens || 0;
+
+              // Store actual token counts for message persistence
+              actualInputTokens = inputTokens;
+              actualOutputTokens = outputTokens;
 
               log.debug('useChat', 'Token usage received', {
                 input: inputTokens,
@@ -246,72 +265,75 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                 graphrag: graphragTokens
               });
 
-              const updatedUsage = contextTrackerRef.current.addMessage(
-                inputTokens,
-                outputTokens,
-                graphragTokens
-              );
-              setContextUsage(updatedUsage);
-
-              // Save context to database using Supabase
-              // Only save if there's a valid model UUID (not '__default__')
-              // Validate that selectedModelId is a valid UUID format
-              const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedModelId);
-
-              if (selectedModelId !== '__default__' && activeId && isValidUUID) {
-                const activeContext = contextTrackerRef.current.getModelContext(
-                  selectedModelId === '__default__' ? null : selectedModelId
+              // Update context tracker if available
+              if (contextTrackerRef.current) {
+                const updatedUsage = contextTrackerRef.current.addMessage(
+                  inputTokens,
+                  outputTokens,
+                  graphragTokens
                 );
+                setContextUsage(updatedUsage);
 
-                if (activeContext) {
-                  log.debug('useChat', 'Saving context for model', { modelId: selectedModelId });
-                  supabase
-                    .from('conversation_model_contexts')
-                    .upsert({
-                      conversation_id: activeId,
-                      model_id: selectedModelId, // Use selectedModelId directly (it's a UUID)
-                      total_tokens: activeContext.totalTokens,
-                      input_tokens: activeContext.inputTokens,
-                      output_tokens: activeContext.outputTokens,
-                      graphrag_tokens: activeContext.graphragTokens,
-                      message_count: activeContext.messageCount,
-                      first_message_at: activeContext.firstMessageAt?.toISOString(),
-                      last_message_at: activeContext.lastMessageAt?.toISOString(),
-                    }, {
-                      onConflict: 'conversation_id,model_id'
-                    })
-                    .then(({ error }) => {
-                      if (error) {
-                        // Properly serialize the error for logging
-                        const errorDetails = {
-                          modelId: selectedModelId,
-                          conversationId: activeId,
-                          code: error.code,
-                          message: error.message,
-                          details: error.details,
-                          hint: error.hint,
-                          errorString: String(error),
-                          errorJson: JSON.stringify(error)
-                        };
-                        log.error('useChat', 'Error saving context', errorDetails);
-                        console.error('[useChat] Full error object:', error);
-                        console.error('[useChat] Context data attempted:', {
-                          conversation_id: activeId,
-                          model_id: selectedModelId,
-                          total_tokens: activeContext.totalTokens,
-                          input_tokens: activeContext.inputTokens,
-                          output_tokens: activeContext.outputTokens,
-                        });
-                      } else {
-                        log.debug('useChat', 'Context saved to database');
-                      }
-                    });
-                }
-              } else {
-                if (selectedModelId !== '__default__' && !isValidUUID) {
-                  log.warn('useChat', 'Skipping context save - invalid model UUID format', { modelId: selectedModelId });
+                // Save context to database using Supabase
+                // Only save if there's a valid model UUID (not '__default__')
+                // Validate that selectedModelId is a valid UUID format
+                const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedModelId);
+
+                if (selectedModelId !== '__default__' && activeId && isValidUUID) {
+                  const activeContext = contextTrackerRef.current.getModelContext(
+                    selectedModelId === '__default__' ? null : selectedModelId
+                  );
+
+                  if (activeContext) {
+                    log.debug('useChat', 'Saving context for model', { modelId: selectedModelId });
+                    supabase
+                      .from('conversation_model_contexts')
+                      .upsert({
+                        conversation_id: activeId,
+                        model_id: selectedModelId, // Use selectedModelId directly (it's a UUID)
+                        total_tokens: activeContext.totalTokens,
+                        input_tokens: activeContext.inputTokens,
+                        output_tokens: activeContext.outputTokens,
+                        graphrag_tokens: activeContext.graphragTokens,
+                        message_count: activeContext.messageCount,
+                        first_message_at: activeContext.firstMessageAt?.toISOString(),
+                        last_message_at: activeContext.lastMessageAt?.toISOString(),
+                      }, {
+                        onConflict: 'conversation_id,model_id'
+                      })
+                      .then(({ error }) => {
+                        if (error) {
+                          // Properly serialize the error for logging
+                          const errorDetails = {
+                            modelId: selectedModelId,
+                            conversationId: activeId,
+                            code: error.code,
+                            message: error.message,
+                            details: error.details,
+                            hint: error.hint,
+                            errorString: String(error),
+                            errorJson: JSON.stringify(error)
+                          };
+                          log.error('useChat', 'Error saving context', errorDetails);
+                          console.error('[useChat] Full error object:', error);
+                          console.error('[useChat] Context data attempted:', {
+                            conversation_id: activeId,
+                            model_id: selectedModelId,
+                            total_tokens: activeContext.totalTokens,
+                            input_tokens: activeContext.inputTokens,
+                            output_tokens: activeContext.outputTokens,
+                          });
+                        } else {
+                          log.debug('useChat', 'Context saved to database');
+                        }
+                      });
+                  }
                 } else {
-                  log.debug('useChat', 'Skipping context save - no specific model selected (using __default__)');
+                  if (selectedModelId !== '__default__' && !isValidUUID) {
+                    log.warn('useChat', 'Skipping context save - invalid model UUID format', { modelId: selectedModelId });
+                  } else {
+                    log.debug('useChat', 'Skipping context save - no specific model selected (using __default__)');
+                  }
                 }
               }
             }
@@ -350,8 +372,19 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     });
 
     // [UI_FREEZE_FIX] Save message to database in background (non-blocking)
+    // Use actual token counts from API if available, otherwise estimate from string length
     const estimatedInputTokens = Math.ceil(userMessage.length / 4);
     const estimatedOutputTokens = Math.ceil(assistantMessage.length / 4);
+    const finalInputTokens = actualInputTokens ?? estimatedInputTokens;
+    const finalOutputTokens = actualOutputTokens ?? estimatedOutputTokens;
+
+    log.debug('useChat', 'Token counts for persistence', {
+      actualInput: actualInputTokens,
+      actualOutput: actualOutputTokens,
+      estimatedInput: estimatedInputTokens,
+      estimatedOutput: estimatedOutputTokens,
+      usingActual: actualInputTokens !== null
+    });
 
     // Create metadata object for persistence (matching server-side implementation)
     const messageMetadata = modelId && modelName && provider ? {
@@ -371,8 +404,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
         model_id: modelId,
         provider: provider,
         latency_ms: streamLatencyMs,
-        input_tokens: estimatedInputTokens,
-        output_tokens: estimatedOutputTokens,
+        input_tokens: finalInputTokens,
+        output_tokens: finalOutputTokens,
         ...(messageMetadata && { metadata: messageMetadata })
       })
       .select()
@@ -513,7 +546,21 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       // Track latency for analytics
       const streamStartTime = Date.now();
 
-      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: conversationMessages, tools: modifiedTools, conversationId: activeId, modelId: selectedModelId === '__default__' ? null : selectedModelId, userId: user?.id, contextInjectionEnabled, enableThinking }), signal: controller.signal });
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: conversationMessages,
+          tools: modifiedTools,
+          conversationId: activeId,
+          modelId: selectedModelId === '__default__' ? null : selectedModelId,
+          userId: user?.id,
+          enableDeepResearch,
+          contextInjectionEnabled,
+          enableThinking,
+        }),
+        signal: controller.signal,
+      });
 
       if (!response.ok) {
         const errorText = await response.text();

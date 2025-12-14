@@ -162,7 +162,7 @@ export async function GET(
     // Fetch all predictions with scores
     const { data: predictions, error: predictionsError } = await supabase
       .from('training_predictions')
-      .select('epoch, step, exact_match, char_error_rate, length_ratio, word_overlap')
+      .select('epoch, step, exact_match, char_error_rate, length_ratio, word_overlap, validation_pass')
       .eq('job_id', jobId)
       .order('epoch', { ascending: true });
 
@@ -183,6 +183,7 @@ export async function GET(
         char_error_rate: number | null;
         length_ratio: number | null;
         word_overlap: number | null;
+        validation_pass: boolean | null;
       }[];
     }>();
 
@@ -193,6 +194,7 @@ export async function GET(
         char_error_rate: pred.char_error_rate,
         length_ratio: pred.length_ratio,
         word_overlap: pred.word_overlap,
+        validation_pass: (pred as { validation_pass?: boolean | null }).validation_pass ?? null,
       };
 
       if (existing) {
@@ -214,10 +216,15 @@ export async function GET(
       const validCER = samples.filter(s => s.char_error_rate !== null).map(s => s.char_error_rate!);
       const validLengthRatio = samples.filter(s => s.length_ratio !== null).map(s => s.length_ratio!);
       const validWordOverlap = samples.filter(s => s.word_overlap !== null).map(s => s.word_overlap!);
+      const validValidation = samples.filter(s => s.validation_pass !== null).map(s => s.validation_pass!);
 
       const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
       const min = (arr: number[]) => arr.length > 0 ? Math.min(...arr) : null;
       const max = (arr: number[]) => arr.length > 0 ? Math.max(...arr) : null;
+
+      const validation_pass_rate = validValidation.length > 0
+        ? validValidation.filter(Boolean).length / validValidation.length
+        : null;
 
       return {
         epoch: epochData.epoch,
@@ -229,6 +236,7 @@ export async function GET(
         avg_word_overlap: avg(validWordOverlap),
         min_char_error_rate: min(validCER),
         max_char_error_rate: max(validCER),
+        validation_pass_rate,
       };
     }).sort((a, b) => a.epoch - b.epoch);
 

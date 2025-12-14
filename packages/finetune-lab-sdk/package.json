@@ -1,0 +1,55 @@
+{
+  "name": "@finetunelab/sdk",
+  "version": "0.2.0",
+  "description": "FineTune Lab SDK - Inference, batch testing, and analytics for LLMs",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "llm",
+    "fine-tuning",
+    "inference",
+    "batch-testing",
+    "analytics",
+    "ai",
+    "machine-learning"
+  ],
+  "author": "FineTune Lab Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/finetune-lab/sdk"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "typescript": ">=4.7.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

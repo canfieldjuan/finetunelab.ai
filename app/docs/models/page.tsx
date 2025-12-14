@@ -9,6 +9,22 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Brain, Zap, DollarSign, Info, CheckCircle2, ArrowRight } from 'lucide-react';
 
+type ShowcaseModel = {
+  name: string;
+  id: string;
+  description: string;
+  contextWindow: string;
+  pricing: {
+    input: string;
+    output: string;
+  };
+  strengths: string[];
+  useCases: string[];
+  recommended?: boolean;
+  badge?: string;
+  costWarning?: boolean;
+};
+
 export default function ModelsPage() {
   const { user, signOut, loading } = useAuth();
   const router = useRouter();
@@ -22,7 +38,7 @@ export default function ModelsPage() {
     return null;
   }
 
-  const openAIModels = [
+  const openAIModels: ShowcaseModel[] = [
     {
       name: 'GPT o3-Pro',
       id: 'o3-pro',
@@ -139,7 +155,7 @@ export default function ModelsPage() {
     }
   ];
 
-  const anthropicModels = [
+  const anthropicModels: ShowcaseModel[] = [
     {
       name: 'Claude Sonnet 4.5',
       id: 'claude-sonnet-4.5',
@@ -315,14 +331,14 @@ export default function ModelsPage() {
                   Recommended
                 </div>
               )}
-              {(model as any).badge && !(model as any).recommended && (
+              {model.badge && !model.recommended && (
                 <div className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-semibold rounded mb-3">
                   <Brain className="w-3 h-3" />
-                  {(model as any).badge}
+                  {model.badge}
                 </div>
               )}
               
-              {(model as any).costWarning && (
+              {model.costWarning && (
                 <div className="p-3 mb-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                   <div className="flex gap-2">
                     <DollarSign className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
@@ -413,15 +429,15 @@ export default function ModelsPage() {
                   Recommended
                 </div>
               )}
-              {(model as any).badge && !(model as any).recommended && (
+              {model.badge && !model.recommended && (
                 <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-semibold rounded mb-3">
                   <Brain className="w-3 h-3" />
-                  {(model as any).badge}
+                  {model.badge}
                 </div>
               )}
-              {(model as any).badge && (model as any).recommended && (
+              {model.badge && model.recommended && (
                 <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-semibold rounded ml-2 mb-3">
-                  {(model as any).badge}
+                  {model.badge}
                 </div>
               )}
               

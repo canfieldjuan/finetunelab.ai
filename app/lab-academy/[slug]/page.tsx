@@ -57,7 +57,27 @@ export default async function ArticlePage({ params }: PageProps) {
     notFound();
   }
 
-  // Structured Data: Article + FAQPage (treating the article as a Q&A)
+  const faqEntities = (article.faq && article.faq.length > 0)
+    ? article.faq.map((item) => ({
+        "@type": "Question",
+        "name": item.question,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": item.answer,
+        },
+      }))
+    : [
+        {
+          "@type": "Question",
+          "name": article.title,
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": article.excerpt,
+          },
+        },
+      ];
+
+  // Structured Data: Article + FAQPage
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -77,16 +97,7 @@ export default async function ArticlePage({ params }: PageProps) {
       },
       {
         "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": article.title,
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": article.excerpt // Using excerpt as the direct answer for FAQ schema
-            }
-          }
-        ]
+        "mainEntity": faqEntities
       }
     ]
   };

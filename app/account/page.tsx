@@ -16,6 +16,7 @@ import type {
   UsageMetrics,
   PlanLimits
 } from "@/lib/subscriptions/types";
+import { NotificationSettings } from "@/components/settings/NotificationSettings";
 
 export default function AccountPage() {
   const { user, signOut, session } = useAuth();
@@ -293,6 +294,13 @@ export default function AccountPage() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Notification Settings */}
+          {session?.access_token && (
+            <div className="mb-8">
+              <NotificationSettings sessionToken={session.access_token} />
             </div>
           )}
 

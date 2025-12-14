@@ -54,11 +54,19 @@ export function PredictionsComparison({
         return;
       }
 
-      const data = await response.json();
+      // Defensive JSON parsing: handle empty or truncated responses
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('[PredictionsComparison] Empty response body from predictions API');
+        setHasPredictions(false);
+        return;
+      }
+
+      const data = JSON.parse(text);
       const exists = (data.total_count || 0) > 0;
       setHasPredictions(exists);
     } catch (err) {
-      console.error('Error checking predictions:', err);
+      console.error('[PredictionsComparison] Error checking predictions:', err);
       setHasPredictions(false);
     }
   }, [jobId, authToken]);
@@ -77,9 +85,18 @@ export function PredictionsComparison({
         throw new Error('Failed to fetch predictions');
       }
 
-      const data = await response.json();
+      // Defensive JSON parsing: handle empty or truncated responses
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('[PredictionsComparison] Empty response body from predictions API');
+        setPredictions([]);
+        return;
+      }
+
+      const data = JSON.parse(text);
       setPredictions(data.predictions || []);
     } catch (err) {
+      console.error('[PredictionsComparison] Error fetching predictions:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
@@ -161,6 +178,26 @@ export function PredictionsComparison({
   const groundTruth =
     selectedPredictions.length > 0 ? selectedPredictions[0].ground_truth : null;
 
+  const getValidationStatus = (pred: TrainingPrediction) => {
+    if (pred.validation_pass === true) {
+      return { label: 'Valid', variant: 'secondary' as const };
+    }
+    if (pred.validation_pass === false) {
+      return { label: 'Invalid', variant: 'destructive' as const };
+    }
+    return { label: 'Not run', variant: 'outline' as const };
+  };
+
+  const formatValidationErrors = (errors: unknown): string | null => {
+    if (errors == null) return null;
+    if (typeof errors === 'string') return errors;
+    try {
+      return JSON.stringify(errors, null, 2);
+    } catch {
+      return String(errors);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -212,6 +249,10 @@ export function PredictionsComparison({
           {selectedPredictions.map((pred, idx) => {
             const isFirst = idx === 0;
             const isLast = idx === selectedPredictions.length - 1;
+            const validationStatus = getValidationStatus(pred);
+            const validationErrorText = formatValidationErrors(
+              pred.validation_errors
+            );
 
             let trendIcon = <Minus className="w-3 h-3" />;
             if (!isFirst) {
@@ -238,6 +279,12 @@ export function PredictionsComparison({
                     <Badge variant={isLast ? 'default' : 'secondary'}>
                       Epoch {pred.epoch}
                     </Badge>
+                    <Badge
+                      variant={validationStatus.variant}
+                      title={pred.validation_kind || undefined}
+                    >
+                      {validationStatus.label}
+                    </Badge>
                     {!isFirst && trendIcon}
                   </div>
                   <span className="text-xs text-muted-foreground">
@@ -245,6 +292,11 @@ export function PredictionsComparison({
                   </span>
                 </div>
                 <p className="text-sm">{pred.prediction}</p>
+                {pred.validation_pass === false && validationErrorText && (
+                  <pre className="text-xs mt-3 p-2 bg-muted rounded border overflow-auto max-h-56 whitespace-pre-wrap">
+                    {validationErrorText}
+                  </pre>
+                )}
                 {isLast && (
                   <p className="text-xs text-blue-600 mt-2 font-medium">
                     Latest prediction

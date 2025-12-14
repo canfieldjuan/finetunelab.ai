@@ -165,19 +165,51 @@ import {
   aggregateLatencyData,
 } from '@/lib/analytics/dataAggregator';
 import type { DateRange, AnalyticsDataset } from '@/lib/analytics/types';
+import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
 
 export const runtime = 'nodejs';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const API_KEY_PREFIX = 'wak_';
 
 /**
  * Authenticate user
  */
 async function authenticateUser(req: NextRequest) {
+  // API key auth (preferred for CI/production monitoring)
+  const headerApiKey = req.headers.get('x-api-key') || req.headers.get('x-workspace-api-key');
+  if (headerApiKey) {
+    const validation = await validateRequestWithScope(req.headers, 'production');
+    if (!validation.isValid || !validation.userId) {
+      return {
+        error: validation.errorMessage || 'Unauthorized',
+        user: null,
+        status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401),
+      };
+    }
+    return { error: null, user: { id: validation.userId }, status: 200 };
+  }
+
+  // Session auth (UI)
   const authHeader = req.headers.get('authorization');
   if (!authHeader) {
-    return { error: 'Unauthorized - no auth header', user: null };
+    return { error: 'Unauthorized - no auth header', user: null, status: 401 };
+  }
+
+  // Support API key in Authorization: Bearer wak_...
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  const bearerValue = bearerMatch?.[1]?.trim();
+  if (bearerValue?.startsWith(API_KEY_PREFIX)) {
+    const validation = await validateRequestWithScope(req.headers, 'production');
+    if (!validation.isValid || !validation.userId) {
+      return {
+        error: validation.errorMessage || 'Unauthorized',
+        user: null,
+        status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401),
+      };
+    }
+    return { error: null, user: { id: validation.userId }, status: 200 };
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -186,10 +218,10 @@ async function authenticateUser(req: NextRequest) {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return { error: 'Unauthorized - invalid token', user: null };
+    return { error: 'Unauthorized - invalid token', user: null, status: 401 };
   }
 
-  return { error: null, user };
+  return { error: null, user, status: 200 };
 }
 
 /**
@@ -333,9 +365,9 @@ async function aggregateAnalyticsData(
  */
 export async function GET(req: NextRequest) {
   try {
-    const { error: authError, user } = await authenticateUser(req);
+    const { error: authError, user, status } = await authenticateUser(req);
     if (authError || !user) {
-      return NextResponse.json({ error: authError }, { status: 401 });
+      return NextResponse.json({ error: authError }, { status: status || 401 });
     }
 
     console.log('[Analytics Data API] Request from user:', user.id);

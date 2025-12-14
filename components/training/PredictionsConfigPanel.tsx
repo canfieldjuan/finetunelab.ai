@@ -18,8 +18,9 @@ import {
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Info, DollarSign, AlertTriangle } from 'lucide-react';
+import { Info, DollarSign, AlertTriangle, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import type { PredictionsConfig } from '@/lib/training/types/predictions-types';
 import {
   loadPredictionsLimits,
@@ -53,19 +54,60 @@ export function PredictionsConfigPanel({
   const [frequency, setFrequency] = useState<'epoch' | 'eval' | 'steps'>(
     config.sample_frequency ?? limits.default_frequency
   );
+  const [jsonParse, setJsonParse] = useState<boolean>(
+    config.validators?.json_parse ?? false
+  );
+  const [jsonSchemaText, setJsonSchemaText] = useState<string>(() => {
+    const schema = config.validators?.json_schema;
+    if (schema == null) return '';
+    if (typeof schema === 'string') return schema;
+    try {
+      return JSON.stringify(schema, null, 2);
+    } catch {
+      return '';
+    }
+  });
+  const [schemaParseError, setSchemaParseError] = useState<string | null>(null);
+  const [showSchemaHelp, setShowSchemaHelp] = useState(false);
 
   useEffect(() => {
+    const trimmedSchemaText = jsonSchemaText.trim();
+    const effectiveJsonParse = jsonParse || trimmedSchemaText.length > 0;
+
     const newConfig: Partial<PredictionsConfig> = {
       enabled,
       sample_count: sampleCount,
       sample_frequency: frequency,
     };
 
+    if (effectiveJsonParse) {
+      const validators: NonNullable<PredictionsConfig['validators']> = {
+        json_parse: effectiveJsonParse,
+      };
+
+      if (trimmedSchemaText.length > 0) {
+        try {
+          validators.json_schema = JSON.parse(trimmedSchemaText);
+          setSchemaParseError(null);
+        } catch (e) {
+          setSchemaParseError(
+            e instanceof Error
+              ? e.message
+              : 'Invalid JSON schema'
+          );
+        }
+      } else {
+        setSchemaParseError(null);
+      }
+
+      newConfig.validators = validators;
+    }
+
     const validation = validatePredictionsConfig(newConfig, limits);
     if (validation.valid && validation.config) {
       onChange(validation.config);
     }
-  }, [enabled, sampleCount, frequency, limits, onChange]);
+  }, [enabled, sampleCount, frequency, jsonParse, jsonSchemaText, limits, onChange]);
 
   const costEstimate = estimatePredictionsCost(
     {
@@ -207,6 +249,112 @@ export function PredictionsConfigPanel({
                 </AlertDescription>
               </Alert>
             )}
+
+            <div className="space-y-3 pt-2 border-t">
+              <div className="space-y-1 pt-2">
+                <Label className="text-sm font-medium">Output Validators (Optional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Automatically validate each prediction output. Useful when training models to produce structured data.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 p-3 bg-muted/50 rounded-lg">
+                <div className="space-y-1">
+                  <Label htmlFor="predictions-json-parse" className="text-sm">
+                    Require valid JSON output
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Enable this if your model should output JSON. Each prediction will be marked pass/fail.
+                  </p>
+                </div>
+                <Switch
+                  id="predictions-json-parse"
+                  checked={jsonParse}
+                  onCheckedChange={setJsonParse}
+                  disabled={disabled}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="predictions-json-schema" className="text-sm">
+                    JSON Schema Validation (Advanced)
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setShowSchemaHelp(!showSchemaHelp)}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    <HelpCircle className="w-3 h-3" />
+                    {showSchemaHelp ? 'Hide help' : 'What is this?'}
+                    {showSchemaHelp ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                </div>
+
+                {showSchemaHelp && (
+                  <div className="p-3 bg-muted/50 rounded-lg space-y-3 text-sm">
+                    <p>
+                      <strong>JSON Schema</strong> validates that your model outputs match a specific structure.
+                      This is useful when training models for:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                      <li><strong>Function calling</strong> - ensure output has <code className="bg-background px-1 rounded">function</code> and <code className="bg-background px-1 rounded">args</code> keys</li>
+                      <li><strong>Classification</strong> - validate <code className="bg-background px-1 rounded">label</code> is one of allowed values</li>
+                      <li><strong>Data extraction</strong> - ensure all required fields are present</li>
+                    </ul>
+                    <div className="pt-2">
+                      <p className="font-medium mb-1">Example: Function calling schema</p>
+                      <pre className="bg-background p-2 rounded text-xs overflow-x-auto">{`{
+  "type": "object",
+  "properties": {
+    "function": { "type": "string" },
+    "args": { "type": "object" }
+  },
+  "required": ["function", "args"]
+}`}</pre>
+                    </div>
+                    <div className="pt-2">
+                      <p className="font-medium mb-1">Example: Classification schema</p>
+                      <pre className="bg-background p-2 rounded text-xs overflow-x-auto">{`{
+  "type": "object",
+  "properties": {
+    "label": { "enum": ["positive", "negative", "neutral"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+  "required": ["label"]
+}`}</pre>
+                    </div>
+                    <p className="text-xs text-muted-foreground pt-1">
+                      Learn more at{' '}
+                      <a href="https://json-schema.org/learn/getting-started-step-by-step" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                        json-schema.org
+                      </a>
+                    </p>
+                  </div>
+                )}
+
+                <Textarea
+                  id="predictions-json-schema"
+                  value={jsonSchemaText}
+                  onChange={(e) => setJsonSchemaText(e.target.value)}
+                  placeholder='Paste your JSON Schema here (optional)'
+                  className="font-mono text-sm"
+                  rows={4}
+                  disabled={disabled}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to skip schema validation. Setting a schema automatically enables JSON parsing.
+                </p>
+                {schemaParseError && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="w-4 h-4" />
+                    <AlertDescription>
+                      Invalid JSON Schema: {schemaParseError}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </div>
           </>
         )}
       </CardContent>

@@ -1087,6 +1087,39 @@ class RuntimeParameterUpdateCallback(TrainerCallback):
             logger.error(f"[RuntimeParamCallback] Failed to apply parameter updates: {e}")
 
 
+class IntegerDtypeCollator:
+    """
+    Data collator that ensures input_ids, labels, and attention_mask remain as integers.
+
+    This fixes a bug in TRL 0.26+ where pre-tokenized data can be cast to FloatTensor,
+    causing "Expected tensor for argument #1 'indices' to have scalar type Long/Int" errors.
+
+    GitHub issue: https://github.com/huggingface/trl/issues/4103
+    """
+
+    def __init__(self, tokenizer, pad_to_multiple_of: int = None):
+        from transformers import DataCollatorForSeq2Seq
+        self.base_collator = DataCollatorForSeq2Seq(
+            tokenizer=tokenizer,
+            padding=True,
+            pad_to_multiple_of=pad_to_multiple_of
+        )
+
+    def __call__(self, features: list) -> dict:
+        # Use base collator for padding
+        batch = self.base_collator(features)
+
+        # Ensure integer dtypes for embedding-related tensors
+        # This fixes TRL bug where tensors get cast to float
+        integer_keys = ['input_ids', 'labels', 'attention_mask']
+        for key in integer_keys:
+            if key in batch and hasattr(batch[key], 'dtype'):
+                if batch[key].dtype not in (torch.long, torch.int, torch.int32, torch.int64):
+                    batch[key] = batch[key].long()
+
+        return batch
+
+
 class ResponseMaskingCollator:
     """
     Custom data collator that masks prompt tokens for SFT training.
@@ -1836,9 +1869,12 @@ class ToolTrainer:
         logger.info(f"[SFT] METRICS_API_URL env: {os.getenv('METRICS_API_URL', 'NOT SET')}")
         predictions_config = self.config.get("predictions", {})
         dataset_path = self.config.get("dataset_path") or self.config.get("data", {}).get("dataset_path")
+        samples_path = predictions_config.get('samples_path')
         logger.info(f"[SFT] predictions config: {predictions_config}")
         logger.info(f"[SFT] predictions.enabled: {predictions_config.get('enabled', False)}")
         logger.info(f"[SFT] dataset_path resolved: {dataset_path or 'NOT SET'}")
+        if samples_path:
+            logger.info(f"[SFT] predictions.samples_path: {samples_path}")
         logger.info(f"[SFT] ================================")
 
         # Warn early if eval-frequency predictions are requested but eval is disabled or empty
@@ -1859,10 +1895,10 @@ class ToolTrainer:
             if predictions_config.get("enabled", False):
                 user_id = os.getenv('JOB_USER_ID')
 
-                if user_id and dataset_path:
+                if user_id and (dataset_path or samples_path):
                     try:
                         predictions_callback = TrainingPredictionsCallback(
-                            dataset_path=dataset_path,
+                            dataset_path=dataset_path or samples_path,
                             job_id=job_id,
                             user_id=user_id,
                             config=predictions_config
@@ -1873,7 +1909,7 @@ class ToolTrainer:
                 else:
                     logger.warning(
                         f"[SFT] Predictions disabled: missing user_id={bool(user_id)}, "
-                        f"dataset_path={bool(dataset_path)}"
+                        f"dataset_path={bool(dataset_path)}, samples_path={bool(samples_path)}"
                     )
             else:
                 logger.info("[SFT] Predictions disabled in config (predictions.enabled=false)")
@@ -2023,33 +2059,10 @@ class ToolTrainer:
         if predictions_callback:
             callbacks.append(predictions_callback)
 
-        # Data collator configuration
-        # For pretokenized datasets: Use DataCollatorForSeq2Seq to handle labels column
-        # For non-pretokenized: TRL 0.26.0 does not have built-in masking support
-        from transformers import DataCollatorForSeq2Seq
-
-        if is_pretokenized and "labels" in dataset_columns:
-            # Pretokenized with masking - use DataCollatorForSeq2Seq to handle labels
-            logger.info("[SFT] ✓ Response masking: ENABLED (labels pre-masked during pretokenization)")
-            logger.info("[SFT] Using DataCollatorForSeq2Seq to handle labels column with padding")
-            data_collator = DataCollatorForSeq2Seq(
-                tokenizer=self.tokenizer,
-                model=self.model,
-                label_pad_token_id=-100,  # Pad labels with -100 (ignored in loss)
-                padding=True
-            )
-        elif is_pretokenized:
-            # Old cache format without labels
-            logger.warning("[SFT] ⚠ Response masking: DISABLED (old cache format - no labels column)")
-            logger.warning("[SFT] Training will be on FULL SEQUENCES")
-            logger.warning("[SFT] To enable masking: clear tokenized_cache/ and re-run training")
-            data_collator = None
-        else:
-            # Non-pretokenized: No masking available (TRL 0.26.0 limitation)
-            logger.warning("[SFT] ⚠ Response masking: DISABLED (requires pretokenization)")
-            logger.warning("[SFT] Training will be on FULL SEQUENCES")
-            logger.warning("[SFT] To enable masking: set training.pretokenize=true in config")
-            data_collator = None
+        # Use custom collator to fix TRL bug where input_ids get cast to float
+        # https://github.com/huggingface/trl/issues/4103
+        data_collator = IntegerDtypeCollator(tokenizer=self.tokenizer)
+        logger.info("[SFT] Using IntegerDtypeCollator to fix TRL dtype bug")
 
         logger.info("[SFT] Creating SFT trainer")
         trainer = SFTTrainer(
@@ -2222,9 +2235,12 @@ class ToolTrainer:
         predictions_callback = None
         predictions_config = self.config.get("predictions", {})
         dataset_path = self.config.get("dataset_path") or self.config.get("data", {}).get("dataset_path")
+        samples_path = predictions_config.get('samples_path')
         logger.info(f"[DPO] predictions config: {predictions_config}")
         logger.info(f"[DPO] predictions.enabled: {predictions_config.get('enabled', False)}")
         logger.info(f"[DPO] dataset_path resolved: {dataset_path or 'NOT SET'}")
+        if samples_path:
+            logger.info(f"[DPO] predictions.samples_path: {samples_path}")
 
         if predictions_config.get("enabled", False):
             if predictions_config.get("sample_frequency") == "eval":
@@ -2233,12 +2249,12 @@ class ToolTrainer:
                 if isinstance(eval_preference_dataset, Dataset) and len(eval_preference_dataset) == 0:
                     logger.warning("[DPO] Predictions frequency set to eval but eval dataset is empty — predictions will not run")
 
-            if PREDICTIONS_AVAILABLE and job_id and dataset_path:
+            if PREDICTIONS_AVAILABLE and job_id and (dataset_path or samples_path):
                 user_id = os.getenv('JOB_USER_ID')
                 if user_id:
                     try:
                         predictions_callback = TrainingPredictionsCallback(
-                            dataset_path=dataset_path,
+                            dataset_path=dataset_path or samples_path,
                             job_id=job_id,
                             user_id=user_id,
                             config=predictions_config
@@ -2253,8 +2269,8 @@ class ToolTrainer:
                     logger.warning("[DPO] Predictions skipped: TrainingPredictionsCallback not available")
                 if not job_id:
                     logger.warning("[DPO] Predictions skipped: no job_id")
-                if not dataset_path:
-                    logger.warning("[DPO] Predictions skipped: dataset_path not set")
+                if not dataset_path and not samples_path:
+                    logger.warning("[DPO] Predictions skipped: dataset_path and predictions.samples_path not set")
 
         # Build DPOConfig with ALL UI-configurable parameters
         training_args = DPOConfig(
@@ -2744,9 +2760,12 @@ class ToolTrainer:
         predictions_callback = None
         predictions_config = self.config.get("predictions", {})
         dataset_path = self.config.get("dataset_path") or self.config.get("data", {}).get("dataset_path")
+        samples_path = predictions_config.get('samples_path')
         logger.info(f"[ORPO] predictions config: {predictions_config}")
         logger.info(f"[ORPO] predictions.enabled: {predictions_config.get('enabled', False)}")
         logger.info(f"[ORPO] dataset_path resolved: {dataset_path or 'NOT SET'}")
+        if samples_path:
+            logger.info(f"[ORPO] predictions.samples_path: {samples_path}")
 
         if predictions_config.get("enabled", False):
             if predictions_config.get("sample_frequency") == "eval":
@@ -2755,12 +2774,12 @@ class ToolTrainer:
                 if isinstance(eval_preference_dataset, Dataset) and len(eval_preference_dataset) == 0:
                     logger.warning("[ORPO] Predictions frequency set to eval but eval dataset is empty — predictions will not run")
 
-            if PREDICTIONS_AVAILABLE and job_id and dataset_path:
+            if PREDICTIONS_AVAILABLE and job_id and (dataset_path or samples_path):
                 user_id = os.getenv('JOB_USER_ID')
                 if user_id:
                     try:
                         predictions_callback = TrainingPredictionsCallback(
-                            dataset_path=dataset_path,
+                            dataset_path=dataset_path or samples_path,
                             job_id=job_id,
                             user_id=user_id,
                             config=predictions_config
@@ -2775,8 +2794,8 @@ class ToolTrainer:
                     logger.warning("[ORPO] Predictions skipped: TrainingPredictionsCallback not available")
                 if not job_id:
                     logger.warning("[ORPO] Predictions skipped: no job_id")
-                if not dataset_path:
-                    logger.warning("[ORPO] Predictions skipped: dataset_path not set")
+                if not dataset_path and not samples_path:
+                    logger.warning("[ORPO] Predictions skipped: dataset_path and predictions.samples_path not set")
 
         # Prepare ORPO dataset (same format as DPO: prompt, chosen, rejected)
         logger.info("[ORPO] Creating preference datasets")
@@ -3227,7 +3246,8 @@ def _pretokenize_dataset(
             response_template = "<|im_start|>assistant\n"
             logger.info("[PreTokenize] Detected ChatML template, will apply response masking")
         elif "[/INST]" in template_str:
-            response_template = " [/INST] "
+            # NOTE: Use without spaces - spaces get absorbed into adjacent tokens during tokenization
+            response_template = "[/INST]"
             logger.info("[PreTokenize] Detected Mistral template, will apply response masking")
         elif "<start_of_turn>model" in template_str:
             response_template = "<start_of_turn>model\n"
@@ -3245,6 +3265,14 @@ def _pretokenize_dataset(
             response_template = "Assistant:"
             logger.info("[PreTokenize] Detected Generic Assistant template, will apply response masking")
 
+    # Check if tokenizer has a chat template
+    has_chat_template = hasattr(tokenizer, 'chat_template') and tokenizer.chat_template
+
+    # If no response template and no chat template, use our fallback format's template
+    if not response_template and not has_chat_template:
+        response_template = "Assistant:"
+        logger.info("[PreTokenize] No chat template - using fallback 'Assistant:' response template for masking")
+
     if response_template:
         logger.info(f"[PreTokenize] Response masking enabled with template: {repr(response_template)}")
     else:
@@ -3256,14 +3284,40 @@ def _pretokenize_dataset(
             # Format the example to text
             if "messages" in example:
                 messages = example["messages"]
-                result = tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=True,
-                    add_generation_prompt=False,
-                    return_dict=True,
-                    max_length=max_length,
-                    truncation=True
-                )
+
+                if has_chat_template:
+                    # Use native chat template
+                    result = tokenizer.apply_chat_template(
+                        messages,
+                        tokenize=True,
+                        add_generation_prompt=False,
+                        return_dict=True,
+                        max_length=max_length,
+                        truncation=True
+                    )
+                else:
+                    # Fallback: manually format messages for base models without chat template
+                    # Use a simple format: "User: {user_msg}\nAssistant: {assistant_msg}"
+                    formatted_text = ""
+                    for msg in messages:
+                        role = msg.get("role", "user")
+                        content = msg.get("content", "")
+                        if role == "system":
+                            formatted_text += f"System: {content}\n\n"
+                        elif role == "user":
+                            formatted_text += f"User: {content}\n\n"
+                        elif role == "assistant":
+                            formatted_text += f"Assistant: {content}\n\n"
+                        else:
+                            formatted_text += f"{role}: {content}\n\n"
+
+                    result = tokenizer(
+                        formatted_text.strip(),
+                        max_length=max_length,
+                        truncation=True,
+                        padding=False,
+                        return_tensors=None
+                    )
             else:
                 # Fallback to formatting_func for text-based data
                 text = formatting_func(example)

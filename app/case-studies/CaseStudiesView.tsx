@@ -1,10 +1,8 @@
 'use client';
 
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
-import { PageWrapper } from '@/components/layout/PageWrapper';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { ContentPageHeader } from '@/components/layout/ContentPageHeader';
 import {
   Target,
   ArrowRight,
@@ -20,30 +18,35 @@ interface CaseStudiesViewProps {
 }
 
 export function CaseStudiesView({ caseStudies }: CaseStudiesViewProps) {
-  const { user, signOut } = useAuth();
-
   return (
-    <PageWrapper currentPage="case-studies" user={user} signOut={signOut}>
-      <PageHeader
-        title="Case Studies"
-        description="Real-world results from fine-tuning experiments and production deployments"
-      />
+    <div className="min-h-screen bg-background">
+      <ContentPageHeader />
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+            Case Studies
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            Real-world results from fine-tuning experiments and production deployments
+          </p>
+        </div>
 
-      {/* Intro Section */}
-      <div className="mb-12 p-6 bg-muted/50 border rounded-lg">
-        <div className="flex items-start gap-4">
-          <Target className="w-8 h-8 text-primary mt-1" />
-          <div>
-            <h2 className="text-xl font-bold mb-2">Evidence-Based Fine-Tuning</h2>
-            <p className="text-muted-foreground">
-              See exactly how we solve complex problems using fine-tuned models. 
-              These case studies detail the problem, the approach, the dataset iteration process, and the final metrics.
-            </p>
+        {/* Intro Section */}
+        <div className="mb-12 p-6 bg-muted/50 border rounded-lg">
+          <div className="flex items-start gap-4">
+            <Target className="w-8 h-8 text-primary mt-1" />
+            <div>
+              <h2 className="text-xl font-bold mb-2">Evidence-Based Fine-Tuning</h2>
+              <p className="text-muted-foreground">
+                See exactly how we solve complex problems using fine-tuned models. 
+                These case studies detail the problem, the approach, the dataset iteration process, and the final metrics.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 gap-6">
         {caseStudies.map((note) => (
           <Link key={note.id} href={`/lab-notes/${note.slug}`}>
             <article className="p-6 border rounded-lg hover:shadow-lg transition-all duration-200 cursor-pointer group bg-card">
@@ -89,7 +92,8 @@ export function CaseStudiesView({ caseStudies }: CaseStudiesViewProps) {
             </article>
           </Link>
         ))}
-      </div>
-    </PageWrapper>
+        </div>
+      </main>
+    </div>
   );
 }

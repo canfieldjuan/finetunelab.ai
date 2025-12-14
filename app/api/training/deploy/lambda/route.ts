@@ -430,7 +430,7 @@ export async function POST(request: NextRequest) {
 
     // Build training script for cloud-init
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const metricsUrl = `${appUrl}/api/training/metrics`;
+    const metricsUrl = `${appUrl}/api/training/jobs/${jobId}/metrics`;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
     const trainingScript = generateLambdaTrainingScript(

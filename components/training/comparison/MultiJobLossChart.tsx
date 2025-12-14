@@ -20,6 +20,12 @@ import {
 import type { JobMetrics } from '@/hooks/useMultiJobMetrics';
 import { mergeMetricsForChart } from '@/hooks/useMultiJobMetrics';
 
+// Truncate long job names to prevent legend overflow
+function truncateJobName(name: string, maxLength: number = 14): string {
+  if (name.length <= maxLength) return name;
+  return name.substring(0, maxLength - 2) + '…';
+}
+
 interface MultiJobLossChartProps {
   jobMetrics: JobMetrics[];
   metricType: 'train_loss' | 'eval_loss' | 'both';
@@ -95,37 +101,87 @@ export function MultiJobLossChart({
       </div>
 
       <div className="p-6">
+        {/* Legend moved outside chart for better readability */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3 text-xs">
+          {jobMetrics.map((jm) => (
+            <div key={jm.jobId} className="flex items-center gap-1.5">
+              <div
+                className="w-3 h-0.5 rounded-sm"
+                style={{ backgroundColor: jm.color }}
+              />
+              <span className="text-muted-foreground truncate max-w-[160px]" title={jm.jobName}>
+                {truncateJobName(jm.jobName, 22)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Line style legend for both mode */}
+        {metricType === 'both' && (
+          <div className="flex items-center gap-4 mb-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-0.5 bg-current" />
+              <span>Train</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 border-t-2 border-dashed border-current" />
+              <span>Eval</span>
+            </div>
+          </div>
+        )}
+
         <ResponsiveContainer width="100%" height={height}>
           <LineChart
             data={chartData}
-            margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+            margin={{
+              top: 10,
+              right: 15,
+              left: 45,
+              bottom: 5,
+            }}
           >
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="step"
-              label={{ value: 'Training Step', position: 'insideBottom', offset: -15 }}
               className="text-muted-foreground"
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 10 }}
+              tickFormatter={(value) => {
+                if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
+                return String(value);
+              }}
             />
             <YAxis
-              label={{ value: 'Loss', angle: -90, position: 'insideLeft', offset: 10, dy: 30 }}
               className="text-muted-foreground"
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 10 }}
+              width={40}
               domain={['auto', 'auto']}
+              tickFormatter={(value) => {
+                if (typeof value !== 'number') return '';
+                if (value >= 10) return value.toFixed(1);
+                if (value >= 1) return value.toFixed(2);
+                return value.toFixed(3);
+              }}
             />
             <Tooltip
               contentStyle={{
                 backgroundColor: 'hsl(var(--card))',
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '6px',
+                fontSize: '12px',
+                maxWidth: '320px',
               }}
               labelFormatter={(value) => `Step ${value}`}
               formatter={(value, name) => {
                 if (value === null || value === undefined) return ['N/A', name];
-                return [typeof value === 'number' ? value.toFixed(4) : String(value), name];
+                // Find full job name for tooltip (remove truncation and suffix)
+                const nameStr = String(name);
+                const isEval = nameStr.endsWith('(E)');
+                const truncatedName = nameStr.replace(/ \((T|E)\)$/, '');
+                const job = jobMetrics.find(jm => truncateJobName(jm.jobName) === truncatedName);
+                const fullName = job ? `${job.jobName} ${isEval ? '(Eval)' : '(Train)'}` : name;
+                return [typeof value === 'number' ? value.toFixed(4) : String(value), fullName];
               }}
             />
-            <Legend />
 
             {/* Render lines for each job */}
             {jobMetrics.map((jm) => (
@@ -135,7 +191,7 @@ export function MultiJobLossChart({
                   <Line
                     type="monotone"
                     dataKey={jm.jobId}
-                    name={`${jm.jobName} (Train)`}
+                    name={`${truncateJobName(jm.jobName)} (T)`}
                     stroke={jm.color}
                     strokeWidth={2}
                     dot={false}
@@ -147,7 +203,7 @@ export function MultiJobLossChart({
                   <Line
                     type="monotone"
                     dataKey={metricType === 'both' ? `${jm.jobId}_eval` : jm.jobId}
-                    name={`${jm.jobName} (Eval)`}
+                    name={`${truncateJobName(jm.jobName)} (E)`}
                     stroke={jm.color}
                     strokeWidth={2}
                     strokeDasharray="5 5"
@@ -159,20 +215,9 @@ export function MultiJobLossChart({
             ))}
           </LineChart>
         </ResponsiveContainer>
-
-        {/* Legend for line styles */}
-        {metricType === 'both' && (
-          <div className="mt-4 flex items-center justify-center gap-6 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-0.5 bg-foreground" />
-              <span>Train Loss</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-0.5 bg-foreground border-dashed" style={{ borderTop: '2px dashed currentColor', height: 0 }} />
-              <span>Eval Loss</span>
-            </div>
-          </div>
-        )}
+        <div className="text-center text-[10px] text-muted-foreground mt-1">
+          Training Step
+        </div>
       </div>
     </div>
   );

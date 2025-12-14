@@ -1,16 +1,19 @@
 /**
  * Local Training Jobs Persistence API
- * POST /api/training/local/jobs
+ * POST /api/training/local/jobs - Create or update job (training server)
+ * GET /api/training/local/jobs - List user's training jobs (SDK/UI)
  *
  * Purpose: Create or update local training job records for analytics
- * Called by: Python training server (localhost:8000)
+ * Called by: Python training server (localhost:8000), SDK, UI
  * Phase: Metrics Persistence
  * Date: 2025-10-27
- * Auth: Requires user authentication via Bearer token
+ * Updated: 2025-12-13 - Added GET handler with API key auth for SDK access
+ * Auth: POST requires user_id in body, GET requires session or API key
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateTraining } from '@/lib/auth/training-auth';
 
 export const runtime = 'nodejs';
 
@@ -409,6 +412,94 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to process request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/training/local/jobs
+ * List user's training jobs
+ *
+ * Query parameters:
+ * - status: Filter by status (running, completed, failed, cancelled, pending)
+ * - limit: Max results (default 50)
+ * - offset: Pagination offset (default 0)
+ *
+ * Auth: Session token or API key with 'training' scope
+ */
+export async function GET(request: NextRequest) {
+  console.log('[LocalTrainingJobs] GET request received');
+
+  // Verify Supabase configuration
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return NextResponse.json(
+      { error: 'Server configuration error: Missing Supabase credentials' },
+      { status: 500 }
+    );
+  }
+
+  try {
+    // Authentication - supports both session tokens (UI) and API keys (SDK)
+    const authResult = await authenticateTraining(request);
+    if (!authResult.ok) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
+    const userId = authResult.userId;
+    console.log('[LocalTrainingJobs] User authenticated:', userId, 'mode:', authResult.mode);
+
+    // Parse query parameters
+    const { searchParams } = new URL(request.url);
+    const statusFilter = searchParams.get('status');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+    const offset = parseInt(searchParams.get('offset') || '0', 10);
+
+    // Use service role for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Build query
+    let query = supabase
+      .from('local_training_jobs')
+      .select('id, model_name, dataset_path, status, progress, current_step, current_epoch, total_steps, total_epochs, loss, eval_loss, best_eval_loss, started_at, completed_at, created_at, error_message', { count: 'exact' })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    // Apply status filter if provided
+    if (statusFilter) {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data: jobs, error: queryError, count } = await query;
+
+    if (queryError) {
+      console.error('[LocalTrainingJobs] Query error:', queryError);
+      return NextResponse.json(
+        { error: 'Failed to fetch training jobs', details: queryError.message },
+        { status: 500 }
+      );
+    }
+
+    console.log('[LocalTrainingJobs] Found', jobs?.length || 0, 'jobs for user', userId);
+
+    return NextResponse.json({
+      jobs: jobs || [],
+      total: count || 0,
+      limit,
+      offset
+    });
+
+  } catch (error) {
+    console.error('[LocalTrainingJobs] GET error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to fetch training jobs',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }

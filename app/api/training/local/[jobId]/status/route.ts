@@ -156,6 +156,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { STATUS } from '@/lib/constants';
+import { authenticateTraining } from '@/lib/auth/training-auth';
 
 type TrainingJobConfigSnapshot = {
   metadata?: {
@@ -218,33 +219,17 @@ export async function GET(
   }
 
   try {
-    // Authentication - verify user is logged in
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      console.log('[LocalTraining Status] No authorization header provided');
+    // Authentication - supports both session tokens (UI) and API keys (SDK)
+    const authResult = await authenticateTraining(request);
+    if (!authResult.ok) {
       return NextResponse.json(
-        { error: 'Unauthorized - no auth header' },
-        { status: 401 }
+        { error: authResult.error },
+        { status: authResult.status }
       );
     }
 
-    const supabaseAuth = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
-    });
-
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
-
-    if (authError || !user) {
-      console.log('[LocalTraining Status] Authentication failed:', authError?.message);
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    console.log('[LocalTraining Status] User authenticated:', user.id);
+    const userId = authResult.userId;
+    console.log('[LocalTraining Status] User authenticated:', userId, 'mode:', authResult.mode);
 
     // Use service role key for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -254,7 +239,7 @@ export async function GET(
       .from('local_training_jobs')
       .select('*')
       .eq('id', jobId)
-      .eq('user_id', user.id) // Security: Only allow users to view their own jobs
+      .eq('user_id', userId) // Security: Only allow users to view their own jobs
       .single();
 
     if (jobError) {

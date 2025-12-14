@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { TrainingDashboard } from '@/components/training/TrainingDashboard';
 import { Button } from '@/components/ui/button';
@@ -74,6 +74,11 @@ const CheckpointResumeCard = dynamic(() => import('@/components/training/Checkpo
   ssr: false
 });
 
+const TrainingErrorPanel = dynamic(() => import('@/components/training/TrainingErrorPanel').then(mod => ({ default: mod.TrainingErrorPanel })), {
+  loading: () => <div className="h-32 bg-muted animate-pulse rounded-lg" />,
+  ssr: false
+});
+
 const JobRecoveryCard = dynamic(() => import('@/components/training/JobRecoveryCard').then(mod => ({ default: mod.JobRecoveryCard })), {
   loading: () => <div className="h-48 bg-muted animate-pulse rounded-lg" />,
   ssr: false
@@ -101,6 +106,7 @@ const PredictionsTrendsChart = dynamic(() => import('@/components/training/Predi
 
 function TrainingMonitorPageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const urlJobId = searchParams?.get('jobId') || null;
   const { user, session, signOut, loading: authLoading } = useAuth();
   const getFreshToken = useFreshToken();
@@ -115,6 +121,20 @@ function TrainingMonitorPageContent() {
   const [isMonitoring, setIsMonitoring] = useState<boolean>(!!urlJobId);
   const [isTrainingActive, setIsTrainingActive] = useState<boolean>(false);
   const [isCloudJob, setIsCloudJob] = useState<boolean>(false);
+
+  // Sync state with URL changes (URL is source of truth)
+  useEffect(() => {
+    if (urlJobId) {
+      setJobId(urlJobId);
+      setInputJobId(urlJobId);
+      setIsMonitoring(true);
+    } else {
+      setJobId('');
+      setInputJobId('');
+      setIsMonitoring(false);
+      setCurrentStatus(null);
+    }
+  }, [urlJobId]);
 
   // Filter and search state
   const [statusFilter, setStatusFilter] = useState<string>(STATUS.ALL);
@@ -279,8 +299,8 @@ function TrainingMonitorPageContent() {
       return;
     }
     console.log('[TrainingMonitor] Starting monitoring for:', inputJobId);
-    setJobId(inputJobId.trim());
-    setIsMonitoring(true);
+    // Navigate with jobId in URL for consistent state
+    router.push(`/training/monitor?jobId=${inputJobId.trim()}`);
   };
 
   const handleJobComplete = useCallback((finalStatus: TrainingJobStatus) => {
@@ -679,9 +699,8 @@ function TrainingMonitorPageContent() {
                               {/* Job details - clickable to monitor */}
                               <button
                                 onClick={() => {
-                                  setInputJobId(job.id);
-                                  setJobId(job.id);
-                                  setIsMonitoring(true);
+                                  // Navigate with jobId in URL for consistent state
+                                  router.push(`/training/monitor?jobId=${job.id}`);
                                 }}
                                 className="flex-1 text-left group min-w-0"
                               >
@@ -830,11 +849,8 @@ function TrainingMonitorPageContent() {
                 leftControlButton={
                   <Button
                     onClick={() => {
-                      setIsMonitoring(false);
-                      setJobId('');
-                      setInputJobId('');
-                      setCurrentStatus(null);
-                      // Real-time hook keeps jobs list updated automatically
+                      // Navigate back to job list (removes jobId from URL)
+                      router.push('/training/monitor');
                     }}
                     variant="outline"
                     size="sm"
@@ -906,6 +922,15 @@ function TrainingMonitorPageContent() {
                     // Reload to show updated status
                     window.location.reload();
                   }}
+                />
+              )}
+
+              {/* Training Error Panel - Show error details for failed/cancelled jobs */}
+              {currentStatus && (currentStatus.status === STATUS.FAILED || currentStatus.status === STATUS.CANCELLED) && (
+                <TrainingErrorPanel
+                  jobId={jobId}
+                  errorMessage={currentStatus.error}
+                  jobStatus={currentStatus.status as 'failed' | 'cancelled'}
                 />
               )}
 

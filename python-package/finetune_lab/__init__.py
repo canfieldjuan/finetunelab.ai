@@ -1,11 +1,29 @@
-# FineTune Lab Loader - Main API
+# FineTune Lab - Main API
 # Date: 2025-10-16
-# Purpose: Public API for one-click training
+# Updated: 2025-12-12 - Added API client for inference, batch testing, analytics
+# Purpose: Public API for training and API-authenticated operations
 
-from .loader import TrainingLoader
-from .trainers import SFTTrainer, DPOTrainer, RLHFTrainer
+# Core client (no heavy dependencies)
+from .client import FinetuneLabClient, FinetuneLabError
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
+
+# Lazy imports for training modules (require torch, transformers, etc.)
+def __getattr__(name):
+    """Lazy load training modules to avoid requiring torch for API client users."""
+    if name == "TrainingLoader":
+        from .loader import TrainingLoader
+        return TrainingLoader
+    if name == "SFTTrainer":
+        from .trainers import SFTTrainer
+        return SFTTrainer
+    if name == "DPOTrainer":
+        from .trainers import DPOTrainer
+        return DPOTrainer
+    if name == "RLHFTrainer":
+        from .trainers import RLHFTrainer
+        return RLHFTrainer
+    raise AttributeError(f"module 'finetune_lab' has no attribute '{name}'")
 
 def train_sft(public_id: str, output_dir: str = "./output", base_url: str = None):
     """
@@ -20,6 +38,9 @@ def train_sft(public_id: str, output_dir: str = "./output", base_url: str = None
         >>> from finetune_lab import train_sft
         >>> train_sft("train_abc123")
     """
+    from .loader import TrainingLoader
+    from .trainers import SFTTrainer
+
     print(f"[FineTuneLab] Starting SFT training: {public_id}")
 
     loader = TrainingLoader(base_url=base_url)
@@ -47,6 +68,9 @@ def train_dpo(public_id: str, output_dir: str = "./output", base_url: str = None
         >>> from finetune_lab import train_dpo
         >>> train_dpo("train_xyz456")
     """
+    from .loader import TrainingLoader
+    from .trainers import DPOTrainer
+
     print(f"[FineTuneLab] Starting DPO training: {public_id}")
 
     loader = TrainingLoader(base_url=base_url)
@@ -74,6 +98,9 @@ def train_rlhf(public_id: str, output_dir: str = "./output", base_url: str = Non
         >>> from finetune_lab import train_rlhf
         >>> train_rlhf("train_def789")
     """
+    from .loader import TrainingLoader
+    from .trainers import RLHFTrainer
+
     print(f"[FineTuneLab] Starting RLHF training: {public_id}")
 
     loader = TrainingLoader(base_url=base_url)
@@ -89,13 +116,16 @@ def train_rlhf(public_id: str, output_dir: str = "./output", base_url: str = Non
 
 
 __all__ = [
+    # API Client (new)
+    "FinetuneLabClient",
+    "FinetuneLabError",
+    # Training functions
     "train_sft",
     "train_dpo",
     "train_rlhf",
+    # Training classes (lazy loaded)
     "TrainingLoader",
     "SFTTrainer",
     "DPOTrainer",
     "RLHFTrainer",
 ]
-
-print(f"[FineTuneLab] FineTune Lab Loader v{__version__} loaded")

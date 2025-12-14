@@ -1,10 +1,8 @@
 'use client';
 
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
-import { PageWrapper } from '@/components/layout/PageWrapper';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { ContentPageHeader } from '@/components/layout/ContentPageHeader';
 import {
   FlaskConical,
   TrendingUp,
@@ -22,41 +20,44 @@ interface LabNotesViewProps {
 }
 
 export function LabNotesView({ notes }: LabNotesViewProps) {
-  const { user, signOut } = useAuth();
-  // Note: We do NOT redirect if not logged in, to allow SEO crawling.
-  // The sidebar will just show public state or empty user.
-
   const featuredNotes = notes.filter(note => note.featured);
   const recentNotes = notes.filter(note => !note.featured);
 
   return (
-    <PageWrapper currentPage="lab-notes" user={user} signOut={signOut}>
-      <PageHeader
-        title="Lab Notes"
-        description="Research, experiments, and real results from the FineTune Lab team"
-      />
+    <div className="min-h-screen bg-background">
+      <ContentPageHeader />
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+            Lab Notes
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            Research, experiments, and real results from the FineTune Lab team
+          </p>
+        </div>
 
-      {/* Intro Section */}
-      <div className="mb-12 p-6 bg-muted/50 border rounded-lg">
-        <div className="flex items-start gap-4">
-          <FlaskConical className="w-8 h-8 text-primary mt-1" />
-          <div>
-            <h2 className="text-xl font-bold mb-2">Real Experiments. Real Results.</h2>
-            <p className="text-muted-foreground">
-              This isn't a marketing blog. It's our lab journal. We document what we try, what works,
-              what fails, and what we learn. Every fine-tuning technique we recommend has been tested here first.
-            </p>
+        {/* Intro Section */}
+        <div className="mb-12 p-6 bg-muted/50 border rounded-lg">
+          <div className="flex items-start gap-4">
+            <FlaskConical className="w-8 h-8 text-primary mt-1" />
+            <div>
+              <h2 className="text-xl font-bold mb-2">Real Experiments. Real Results.</h2>
+              <p className="text-muted-foreground">
+                This isn&apos;t a marketing blog. It&apos;s our lab journal. We document what we try, what works,
+                what fails, and what we learn. Every fine-tuning technique we recommend has been tested here first.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Featured Articles */}
-      {featuredNotes.length > 0 && (
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6" />
-            Featured
-          </h2>
+        {/* Featured Articles */}
+        {featuredNotes.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+              <TrendingUp className="w-6 h-6" />
+              Featured
+            </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {featuredNotes.map((note) => (
               <Link key={note.id} href={`/lab-notes/${note.slug}`}>
@@ -91,13 +92,13 @@ export function LabNotesView({ notes }: LabNotesViewProps) {
                 </article>
               </Link>
             ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* All Articles */}
-      <div className="mb-12">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+        {/* All Articles */}
+        <div className="mb-12">
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
           <Database className="w-6 h-6" />
           All Notes
         </h2>
@@ -136,17 +137,17 @@ export function LabNotesView({ notes }: LabNotesViewProps) {
               </article>
             </Link>
           ))}
+          </div>
         </div>
-      </div>
 
-      {/* Categories Section */}
-      <div className="border-t pt-8">
-        <h2 className="text-2xl font-bold mb-6">Browse by Category</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Categories Section */}
+        <div className="border-t pt-8">
+          <h2 className="text-2xl font-bold mb-6">Browse by Category</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Link href="/lab-notes?category=experiment" className="p-4 border rounded-lg hover:bg-muted transition-colors text-center">
             <FlaskConical className="w-8 h-8 mx-auto mb-2 text-blue-600" />
             <h3 className="font-semibold">Experiments</h3>
-            <p className="text-xs text-muted-foreground">We tried it so you don't have to</p>
+            <p className="text-xs text-muted-foreground">We tried it so you don&apos;t have to</p>
           </Link>
           <Link href="/lab-notes?category=technique" className="p-4 border rounded-lg hover:bg-muted transition-colors text-center">
             <GitCompare className="w-8 h-8 mx-auto mb-2 text-purple-600" />
@@ -163,8 +164,9 @@ export function LabNotesView({ notes }: LabNotesViewProps) {
             <h3 className="font-semibold">Dataset Insights</h3>
             <p className="text-xs text-muted-foreground">Data curation deep dives</p>
           </Link>
+          </div>
         </div>
-      </div>
-    </PageWrapper>
+      </main>
+    </div>
   );
 }

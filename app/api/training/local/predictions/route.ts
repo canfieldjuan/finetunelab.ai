@@ -29,6 +29,10 @@ interface PredictionRecord {
   epoch: number;
   step: number;
   sample_index: number;
+  source_index?: number;
+  prompt_id?: string;
+  sample_source?: string;
+  sample_source_id?: string;
   prompt: string;
   prediction: string;
   ground_truth?: string;
@@ -37,6 +41,19 @@ interface PredictionRecord {
   char_error_rate?: number;
   length_ratio?: number;
   word_overlap?: number;
+
+  // Generation metadata (optional)
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  latency_ms?: number;
+  max_new_tokens?: number;
+  do_sample?: boolean;
+
+  // Validation results (optional)
+  validation_pass?: boolean;
+  validation_kind?: string;
+  validation_errors?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -148,6 +165,10 @@ export async function POST(request: NextRequest) {
       epoch: p.epoch,
       step: p.step,
       sample_index: p.sample_index,
+      source_index: p.source_index ?? null,
+      prompt_id: p.prompt_id ?? null,
+      sample_source: p.sample_source ?? null,
+      sample_source_id: p.sample_source_id ?? null,
       prompt: p.prompt,
       prediction: p.prediction,
       ground_truth: p.ground_truth ?? null,
@@ -155,7 +176,20 @@ export async function POST(request: NextRequest) {
       exact_match: p.exact_match ?? null,
       char_error_rate: p.char_error_rate ?? null,
       length_ratio: p.length_ratio ?? null,
-      word_overlap: p.word_overlap ?? null
+      word_overlap: p.word_overlap ?? null,
+
+      // Generation metadata (optional)
+      prompt_tokens: p.prompt_tokens ?? null,
+      completion_tokens: p.completion_tokens ?? null,
+      total_tokens: p.total_tokens ?? null,
+      latency_ms: p.latency_ms ?? null,
+      max_new_tokens: p.max_new_tokens ?? null,
+      do_sample: p.do_sample ?? null,
+
+      // Validation results (optional)
+      validation_pass: p.validation_pass ?? null,
+      validation_kind: p.validation_kind ?? null,
+      validation_errors: p.validation_errors ?? null
     }));
 
     const { data, error } = await supabase

@@ -47,12 +47,18 @@ export function ModelSelector({ value, onChange, sessionToken, disabled }: Model
     setError(null);
 
     try {
-      const response = await fetch('/api/models', {
+      const url = '/api/models';
+      const response = await fetch(url, {
         headers: sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {},
+        cache: 'no-store',
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.status}`);
+        const bodyText = await response.text().catch(() => '');
+        const snippet = bodyText ? bodyText.slice(0, 300) : '';
+        throw new Error(
+          `Failed to fetch models: ${response.status} ${response.statusText} (${response.url})${snippet ? ` - ${snippet}` : ''}`
+        );
       }
 
       const data = await response.json();

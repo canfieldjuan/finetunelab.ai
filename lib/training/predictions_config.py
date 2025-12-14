@@ -83,6 +83,14 @@ class PredictionsConfig:
             self.default_frequency
         )
 
+        samples_path = user_config.get('samples_path')
+        if samples_path is not None and not isinstance(samples_path, str):
+            errors.append('samples_path must be a string when provided')
+
+        validators = user_config.get('validators')
+        if validators is not None and not isinstance(validators, dict):
+            errors.append('validators must be a dictionary when provided')
+
         if frequency not in ('epoch', 'eval', 'steps'):
             errors.append('Frequency must be "epoch", "eval", or "steps"')
 
@@ -103,6 +111,18 @@ class PredictionsConfig:
             'sample_count': sample_count,
             'sample_frequency': frequency
         }
+
+        if isinstance(samples_path, str) and samples_path.strip():
+            config['samples_path'] = samples_path
+
+        if isinstance(validators, dict) and validators:
+            v = {}
+            if 'json_parse' in validators:
+                v['json_parse'] = bool(validators.get('json_parse'))
+            if 'json_schema_path' in validators and isinstance(validators.get('json_schema_path'), str) and validators.get('json_schema_path').strip():
+                v['json_schema_path'] = validators.get('json_schema_path')
+            if v:
+                config['validators'] = v
 
         if frequency == 'steps' and step_interval:
             config['step_interval'] = step_interval

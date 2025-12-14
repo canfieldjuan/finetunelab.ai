@@ -1,11 +1,20 @@
 import { MetadataRoute } from 'next';
 import { labNotes } from './lab-notes/data';
 import { academyArticles } from '@/lib/academy/content';
+import { siteConfig, publicPages } from '@/lib/seo/config';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  // Hardcode production URL to avoid env var parsing issues
-  const baseUrl = 'https://finetunelab.ai';
+  const baseUrl = siteConfig.url;
 
+  // Static public pages from config
+  const staticPages = publicPages.map((page) => ({
+    url: `${baseUrl}${page.path === '/' ? '' : page.path}`,
+    lastModified: new Date(),
+    changeFrequency: page.changeFreq,
+    priority: page.priority,
+  }));
+
+  // Dynamic lab notes articles
   const notes = labNotes.map((note) => ({
     url: `${baseUrl}/lab-notes/${note.slug}`,
     lastModified: new Date(note.publishedAt),
@@ -13,61 +22,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
+  // Dynamic academy articles
   const academy = academyArticles.map((article) => ({
     url: `${baseUrl}/lab-academy/${article.slug}`,
     lastModified: new Date(article.publishedAt),
     changeFrequency: 'monthly' as const,
-    priority: 0.7,
+    priority: 0.8, // Higher priority for SEO-focused content
   }));
 
-  return [
-    // Main pages
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 1,
-    },
-    {
-      url: `${baseUrl}/welcome`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 1,
-    },
-    // Content hubs
-    {
-      url: `${baseUrl}/lab-notes`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/lab-academy`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/case-studies`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    // Auth pages (for brand searches)
-    {
-      url: `${baseUrl}/login`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-    {
-      url: `${baseUrl}/signup`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    },
-    // Individual articles
-    ...notes,
-    ...academy,
-  ];
+  return [...staticPages, ...notes, ...academy];
 }

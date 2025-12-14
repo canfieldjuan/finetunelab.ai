@@ -263,7 +263,20 @@ def test_5_sample_loading():
             print_result("All samples have prompt", has_prompt,
                          f"Sample keys: {list(samples[0].keys()) if samples else []}")
 
-            return correct_count and has_prompt
+            # Verify new identity/source metadata (Phase 1 + Phase 2)
+            has_source_index = all('source_index' in s for s in samples)
+            print_result("All samples have source_index", has_source_index)
+
+            has_prompt_id = all('prompt_id' in s for s in samples)
+            print_result("All samples have prompt_id", has_prompt_id)
+
+            has_sample_source = all('sample_source' in s for s in samples)
+            print_result("All samples have sample_source", has_sample_source)
+
+            has_sample_source_id = all('sample_source_id' in s for s in samples)
+            print_result("All samples have sample_source_id", has_sample_source_id)
+
+            return correct_count and has_prompt and has_source_index and has_prompt_id and has_sample_source and has_sample_source_id
 
         return False
 

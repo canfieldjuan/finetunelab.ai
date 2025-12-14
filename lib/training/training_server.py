@@ -59,6 +59,36 @@ try:
 except ImportError:
     from .config_validator import validate_config, validate_dataset_format, ValidationError
 
+# Alert system integration
+try:
+    from alert_trigger import (
+        trigger_job_started,
+        trigger_job_completed,
+        trigger_job_failed,
+        trigger_job_cancelled,
+        trigger_gpu_oom,
+    )
+    ALERTS_AVAILABLE = True
+except ImportError:
+    try:
+        from .alert_trigger import (
+            trigger_job_started,
+            trigger_job_completed,
+            trigger_job_failed,
+            trigger_job_cancelled,
+            trigger_gpu_oom,
+        )
+        ALERTS_AVAILABLE = True
+    except ImportError:
+        ALERTS_AVAILABLE = False
+        logger = logging.getLogger(__name__)
+        # Will log warning later after logger is configured
+
+try:
+    from error_extractor import extract_errors_from_file, ErrorExtractionResult
+except ImportError:
+    from .error_extractor import extract_errors_from_file, ErrorExtractionResult
+
 # Configure logging (after dotenv load)
 logging.basicConfig(
     level=logging.INFO,
@@ -246,6 +276,9 @@ class JobStatus:
     parameter_updates: list = field(default_factory=list)  # Runtime parameter updates
     last_parameter_update_at: Optional[str] = None  # Last parameter update timestamp
 
+    # Process tracking for cancellation after server restart
+    process_pid: Optional[int] = None  # Store PID separately for orphan cleanup
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON response"""
         return {
@@ -291,6 +324,8 @@ class JobStatus:
             "distributed_strategy": self.distributed_strategy,
             "parameter_updates": self.parameter_updates,
             "last_parameter_update_at": self.last_parameter_update_at,
+            # Process tracking
+            "process_pid": self.process_pid,
         }
 
 
@@ -511,13 +546,28 @@ def _persist_metrics_sync(job_id: str, metrics: List[Dict]) -> bool:
             payload = {"job_id": job_id, "metrics": metrics}
             logger.debug(f"[Persistence] Payload: {payload}")
 
+            headers = {
+                "Content-Type": "application/json"
+            }
+
+            # Auth: include job_token when available (required by /api/training/local/metrics)
+            try:
+                job = jobs.get(job_id)
+                token = getattr(job, "job_token", "") if job else ""
+                if token:
+                    headers["Authorization"] = f"Bearer {token}"
+                    logger.debug(f"[Persistence] Auth header set for job {job_id[:8]}...")
+                else:
+                    logger.warning(f"[Persistence] No job_token available for job {job_id[:8]}... - request will fail with 401")
+                    logger.warning(f"[Persistence] Job in memory: {job is not None}, job_token: '{token}'")
+            except Exception as header_err:
+                logger.warning(f"[Persistence] Could not attach Authorization header: {header_err}")
+
             # Send request to Next.js API (uses service role key internally)
             response = requests.post(
                 METRICS_ENDPOINT,
                 json=payload,
-                headers={
-                    "Content-Type": "application/json"
-                },
+                headers=headers,
                 timeout=PERSISTENCE_HTTP_TIMEOUT
             )
             
@@ -728,6 +778,127 @@ def terminate_process_gracefully(process: subprocess.Popen, timeout: int = None)
         except Exception as kill_err:
             logger.error(f"[Terminate] Emergency kill failed: {kill_err}")
             return False
+
+
+async def kill_process_by_pid(pid: int, job_id: str) -> bool:
+    """
+    Kill a process by PID when we don't have the subprocess.Popen object.
+    Used for orphan cleanup after server restart.
+
+    Args:
+        pid: Process ID to kill
+        job_id: Job ID for logging
+
+    Returns:
+        True if process was killed or doesn't exist
+    """
+    logger.info(f"[KillByPID] Attempting to kill PID {pid} for job {job_id}")
+
+    try:
+        # Check if process exists
+        try:
+            os.kill(pid, 0)  # Signal 0 checks if process exists
+        except ProcessLookupError:
+            logger.info(f"[KillByPID] PID {pid} no longer exists")
+            return True
+        except PermissionError:
+            logger.warning(f"[KillByPID] No permission to check PID {pid}")
+
+        # Try to kill the process group first
+        try:
+            pgid = os.getpgid(pid)
+            logger.info(f"[KillByPID] Killing process group {pgid} (PID {pid})")
+            os.killpg(pgid, signal.SIGTERM)
+            await asyncio.sleep(2)  # Wait for graceful termination
+
+            # Check if still alive
+            try:
+                os.kill(pid, 0)
+                logger.warning(f"[KillByPID] PID {pid} still alive after SIGTERM, sending SIGKILL")
+                os.killpg(pgid, signal.SIGKILL)
+                await asyncio.sleep(1)
+            except ProcessLookupError:
+                logger.info(f"[KillByPID] PID {pid} terminated after SIGTERM")
+                return True
+
+        except (ProcessLookupError, PermissionError) as e:
+            logger.warning(f"[KillByPID] Could not kill process group: {e}, trying direct kill")
+            os.kill(pid, signal.SIGKILL)
+            await asyncio.sleep(1)
+
+        # Final check
+        try:
+            os.kill(pid, 0)
+            logger.error(f"[KillByPID] PID {pid} still alive after SIGKILL!")
+            return False
+        except ProcessLookupError:
+            logger.info(f"[KillByPID] PID {pid} successfully killed")
+            return True
+
+    except Exception as e:
+        logger.error(f"[KillByPID] Error killing PID {pid}: {e}", exc_info=True)
+        return False
+
+
+async def kill_process_by_job_id(job_id: str) -> bool:
+    """
+    Find and kill processes associated with a job by searching command lines.
+    Used as fallback when we have neither process object nor PID.
+
+    Args:
+        job_id: Job ID to search for
+
+    Returns:
+        True if processes were found and killed
+    """
+    logger.info(f"[KillByJobID] Searching for processes with job_id {job_id}")
+
+    try:
+        # Use pgrep to find processes with job_id in command line
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ['pgrep', '-f', f'job.*{job_id}'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode != 0:
+            # Also search for standalone_trainer with job_id
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ['pgrep', '-f', f'standalone_trainer.*{job_id}'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+        if result.returncode != 0 or not result.stdout.strip():
+            logger.info(f"[KillByJobID] No processes found for job {job_id}")
+            return False
+
+        pids = [int(p) for p in result.stdout.strip().split('\n') if p.strip().isdigit()]
+        logger.info(f"[KillByJobID] Found PIDs for job {job_id}: {pids}")
+
+        killed_any = False
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+                logger.info(f"[KillByJobID] Killed PID {pid}")
+                killed_any = True
+            except ProcessLookupError:
+                logger.info(f"[KillByJobID] PID {pid} already dead")
+                killed_any = True
+            except PermissionError:
+                logger.warning(f"[KillByJobID] No permission to kill PID {pid}")
+            except Exception as e:
+                logger.error(f"[KillByJobID] Error killing PID {pid}: {e}")
+
+        return killed_any
+
+    except Exception as e:
+        logger.error(f"[KillByJobID] Error searching for processes: {e}", exc_info=True)
+        return False
 
 
 class TrainingRequest(BaseModel):
@@ -1191,6 +1362,24 @@ async def reconnect_orphaned_training_jobs():
 
                     db_job = db_response.data
 
+                    # Try to find the PID for this specific job
+                    job_pid = None
+                    try:
+                        # Search for process with this job_id in command line
+                        pid_result = subprocess.run(
+                            ['pgrep', '-f', f'job_{job_id}'],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        if pid_result.returncode == 0 and pid_result.stdout.strip():
+                            found_pids = [int(p) for p in pid_result.stdout.strip().split('\n') if p.strip().isdigit()]
+                            if found_pids:
+                                job_pid = found_pids[0]  # Take the first matching PID
+                                logger.info(f"[Reconnect] Found PID {job_pid} for job {job_id}")
+                    except Exception as pid_err:
+                        logger.debug(f"[Reconnect] Could not find PID for job {job_id}: {pid_err}")
+
                     # Recreate JobStatus object
                     job = JobStatus(
                         job_id=job_id,
@@ -1213,12 +1402,25 @@ async def reconnect_orphaned_training_jobs():
                         started_at=db_job.get('started_at'),
                         # No process object - we can't get the actual Python process object
                         process=None,
+                        process_pid=job_pid,  # Store PID for cancellation
                         job_token=db_job.get('job_token', '')  # For predictions API
                     )
 
+                    # Generate token if not present (critical for metrics persistence)
+                    if not job.job_token:
+                        job.job_token = secrets.token_urlsafe(32)
+                        logger.info(f"[Reconnect] Generated new job_token for job {job_id[:8]}...")
+                        # Update DB with new token
+                        try:
+                            supabase.table('local_training_jobs').update({
+                                'job_token': job.job_token
+                            }).eq('id', job_id).execute()
+                        except Exception as token_err:
+                            logger.warning(f"[Reconnect] Failed to persist job_token: {token_err}")
+
                     # Add to jobs dict
                     jobs[job_id] = job
-                    logger.info(f"[Reconnect] Reconnected to job {job_id} - progress: {job.progress:.1f}%")
+                    logger.info(f"[Reconnect] Reconnected to job {job_id} - progress: {job.progress:.1f}% (job_token: {'SET' if job.job_token else 'EMPTY'})")
 
                     # Start monitoring task
                     asyncio.create_task(monitor_job(job_id))
@@ -1301,6 +1503,18 @@ async def reconnect_orphaned_training_jobs():
                             job_token=db_job.get('job_token', '')  # Critical for predictions API
                         )
 
+                        # Generate token if not present (critical for metrics persistence)
+                        if not job.job_token:
+                            job.job_token = secrets.token_urlsafe(32)
+                            logger.info(f"[Reconnect] Generated new job_token for queued job {job_id[:8]}...")
+                            # Update DB with new token
+                            try:
+                                supabase.table('local_training_jobs').update({
+                                    'job_token': job.job_token
+                                }).eq('id', job_id).execute()
+                            except Exception as token_err:
+                                logger.warning(f"[Reconnect] Failed to persist job_token: {token_err}")
+
                         # Add to jobs dict
                         jobs[job_id] = job
 
@@ -1308,7 +1522,7 @@ async def reconnect_orphaned_training_jobs():
                         await job_queue.put(job_id)
                         recovered_count += 1
 
-                        logger.info(f"[Reconnect] ✓ Re-queued job {job_id[:8]}... (age: {int(job_age_seconds)}s)")
+                        logger.info(f"[Reconnect] ✓ Re-queued job {job_id[:8]}... (age: {int(job_age_seconds)}s, job_token: {'SET' if job.job_token else 'EMPTY'})")
 
                     if recovered_count > 0:
                         logger.info(f"[Reconnect] Recovered {recovered_count} queued job(s)")
@@ -1385,6 +1599,7 @@ async def start_queued_job(job_id: str):
         logger.info(f"[QueueWorker] Spawning with job_token: {'SET (len={})'.format(len(job.job_token)) if job.job_token else 'EMPTY'}")
         process = await spawn_training_process(job_id, training_config, job.user_id, job.job_token)
         job.process = process
+        job.process_pid = process.pid  # Store PID separately for orphan cleanup
         job.status = JobStatusEnum.RUNNING
         job.started_at = datetime.utcnow().isoformat()
         logger.info(f"[QueueWorker] Job {job_id} now RUNNING (PID: {process.pid})")
@@ -1400,14 +1615,22 @@ async def start_queued_job(job_id: str):
         })
         logger.info(f"[QueueWorker] Persisted RUNNING status to database for job {job_id}")
 
+        # Trigger job started alert
+        if ALERTS_AVAILABLE and job.user_id:
+            trigger_job_started(job_id, job.user_id, model_name=job.model_name, base_model=getattr(job, 'base_model', None))
+
         # Start monitoring task
         asyncio.create_task(monitor_job(job_id))
         logger.info(f"[QueueWorker] Monitor started for job {job_id}")
-        
+
     except Exception as e:
         logger.error(f"[QueueWorker] Failed to start job {job_id}: {e}", exc_info=True)
         job.status = JobStatusEnum.FAILED
         job.error_message = f"Failed to start training: {str(e)}"
+
+        # Trigger job failed alert
+        if ALERTS_AVAILABLE and job.user_id:
+            trigger_job_failed(job_id, job.user_id, model_name=job.model_name, error_message=job.error_message, error_type="START_FAILURE")
 
 
 async def cancel_job(job_id: str) -> dict:
@@ -1507,7 +1730,11 @@ async def cancel_job(job_id: str) -> dict:
             
             # Persist cancellation
             await persist_with_cache(job_id, job.to_dict())
-            
+
+            # Trigger cancellation alert
+            if ALERTS_AVAILABLE and job.user_id:
+                trigger_job_cancelled(job_id, job.user_id, model_name=job.model_name)
+
             logger.info(f"[Cancel] Job {job_id} removed from queue and marked CANCELLED")
             return {
                 "success": True,
@@ -1521,10 +1748,14 @@ async def cancel_job(job_id: str) -> dict:
             job.status = JobStatusEnum.CANCELLED
             job.completed_at = datetime.utcnow().isoformat()
             job.error_message = "Cancelled by user"
-            
+
             # Persist cancellation
             await persist_with_cache(job_id, job.to_dict())
-            
+
+            # Trigger cancellation alert
+            if ALERTS_AVAILABLE and job.user_id:
+                trigger_job_cancelled(job_id, job.user_id, model_name=job.model_name)
+
             return {
                 "success": True,
                 "job_id": job_id,
@@ -1535,29 +1766,37 @@ async def cancel_job(job_id: str) -> dict:
     # Handle pending/running jobs - terminate subprocess
     if previous_status in [JobStatusEnum.PENDING, JobStatusEnum.RUNNING]:
         logger.info(f"[Cancel] Terminating {previous_status} job {job_id}")
-        
+
+        terminated = False
+
         # Terminate the subprocess
         if job.process:
             logger.info(f"[Cancel] Terminating process PID {job.process.pid}")
             terminated = terminate_process_gracefully(job.process, timeout=PROCESS_TERMINATION_TIMEOUT_DEFAULT)
-            
-            if terminated:
-                logger.info(f"[Cancel] Process terminated successfully")
-                
-                # Phase 1.2: Clear GPU cache after process termination
-                try:
-                    import torch
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                        logger.info(f"[Cancel] GPU cache cleared for job {job_id}")
-                except ImportError:
-                    logger.debug(f"[Cancel] Torch not available, skipping GPU cache clear")
-                except Exception as e:
-                    logger.warning(f"[Cancel] Could not clear GPU cache: {e}")
-            else:
-                logger.warning(f"[Cancel] Process termination may have failed")
+        elif job.process_pid:
+            # Process object not available (e.g., after server restart), but we have the PID
+            logger.info(f"[Cancel] No process object, killing by stored PID {job.process_pid}")
+            terminated = await kill_process_by_pid(job.process_pid, job_id)
         else:
-            logger.warning(f"[Cancel] No process found for job {job_id}")
+            # No process info at all - try to find by job_id in command line
+            logger.warning(f"[Cancel] No process info for job {job_id}, searching by job_id...")
+            terminated = await kill_process_by_job_id(job_id)
+
+        if terminated:
+            logger.info(f"[Cancel] Process terminated successfully")
+
+            # Phase 1.2: Clear GPU cache after process termination
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    logger.info(f"[Cancel] GPU cache cleared for job {job_id}")
+            except ImportError:
+                logger.debug(f"[Cancel] Torch not available, skipping GPU cache clear")
+            except Exception as e:
+                logger.warning(f"[Cancel] Could not clear GPU cache: {e}")
+        else:
+            logger.warning(f"[Cancel] Process termination may have failed or no process found")
         
         # Update job status
         job.status = JobStatusEnum.CANCELLED
@@ -1566,7 +1805,11 @@ async def cancel_job(job_id: str) -> dict:
 
         # Persist cancellation
         await persist_with_cache(job_id, job.to_dict())
-        
+
+        # Trigger cancellation alert
+        if ALERTS_AVAILABLE and job.user_id:
+            trigger_job_cancelled(job_id, job.user_id, model_name=job.model_name)
+
         logger.info(f"[Cancel] Job {job_id} cancelled successfully")
         return {
             "success": True,
@@ -1574,7 +1817,7 @@ async def cancel_job(job_id: str) -> dict:
             "previous_status": previous_status.value,
             "message": f"Job cancelled (was {previous_status.value})"
         }
-    
+
     # Should never reach here
     logger.warning(f"[Cancel] Unexpected status {previous_status} for job {job_id}")
     return {
@@ -2390,6 +2633,39 @@ async def monitor_job(job_id: str):
                 })
                 logger.info(f"[Monitor] Job {job_id}: Final status persisted")
 
+                # Trigger completion/failure alerts
+                if ALERTS_AVAILABLE and job.user_id:
+                    started_at_dt = None
+                    if job.started_at:
+                        try:
+                            started_at_dt = datetime.fromisoformat(job.started_at.replace('Z', '+00:00').replace('+00:00', ''))
+                        except ValueError:
+                            pass
+
+                    if job.status == JobStatusEnum.COMPLETED:
+                        trigger_job_completed(
+                            job_id, job.user_id,
+                            model_name=job.model_name,
+                            loss=final_train_loss,
+                            current_step=job.current_step,
+                            total_steps=job.total_steps,
+                            started_at=started_at_dt
+                        )
+                    elif job.status == JobStatusEnum.FAILED:
+                        # Check for OOM in error message
+                        error_type = "TRAINING_FAILURE"
+                        if job.error_message and ("CUDA" in job.error_message or "OOM" in job.error_message or "out of memory" in job.error_message.lower()):
+                            error_type = "CUDA_OOM"
+                            trigger_gpu_oom(job_id, job.user_id, model_name=job.model_name, error_message=job.error_message)
+                        else:
+                            trigger_job_failed(
+                                job_id, job.user_id,
+                                model_name=job.model_name,
+                                error_message=job.error_message,
+                                error_type=error_type,
+                                started_at=started_at_dt
+                            )
+
                 # Wait for training process to finalize progress.json, then persist any remaining metrics
                 logger.info(f"[Monitor] Job {job_id}: Checking for final metrics...")
                 await asyncio.sleep(MONITOR_CLEANUP_DELAY)
@@ -2427,6 +2703,15 @@ async def monitor_job(job_id: str):
         if job_id in jobs:
             jobs[job_id].status = JobStatusEnum.FAILED
             jobs[job_id].error_message = f"Monitor crashed: {str(e)}"
+
+            # Trigger failure alert for monitor crash
+            if ALERTS_AVAILABLE and jobs[job_id].user_id:
+                trigger_job_failed(
+                    job_id, jobs[job_id].user_id,
+                    model_name=jobs[job_id].model_name,
+                    error_message=jobs[job_id].error_message,
+                    error_type="MONITOR_CRASH"
+                )
 
 
 async def validate_model_on_dataset(
@@ -3035,6 +3320,52 @@ async def get_training_logs(job_id: str, limit: int = 100, offset: int = 0):
         raise HTTPException(status_code=500, detail=f"Failed to read logs: {str(e)}")
 
 
+@app.get("/api/training/{job_id}/errors")
+async def get_training_errors(job_id: str):
+    """
+    Get structured error information for a training job.
+
+    Parses log files to extract:
+    - Deduplicated error messages with counts
+    - Full traceback with parsed frames
+    - Error classification and phase information
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        JSON with structured error data
+    """
+    logger.info(f"Errors requested for job_id: {job_id}")
+
+    log_file = LOGS_DIR / f"job_{job_id}.log"
+
+    # Extract errors using the error_extractor module
+    result = extract_errors_from_file(log_file, job_id)
+
+    # Get error_message from database if available
+    error_summary = None
+    if supabase:
+        try:
+            response = supabase.table("training_jobs").select("error_message, status").eq("id", job_id).single().execute()
+            if response.data:
+                error_summary = response.data.get("error_message")
+        except Exception as db_err:
+            logger.warning(f"Could not fetch error_message from database: {db_err}")
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "job_id": result.job_id,
+            "error_summary": error_summary,
+            "errors": [e.to_dict() for e in result.errors],
+            "traceback": result.traceback.to_dict() if result.traceback else None,
+            "error_count": result.error_count,
+            "unique_error_count": result.unique_error_count
+        }
+    )
+
+
 @app.get("/api/training/queue")
 async def get_queue_status():
     """
@@ -3081,6 +3412,66 @@ async def get_queue_status():
         "queued_jobs": queued_jobs,
         "queue_active": True
     }
+
+
+@app.post("/api/training/reconnect")
+@limiter.limit(RATE_LIMIT_TRAINING_GENERAL if RATE_LIMIT_ENABLED else "1000000/minute")
+async def reconnect_jobs(request: Request):
+    """
+    Manually trigger reconnection to orphaned training jobs.
+
+    Scans for:
+    - Running trainer processes not tracked by this server instance
+    - Queued jobs in database that need to be re-queued
+
+    Use this when:
+    - Jobs are running but not showing in queue
+    - Server was restarted and jobs weren't auto-recovered
+    - Jobs appear stuck but subprocess is still running
+
+    Returns:
+        JSON with reconnection results
+    """
+    logger.info("[API] Manual reconnect request received")
+
+    try:
+        # Get state before reconnect
+        jobs_before = len(jobs)
+        running_before = len(get_running_jobs())
+
+        # Run the reconnect function
+        await reconnect_orphaned_training_jobs()
+
+        # Get state after reconnect
+        jobs_after = len(jobs)
+        running_after = len(get_running_jobs())
+
+        reconnected_count = jobs_after - jobs_before
+
+        logger.info(f"[API] Reconnect complete: {reconnected_count} job(s) reconnected")
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": f"Reconnect scan complete",
+                "jobs_before": jobs_before,
+                "jobs_after": jobs_after,
+                "running_before": running_before,
+                "running_after": running_after,
+                "reconnected": reconnected_count
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"[API] Reconnect failed: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "message": f"Reconnect failed: {str(e)}"
+            }
+        )
 
 
 @app.post("/api/training/cancel/{job_id}")
@@ -3353,20 +3744,28 @@ async def force_start_training_job(job_id: str, request: Request):
             job_token=db_job.get('job_token', '')  # Critical for predictions API
         )
 
+        # Generate token if not present (critical for metrics persistence)
+        if not job.job_token:
+            job.job_token = secrets.token_urlsafe(32)
+            logger.info(f"[API] Generated new job_token for force-started job {job_id[:8]}...")
+
         # Add to jobs dict
         jobs[job_id] = job
-        logger.info(f"[API] Job {job_id} added to jobs dict")
+        logger.info(f"[API] Job {job_id} added to jobs dict (job_token: {'SET' if job.job_token else 'EMPTY'})")
 
         # Add to queue
         await job_queue.put(job_id)
         queue_position = job_queue.qsize()
         logger.info(f"[API] Job {job_id} added to queue - position: {queue_position}")
 
-        # Update database status to queued
-        supabase.table('local_training_jobs').update({
+        # Update database status to queued (and job_token if generated)
+        update_data = {
             'status': 'queued',
             'updated_at': datetime.utcnow().isoformat()
-        }).eq('id', job_id).execute()
+        }
+        if job.job_token:
+            update_data['job_token'] = job.job_token
+        supabase.table('local_training_jobs').update(update_data).eq('id', job_id).execute()
 
         logger.info(f"[API] Job {job_id} force-started successfully")
 

@@ -2,42 +2,95 @@
  * Test Suites API
  * CRUD operations for test prompt suites (separate from training datasets)
  * Date: 2025-11-25
+ * Updated: 2025-12-13 - Added API key auth for SDK access
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
 
 export const runtime = 'nodejs';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const API_KEY_PREFIX = 'wak_';
+
+/**
+ * Authenticate request - supports both session tokens (UI) and API keys (SDK)
+ */
+async function authenticateTestSuites(req: NextRequest): Promise<
+  | { ok: true; userId: string; mode: 'session' | 'apiKey' }
+  | { ok: false; status: number; error: string }
+> {
+  const headerApiKey = req.headers.get('x-api-key') || req.headers.get('x-workspace-api-key');
+  const authHeader = req.headers.get('authorization');
+
+  const bearerMatch = authHeader?.match(/^Bearer\s+(.+)$/i);
+  const bearerValue = bearerMatch?.[1]?.trim() || null;
+  const apiKeyInAuthorization = !!(bearerValue && bearerValue.startsWith(API_KEY_PREFIX));
+
+  // Path 1: API Key Authentication
+  if (headerApiKey || apiKeyInAuthorization) {
+    const validation = await validateRequestWithScope(req.headers, 'testing');
+    if (!validation.isValid || !validation.userId) {
+      return {
+        ok: false,
+        status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401),
+        error: validation.errorMessage || 'Unauthorized',
+      };
+    }
+
+    const extracted = extractApiKeyFromHeaders(req.headers);
+    if (!extracted || !extracted.startsWith(API_KEY_PREFIX)) {
+      return { ok: false, status: 401, error: 'Invalid API key format' };
+    }
+
+    return { ok: true, userId: validation.userId, mode: 'apiKey' };
+  }
+
+  // Path 2: Session Token Authentication
+  if (!authHeader) {
+    return { ok: false, status: 401, error: 'Missing authorization header' };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { ok: false, status: 401, error: 'Authentication failed' };
+  }
+
+  return { ok: true, userId: user.id, mode: 'session' };
+}
 
 /**
  * GET /api/test-suites
  * List all test suites for the authenticated user
+ * Auth: Session token or API key with 'testing' scope
  */
 export async function GET(request: NextRequest) {
   console.log('[TestSuitesAPI] GET - Fetching test suites');
 
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authResult = await authenticateTestSuites(request);
+    if (!authResult.ok) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const userId = authResult.userId;
+    console.log('[TestSuitesAPI] User authenticated:', userId, 'mode:', authResult.mode);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Use service role for API key auth, or session for UI
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data, error } = await supabase
       .from('test_suites')
       .select('id, name, description, prompt_count, created_at, updated_at')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -66,24 +119,19 @@ export async function GET(request: NextRequest) {
  * POST /api/test-suites
  * Create a new test suite from uploaded prompts
  * Accepts: { name, description?, prompts: string[], expected_answers?: string[] }
+ * Auth: Session token or API key with 'testing' scope
  */
 export async function POST(request: NextRequest) {
   console.log('[TestSuitesAPI] POST - Creating test suite');
 
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authResult = await authenticateTestSuites(request);
+    if (!authResult.ok) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const userId = authResult.userId;
+    console.log('[TestSuitesAPI] User authenticated:', userId, 'mode:', authResult.mode);
 
     const body = await request.json();
     const { name, description, prompts, expected_answers } = body;
@@ -126,10 +174,13 @@ export async function POST(request: NextRequest) {
       hasExpectedAnswers: !!cleanedExpectedAnswers
     });
 
+    // Use service role for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const { data, error } = await supabase
       .from('test_suites')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         name: name.trim(),
         description: description?.trim() || null,
         prompts: cleanedPrompts,

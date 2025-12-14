@@ -14,6 +14,12 @@ export const runtime = 'nodejs';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+function safePerplexity(loss: unknown): number | null {
+  if (typeof loss !== 'number' || !Number.isFinite(loss)) return null;
+  if (loss >= 100) return null;
+  return Math.exp(loss);
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
@@ -41,7 +47,7 @@ export async function POST(
 
     const { data: job, error: jobError } = await supabase
       .from('local_training_jobs')
-      .select('id, job_token')
+      .select('id, job_token, status')
       .eq('id', jobId)
       .single();
 
@@ -60,32 +66,85 @@ export async function POST(
     }
 
     const metrics = await request.json();
+    if (typeof metrics?.step !== 'number') {
+      return NextResponse.json(
+        { error: 'Invalid metrics payload: step is required' },
+        { status: 400 }
+      );
+    }
+
+    const currentEpochRaw = metrics?.epoch;
+    const currentEpoch = typeof currentEpochRaw === 'number' ? Math.trunc(currentEpochRaw) : 0;
+
+    const trainLoss = (typeof metrics?.loss === 'number' ? metrics.loss : null) ??
+      (typeof metrics?.train_loss === 'number' ? metrics.train_loss : null);
+    const evalLoss = typeof metrics?.eval_loss === 'number' ? metrics.eval_loss : null;
+
+    const trainPerplexity = (typeof metrics?.train_perplexity === 'number' ? metrics.train_perplexity : null) ?? safePerplexity(trainLoss);
+    const perplexity = (typeof metrics?.perplexity === 'number' ? metrics.perplexity : null) ?? safePerplexity(evalLoss);
+
+    const nowIso = new Date().toISOString();
+
+    const jobUpdate: Record<string, unknown> = {
+      current_step: metrics.step,
+      current_epoch: currentEpoch,
+      loss: trainLoss,
+      eval_loss: evalLoss,
+      learning_rate: typeof metrics?.learning_rate === 'number' ? metrics.learning_rate : null,
+      grad_norm: typeof metrics?.grad_norm === 'number' ? metrics.grad_norm : null,
+      samples_per_second: typeof metrics?.samples_per_second === 'number' ? metrics.samples_per_second : null,
+      gpu_memory_allocated_gb: typeof metrics?.gpu_memory_allocated_gb === 'number' ? metrics.gpu_memory_allocated_gb : null,
+      gpu_memory_reserved_gb: typeof metrics?.gpu_memory_reserved_gb === 'number' ? metrics.gpu_memory_reserved_gb : null,
+      gpu_utilization_percent: typeof metrics?.gpu_utilization_percent === 'number' ? metrics.gpu_utilization_percent : null,
+      perplexity,
+      train_perplexity: trainPerplexity,
+      elapsed_seconds: typeof metrics?.elapsed_seconds === 'number' ? metrics.elapsed_seconds : null,
+      remaining_seconds: typeof metrics?.remaining_seconds === 'number' ? metrics.remaining_seconds : null,
+      progress: typeof metrics?.progress === 'number' ? metrics.progress : null,
+      updated_at: nowIso,
+    };
+
+    if (job.status === 'pending' || job.status === 'queued') {
+      jobUpdate.status = 'running';
+    }
 
     const { error: updateError } = await supabase
       .from('local_training_jobs')
-      .update({
-        current_step: metrics.step,
-        current_epoch: metrics.epoch,
-        loss: metrics.loss,
-        eval_loss: metrics.eval_loss,
-        learning_rate: metrics.learning_rate,
-        grad_norm: metrics.grad_norm,
-        samples_per_second: metrics.samples_per_second,
-        gpu_memory_allocated_gb: metrics.gpu_memory_allocated_gb,
-        gpu_memory_reserved_gb: metrics.gpu_memory_reserved_gb,
-        gpu_utilization_percent: metrics.gpu_utilization_percent,
-        perplexity: metrics.perplexity,
-        train_perplexity: metrics.train_perplexity,
-        elapsed_seconds: metrics.elapsed_seconds,
-        remaining_seconds: metrics.remaining_seconds,
-        progress: metrics.progress,
-        updated_at: new Date().toISOString()
-      })
+      .update(jobUpdate)
       .eq('id', jobId);
 
     if (updateError) {
       console.error('[Metrics API] Update failed:', updateError);
       return NextResponse.json({ error: 'Update failed' }, { status: 500 });
+    }
+
+    // Insert a time-series metric point for charts.
+    try {
+      const { error: insertError } = await supabase
+        .from('local_training_metrics')
+        .insert({
+          job_id: jobId,
+          step: metrics.step,
+          epoch: currentEpoch,
+          train_loss: trainLoss,
+          eval_loss: evalLoss,
+          learning_rate: typeof metrics?.learning_rate === 'number' ? metrics.learning_rate : null,
+          grad_norm: typeof metrics?.grad_norm === 'number' ? metrics.grad_norm : null,
+          samples_per_second: typeof metrics?.samples_per_second === 'number' ? metrics.samples_per_second : null,
+          tokens_per_second: typeof metrics?.tokens_per_second === 'number' ? metrics.tokens_per_second : null,
+          gpu_memory_allocated_gb: typeof metrics?.gpu_memory_allocated_gb === 'number' ? metrics.gpu_memory_allocated_gb : null,
+          gpu_memory_reserved_gb: typeof metrics?.gpu_memory_reserved_gb === 'number' ? metrics.gpu_memory_reserved_gb : null,
+          gpu_utilization_percent: typeof metrics?.gpu_utilization_percent === 'number' ? metrics.gpu_utilization_percent : null,
+          perplexity,
+          train_perplexity: trainPerplexity,
+          timestamp: nowIso,
+        });
+
+      if (insertError) {
+        console.warn('[Metrics API] Metrics insert failed:', insertError);
+      }
+    } catch (insertCatch) {
+      console.warn('[Metrics API] Metrics insert threw:', insertCatch);
     }
 
     return NextResponse.json({ success: true });

@@ -238,6 +238,16 @@ export async function POST(request: NextRequest) {
     console.log('[DatasetAPI] Valid dataset, detected format:', validation.detectedFormat);
     console.log('[DatasetAPI] Normalized examples:', validation.normalized?.stats.convertedCount);
 
+    const canonicalizeDetectedFormat = (detected: string | undefined): string | undefined => {
+      if (!detected) return detected;
+      if (detected.startsWith('sharegpt')) return 'sharegpt';
+      if (detected.startsWith('chatml')) return 'chatml';
+      return detected;
+    };
+
+    const detectedCanonical = canonicalizeDetectedFormat(validation.detectedFormat);
+    const formatMismatch = Boolean(detectedCanonical && detectedCanonical !== format);
+
     // Convert normalized data to JSONL for storage
     let normalizedJsonl;
     try {
@@ -419,6 +429,9 @@ export async function POST(request: NextRequest) {
         // Store detection metadata with cost estimates
         metadata: {
           original_format: validation.detectedFormat,
+          detected_format_canonical: detectedCanonical,
+          user_selected_format: format,
+          format_mismatch: formatMismatch,
           normalized: true,
           compressed: true,
           compression_type: 'gzip',

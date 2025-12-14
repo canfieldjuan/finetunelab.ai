@@ -31,6 +31,7 @@ import {
   Filter,
   Info,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import type {
   TrainingPrediction,
   PredictionsEpochSummary,
@@ -70,11 +71,19 @@ export function PredictionsTable({
         return;
       }
 
-      const data = await response.json();
+      // Defensive JSON parsing: handle empty or truncated responses
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('[PredictionsTable] Empty response body from predictions API');
+        setHasPredictions(false);
+        return;
+      }
+
+      const data = JSON.parse(text);
       const exists = (data.total_count || 0) > 0;
       setHasPredictions(exists);
     } catch (err) {
-      console.error('Error checking predictions:', err);
+      console.error('[PredictionsTable] Error checking predictions:', err);
       setHasPredictions(false);
     }
   }, [jobId, authToken]);
@@ -90,10 +99,18 @@ export function PredictionsTable({
         throw new Error('Failed to fetch epochs');
       }
 
-      const data = await response.json();
+      // Defensive JSON parsing: handle empty or truncated responses
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('[PredictionsTable] Empty response body from epochs API');
+        setEpochs([]);
+        return;
+      }
+
+      const data = JSON.parse(text);
       setEpochs(data.epochs || []);
     } catch (err) {
-      console.error('Error fetching epochs:', err);
+      console.error('[PredictionsTable] Error fetching epochs:', err);
     }
   }, [jobId, authToken]);
 
@@ -120,10 +137,20 @@ export function PredictionsTable({
         throw new Error('Failed to fetch predictions');
       }
 
-      const data = await response.json();
+      // Defensive JSON parsing: handle empty or truncated responses
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('[PredictionsTable] Empty response body from predictions API');
+        setPredictions([]);
+        setTotalCount(0);
+        return;
+      }
+
+      const data = JSON.parse(text);
       setPredictions(data.predictions || []);
       setTotalCount(data.total_count || 0);
     } catch (err) {
+      console.error('[PredictionsTable] Error fetching predictions:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
@@ -166,6 +193,34 @@ export function PredictionsTable({
   const truncate = (text: string, maxLen: number = 100) => {
     if (text.length <= maxLen) return text;
     return text.substring(0, maxLen) + '...';
+  };
+
+  const getValidationStatus = (pred: TrainingPrediction) => {
+    if (pred.validation_pass === true) {
+      return { label: 'Valid', variant: 'secondary' as const };
+    }
+    if (pred.validation_pass === false) {
+      return { label: 'Invalid', variant: 'destructive' as const };
+    }
+    return { label: 'Not run', variant: 'outline' as const };
+  };
+
+  const getValidationErrorCount = (errors: unknown): number | null => {
+    if (errors == null) return null;
+    if (Array.isArray(errors)) return errors.length;
+    if (typeof errors === 'string') return errors.trim() ? 1 : 0;
+    if (typeof errors === 'object') return 1;
+    return 1;
+  };
+
+  const formatValidationErrors = (errors: unknown): string | null => {
+    if (errors == null) return null;
+    if (typeof errors === 'string') return errors;
+    try {
+      return JSON.stringify(errors, null, 2);
+    } catch {
+      return String(errors);
+    }
   };
 
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -272,6 +327,9 @@ export function PredictionsTable({
                   <th className="px-4 py-2 text-left text-sm font-medium">
                     Prediction
                   </th>
+                  <th className="px-4 py-2 text-left text-sm font-medium">
+                    Validation
+                  </th>
                   <th className="px-4 py-2 text-center text-sm font-medium w-16">
                     View
                   </th>
@@ -280,6 +338,13 @@ export function PredictionsTable({
               <tbody>
                 {predictions.map((pred) => {
                   const isExpanded = expandedRows.has(pred.id);
+                  const validationStatus = getValidationStatus(pred);
+                  const validationErrorCount = getValidationErrorCount(
+                    pred.validation_errors
+                  );
+                  const validationErrorText = formatValidationErrors(
+                    pred.validation_errors
+                  );
                   return (
                     <tr key={pred.id} className="border-t hover:bg-muted/50">
                       <td className="px-4 py-3 text-sm">{pred.epoch}</td>
@@ -290,9 +355,38 @@ export function PredictionsTable({
                         {isExpanded ? pred.prompt : truncate(pred.prompt)}
                       </td>
                       <td className="px-4 py-3 text-sm max-w-xs">
-                        {isExpanded
-                          ? pred.prediction
-                          : truncate(pred.prediction)}
+                        <div className="space-y-2">
+                          <div>
+                            {isExpanded
+                              ? pred.prediction
+                              : truncate(pred.prediction)}
+                          </div>
+                          {isExpanded &&
+                            pred.validation_pass === false &&
+                            validationErrorText && (
+                              <pre className="text-xs p-2 bg-muted rounded border overflow-auto max-h-40 whitespace-pre-wrap">
+                                {validationErrorText}
+                              </pre>
+                            )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={validationStatus.variant}
+                            title={pred.validation_kind || undefined}
+                          >
+                            {validationStatus.label}
+                          </Badge>
+                          {pred.validation_pass === false &&
+                            validationErrorCount != null &&
+                            validationErrorCount > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                {validationErrorCount} error
+                                {validationErrorCount === 1 ? '' : 's'}
+                              </span>
+                            )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <Button

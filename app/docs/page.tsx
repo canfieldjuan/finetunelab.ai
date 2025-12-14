@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { Zap, Code2, BookMarked, FileCode, AlertCircle, ArrowRight, Rocket } from 'lucide-react';
+import { Zap, Code2, BookMarked, FileCode, AlertCircle, ArrowRight, Rocket, Package } from 'lucide-react';
 
 export default function DocsPage() {
   const { user, signOut, loading } = useAuth();
@@ -64,6 +64,15 @@ export default function DocsPage() {
       description: 'Step-by-step tutorials for common workflows and advanced features.',
       icon: BookMarked,
       href: '/docs/guides',
+      color: 'text-primary',
+      bgColor: 'bg-muted/50',
+      borderColor: 'border-border',
+    },
+    {
+      title: 'SDKs',
+      description: 'Official Python and Node.js SDKs for inference, batch testing, and analytics.',
+      icon: Package,
+      href: '/docs/sdk',
       color: 'text-primary',
       bgColor: 'bg-muted/50',
       borderColor: 'border-border',

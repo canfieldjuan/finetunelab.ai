@@ -46,9 +46,6 @@ export default function LabAcademyPage() {
               <Link href="/">
                 <FineTuneLabFullLogoV2 width={150} height={45} />
               </Link>
-              <span className="ml-4 text-lg font-semibold text-muted-foreground border-l pl-4">
-                Lab Academy
-              </span>
             </div>
             <div className="flex items-center gap-4">
               <Link href="/" className="text-sm font-medium hover:text-primary transition-colors">

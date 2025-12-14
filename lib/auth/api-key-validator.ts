@@ -1,6 +1,7 @@
 // API Key Validator Middleware
 // Validates API keys and retrieves user context
 // Date: 2025-10-17
+// Updated: 2025-12-12 - Added scopes and usage tracking
 
 import { createClient } from '@supabase/supabase-js';
 import { validateApiKeyFormat, verifyApiKeyHash } from './api-key-generator';
@@ -10,11 +11,51 @@ import { apiConfig } from '@/lib/config/api';
 // TYPE DEFINITIONS
 // ============================================================================
 
+export type ApiKeyScope = 'training' | 'production' | 'testing' | 'all';
+
+export const API_KEY_SCOPES: Record<ApiKeyScope, { label: string; description: string; endpoints: string[] }> = {
+  all: {
+    label: 'All Access',
+    description: 'Full access to all API endpoints',
+    endpoints: ['*'],
+  },
+  training: {
+    label: 'Training',
+    description: 'Training metrics, predictions, and job management',
+    endpoints: [
+      '/api/training/local/metrics',
+      '/api/training/local/predictions',
+      '/api/training/predictions/*',
+      '/api/training/jobs/*/metrics',
+    ],
+  },
+  production: {
+    label: 'Production',
+    description: 'Production monitoring, traces, and inference',
+    endpoints: [
+      '/api/v1/ingest',
+      '/api/v1/predict',
+      '/api/analytics/traces',
+    ],
+  },
+  testing: {
+    label: 'Testing',
+    description: 'Batch testing and evaluation',
+    endpoints: [
+      '/api/batch-testing/*',
+      '/api/evaluation/*',
+      '/api/test-suites/*',
+    ],
+  },
+};
+
 export interface ApiKeyValidationResult {
   isValid: boolean;
   userId?: string;
+  keyId?: string;
   keyName?: string;
   keyHash?: string;
+  scopes?: ApiKeyScope[];
   isActive?: boolean;
   errorMessage?: string;
 }
@@ -78,7 +119,7 @@ export async function validateApiKey(
     console.log('[API Key Validator] Querying database for API keys');
     const { data: apiKeys, error } = await supabase
       .from('user_api_keys')
-      .select('id, user_id, name, key_hash, is_active')
+      .select('id, user_id, name, key_hash, is_active, scopes')
       .eq('is_active', true);
 
     if (error) {
@@ -105,12 +146,20 @@ export async function validateApiKey(
         console.log('[API Key Validator] Key validated successfully');
         console.log('[API Key Validator] User ID:', keyRecord.user_id);
         console.log('[API Key Validator] Key Name:', keyRecord.name);
-        
+        console.log('[API Key Validator] Scopes:', keyRecord.scopes);
+
+        // Update usage stats asynchronously (fire and forget)
+        updateApiKeyUsage(supabase, keyRecord.id).catch(err => {
+          console.warn('[API Key Validator] Failed to update usage stats:', err);
+        });
+
         return {
           isValid: true,
           userId: keyRecord.user_id,
+          keyId: keyRecord.id,
           keyName: keyRecord.name,
           keyHash: keyRecord.key_hash,
+          scopes: (keyRecord.scopes as ApiKeyScope[]) || ['all'],
           isActive: true
         };
       }
@@ -284,4 +333,108 @@ export async function validateRequest(
   
   // All checks passed
   return validation;
+}
+
+// ============================================================================
+// SCOPE CHECKING - Block 4: Check API Key Scopes
+// ============================================================================
+
+/**
+ * Checks if an API key has the required scope
+ * @param keyScopes - The scopes assigned to the API key
+ * @param requiredScope - The scope required for the endpoint
+ * @returns true if key has access
+ */
+export function hasScope(keyScopes: ApiKeyScope[], requiredScope: ApiKeyScope): boolean {
+  // 'all' scope grants access to everything
+  if (keyScopes.includes('all')) {
+    return true;
+  }
+  // Check if required scope is in key's scopes
+  return keyScopes.includes(requiredScope);
+}
+
+/**
+ * Validates API key from request and checks both rate limit and scope
+ * Complete validation pipeline for scoped API endpoints
+ *
+ * @param headers - Request headers
+ * @param requiredScope - The scope required for this endpoint
+ * @returns Validation result with user context
+ */
+export async function validateRequestWithScope(
+  headers: Headers,
+  requiredScope: ApiKeyScope
+): Promise<ApiKeyValidationResult & { rateLimitExceeded?: boolean; scopeError?: boolean }> {
+  // First do standard validation
+  const validation = await validateRequest(headers);
+
+  if (!validation.isValid) {
+    return validation;
+  }
+
+  // Check scope
+  const keyScopes = validation.scopes || ['all'];
+  if (!hasScope(keyScopes, requiredScope)) {
+    console.warn('[API Key Validator] Scope check failed. Required:', requiredScope, 'Has:', keyScopes);
+    return {
+      isValid: false,
+      scopeError: true,
+      errorMessage: `API key does not have '${requiredScope}' scope. Key scopes: ${keyScopes.join(', ')}`
+    };
+  }
+
+  return validation;
+}
+
+// ============================================================================
+// USAGE TRACKING - Block 5: Update Usage Statistics
+// ============================================================================
+
+/**
+ * Updates API key usage statistics (request_count, last_used_at)
+ * Called automatically when a key is validated
+ *
+ * @param supabase - Supabase client with service role
+ * @param keyId - The API key ID to update
+ */
+async function updateApiKeyUsage(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  keyId: string
+): Promise<void> {
+  try {
+    // Try RPC first (most efficient)
+    const { error } = await supabase.rpc('update_api_key_usage', {
+      p_key_id: keyId
+    });
+
+    if (error) {
+      // Fallback to direct SQL update if RPC doesn't exist
+      if (error.code === 'PGRST202' || error.code === '42883') {
+        // Use raw SQL to increment counter
+        const { error: updateError } = await supabase
+          .from('user_api_keys')
+          .update({
+            last_used_at: new Date().toISOString()
+          })
+          .eq('id', keyId);
+
+        if (updateError) {
+          console.warn('[API Key Usage] Direct update failed:', updateError.message);
+        } else {
+          // Increment request_count separately using raw query
+          await supabase.rpc('exec_sql', {
+            query: `UPDATE user_api_keys SET request_count = COALESCE(request_count, 0) + 1 WHERE id = '${keyId}'`
+          }).catch(() => {
+            // If exec_sql doesn't exist, that's fine - we at least updated last_used_at
+          });
+        }
+      } else {
+        console.warn('[API Key Usage] RPC error:', error.message);
+      }
+    }
+  } catch (err) {
+    console.warn('[API Key Usage] Failed to update usage:', err);
+  }
 }

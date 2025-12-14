@@ -55,7 +55,15 @@ export function PredictionsTrendsChart({
         return;
       }
 
-      const data = await response.json();
+      // Defensive JSON parsing: handle empty or truncated responses
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('[PredictionsTrendsChart] Empty response body from predictions API');
+        setHasPredictions(false);
+        return;
+      }
+
+      const data = JSON.parse(text);
       const exists = (data.total_count || 0) > 0;
       setHasPredictions(exists);
     } catch (err) {
@@ -78,9 +86,18 @@ export function PredictionsTrendsChart({
         throw new Error('Failed to fetch trends');
       }
 
-      const data = await response.json();
+      // Defensive JSON parsing: handle empty or truncated responses
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('[PredictionsTrendsChart] Empty response body from trends API');
+        setTrendsData(null);
+        return;
+      }
+
+      const data = JSON.parse(text);
       setTrendsData(data);
     } catch (err) {
+      console.error('[PredictionsTrendsChart] Error fetching trends:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
@@ -163,9 +180,17 @@ export function PredictionsTrendsChart({
   }
 
   const trends = trendsData.trends;
-  const hasScores = trends.some(t => t.avg_char_error_rate !== null);
+  const hasQualityMetrics = trends.some(
+    (t) =>
+      t.avg_char_error_rate !== null ||
+      t.avg_exact_match !== null ||
+      t.avg_word_overlap !== null
+  );
+  const hasValidation = trends.some(
+    (t) => t.validation_pass_rate !== null && t.validation_pass_rate !== undefined
+  );
 
-  if (!hasScores) {
+  if (!hasQualityMetrics && !hasValidation) {
     return (
       <Card>
         <CardHeader>
@@ -175,8 +200,9 @@ export function PredictionsTrendsChart({
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
-              Predictions found, but no quality scores available.
-              Ensure your dataset includes ground truth responses.
+              Predictions found, but no trend metrics are available.
+              Ensure your dataset includes ground truth responses and/or
+              enable validators.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -219,142 +245,197 @@ export function PredictionsTrendsChart({
       <CardContent>
         <div className="space-y-6">
           {/* Character Error Rate Chart */}
-          <div>
-            <h4 className="text-sm font-medium mb-2">Character Error Rate (CER)</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={trends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="epoch"
-                  label={{ value: 'Epoch', position: 'insideBottom', offset: -5 }}
-                />
-                <YAxis
-                  label={{ value: 'Error Rate', angle: -90, position: 'insideLeft' }}
-                  domain={[0, 1]}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-white border border-gray-200 p-3 rounded shadow-lg">
-                          <p className="font-semibold">Epoch {data.epoch}</p>
-                          <p className="text-sm text-gray-600">Step {data.step}</p>
-                          <p className="text-sm">Avg CER: {data.avg_char_error_rate?.toFixed(3) || 'N/A'}</p>
-                          <p className="text-xs text-gray-500">
-                            Range: {data.min_char_error_rate?.toFixed(3)} - {data.max_char_error_rate?.toFixed(3)}
-                          </p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="avg_char_error_rate"
-                  stroke="#ef4444"
-                  strokeWidth={2}
-                  name="Avg Error Rate"
-                  dot={{ r: 4 }}
-                  connectNulls
-                />
-              </LineChart>
-            </ResponsiveContainer>
-            <p className="text-xs text-gray-500 mt-1">Lower is better. 0.0 = perfect match, 1.0 = completely wrong</p>
-          </div>
+          {trends.some((t) => t.avg_char_error_rate !== null) && (
+            <div>
+              <h4 className="text-sm font-medium mb-2">Character Error Rate (CER)</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trends}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="epoch"
+                    label={{ value: 'Epoch', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis
+                    label={{ value: 'Error Rate', angle: -90, position: 'insideLeft' }}
+                    domain={[0, 1]}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-white border border-gray-200 p-3 rounded shadow-lg">
+                            <p className="font-semibold">Epoch {data.epoch}</p>
+                            <p className="text-sm text-gray-600">Step {data.step}</p>
+                            <p className="text-sm">Avg CER: {data.avg_char_error_rate?.toFixed(3) || 'N/A'}</p>
+                            <p className="text-xs text-gray-500">
+                              Range: {data.min_char_error_rate?.toFixed(3)} - {data.max_char_error_rate?.toFixed(3)}
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="avg_char_error_rate"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    name="Avg Error Rate"
+                    dot={{ r: 4 }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-gray-500 mt-1">Lower is better. 0.0 = perfect match, 1.0 = completely wrong</p>
+            </div>
+          )}
 
           {/* Exact Match Rate Chart */}
-          <div>
-            <h4 className="text-sm font-medium mb-2">Exact Match Rate</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={trends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="epoch"
-                  label={{ value: 'Epoch', position: 'insideBottom', offset: -5 }}
-                />
-                <YAxis
-                  label={{ value: 'Match Rate', angle: -90, position: 'insideLeft' }}
-                  domain={[0, 1]}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-white border border-gray-200 p-3 rounded shadow-lg">
-                          <p className="font-semibold">Epoch {data.epoch}</p>
-                          <p className="text-sm">
-                            Exact Match: {((data.avg_exact_match || 0) * 100).toFixed(1)}%
-                          </p>
-                          <p className="text-xs text-gray-500">{data.sample_count} samples</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="avg_exact_match"
-                  stroke="#22c55e"
-                  strokeWidth={2}
-                  name="Exact Match %"
-                  dot={{ r: 4 }}
-                  connectNulls
-                />
-              </LineChart>
-            </ResponsiveContainer>
-            <p className="text-xs text-gray-500 mt-1">Higher is better. 1.0 = perfect match</p>
-          </div>
+          {trends.some((t) => t.avg_exact_match !== null) && (
+            <div>
+              <h4 className="text-sm font-medium mb-2">Exact Match Rate</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trends}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="epoch"
+                    label={{ value: 'Epoch', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis
+                    label={{ value: 'Match Rate', angle: -90, position: 'insideLeft' }}
+                    domain={[0, 1]}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-white border border-gray-200 p-3 rounded shadow-lg">
+                            <p className="font-semibold">Epoch {data.epoch}</p>
+                            <p className="text-sm">
+                              Exact Match: {((data.avg_exact_match || 0) * 100).toFixed(1)}%
+                            </p>
+                            <p className="text-xs text-gray-500">{data.sample_count} samples</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="avg_exact_match"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    name="Exact Match %"
+                    dot={{ r: 4 }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-gray-500 mt-1">Higher is better. 1.0 = perfect match</p>
+            </div>
+          )}
 
           {/* Word Overlap Chart */}
-          <div>
-            <h4 className="text-sm font-medium mb-2">Word Overlap</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={trends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="epoch"
-                  label={{ value: 'Epoch', position: 'insideBottom', offset: -5 }}
-                />
-                <YAxis
-                  label={{ value: 'Overlap Score', angle: -90, position: 'insideLeft' }}
-                  domain={[0, 1]}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-white border border-gray-200 p-3 rounded shadow-lg">
-                          <p className="font-semibold">Epoch {data.epoch}</p>
-                          <p className="text-sm">
-                            Word Overlap: {((data.avg_word_overlap || 0) * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="avg_word_overlap"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  name="Word Overlap"
-                  dot={{ r: 4 }}
-                  connectNulls
-                />
-              </LineChart>
-            </ResponsiveContainer>
-            <p className="text-xs text-gray-500 mt-1">Higher is better. Measures word-level similarity</p>
-          </div>
+          {trends.some((t) => t.avg_word_overlap !== null) && (
+            <div>
+              <h4 className="text-sm font-medium mb-2">Word Overlap</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trends}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="epoch"
+                    label={{ value: 'Epoch', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis
+                    label={{ value: 'Overlap Score', angle: -90, position: 'insideLeft' }}
+                    domain={[0, 1]}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-white border border-gray-200 p-3 rounded shadow-lg">
+                            <p className="font-semibold">Epoch {data.epoch}</p>
+                            <p className="text-sm">
+                              Word Overlap: {((data.avg_word_overlap || 0) * 100).toFixed(1)}%
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="avg_word_overlap"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    name="Word Overlap"
+                    dot={{ r: 4 }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-gray-500 mt-1">Higher is better. Measures word-level similarity</p>
+            </div>
+          )}
+
+          {/* Validation Pass Rate Chart */}
+          {hasValidation && (
+            <div>
+              <h4 className="text-sm font-medium mb-2">Validation Pass Rate</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trends}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="epoch"
+                    label={{ value: 'Epoch', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis
+                    label={{ value: 'Pass Rate', angle: -90, position: 'insideLeft' }}
+                    domain={[0, 1]}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        const rate = data.validation_pass_rate;
+                        return (
+                          <div className="bg-white border border-gray-200 p-3 rounded shadow-lg">
+                            <p className="font-semibold">Epoch {data.epoch}</p>
+                            <p className="text-sm">
+                              Pass Rate: {rate == null ? 'N/A' : `${(rate * 100).toFixed(1)}%`}
+                            </p>
+                            <p className="text-xs text-gray-500">{data.sample_count} samples</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="validation_pass_rate"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    name="Validation Pass %"
+                    dot={{ r: 4 }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-gray-500 mt-1">Higher is better. 1.0 = all outputs passed validation</p>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -152,7 +152,7 @@ export async function GET(
         job_config: job.config || {},  // Include job config for manual editing
       });
 
-    } catch (execError: any) {
+    } catch (execError: unknown) {
       console.error('[AnalyzeFailure] CLI execution error:', execError);
       console.error('[AnalyzeFailure] Error details:', {
         message: execError?.message,

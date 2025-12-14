@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RefreshCw, Upload, Search, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { RefreshCw, Upload, Search, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp, Filter, X } from 'lucide-react';
 import type { TrainingDatasetRecord } from '@/lib/training/dataset.types';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -31,6 +31,11 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedDatasetId, setExpandedDatasetId] = useState<string | null>(null);
 
+  // Filter state
+  const [filterFormat, setFilterFormat] = useState<string>('all');
+  const [filterSize, setFilterSize] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('newest');
+
   // Upload form state
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
@@ -40,6 +45,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
 
   console.log('[DatasetManager] expandedDatasetId:', expandedDatasetId);
 
@@ -88,12 +94,51 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      setFile(selectedFile);
-      if (!name) {
-        setName(selectedFile.name.replace(/\.[^/.]+$/, ''));
-      }
-      setUploadError(null);
-      setUploadSuccess(false);
+      processFile(selectedFile);
+    }
+  };
+
+  const processFile = (selectedFile: File) => {
+    const validExtensions = ['.jsonl', '.json', '.csv', '.txt', '.parquet'];
+    const fileExtension = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase();
+
+    if (!validExtensions.includes(fileExtension)) {
+      setUploadError('Invalid file type. Supported: .jsonl, .json, .csv, .txt, .parquet');
+      return;
+    }
+
+    setFile(selectedFile);
+    if (!name) {
+      setName(selectedFile.name.replace(/\.[^/.]+$/, ''));
+    }
+    setUploadError(null);
+    setUploadSuccess(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!uploading) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (uploading) return;
+
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (droppedFile) {
+      processFile(droppedFile);
     }
   };
 
@@ -176,16 +221,58 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
 
   const filteredDatasets = datasets
     .filter((dataset) => {
-      if (!searchQuery) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        dataset.name.toLowerCase().includes(query) ||
-        (dataset.description?.toLowerCase().includes(query) || false) ||
-        dataset.format.toLowerCase().includes(query)
-      );
+      // Text search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = (
+          dataset.name.toLowerCase().includes(query) ||
+          (dataset.description?.toLowerCase().includes(query) || false) ||
+          dataset.format.toLowerCase().includes(query)
+        );
+        if (!matchesSearch) return false;
+      }
+
+      // Format filter
+      if (filterFormat !== 'all' && dataset.format !== filterFormat) {
+        return false;
+      }
+
+      // Size filter
+      if (filterSize !== 'all') {
+        const sizeBytes = dataset.file_size_bytes;
+        const KB = 1024;
+        const MB = KB * 1024;
+        switch (filterSize) {
+          case 'small': // < 1MB
+            if (sizeBytes >= MB) return false;
+            break;
+          case 'medium': // 1MB - 10MB
+            if (sizeBytes < MB || sizeBytes >= 10 * MB) return false;
+            break;
+          case 'large': // > 10MB
+            if (sizeBytes < 10 * MB) return false;
+            break;
+        }
+      }
+
+      return true;
     })
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 6);
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'size':
+          return b.file_size_bytes - a.file_size_bytes;
+        case 'examples':
+          return b.total_examples - a.total_examples;
+        default:
+          return 0;
+      }
+    });
 
   return (
     <div className="space-y-6">
@@ -214,16 +301,42 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="dataset-file">Dataset File</Label>
-              <Input
-                id="dataset-file"
-                type="file"
-                accept=".jsonl,.json,.csv,.txt,.parquet"
-                onChange={handleFileChange}
-                disabled={uploading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Supported: .jsonl, .json, .csv, .txt, .parquet
-              </p>
+              <div
+                className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  isDragging
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                    : file
+                    ? 'border-green-500 bg-green-50 dark:bg-green-950'
+                    : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+                } ${uploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <input
+                  id="dataset-file"
+                  type="file"
+                  accept=".jsonl,.json,.csv,.txt,.parquet"
+                  onChange={handleFileChange}
+                  disabled={uploading}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                />
+                <Upload className={`h-8 w-8 mx-auto mb-2 ${
+                  isDragging ? 'text-blue-500' : file ? 'text-green-500' : 'text-muted-foreground'
+                }`} />
+                {file ? (
+                  <p className="text-sm font-medium text-foreground">{file.name}</p>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-foreground">
+                      {isDragging ? 'Drop file here' : 'Drag and drop or click to select'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      .jsonl, .json, .csv, .txt, .parquet
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -336,15 +449,80 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
             </Button>
           </div>
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search datasets by name, description, or format..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+          {/* Search and Filters */}
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search by name or description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+
+              <Select value={filterFormat} onValueChange={setFilterFormat}>
+                <SelectTrigger className="w-32 h-8 text-xs">
+                  <SelectValue placeholder="Format" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Formats</SelectItem>
+                  <SelectItem value="chatml">ChatML</SelectItem>
+                  <SelectItem value="sharegpt">ShareGPT</SelectItem>
+                  <SelectItem value="jsonl">JSONL</SelectItem>
+                  <SelectItem value="dpo">DPO</SelectItem>
+                  <SelectItem value="rlhf">RLHF</SelectItem>
+                  <SelectItem value="alpaca">Alpaca</SelectItem>
+                  <SelectItem value="openorca">OpenOrca</SelectItem>
+                  <SelectItem value="unnatural">Unnatural</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterSize} onValueChange={setFilterSize}>
+                <SelectTrigger className="w-28 h-8 text-xs">
+                  <SelectValue placeholder="Size" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sizes</SelectItem>
+                  <SelectItem value="small">&lt; 1 MB</SelectItem>
+                  <SelectItem value="medium">1-10 MB</SelectItem>
+                  <SelectItem value="large">&gt; 10 MB</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-32 h-8 text-xs">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="name">Name A-Z</SelectItem>
+                  <SelectItem value="size">Largest First</SelectItem>
+                  <SelectItem value="examples">Most Examples</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(filterFormat !== 'all' || filterSize !== 'all' || searchQuery) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => {
+                    setFilterFormat('all');
+                    setFilterSize('all');
+                    setSearchQuery('');
+                  }}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
 
           {expandedDatasetId && (
@@ -361,10 +539,17 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
               <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No datasets found</h3>
               <p className="text-muted-foreground mb-4">
-                Try adjusting your search query
+                Try adjusting your search or filters
               </p>
-              <Button onClick={() => setSearchQuery('')} variant="outline">
-                Clear Search
+              <Button
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilterFormat('all');
+                  setFilterSize('all');
+                }}
+                variant="outline"
+              >
+                Clear All Filters
               </Button>
             </div>
           ) : (

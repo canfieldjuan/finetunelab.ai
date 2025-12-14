@@ -11,9 +11,14 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+type RealtimeUpdate = {
+  event: string;
+  data: unknown;
+};
+
 export default function TestRealtimePage() {
   const [status, setStatus] = useState<string>('Initializing...');
-  const [updates, setUpdates] = useState<any[]>([]);
+  const [updates, setUpdates] = useState<RealtimeUpdate[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -118,9 +123,9 @@ export default function TestRealtimePage() {
       <div style={{ marginTop: '30px', padding: '20px', background: '#f8f9fa', borderRadius: '4px' }}>
         <h3>Troubleshooting</h3>
         <ul style={{ lineHeight: '1.8' }}>
-          <li>✅ Status should show "SUBSCRIBED" if realtime is working</li>
-          <li>❌ "TIMED_OUT" means tables aren't in supabase_realtime publication</li>
-          <li>❌ "CHANNEL_ERROR" means RLS policy or permissions issue</li>
+          <li>✅ Status should show &quot;SUBSCRIBED&quot; if realtime is working</li>
+          <li>❌ &quot;TIMED_OUT&quot; means tables aren&apos;t in supabase_realtime publication</li>
+          <li>❌ &quot;CHANNEL_ERROR&quot; means RLS policy or permissions issue</li>
           <li>📊 Updates will appear when training jobs are modified</li>
         </ul>
       </div>

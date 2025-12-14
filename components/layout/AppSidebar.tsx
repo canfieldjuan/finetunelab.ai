@@ -43,7 +43,7 @@ import { NotificationCenter } from '@/components/workspace/NotificationCenter';
 import { ManageWorkspacesDialog } from '@/components/workspace/ManageWorkspacesDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { FineTuneLabFullLogo } from '@/components/branding';
+import { FineTuneLabFullLogoV2 } from '@/components/branding';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -190,7 +190,7 @@ export function AppSidebar({
         {/* Brand/Logo Section */}
         <div className="mb-2">
           <Link href="/chat" className="hover:opacity-80 transition-opacity">
-            <FineTuneLabFullLogo width={180} height={54} />
+            <FineTuneLabFullLogoV2 width={180} height={54} />
           </Link>
         </div>
 
@@ -289,69 +289,71 @@ export function AppSidebar({
                 collapsible={false}
               />
 
-              {/* Lab Notes & Case Studies - Standalone */}
-              <div className="pt-2 border-t space-y-1">
-                {(() => {
-                  const ItemIcon = labNotesItem.icon;
-                  const isActive = labNotesItem.id === currentPage || currentPage.startsWith('lab-notes');
-                  return (
-                    <Link href={labNotesItem.href} className="block">
-                      <button
-                        type="button"
-                        className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-accent text-accent-foreground font-medium'
-                            : 'hover:bg-muted'
-                        }`}
-                        aria-current={isActive ? 'page' : undefined}
-                      >
-                        <ItemIcon className="w-3.5 h-3.5" />
-                        <span>🧪 {labNotesItem.label}</span>
-                      </button>
-                    </Link>
-                  );
-                })()}
-                {(() => {
-                  const ItemIcon = labAcademyItem.icon;
-                  const isActive = labAcademyItem.id === currentPage || currentPage.startsWith('lab-academy');
-                  return (
-                    <Link href={labAcademyItem.href} className="block">
-                      <button
-                        type="button"
-                        className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-accent text-accent-foreground font-medium'
-                            : 'hover:bg-muted'
-                        }`}
-                        aria-current={isActive ? 'page' : undefined}
-                      >
-                        <ItemIcon className="w-3.5 h-3.5" />
-                        <span>📚 {labAcademyItem.label}</span>
-                      </button>
-                    </Link>
-                  );
-                })()}
-                {(() => {
-                  const ItemIcon = caseStudiesItem.icon;
-                  const isActive = caseStudiesItem.id === currentPage || currentPage.startsWith('case-studies');
-                  return (
-                    <Link href={caseStudiesItem.href} className="block">
-                      <button
-                        type="button"
-                        className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-accent text-accent-foreground font-medium'
-                            : 'hover:bg-muted'
-                        }`}
-                        aria-current={isActive ? 'page' : undefined}
-                      >
-                        <ItemIcon className="w-3.5 h-3.5" />
-                        <span>🎯 {caseStudiesItem.label}</span>
-                      </button>
-                    </Link>
-                  );
-                })()}
-              </div>
+              {/* Lab Notes & Case Studies - Hidden on Chat page */}
+              {currentPage !== 'chat' && (
+                <div className="pt-2 border-t space-y-1">
+                  {(() => {
+                    const ItemIcon = labNotesItem.icon;
+                    const isActive = labNotesItem.id === currentPage || currentPage.startsWith('lab-notes');
+                    return (
+                      <Link href={labNotesItem.href} className="block">
+                        <button
+                          type="button"
+                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-accent text-accent-foreground font-medium'
+                              : 'hover:bg-muted'
+                          }`}
+                          aria-current={isActive ? 'page' : undefined}
+                        >
+                          <ItemIcon className="w-3.5 h-3.5" />
+                          <span>🧪 {labNotesItem.label}</span>
+                        </button>
+                      </Link>
+                    );
+                  })()}
+                  {(() => {
+                    const ItemIcon = labAcademyItem.icon;
+                    const isActive = labAcademyItem.id === currentPage || currentPage.startsWith('lab-academy');
+                    return (
+                      <Link href={labAcademyItem.href} className="block">
+                        <button
+                          type="button"
+                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-accent text-accent-foreground font-medium'
+                              : 'hover:bg-muted'
+                          }`}
+                          aria-current={isActive ? 'page' : undefined}
+                        >
+                          <ItemIcon className="w-3.5 h-3.5" />
+                          <span>📚 {labAcademyItem.label}</span>
+                        </button>
+                      </Link>
+                    );
+                  })()}
+                  {(() => {
+                    const ItemIcon = caseStudiesItem.icon;
+                    const isActive = caseStudiesItem.id === currentPage || currentPage.startsWith('case-studies');
+                    return (
+                      <Link href={caseStudiesItem.href} className="block">
+                        <button
+                          type="button"
+                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-accent text-accent-foreground font-medium'
+                              : 'hover:bg-muted'
+                          }`}
+                          aria-current={isActive ? 'page' : undefined}
+                        >
+                          <ItemIcon className="w-3.5 h-3.5" />
+                          <span>🎯 {caseStudiesItem.label}</span>
+                        </button>
+                      </Link>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </>
         )}

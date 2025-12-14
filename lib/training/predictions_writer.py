@@ -129,8 +129,25 @@ class PredictionsWriter:
                 'epoch': pred['epoch'],
                 'step': pred['step'],
                 'sample_index': pred['sample_index'],
+                'source_index': pred.get('source_index'),
+                'prompt_id': pred.get('prompt_id'),
+                'sample_source': pred.get('sample_source'),
+                'sample_source_id': pred.get('sample_source_id'),
                 'prompt': pred['prompt'],
-                'prediction': pred['prediction']
+                'prediction': pred['prediction'],
+
+                # Generation metadata (optional)
+                'prompt_tokens': pred.get('prompt_tokens'),
+                'completion_tokens': pred.get('completion_tokens'),
+                'total_tokens': pred.get('total_tokens'),
+                'latency_ms': pred.get('latency_ms'),
+                'max_new_tokens': pred.get('max_new_tokens'),
+                'do_sample': pred.get('do_sample'),
+
+                # Validation results (optional)
+                'validation_pass': pred.get('validation_pass'),
+                'validation_kind': pred.get('validation_kind'),
+                'validation_errors': pred.get('validation_errors')
             }
 
             if pred.get('ground_truth'):

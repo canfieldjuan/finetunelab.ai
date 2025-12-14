@@ -7,6 +7,7 @@ Samples are stored for consistency across epochs.
 import random
 import json
 import gzip
+import hashlib
 
 
 class PredictionsSampler:
@@ -24,7 +25,7 @@ class PredictionsSampler:
         if random_seed is not None:
             random.seed(random_seed)
 
-    def load_samples(self, dataset_path, sample_count):
+    def load_samples(self, dataset_path, sample_count, sample_source=None, sample_source_id=None):
         """
         Load random samples from dataset
 
@@ -36,6 +37,14 @@ class PredictionsSampler:
             list: Sampled prompts with ground truth
         """
         samples = []
+
+        if sample_source is None:
+            sample_source = 'dataset'
+        if sample_source_id is None and isinstance(dataset_path, str):
+            try:
+                sample_source_id = dataset_path.split('/')[-1]
+            except Exception:
+                sample_source_id = None
 
         try:
             # Handle gzip compressed files
@@ -66,14 +75,27 @@ class PredictionsSampler:
                     if len(data) < sample_count:
                         sample_count = len(data)
 
-                    sampled_items = random.sample(data, sample_count) if data else []
+                    # Sample by original indices to preserve a stable source_index
+                    sampled_indices = random.sample(range(len(data)), sample_count) if data else []
 
-                    for idx, item in enumerate(sampled_items):
+                    for idx, source_index in enumerate(sampled_indices):
+                        item = data[source_index]
+                        prompt = self._extract_prompt(item)
+                        ground_truth = self._extract_ground_truth(item)
+                        messages = item.get('messages') if 'messages' in item else None
+
                         sample = {
+                            # sample_index for UI/ordering within this run
                             'index': idx,
-                            'prompt': self._extract_prompt(item),
-                            'ground_truth': self._extract_ground_truth(item),
-                            'messages': item.get('messages') if 'messages' in item else None
+                            # stable-ish identifier within the source dataset
+                            'source_index': int(source_index),
+                            'sample_source': sample_source,
+                            'sample_source_id': sample_source_id,
+                            'prompt': prompt,
+                            'ground_truth': ground_truth,
+                            'messages': messages,
+                            # stable prompt identity for cross-run comparisons
+                            'prompt_id': self._compute_prompt_id(prompt, messages)
                         }
                         samples.append(sample)
                 else:
@@ -83,16 +105,24 @@ class PredictionsSampler:
                     if len(lines) < sample_count:
                         sample_count = len(lines)
 
-                    sampled_lines = random.sample(lines, sample_count) if lines else []
+                    # Sample by line number to preserve stable source_index
+                    sampled_indices = random.sample(range(len(lines)), sample_count) if lines else []
 
-                    for idx, line in enumerate(sampled_lines):
+                    for idx, line_index in enumerate(sampled_indices):
                         try:
-                            data = json.loads(line.strip())
+                            data = json.loads(lines[line_index].strip())
+                            prompt = self._extract_prompt(data)
+                            ground_truth = self._extract_ground_truth(data)
+                            messages = data.get('messages') if 'messages' in data else None
                             sample = {
                                 'index': idx,
-                                'prompt': self._extract_prompt(data),
-                                'ground_truth': self._extract_ground_truth(data),
-                                'messages': data.get('messages') if 'messages' in data else None
+                                'source_index': int(line_index),
+                                'sample_source': sample_source,
+                                'sample_source_id': sample_source_id,
+                                'prompt': prompt,
+                                'ground_truth': ground_truth,
+                                'messages': messages,
+                                'prompt_id': self._compute_prompt_id(prompt, messages)
                             }
                             samples.append(sample)
                         except (json.JSONDecodeError, KeyError):
@@ -133,6 +163,22 @@ class PredictionsSampler:
             return data['response']
 
         return None
+
+    def _compute_prompt_id(self, prompt, messages):
+        """Compute a stable prompt id for cross-run comparisons.
+
+        Uses messages (if present) else prompt text. This intentionally excludes
+        ground truth so the id reflects the prompt/question identity.
+        """
+        if messages is not None:
+            try:
+                canonical = json.dumps(messages, ensure_ascii=False, sort_keys=True)
+            except Exception:
+                canonical = str(messages)
+        else:
+            canonical = prompt or ''
+
+        return hashlib.sha256(canonical.encode('utf-8', errors='ignore')).hexdigest()
 
     def get_samples(self):
         """Return loaded samples"""

@@ -22,6 +22,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ApiKeysManagement } from '@/components/settings/ApiKeysManagement';
 import { WidgetAppsManagement } from '@/components/settings/WidgetAppsManagement';
+import { IntegrationsManagement } from '@/components/settings/IntegrationsManagement';
 import type { ProviderSecretDisplay } from '@/lib/secrets/secrets.types';
 import type { ModelProvider } from '@/lib/models/llm-model.types';
 
@@ -159,119 +160,116 @@ export default function SecretsPage() {
         {/* Loading State */}
         {loading && <LoadingState message="Loading secrets..." />}
 
+        {/* Third-Party Integrations Section - At Top */}
+        {user && session?.access_token && (
+          <div className="mb-8">
+            <IntegrationsManagement
+              userId={user.id}
+              sessionToken={session.access_token}
+            />
+          </div>
+        )}
+
         {/* Secrets List */}
         {!loading && (
           <div className="space-y-4">
-            {/* Configured Secrets */}
-            {secrets.length > 0 && (
-              <div className="space-y-3">
-                <h2 className="text-xl font-semibold">Configured Providers</h2>
-                {secrets.map((secret) => (
-                  <div
-                    key={secret.id}
-                    className="border border-border rounded-lg p-4 bg-card hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="p-2 bg-primary/10 rounded-md">
-                          <Key className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg">
-                            {providerInfo[secret.provider]?.name || secret.provider}
-                          </h3>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {providerInfo[secret.provider]?.description}
-                          </p>
-                          <div className="text-sm space-y-1">
-                            <p className="font-mono text-xs bg-muted px-2 py-1 rounded inline-block">
-                              {secret.api_key_preview}
-                            </p>
-                            {secret.description && (
-                              <p className="text-muted-foreground italic">{secret.description}</p>
-                            )}
-                            {/* Show HuggingFace username if set */}
-                            {secret.provider === 'huggingface' && (secret.metadata as { username?: string } | null)?.username && (
-                              <p className="text-xs text-muted-foreground">
-                                HF Username: <span className="font-medium">{(secret.metadata as { username?: string })?.username}</span>
-                              </p>
-                            )}
-                            {secret.last_used_at && (
-                              <p className="text-xs text-muted-foreground">
-                                Last used: {new Date(secret.last_used_at).toLocaleDateString()}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingProvider(secret.provider)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleDeleteSecret(secret.provider)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Available Providers */}
-            <div className="space-y-3">
-              <h2 className="text-xl font-semibold mt-6">Add Provider Secret</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Available Providers - Now First */}
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold">Add Provider</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                 {(Object.keys(providerInfo) as ModelProvider[])
                   .filter(provider => !secrets.find(s => s.provider === provider))
                   .map((provider) => (
                     <button
                       key={provider}
                       onClick={() => setEditingProvider(provider)}
-                      className="border border-dashed border-border rounded-lg p-4 hover:bg-muted/50 transition-colors text-left group"
+                      className="border border-dashed border-border rounded-lg p-2.5 hover:bg-muted/50 transition-colors text-left group"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-muted rounded-md group-hover:bg-primary/10 transition-colors">
-                          <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-muted rounded group-hover:bg-primary/10 transition-colors shrink-0">
+                          <Plus className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
                         </div>
-                        <div>
-                          <h3 className="font-semibold">{providerInfo[provider].name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {providerInfo[provider].description}
-                          </p>
+                        <div className="min-w-0">
+                          <h3 className="font-medium text-sm truncate">{providerInfo[provider].name}</h3>
                         </div>
                       </div>
                     </button>
                   ))}
               </div>
             </div>
+
+            {/* Configured Secrets - Now Second */}
+            {secrets.length > 0 && (
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold mt-4">Configured Providers</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {secrets.map((secret) => (
+                    <div
+                      key={secret.id}
+                      className="border border-border rounded-lg p-3 bg-card hover:shadow-sm transition-shadow"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          <div className="p-1.5 bg-primary/10 rounded shrink-0">
+                            <Key className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-sm truncate">
+                              {providerInfo[secret.provider]?.name || secret.provider}
+                            </h3>
+                            <p className="font-mono text-xs text-muted-foreground truncate">
+                              {secret.api_key_preview}
+                            </p>
+                            {secret.provider === 'huggingface' && (secret.metadata as { username?: string } | null)?.username && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                @{(secret.metadata as { username?: string })?.username}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => setEditingProvider(secret.provider)}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteSecret(secret.provider)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Widget API Keys Section */}
         {user && session?.access_token && (
-          <div className="mt-12">
-            <ApiKeysManagement 
-              userId={user.id} 
-              sessionToken={session.access_token} 
+          <div className="mt-8">
+            <ApiKeysManagement
+              userId={user.id}
+              sessionToken={session.access_token}
             />
           </div>
         )}
 
         {/* Embeddable Widget Apps Section */}
         {user && session?.access_token && (
-          <div className="mt-12">
-            <WidgetAppsManagement 
-              userId={user.id} 
-              sessionToken={session.access_token} 
+          <div className="mt-8">
+            <WidgetAppsManagement
+              userId={user.id}
+              sessionToken={session.access_token}
             />
           </div>
         )}

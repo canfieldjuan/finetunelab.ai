@@ -23,20 +23,24 @@ export interface DatasetExtractionResult {
   errors?: string[];
 }
 
+export type DatasetExtractionAuth =
+  | { mode: 'session'; sessionToken: string }
+  | { mode: 'service' };
+
 /**
  * Extract prompts from a training dataset
  *
  * @param datasetId - ID of the dataset in training_datasets table
  * @param maxPrompts - Maximum number of prompts to extract
  * @param userId - User ID for access verification
- * @param sessionToken - Auth token for Supabase
+ * @param auth - Auth mode for Supabase (session or service role)
  * @returns Extraction result with prompts array
  */
 export async function extractPromptsFromDataset(
   datasetId: string,
   maxPrompts: number,
   userId: string,
-  sessionToken: string
+  auth: DatasetExtractionAuth
 ): Promise<DatasetExtractionResult> {
   console.log('[DatasetExtractor] Starting extraction:', {
     datasetId,
@@ -50,19 +54,34 @@ export async function extractPromptsFromDataset(
     // Initialize Supabase clients
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl) {
       throw new Error('Supabase environment variables not configured');
     }
 
-    // Create authenticated client
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: sessionToken.startsWith('Bearer ') ? sessionToken : `Bearer ${sessionToken}`,
-        },
-      },
-    });
+    if (auth.mode === 'session') {
+      if (!supabaseAnonKey) {
+        throw new Error('Supabase environment variables not configured');
+      }
+    } else {
+      if (!supabaseServiceKey) {
+        throw new Error('Supabase environment variables not configured');
+      }
+    }
+
+    const supabase =
+      auth.mode === 'session'
+        ? createClient(supabaseUrl, supabaseAnonKey, {
+            global: {
+              headers: {
+                Authorization: auth.sessionToken.startsWith('Bearer ')
+                  ? auth.sessionToken
+                  : `Bearer ${auth.sessionToken}`,
+              },
+            },
+          })
+        : createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch dataset record from database
     console.log('[DatasetExtractor] Fetching dataset record:', datasetId);

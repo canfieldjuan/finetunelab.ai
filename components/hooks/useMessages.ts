@@ -190,6 +190,13 @@ export function useMessages(
               metadata: msg.metadata,
               content_json: msg.content_json,
               tools_called: msg.tools_called,
+              // Include all metadata fields for MessageMetadata component
+              model_id: msg.model_id,
+              model_name: msg.model_name,
+              provider: msg.provider,
+              input_tokens: msg.input_tokens,
+              output_tokens: msg.output_tokens,
+              latency_ms: msg.latency_ms,
             })),
           };
 

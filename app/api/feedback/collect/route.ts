@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { validateRequest } from '@/lib/auth/api-key-validator';
+import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
 
 export const runtime = 'nodejs';
 
@@ -17,9 +17,9 @@ export async function POST(request: NextRequest) {
   console.log('[FeedbackAPI] POST /api/feedback/collect - Collecting feedback');
 
   try {
-    // Validate API key from headers
-    const validation = await validateRequest(request.headers);
-    
+    // Validate API key from headers (requires production scope)
+    const validation = await validateRequestWithScope(request.headers, 'production');
+
     if (!validation.isValid) {
       console.log('[FeedbackAPI] Invalid API key:', validation.errorMessage);
       return NextResponse.json(
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
           error: validation.errorMessage || 'Unauthorized',
           rateLimitExceeded: validation.rateLimitExceeded,
         },
-        { status: validation.rateLimitExceeded ? 429 : 401 }
+        { status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401) }
       );
     }
 

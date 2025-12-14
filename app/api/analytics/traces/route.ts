@@ -140,10 +140,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
 
 // Supabase configuration
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const API_KEY_PREFIX = 'wak_';
 
 interface TracePayload {
   conversation_id?: string | null;
@@ -194,36 +197,59 @@ export async function POST(req: NextRequest) {
   debugLog('POST', 'Request received');
 
   try {
-    // Block 1: Authentication
+    // Block 1: Authentication (session token OR API key)
+    let userId: string | null = null;
+    let supabase = null as unknown as ReturnType<typeof createClient>;
+
+    const headerApiKey = req.headers.get('x-api-key') || req.headers.get('x-workspace-api-key');
     const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      debugLog('POST', 'No auth header');
-      return NextResponse.json(
-        { error: 'Unauthorized - no auth header' },
-        { status: 401 }
-      );
+
+    if (headerApiKey) {
+      if (!supabaseServiceKey) {
+        return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+      }
+      const validation = await validateRequestWithScope(req.headers, 'production');
+      if (!validation.isValid || !validation.userId) {
+        return NextResponse.json(
+          { error: validation.errorMessage || 'Unauthorized' },
+          { status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401) }
+        );
+      }
+      userId = validation.userId;
+      supabase = createClient(supabaseUrl, supabaseServiceKey);
+    } else if (authHeader) {
+      const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+      const bearerValue = bearerMatch?.[1]?.trim();
+
+      if (bearerValue?.startsWith(API_KEY_PREFIX)) {
+        if (!supabaseServiceKey) {
+          return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+        }
+        const validation = await validateRequestWithScope(req.headers, 'production');
+        if (!validation.isValid || !validation.userId) {
+          return NextResponse.json(
+            { error: validation.errorMessage || 'Unauthorized' },
+            { status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401) }
+          );
+        }
+        userId = validation.userId;
+        supabase = createClient(supabaseUrl, supabaseServiceKey);
+      } else {
+        supabase = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          debugLog('POST', `Invalid token: ${authError?.message}`);
+          return NextResponse.json({ error: 'Unauthorized - invalid token' }, { status: 401 });
+        }
+        userId = user.id;
+      }
+    } else {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Create authenticated Supabase client
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: authHeader,
-        },
-      },
-    });
-
-    // Verify user authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      debugLog('POST', `Invalid token: ${authError?.message}`);
-      return NextResponse.json(
-        { error: 'Unauthorized - invalid token' },
-        { status: 401 }
-      );
-    }
-
-    debugLog('POST', `User authenticated: ${user.id}`);
+    debugLog('POST', `User authenticated: ${userId}`);
 
     // Block 2: Parse and validate request body
     const body = (await req.json()) as TracePayload;
@@ -266,7 +292,7 @@ export async function POST(req: NextRequest) {
     const { data: trace, error: insertError } = await supabase
       .from('llm_traces')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         conversation_id,
         message_id,
         trace_id,
@@ -325,34 +351,59 @@ export async function GET(req: NextRequest) {
   debugLog('GET', 'Request received');
 
   try {
-    // Block 1: Authentication
+    // Block 1: Authentication (session token OR API key)
+    let userId: string | null = null;
+    let supabase = null as unknown as ReturnType<typeof createClient>;
+
+    const headerApiKey = req.headers.get('x-api-key') || req.headers.get('x-workspace-api-key');
     const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      debugLog('GET', 'No auth header');
-      return NextResponse.json(
-        { error: 'Unauthorized - no auth header' },
-        { status: 401 }
-      );
+
+    if (headerApiKey) {
+      if (!supabaseServiceKey) {
+        return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+      }
+      const validation = await validateRequestWithScope(req.headers, 'production');
+      if (!validation.isValid || !validation.userId) {
+        return NextResponse.json(
+          { error: validation.errorMessage || 'Unauthorized' },
+          { status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401) }
+        );
+      }
+      userId = validation.userId;
+      supabase = createClient(supabaseUrl, supabaseServiceKey);
+    } else if (authHeader) {
+      const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+      const bearerValue = bearerMatch?.[1]?.trim();
+
+      if (bearerValue?.startsWith(API_KEY_PREFIX)) {
+        if (!supabaseServiceKey) {
+          return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+        }
+        const validation = await validateRequestWithScope(req.headers, 'production');
+        if (!validation.isValid || !validation.userId) {
+          return NextResponse.json(
+            { error: validation.errorMessage || 'Unauthorized' },
+            { status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401) }
+          );
+        }
+        userId = validation.userId;
+        supabase = createClient(supabaseUrl, supabaseServiceKey);
+      } else {
+        supabase = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          debugLog('GET', `Invalid token: ${authError?.message}`);
+          return NextResponse.json({ error: 'Unauthorized - invalid token' }, { status: 401 });
+        }
+        userId = user.id;
+      }
+    } else {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: authHeader,
-        },
-      },
-    });
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      debugLog('GET', `Invalid token: ${authError?.message}`);
-      return NextResponse.json(
-        { error: 'Unauthorized - invalid token' },
-        { status: 401 }
-      );
-    }
-
-    debugLog('GET', `User authenticated: ${user.id}`);
+    debugLog('GET', `User authenticated: ${userId}`);
 
     // Block 2: Extract query parameters
     const { searchParams } = new URL(req.url);
@@ -378,7 +429,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('llm_traces')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('start_time', { ascending: false });
 
     // Apply filters

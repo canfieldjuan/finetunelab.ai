@@ -131,6 +131,9 @@ import { extractPromptsFromDataset } from '@/lib/batch-testing/dataset-prompt-ex
 import type { BatchTestConfig } from '@/lib/batch-testing/types';
 import { categorizeError } from '@/lib/batch-testing/error-categorizer';
 import { STATUS } from '@/lib/constants';
+import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
+import { sendBatchTestAlert } from '@/lib/alerts';
+import { logApiKeyUsage, extractClientInfo } from '@/lib/auth/api-key-usage-logger';
 
 // Use Node.js runtime for file system operations
 export const runtime = 'nodejs';
@@ -138,6 +141,82 @@ export const runtime = 'nodejs';
 // Supabase configuration
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const API_KEY_PREFIX = 'wak_';
+
+type BatchTestingAuth =
+  | { mode: 'session'; userId: string; authorizationHeader: string }
+  | { mode: 'apiKey'; userId: string; apiKey: string; keyId?: string };
+
+async function authenticateBatchTesting(req: NextRequest): Promise<
+  | { ok: true; auth: BatchTestingAuth }
+  | { ok: false; status: number; error: string }
+> {
+  const headerApiKey = req.headers.get('x-api-key') || req.headers.get('x-workspace-api-key');
+  const authHeader = req.headers.get('authorization');
+
+  const bearerMatch = authHeader?.match(/^Bearer\s+(.+)$/i);
+  const bearerValue = bearerMatch?.[1]?.trim() || null;
+  const apiKeyInAuthorization = !!(bearerValue && bearerValue.startsWith(API_KEY_PREFIX));
+
+  if (headerApiKey || apiKeyInAuthorization) {
+    const validation = await validateRequestWithScope(req.headers, 'testing');
+    if (!validation.isValid || !validation.userId) {
+      return {
+        ok: false,
+        status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401),
+        error: validation.errorMessage || 'Unauthorized',
+      };
+    }
+
+    const extractedApiKey = extractApiKeyFromHeaders(req.headers);
+    if (!extractedApiKey || !extractedApiKey.startsWith(API_KEY_PREFIX)) {
+      return { ok: false, status: 401, error: 'Invalid API key' };
+    }
+
+    return { ok: true, auth: { mode: 'apiKey', userId: validation.userId, apiKey: extractedApiKey, keyId: validation.keyId } };
+  }
+
+  if (!authHeader) {
+    return { ok: false, status: 401, error: 'Unauthorized - no auth header' };
+  }
+
+  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseAnon) {
+    return { ok: false, status: 500, error: 'Server configuration error' };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnon, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { ok: false, status: 401, error: 'Unauthorized - invalid token' };
+  }
+
+  return { ok: true, auth: { mode: 'session', userId: user.id, authorizationHeader: authHeader } };
+}
+
+async function safeSendBatchTestAlert(
+  type: 'batch_test_completed' | 'batch_test_failed',
+  data: {
+    testRunId: string;
+    userId: string;
+    modelName: string | null;
+    testRunName: string | null;
+    status: string;
+    totalPrompts: number;
+    completedPrompts: number;
+    failedPrompts: number;
+    errorMessage: string | null;
+  }
+): Promise<void> {
+  try {
+    await sendBatchTestAlert(type, data);
+  } catch (err) {
+    console.error('[Batch Testing Alerts] Failed to send alert:', err);
+  }
+}
 
 /**
  * Generate a descriptive default name for a batch test run
@@ -159,36 +238,24 @@ function generateDefaultTestRunName(modelName: string, testSuiteName: string | n
 }
 
 export async function POST(req: NextRequest) {
+  const requestStartTime = Date.now();
+  const { clientIp, userAgent } = extractClientInfo(req.headers);
+
   try {
     console.log('[Batch Testing Run] Request received');
 
-    // Authenticate user
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: 'Unauthorized - no auth header' },
-        { status: 401 }
-      );
+    const authResult = await authenticateBatchTesting(req);
+    if (!authResult.ok) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
+    const auth = authResult.auth;
 
-    // Create authenticated Supabase client
-    const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnon, {
-      global: {
-        headers: {
-          Authorization: authHeader,
-        },
-      },
-    });
-
-    // Verify user authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized - invalid token' },
-        { status: 401 }
-      );
-    }
+    const supabaseReadClient =
+      auth.mode === 'session'
+        ? createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+            global: { headers: { Authorization: auth.authorizationHeader } },
+          })
+        : createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse and validate request body
     const body = await req.json();
@@ -216,7 +283,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Note: API key no longer required - using session token from authHeader
+    if (auth.mode === 'apiKey' && config.judge_config?.enabled) {
+      return NextResponse.json(
+        { error: 'judge_config requires session auth (Bearer token). Disable judge_config or use a session token.' },
+        { status: 400 }
+      );
+    }
 
     const batchConfig: BatchTestConfig = {
       model_name: config.model_id, // Using model_id from registry
@@ -237,7 +309,7 @@ export async function POST(req: NextRequest) {
     });
 
     console.log('[Batch Testing Run] Starting batch test:', {
-      userId: user.id,
+      userId: auth.userId,
       model: batchConfig.model_name,
       promptLimit: batchConfig.prompt_limit,
       testSuiteId: config.test_suite_id || 'none',
@@ -254,11 +326,11 @@ export async function POST(req: NextRequest) {
       // NEW: Use test suite extraction (separate from training data)
       console.log('[Batch Testing Run] Using test suite extraction for:', config.test_suite_id);
 
-      const { data: testSuite, error: suiteError } = await supabase
+      const { data: testSuite, error: suiteError } = await supabaseReadClient
         .from('test_suites')
         .select('name, prompts, prompt_count')
         .eq('id', config.test_suite_id)
-        .eq('user_id', user.id)
+        .eq('user_id', auth.userId)
         .single();
 
       if (suiteError || !testSuite) {
@@ -294,8 +366,10 @@ export async function POST(req: NextRequest) {
       const datasetResult = await extractPromptsFromDataset(
         config.dataset_id,
         batchConfig.prompt_limit,
-        user.id,
-        authHeader
+        auth.userId,
+        auth.mode === 'session'
+          ? { mode: 'session', sessionToken: auth.authorizationHeader }
+          : { mode: 'service' }
       );
 
       extractionResult = {
@@ -342,7 +416,7 @@ export async function POST(req: NextRequest) {
     const { data: batchTestRuns, error: createError } = await supabaseAdmin
       .from('batch_test_runs')
       .insert({
-        user_id: user.id,
+        user_id: auth.userId,
         model_name: batchConfig.model_name,
         status: STATUS.RUNNING,
         total_prompts: extractionResult.total,
@@ -380,7 +454,7 @@ export async function POST(req: NextRequest) {
         dataset_version: batchConfig.source_path,
         config_json: batchConfig,
         started_at: new Date().toISOString(),
-        created_by: user.id
+        created_by: auth.userId
       })
       .select()
       .single();
@@ -405,17 +479,33 @@ export async function POST(req: NextRequest) {
     // Step 3: Start background processing (don't await - return immediately)
     processBackgroundBatch(
       batchTestRun.id,
-      user.id,
+      auth.userId,
       extractionResult.prompts,
       batchConfig,
       runId,
-      authHeader,  // Pass auth header for session token authentication
+      auth,  // Pass auth for /api/chat authentication
       customName   // Pass custom name for conversation title
     ).catch(error => {
       console.error('[Batch Testing Run] Background processing error:', error);
     });
 
-    // Step 4: Return immediately with test run ID
+    // Step 4: Log API key usage (if using API key auth)
+    if (auth.mode === 'apiKey' && auth.keyId) {
+      logApiKeyUsage({
+        apiKeyId: auth.keyId,
+        userId: auth.userId,
+        endpoint: '/api/batch-testing/run',
+        method: 'POST',
+        scopeUsed: 'testing',
+        statusCode: 200,
+        latencyMs: Date.now() - requestStartTime,
+        clientIp: clientIp || undefined,
+        userAgent: userAgent || undefined,
+        metadata: { testRunId: batchTestRun.id, totalPrompts: extractionResult.total },
+      }).catch(err => console.warn('[Batch Testing Run] Usage log failed:', err));
+    }
+
+    // Step 5: Return immediately with test run ID
     return NextResponse.json({
       success: true,
       test_run_id: batchTestRun.id,
@@ -444,7 +534,7 @@ async function processBackgroundBatch(
   prompts: string[],
   config: BatchTestConfig,
   runId: string | null,
-  authHeader: string,  // Session token for authentication
+  auth: BatchTestingAuth,  // Session token or API key for authentication
   customName: string   // Custom name for the batch test (used in conversation title)
 ): Promise<void> {
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -485,6 +575,18 @@ async function processBackgroundBatch(
         completed_at: new Date().toISOString()
       })
       .eq('id', testRunId);
+
+    await safeSendBatchTestAlert('batch_test_failed', {
+      testRunId,
+      userId,
+      modelName: config.model_name,
+      testRunName: customName,
+      status: STATUS.FAILED,
+      totalPrompts: prompts.length,
+      completedPrompts: 0,
+      failedPrompts: prompts.length,
+      errorMessage: 'Failed to create conversation: ' + convError.message,
+    });
     return;
   }
 
@@ -503,7 +605,7 @@ async function processBackgroundBatch(
         testRunId,
         config.model_name,
         prompt,
-        authHeader,
+        auth,
         i,
         runId,
         config.benchmark_id,
@@ -552,6 +654,18 @@ async function processBackgroundBatch(
       failed
     });
 
+    await safeSendBatchTestAlert(failed > 0 ? 'batch_test_failed' : 'batch_test_completed', {
+      testRunId,
+      userId,
+      modelName: config.model_name,
+      testRunName: customName,
+      status: STATUS.COMPLETED,
+      totalPrompts: prompts.length,
+      completedPrompts: completed,
+      failedPrompts: failed,
+      errorMessage: failed > 0 ? `${failed} prompts failed` : null,
+    });
+
     // Complete experiment run
     if (runId) {
       await supabaseAdmin
@@ -576,6 +690,18 @@ async function processBackgroundBatch(
         completed_at: new Date().toISOString()
       })
       .eq('id', testRunId);
+
+    await safeSendBatchTestAlert('batch_test_failed', {
+      testRunId,
+      userId,
+      modelName: config.model_name,
+      testRunName: customName,
+      status: STATUS.FAILED,
+      totalPrompts: prompts.length,
+      completedPrompts: completed,
+      failedPrompts: failed,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }
 
@@ -587,7 +713,7 @@ async function processSinglePrompt(
   testRunId: string,
   modelId: string,
   prompt: string,
-  authHeader: string,  // Session token for authentication
+  auth: BatchTestingAuth,  // Session token or API key for authentication
   promptIndex: number,
   runId: string | null,
   benchmarkId: string | undefined,
@@ -600,12 +726,19 @@ async function processSinglePrompt(
   try {
     // Step 1: Call /api/chat endpoint (server-side)
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (auth.mode === 'apiKey') {
+      headers['X-API-Key'] = auth.apiKey;
+    } else {
+      headers['Authorization'] = auth.authorizationHeader;
+    }
+
     const chatResponse = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader  // Use session token instead of API key
-      },
+      headers,
       body: JSON.stringify({
         messages: [{ role: 'user', content: prompt }],
         modelId: modelId,
@@ -628,7 +761,7 @@ async function processSinglePrompt(
     console.log(`[Process Prompt] ${promptIndex + 1}: Chat success`);
 
     // Step 2: If judge is enabled, fetch the message ID and evaluate
-    if (judgeConfig?.enabled && judgeConfig.criteria.length > 0) {
+    if (judgeConfig?.enabled && judgeConfig.criteria.length > 0 && auth.mode === 'session') {
       // Fetch the most recent assistant message from this conversation
       const { data: recentMessage } = await createClient(supabaseUrl, supabaseServiceKey)
         .from('messages')
@@ -652,7 +785,7 @@ async function processSinglePrompt(
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': authHeader
+            'Authorization': auth.authorizationHeader
           },
           body: JSON.stringify({
             message_id: messageId,

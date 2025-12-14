@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
 
 // Use Node.js runtime
 export const runtime = 'nodejs';
@@ -17,30 +18,54 @@ export const runtime = 'nodejs';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const API_KEY_PREFIX = 'wak_';
 
 /**
  * Authenticate user helper
  */
-async function authenticateUser(req: NextRequest) {
+async function authenticateUser(req: NextRequest): Promise<
+  | { ok: true; userId: string; mode: 'session' | 'apiKey'; authorizationHeader?: string }
+  | { ok: false; status: number; error: string }
+> {
+  const headerApiKey = req.headers.get('x-api-key') || req.headers.get('x-workspace-api-key');
   const authHeader = req.headers.get('authorization');
+
+  const bearerMatch = authHeader?.match(/^Bearer\s+(.+)$/i);
+  const bearerValue = bearerMatch?.[1]?.trim() || null;
+  const apiKeyInAuthorization = !!(bearerValue && bearerValue.startsWith(API_KEY_PREFIX));
+
+  if (headerApiKey || apiKeyInAuthorization) {
+    const validation = await validateRequestWithScope(req.headers, 'testing');
+    if (!validation.isValid || !validation.userId) {
+      return {
+        ok: false,
+        status: validation.scopeError ? 403 : (validation.rateLimitExceeded ? 429 : 401),
+        error: validation.errorMessage || 'Unauthorized',
+      };
+    }
+
+    const extracted = extractApiKeyFromHeaders(req.headers);
+    if (!extracted || !extracted.startsWith(API_KEY_PREFIX)) {
+      return { ok: false, status: 401, error: 'Invalid API key' };
+    }
+
+    return { ok: true, userId: validation.userId, mode: 'apiKey' };
+  }
+
   if (!authHeader) {
-    return { error: 'Unauthorized - no auth header', user: null };
+    return { ok: false, status: 401, error: 'Unauthorized - no auth header' };
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: authHeader,
-      },
-    },
+    global: { headers: { Authorization: authHeader } },
   });
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return { error: 'Unauthorized - invalid token', user: null };
+    return { ok: false, status: 401, error: 'Unauthorized - invalid token' };
   }
 
-  return { error: null, user };
+  return { ok: true, userId: user.id, mode: 'session', authorizationHeader: authHeader };
 }
 
 /**
@@ -48,9 +73,9 @@ async function authenticateUser(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const { error, user } = await authenticateUser(req);
-    if (error || !user) {
-      return NextResponse.json({ error }, { status: 401 });
+    const auth = await authenticateUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
     // Parse request body
@@ -65,7 +90,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('[BatchTestArchive] Archiving test runs:', {
-      userId: user.id,
+      userId: auth.userId,
       count: testRunIds.length
     });
 
@@ -76,7 +101,7 @@ export async function POST(req: NextRequest) {
       .from('batch_test_runs')
       .update({ archived: true })
       .in('id', testRunIds)
-      .eq('user_id', user.id)
+      .eq('user_id', auth.userId)
       .select('id');
 
     if (updateError) {
@@ -112,9 +137,9 @@ export async function POST(req: NextRequest) {
  */
 export async function PATCH(req: NextRequest) {
   try {
-    const { error, user } = await authenticateUser(req);
-    if (error || !user) {
-      return NextResponse.json({ error }, { status: 401 });
+    const auth = await authenticateUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
     // Parse request body
@@ -129,7 +154,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     console.log('[BatchTestArchive] Restoring test runs:', {
-      userId: user.id,
+      userId: auth.userId,
       count: testRunIds.length
     });
 
@@ -140,7 +165,7 @@ export async function PATCH(req: NextRequest) {
       .from('batch_test_runs')
       .update({ archived: false })
       .in('id', testRunIds)
-      .eq('user_id', user.id)
+      .eq('user_id', auth.userId)
       .select('id');
 
     if (updateError) {
@@ -176,9 +201,9 @@ export async function PATCH(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
-    const { error, user } = await authenticateUser(req);
-    if (error || !user) {
-      return NextResponse.json({ error }, { status: 401 });
+    const auth = await authenticateUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
     // Parse request body
@@ -193,7 +218,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     console.log('[BatchTestArchive] Deleting test runs:', {
-      userId: user.id,
+      userId: auth.userId,
       count: testRunIds.length
     });
 
@@ -204,7 +229,7 @@ export async function DELETE(req: NextRequest) {
       .from('batch_test_runs')
       .delete()
       .in('id', testRunIds)
-      .eq('user_id', user.id)
+      .eq('user_id', auth.userId)
       .select('id');
 
     if (deleteError) {
