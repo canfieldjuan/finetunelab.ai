@@ -341,17 +341,17 @@ export function NotificationSettings({ sessionToken }: NotificationSettingsProps
                 {/* Alert Type Toggles */}
                 <div>
                   <div className="text-sm font-medium text-foreground mb-3">Alert Types</div>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     {ALERT_TYPES.map(({ key, label, description }) => (
                       <div key={key} className="flex items-center justify-between py-2">
-                        <div>
+                        <div className="flex-1 min-w-0 mr-3">
                           <div className="text-sm font-medium">{label}</div>
                           <div className="text-xs text-muted-foreground">{description}</div>
                         </div>
                         <button
                           onClick={() => updatePreferences({ [key]: !preferences[key as keyof AlertPreferences] })}
                           disabled={saving}
-                          className={`relative w-9 h-5 rounded-full transition-colors ${
+                          className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
                             preferences[key as keyof AlertPreferences] ? 'bg-primary' : 'bg-muted-foreground/30'
                           }`}
                         >
