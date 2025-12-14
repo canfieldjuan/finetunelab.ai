@@ -1,12 +1,5 @@
 import { Metadata } from 'next';
-import dynamic from 'next/dynamic';
-
-const LoginClient = dynamic(() => import('./LoginClient'), {
-  ssr: false,
-  loading: () => (
-    <div className="min-h-screen flex items-center justify-center">Loading...</div>
-  ),
-});
+import LoginClient from './LoginClient';
 
 export const metadata: Metadata = {
   title: "Login",

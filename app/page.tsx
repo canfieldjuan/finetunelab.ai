@@ -1,17 +1,5 @@
 import { Metadata } from 'next';
-import dynamic from 'next/dynamic';
-
-const HomeRedirect = dynamic(() => import('./HomeRedirect'), {
-  ssr: false,
-  loading: () => (
-    <main className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    </main>
-  ),
-});
+import HomeRedirect from './HomeRedirect';
 
 export const metadata: Metadata = {
   title: "Fine Tune Lab - Visual DAG-Based AI Training Platform",
