@@ -97,6 +97,8 @@ export async function POST(
       alert_gpu_oom: true,
       alert_disk_warning: true,
       alert_timeout_warning: true,
+      alert_batch_test_completed: true,
+      alert_batch_test_failed: true,
       daily_summary_enabled: false,
       daily_summary_hour: 9,
       weekly_digest_enabled: false,
