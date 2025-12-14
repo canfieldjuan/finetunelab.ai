@@ -1832,30 +1832,11 @@ class ToolTrainer:
                 f"Auto-adjusted to {save_steps} to satisfy load_best_model_at_end requirement."
             )
 
-        # Calculate total steps for eval frequency validation
-        train_size = len(self.train_dataset) if not isinstance(self.train_dataset, IterableDataset) else 0
-        effective_batch = batch_size * self.config["training"].get("gradient_accumulation_steps", DEFAULT_GRADIENT_ACCUMULATION_STEPS)
-        steps_per_epoch = max(1, train_size // effective_batch) if train_size > 0 else 0
-        total_steps = steps_per_epoch * num_epochs
-
         logger.info(
             f"[SFT] Config: epochs={num_epochs}, batch={batch_size}, lr={learning_rate}, "
             f"scheduler={lr_scheduler_type}, warmup_ratio={warmup_ratio or 'default'}, "
             f"save_steps={save_steps}, eval_steps={eval_steps}, eval_strategy={evaluation_strategy}, packing={packing}"
         )
-
-        # Eval dataset and frequency info
-        eval_size = len(self.eval_dataset) if self.eval_dataset is not None and not isinstance(self.eval_dataset, IterableDataset) else 0
-        do_eval = self.eval_dataset is not None and evaluation_strategy != "no"
-        logger.info(
-            f"[SFT] Evaluation: do_eval={do_eval}, eval_dataset_size={eval_size}, "
-            f"steps_per_epoch={steps_per_epoch}, total_steps={total_steps}"
-        )
-        if do_eval and eval_steps > total_steps:
-            logger.warning(
-                f"[SFT] ⚠️ eval_steps ({eval_steps}) > total_steps ({total_steps}) - "
-                f"evaluation may not run during training! Consider lowering eval_steps."
-            )
         
         progress_file = self.output_dir / PROGRESS_FILENAME
         metrics_callback = TrainingMetricsCallback(
@@ -1954,7 +1935,6 @@ class ToolTrainer:
             logging_steps=self.config["training"].get("logging_steps", DEFAULT_LOGGING_STEPS),
             eval_strategy=evaluation_strategy,
             eval_steps=eval_steps,
-            do_eval=True if self.eval_dataset is not None and evaluation_strategy != "no" else False,
             eval_accumulation_steps=10,  # Accumulate eval outputs to reduce memory peaks
 
             # Checkpointing
