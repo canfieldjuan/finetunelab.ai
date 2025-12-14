@@ -5,7 +5,8 @@ import { WorkspaceProvider } from "../contexts/WorkspaceContext";
 import { Inter } from "next/font/google";
 // import { LoggerInit } from "../components/LoggerInit"; // Temporarily disabled
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://finetunelab.ai';
+// Hardcode production URL to avoid env var parsing issues
+const siteUrl = 'https://finetunelab.ai';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
