@@ -1,9 +1,11 @@
 import { LabNote } from "./data";
 
+const siteUrl = 'https://finetunelab.ai';
+
 export function generateArticleSchema(article: LabNote) {
   // Use TechArticle for case studies and experiments as they are more technical/scientific
-  const type = ['case-study', 'experiment', 'technique'].includes(article.category) 
-    ? 'TechArticle' 
+  const type = ['case-study', 'experiment', 'technique'].includes(article.category)
+    ? 'TechArticle'
     : 'BlogPosting';
 
   return {
@@ -12,21 +14,21 @@ export function generateArticleSchema(article: LabNote) {
     headline: article.title,
     description: article.description,
     author: {
-      '@type': 'Organization', // FineTune Lab Team is an org/team
+      '@type': 'Organization',
       name: article.author,
     },
     datePublished: article.publishedAt,
     dateModified: article.publishedAt,
     mainEntityOfPage: {
       '@type': 'WebPage',
-      '@id': `https://your-domain.com/lab-notes/${article.slug}`,
+      '@id': `${siteUrl}/lab-notes/${article.slug}`,
     },
     publisher: {
       '@type': 'Organization',
-      name: 'FineTune Lab',
+      name: 'Fine Tune Lab',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://your-domain.com/logo.png', // TODO: Update this
+        url: `${siteUrl}/finetune-lab-icon.svg`,
       },
     },
     keywords: article.tags.join(', '),
@@ -41,7 +43,7 @@ export function generateListingSchema(articles: LabNote[]) {
     itemListElement: articles.map((article, index) => ({
       '@type': 'ListItem',
       position: index + 1,
-      url: `https://your-domain.com/lab-notes/${article.slug}`,
+      url: `${siteUrl}/lab-notes/${article.slug}`,
       name: article.title,
     })),
   };
