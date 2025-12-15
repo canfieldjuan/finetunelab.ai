@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
   // Create the SSE stream
   const stream = new ReadableStream({
     async start(controller) {
-      let testRunId: string | null = null;
+      let testRunId: string | undefined = undefined;
       let runId: string | null = null;
       let conversationId: string | null = null;
       let completed = 0;
