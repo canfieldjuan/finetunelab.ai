@@ -25,9 +25,9 @@ import type { DemoTestSuite, TaskDomain, ConfigureModelResponse } from '@/lib/de
 type DemoStep = 'welcome' | 'task_selection' | 'model_config' | 'batch_test' | 'atlas_chat' | 'export';
 
 const TASK_DOMAINS: { domain: TaskDomain; label: string; description: string; icon: React.ElementType }[] = [
-  { domain: 'general', label: 'General Knowledge', description: 'Broad knowledge and reasoning', icon: MessageSquare },
-  { domain: 'coding', label: 'Code Generation', description: 'Programming and technical tasks', icon: FileText },
-  { domain: 'reasoning', label: 'Reasoning', description: 'Logic and problem-solving', icon: Sparkles },
+  { domain: 'customer_support', label: 'Customer Support', description: 'Help desk and support queries', icon: MessageSquare },
+  { domain: 'code_generation', label: 'Code Generation', description: 'Programming and technical tasks', icon: FileText },
+  { domain: 'qa', label: 'Q&A / Reasoning', description: 'Question answering and logic', icon: Sparkles },
   { domain: 'creative', label: 'Creative Writing', description: 'Stories, content, and creativity', icon: Zap },
 ];
 
