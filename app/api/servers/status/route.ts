@@ -209,15 +209,20 @@ export async function GET(req: NextRequest) {
 
     // Batch update dead servers in background (don't await - fire and forget)
     if (deadServerIds.length > 0) {
-      supabase
-        .from('local_inference_servers')
-        .update({
-          status: STATUS.STOPPED,
-          stopped_at: new Date().toISOString()
-        })
-        .in('id', deadServerIds)
-        .then(() => console.log(`[ServerStatus] Updated ${deadServerIds.length} dead servers`))
-        .catch((err) => console.error('[ServerStatus] Failed to update dead servers:', err));
+      (async () => {
+        try {
+          await supabase
+            .from('local_inference_servers')
+            .update({
+              status: STATUS.STOPPED,
+              stopped_at: new Date().toISOString()
+            })
+            .in('id', deadServerIds);
+          console.log(`[ServerStatus] Updated ${deadServerIds.length} dead servers`);
+        } catch (err) {
+          console.error('[ServerStatus] Failed to update dead servers:', err);
+        }
+      })();
     }
 
     return NextResponse.json({
