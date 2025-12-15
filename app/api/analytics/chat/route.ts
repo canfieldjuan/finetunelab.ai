@@ -393,6 +393,150 @@ const analyticsTools: ToolDefinition[] = [
         required: ['operation']
       }
     }
+  },
+  // Tool 13: Web Search
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Search the web for current information, facts, news, or research. Use this for any query requiring up-to-date information from the internet.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query' },
+          maxResults: { type: 'number', description: 'Max results (default: 10)' },
+          deepSearch: { type: 'boolean', description: 'Enable full content fetching' },
+          summarize: { type: 'boolean', description: 'Generate AI summaries of results' },
+        },
+        required: ['query']
+      }
+    }
+  },
+  // Tool 14: Dataset Manager
+  {
+    type: 'function',
+    function: {
+      name: 'dataset_manager',
+      description: 'Manage training datasets from conversation history. List, export, filter, validate, delete, and merge conversation data for ML training workflows.',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation: {
+            type: 'string',
+            enum: ['list', 'stats', 'export', 'validate', 'delete', 'merge'],
+            description: 'Dataset operation to perform'
+          },
+          export_format: {
+            type: 'string',
+            enum: ['jsonl', 'json', 'csv'],
+            description: 'Export format (default: jsonl)'
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum records to return (default: 1000)'
+          },
+          conversation_ids: {
+            type: 'string',
+            description: 'Comma-separated conversation IDs for delete/merge'
+          },
+          confirm_delete: {
+            type: 'boolean',
+            description: 'Required for delete (must be true)'
+          },
+          target_conversation_id: {
+            type: 'string',
+            description: 'Target conversation ID for merge'
+          }
+        },
+        required: ['operation']
+      }
+    }
+  },
+  // Tool 15: Token Analyzer
+  {
+    type: 'function',
+    function: {
+      name: 'token_analyzer',
+      description: 'Track token usage, analyze costs, compare model efficiency, and get optimization recommendations for LLM conversations.',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation: {
+            type: 'string',
+            enum: ['usage_stats', 'cost_analysis', 'model_comparison', 'optimization_tips'],
+            description: 'Analysis operation to perform'
+          },
+          period: {
+            type: 'string',
+            enum: ['day', 'week', 'month', 'all'],
+            description: 'Time period (default: week)'
+          },
+          conversationId: {
+            type: 'string',
+            description: 'Analyze specific conversation only'
+          },
+          model: {
+            type: 'string',
+            description: 'Filter by specific model'
+          }
+        },
+        required: ['operation']
+      }
+    }
+  },
+  // Tool 16: Analytics Export
+  {
+    type: 'function',
+    function: {
+      name: 'analytics_export',
+      description: 'Create analytics export files (CSV, JSON, or Report) and get download links. Use to provide users with downloadable analytics data.',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation: {
+            type: 'string',
+            enum: ['create_export', 'list_exports', 'get_download_link'],
+            description: 'Operation to perform'
+          },
+          format: {
+            type: 'string',
+            enum: ['csv', 'json', 'report'],
+            description: 'Export format'
+          },
+          exportType: {
+            type: 'string',
+            enum: ['overview', 'timeseries', 'complete', 'model_comparison', 'tool_usage', 'quality_trends'],
+            description: 'Type of analytics data to export'
+          },
+          startDate: { type: 'string', description: 'Start date (YYYY-MM-DD)' },
+          endDate: { type: 'string', description: 'End date (YYYY-MM-DD)' },
+          exportId: { type: 'string', description: 'Export ID for download link' }
+        },
+        required: ['operation']
+      }
+    }
+  },
+  // Tool 17: Knowledge Graph Query
+  {
+    type: 'function',
+    function: {
+      name: 'query_knowledge_graph',
+      description: "Search the user's uploaded documents and knowledge graph for relevant information. Use when user asks about their documents or wants to query their knowledge base.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query. Use empty string "" to list all documents.'
+          },
+          maxResults: {
+            type: 'number',
+            description: 'Max results (default: 30, max: 50)'
+          }
+        },
+        required: ['query']
+      }
+    }
   }
 ];
 
@@ -943,6 +1087,41 @@ async function executeAnalyticsTool(toolName: string, args: Record<string, unkno
       case 'advanced_analytics':
         return await executeAdvancedAnalytics(args, userId, authHeader, authClient);
 
+      case 'web_search':
+        const webSearchResult = await executeTool('web_search', args, '', undefined, userId);
+        if (webSearchResult.error) {
+          return { error: webSearchResult.error };
+        }
+        return webSearchResult.data;
+
+      case 'dataset_manager':
+        const datasetResult = await executeTool('dataset_manager', { ...args, user_id: userId }, '', undefined, userId);
+        if (datasetResult.error) {
+          return { error: datasetResult.error };
+        }
+        return datasetResult.data;
+
+      case 'token_analyzer':
+        const tokenResult = await executeTool('token_analyzer', { ...args, userId }, '', undefined, userId);
+        if (tokenResult.error) {
+          return { error: tokenResult.error };
+        }
+        return tokenResult.data;
+
+      case 'analytics_export':
+        const exportResult = await executeTool('analytics_export', args, '', undefined, userId);
+        if (exportResult.error) {
+          return { error: exportResult.error };
+        }
+        return exportResult.data;
+
+      case 'query_knowledge_graph':
+        const graphResult = await executeTool('query_knowledge_graph', args, '', undefined, userId);
+        if (graphResult.error) {
+          return { error: graphResult.error };
+        }
+        return graphResult.data;
+
       default:
         return { error: `Unknown tool: ${toolName}` };
     }
@@ -1086,7 +1265,7 @@ EXAMPLE CORRECT TOOL CALL:
   }
 }
 
-## YOUR 8 TOOLS
+## YOUR 17 TOOLS
 
 ### Session Data Tools (Start Here)
 1. **get_session_evaluations** - Get ratings, feedback, and success/failure data
@@ -1169,6 +1348,32 @@ EXAMPLE CORRECT TOOL CALL:
       - sentiment_trends: Sentiment analysis trends over time
       - quality_forecast: Predictive quality modeling
     - Returns: Aggregated metrics, trends, comparisons, forecasts
+
+### General Purpose Tools
+12. **web_search** - Search the web for current information
+    - USE when user needs up-to-date info, news, or research from the internet
+    - Returns: Search results with titles, snippets, and URLs
+    - Can enable deep search for full content or AI summaries
+
+13. **dataset_manager** - Manage training datasets
+    - USE when user wants to work with their conversation data for training
+    - Operations: list, stats, export, validate, delete, merge
+    - Supports JSONL/JSON/CSV export formats
+
+14. **token_analyzer** - Analyze token usage and costs
+    - USE when user asks about token consumption or cost optimization
+    - Operations: usage_stats, cost_analysis, model_comparison, optimization_tips
+    - Provides detailed cost breakdown by model and time period
+
+15. **analytics_export** - Create downloadable analytics reports
+    - USE when user wants to export or download analytics data
+    - Operations: create_export, list_exports, get_download_link
+    - Formats: CSV, JSON, or formatted reports
+
+16. **query_knowledge_graph** - Search user's documents
+    - USE when user asks about their uploaded documents or knowledge base
+    - Searches GraphRAG knowledge graph for relevant entities and facts
+    - Returns facts, entities, and relationships with confidence scores
 
 ## ANALYSIS WORKFLOWS
 
