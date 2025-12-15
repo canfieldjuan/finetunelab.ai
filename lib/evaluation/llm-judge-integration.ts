@@ -40,10 +40,10 @@ export async function evaluateWithLLMJudge(context: LLMJudgeContext): Promise<vo
     return;
   }
 
-  // Check if enabled via environment variable
-  const enabled = process.env.LLM_JUDGE_ENABLED !== 'false'; // Default: true
+  // Check if enabled via environment variable (default: disabled for auto-sampling)
+  const enabled = process.env.LLM_JUDGE_AUTO_SAMPLE === 'true'; // Default: false
   if (!enabled) {
-    console.log('[LLM Judge] Disabled via LLM_JUDGE_ENABLED');
+    console.log('[LLM Judge] Auto-sampling disabled (set LLM_JUDGE_AUTO_SAMPLE=true to enable)');
     return;
   }
 

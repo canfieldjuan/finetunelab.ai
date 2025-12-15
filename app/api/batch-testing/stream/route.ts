@@ -12,7 +12,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { extractPrompts } from '@/lib/tools/prompt-extractor/prompt-extractor.service';
 import { extractPromptsFromDataset } from '@/lib/batch-testing/dataset-prompt-extractor';
-import type { BatchTestConfig } from '@/lib/batch-testing/types';
+import type { BatchTestConfig, SessionTag, JudgeConfig } from '@/lib/batch-testing/types';
 import { categorizeError } from '@/lib/batch-testing/error-categorizer';
 import { STATUS } from '@/lib/constants';
 import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
@@ -205,8 +205,8 @@ export async function POST(req: NextRequest) {
     delay_ms: (config.delay_ms as number) || parseInt(process.env.BATCH_TESTING_DEFAULT_DELAY_MS || '1000', 10),
     source_path: (config.source_path as string) || '',
     benchmark_id: config.benchmark_id as string | undefined,
-    session_tag: config.session_tag as { session_id?: string; experiment_name?: string } | undefined,
-    judge_config: config.judge_config as { enabled: boolean; model: string; criteria: string[] } | undefined
+    session_tag: config.session_tag as SessionTag | undefined,
+    judge_config: config.judge_config as JudgeConfig | undefined
   };
 
   // Extract prompts before starting stream
