@@ -418,6 +418,55 @@ export async function POST(req: NextRequest) {
               await chatResponse.text(); // Consume response
               success = true;
               completed++;
+
+              // Step 2: If judge is enabled, fetch the message ID and evaluate
+              if (batchConfig.judge_config?.enabled && batchConfig.judge_config.criteria.length > 0 && auth.mode === 'session' && conversationId) {
+                // Fetch the most recent assistant message from this conversation
+                const { data: recentMessage } = await supabaseAdmin
+                  .from('messages')
+                  .select('id')
+                  .eq('conversation_id', conversationId)
+                  .eq('role', 'assistant')
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .single();
+
+                const messageId = recentMessage?.id;
+
+                if (messageId) {
+                  console.log(`[BatchTest/Stream] Prompt ${i + 1}: Starting LLM judge evaluation with ${batchConfig.judge_config.criteria.length} criteria`);
+
+                  try {
+                    const judgeResponse = await fetch(`${baseUrl}/api/evaluation/judge`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': auth.authorizationHeader
+                      },
+                      body: JSON.stringify({
+                        message_id: messageId,
+                        criteria: batchConfig.judge_config.criteria,
+                        judge_model: batchConfig.judge_config.model,
+                        save_to_db: true
+                      })
+                    });
+
+                    if (judgeResponse.ok) {
+                      const judgeData = await judgeResponse.json();
+                      const avgScore = judgeData.evaluations?.reduce((sum: number, e: { score?: number }) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);
+                      console.log(`[BatchTest/Stream] Prompt ${i + 1}: Judge evaluation complete, avg score: ${avgScore.toFixed(1)}/10`);
+                    } else {
+                      const judgeError = await judgeResponse.text();
+                      console.error(`[BatchTest/Stream] Prompt ${i + 1}: Judge evaluation failed:`, judgeError.substring(0, 200));
+                    }
+                  } catch (judgeError) {
+                    console.error(`[BatchTest/Stream] Prompt ${i + 1}: Judge error:`, judgeError);
+                    // Don't fail the prompt if judge fails
+                  }
+                } else {
+                  console.warn(`[BatchTest/Stream] Prompt ${i + 1}: Could not find message ID for judge evaluation`);
+                }
+              }
             } else {
               failed++;
             }
