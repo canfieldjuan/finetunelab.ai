@@ -534,17 +534,19 @@ export async function POST(req: NextRequest) {
           failed_prompts: failed
         });
 
-        await safeSendBatchTestAlert(failed > 0 ? 'batch_test_failed' : 'batch_test_completed', {
-          testRunId,
-          userId: auth.userId,
-          modelName: batchConfig.model_name,
-          testRunName: customName,
-          status: finalStatus,
-          totalPrompts: extractionResult.total,
-          completedPrompts: completed,
-          failedPrompts: failed,
-          errorMessage: failed > 0 ? `${failed} prompts failed` : null,
-        });
+        if (testRunId) {
+          await safeSendBatchTestAlert(failed > 0 ? 'batch_test_failed' : 'batch_test_completed', {
+            testRunId,
+            userId: auth.userId,
+            modelName: batchConfig.model_name,
+            testRunName: customName,
+            status: finalStatus,
+            totalPrompts: extractionResult.total,
+            completedPrompts: completed,
+            failedPrompts: failed,
+            errorMessage: failed > 0 ? `${failed} prompts failed` : null,
+          });
+        }
 
         console.log(`[BatchTest/Stream] Completed: ${completed} succeeded, ${failed} failed`);
 
