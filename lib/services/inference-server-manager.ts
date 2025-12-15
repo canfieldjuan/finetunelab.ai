@@ -25,9 +25,9 @@ import { ENDPOINTS, PORTS } from '@/lib/config/endpoints';
 // Resolve the python executable we will use for vLLM on Linux systems
 function resolvePythonExecutable(): string {
   // On Vercel, Python is not available - this function should not be called
-  if (process.env.VERCEL) {
+  if (process.env.VERCEL || process.env.RENDER) {
     throw new Error(
-      'Python executable resolution is not available on Vercel. ' +
+      'Python executable resolution is not available on cloud deployments (Vercel/Render). ' +
       'Use VLLM_EXTERNAL_URL to connect to an external vLLM server.'
     );
   }
@@ -143,6 +143,12 @@ export class InferenceServerManager {
   private processes: Map<string, ChildProcess> = new Map();
 
   constructor() {
+    // Skip zombie cleanup on cloud deployments - no local processes to manage
+    if (process.env.VERCEL || process.env.RENDER) {
+      console.log('[InferenceServerManager] Cloud deployment detected, skipping local process management');
+      return;
+    }
+
     // Clean up zombie processes on startup (processes marked as running but actually dead)
     this.cleanupZombieProcesses(null).catch(err =>
       console.error('[InferenceServerManager] Failed to cleanup zombies on startup:', err)
@@ -161,7 +167,7 @@ export class InferenceServerManager {
     console.log('[InferenceServerManager] Starting vLLM server:', config.modelName);
 
     // On Vercel or when external URL is configured, use external vLLM server
-    if (process.env.VERCEL || process.env.VLLM_EXTERNAL_URL) {
+    if (process.env.VERCEL || process.env.RENDER || process.env.VLLM_EXTERNAL_URL) {
       const externalUrl = process.env.VLLM_EXTERNAL_URL;
 
       if (!externalUrl) {
@@ -408,8 +414,8 @@ export class InferenceServerManager {
    * Check if Ollama is installed on the system
    */
   private checkOllamaInstalled(): boolean {
-    // On Vercel, execSync for system binaries won't work
-    if (process.env.VERCEL) {
+    // On cloud deployments, execSync for system binaries won't work
+    if (process.env.VERCEL || process.env.RENDER) {
       return false;
     }
 
@@ -446,12 +452,12 @@ export class InferenceServerManager {
    * Start Ollama server if not running
    */
   private async ensureOllamaRunning(): Promise<void> {
-    // On Vercel, cannot spawn Ollama - must use external server
-    if (process.env.VERCEL) {
+    // On cloud deployments, cannot spawn Ollama - must use external server
+    if (process.env.VERCEL || process.env.RENDER) {
       const externalUrl = process.env.OLLAMA_BASE_URL;
       if (!externalUrl || externalUrl.includes('localhost')) {
         throw new Error(
-          'Cannot spawn Ollama on Vercel serverless environment. ' +
+          'Cannot spawn Ollama on cloud deployments (Vercel/Render). ' +
           'Set OLLAMA_BASE_URL to point to an external Ollama server.'
         );
       }
