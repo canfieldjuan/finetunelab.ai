@@ -16,6 +16,7 @@ import { TrainingMetricsProvider } from '@/contexts/TrainingMetricsContext';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AgentStatus } from '@/components/training/AgentStatus';
 import { ComparisonModal } from '@/components/training/ComparisonModal';
+import { safeJsonParse } from '@/lib/utils/safe-json';
 
 // Lazy load chart components to reduce initial bundle size and memory usage
 const LossChart = dynamic(() => import('@/components/training/LossChart').then(mod => ({ default: mod.LossChart })), {
@@ -282,7 +283,7 @@ function TrainingMonitorPageContent() {
         });
 
         if (response.ok) {
-          const data = await response.json();
+          const data = await safeJsonParse(response, { isCloudJob: false });
           setIsCloudJob(data.isCloudJob || false);
         }
       } catch (err) {
@@ -350,7 +351,7 @@ function TrainingMonitorPageContent() {
       result?: unknown;
     } | null;
 
-    const result: JobControlResponse = await response.json().catch(() => null);
+    const result: JobControlResponse = await safeJsonParse(response, null as JobControlResponse);
 
     if (!response.ok || result?.success === false) {
       throw new Error(result?.error || result?.message || `Failed to ${action} training job.`);

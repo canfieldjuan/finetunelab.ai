@@ -166,8 +166,13 @@ import {
 } from '@/lib/analytics/dataAggregator';
 import type { DateRange, AnalyticsDataset } from '@/lib/analytics/types';
 import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
+import { cacheGet, cacheSet, generateCacheKey } from '@/lib/cache/redis-cache';
 
 export const runtime = 'nodejs';
+
+// Cache TTL for analytics data (5 minutes - analytics don't change frequently)
+const ANALYTICS_CACHE_TTL_MS = parseInt(process.env.ANALYTICS_CACHE_TTL_MS || '300000', 10);
+const CACHE_PREFIX = 'api:analytics:data';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -286,13 +291,15 @@ function parseMetricsParam(metrics: string | null): string[] {
 
 /**
  * Aggregate analytics data
+ * Optimized: Runs all metric queries in parallel for better performance
  */
 async function aggregateAnalyticsData(
   userId: string,
   dateRange: DateRange,
   metrics: string[]
 ): Promise<AnalyticsDataset> {
-  console.log('[Analytics Data API] Aggregating data for user:', userId);
+  console.log('[Analytics Data API] Aggregating data for user:', userId, 'metrics:', metrics.join(','));
+  const startTime = Date.now();
 
   const dataset: AnalyticsDataset = {
     userId,
@@ -332,36 +339,68 @@ async function aggregateAnalyticsData(
     generatedAt: new Date(),
   };
 
+  // Run all metric aggregations in parallel for better performance
+  const aggregationPromises: Promise<void>[] = [];
+
   if (metrics.includes('tokens')) {
-    dataset.metrics.tokenUsage = await aggregateTokenUsageData(userId, dateRange);
+    aggregationPromises.push(
+      aggregateTokenUsageData(userId, dateRange).then(data => {
+        dataset.metrics.tokenUsage = data;
+      })
+    );
   }
 
   if (metrics.includes('quality')) {
-    dataset.metrics.quality = await aggregateQualityMetrics(userId, dateRange);
+    aggregationPromises.push(
+      aggregateQualityMetrics(userId, dateRange).then(data => {
+        dataset.metrics.quality = data;
+      })
+    );
   }
 
   if (metrics.includes('tools')) {
-    dataset.metrics.tools = await aggregateToolUsageData(userId, dateRange);
+    aggregationPromises.push(
+      aggregateToolUsageData(userId, dateRange).then(data => {
+        dataset.metrics.tools = data;
+      })
+    );
   }
 
   if (metrics.includes('conversations')) {
-    dataset.metrics.conversations = await aggregateConversationMetrics(userId, dateRange);
+    aggregationPromises.push(
+      aggregateConversationMetrics(userId, dateRange).then(data => {
+        dataset.metrics.conversations = data;
+      })
+    );
   }
 
   if (metrics.includes('errors')) {
-    dataset.metrics.errors = await aggregateErrorData(userId, dateRange);
+    aggregationPromises.push(
+      aggregateErrorData(userId, dateRange).then(data => {
+        dataset.metrics.errors = data;
+      })
+    );
   }
 
   if (metrics.includes('latency')) {
-    dataset.metrics.latency = await aggregateLatencyData(userId, dateRange);
+    aggregationPromises.push(
+      aggregateLatencyData(userId, dateRange).then(data => {
+        dataset.metrics.latency = data;
+      })
+    );
   }
 
-  console.log('[Analytics Data API] Data aggregation complete');
+  // Wait for all aggregations to complete in parallel
+  await Promise.all(aggregationPromises);
+
+  const elapsed = Date.now() - startTime;
+  console.log('[Analytics Data API] Data aggregation complete in', elapsed, 'ms');
   return dataset;
 }
 
 /**
  * GET handler
+ * Optimized with in-memory caching to reduce database load under concurrent requests
  */
 export async function GET(req: NextRequest) {
   try {
@@ -370,13 +409,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: authError }, { status: status || 401 });
     }
 
-    console.log('[Analytics Data API] Request from user:', user.id);
-
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const metrics = searchParams.get('metrics');
     const granularity = searchParams.get('granularity') || 'day';
+    const noCache = searchParams.get('noCache') === 'true';
 
     const { dateRange, error: dateError } = validateDateRange(startDate, endDate, granularity);
     if (dateError || !dateRange) {
@@ -391,13 +429,39 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const dataset = await aggregateAnalyticsData(
-      user.id,
-      dateRange,
-      metricsArray
-    );
+    // Check Redis cache first (unless noCache is set)
+    const cacheKey = generateCacheKey(CACHE_PREFIX, user.id, {
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      metrics: metricsArray.sort().join(','),
+      granularity,
+    });
 
-    console.log('[Analytics Data API] Returning dataset');
+    let dataset: AnalyticsDataset | null = null;
+    let fromCache = false;
+
+    if (!noCache) {
+      dataset = await cacheGet<AnalyticsDataset>(cacheKey);
+      if (dataset) {
+        fromCache = true;
+        console.log('[Analytics Data API] Cache HIT for user:', user.id);
+      }
+    }
+
+    // If not in cache, compute and store
+    if (!dataset) {
+      console.log('[Analytics Data API] Cache MISS, computing for user:', user.id);
+      dataset = await aggregateAnalyticsData(
+        user.id,
+        dateRange,
+        metricsArray
+      );
+
+      // Store in Redis cache for future requests
+      await cacheSet(cacheKey, dataset, ANALYTICS_CACHE_TTL_MS);
+    }
+
+    console.log('[Analytics Data API] Serving data for user:', user.id, 'fromCache:', fromCache);
 
     return NextResponse.json(
       {
@@ -409,11 +473,13 @@ export async function GET(req: NextRequest) {
           metrics: metricsArray,
           granularity,
           generatedAt: new Date().toISOString(),
+          fromCache,
         },
       },
       {
         headers: {
           'Cache-Control': `private, max-age=${process.env.ANALYTICS_CACHE_MAX_AGE || '300'}`,
+          'X-Cache': fromCache ? 'HIT' : 'MISS',
         },
       }
     );

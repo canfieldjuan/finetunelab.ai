@@ -19,6 +19,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 // V2 Feature - Regression Gates (temporarily disabled)
 // import { BaselineManagerUI, ValidationHistoryView } from '@/components/training/baselines';
 import { AgentStatus } from '@/components/training/AgentStatus';
+import { safeJsonParse } from '@/lib/utils/safe-json';
 
 function TrainingPageContent() {
   const { user, session, signOut } = useAuth();
@@ -70,7 +71,7 @@ function TrainingPageContent() {
 
       if (!response.ok) throw new Error('Failed to fetch configs');
 
-      const data = await response.json();
+      const data = await safeJsonParse(response, { configs: [] });
       console.log('[TrainingPage] Loaded', data.configs.length, 'configs');
       console.log('[TrainingPage] Config public_ids:', data.configs.map((c: TrainingConfigRecord) => ({
         name: c.name,
@@ -96,7 +97,7 @@ function TrainingPageContent() {
 
       if (!response.ok) throw new Error('Failed to fetch datasets');
 
-      const data = await response.json();
+      const data = await safeJsonParse(response, { datasets: [] });
       console.log('[TrainingPage] Loaded', data.datasets?.length || 0, 'datasets');
       setDatasets(data.datasets || []);
     } catch (err) {
@@ -146,7 +147,7 @@ function TrainingPageContent() {
 
       if (!response.ok) throw new Error('Failed to clone config');
 
-      const data = await response.json();
+      const data = await safeJsonParse(response, { config: { id: '' } });
       console.log('[TrainingPage] Config cloned:', data.config.id);
       fetchConfigs();
     } catch (err) {

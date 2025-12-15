@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next dev",
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next dev -p 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3000",
     "lint": "eslint",
     "test": "jest",
     "test:e2e": "jest tests/integration",

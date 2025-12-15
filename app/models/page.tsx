@@ -108,6 +108,21 @@ function ModelsPageContent() {
     }
   }, [highlightedModelId, models, loading]);
 
+  // Safe JSON parser to handle truncated responses under heavy load
+  async function safeJsonParse<T>(response: Response, fallback: T): Promise<T> {
+    try {
+      const text = await response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('[ModelsPage] Empty response body');
+        return fallback;
+      }
+      return JSON.parse(text) as T;
+    } catch (err) {
+      console.error('[ModelsPage] JSON parse error:', err);
+      return fallback;
+    }
+  }
+
   async function fetchModels() {
     console.log('[ModelsPage] Fetching models...');
     setLoading(true);
@@ -122,7 +137,7 @@ function ModelsPageContent() {
         throw new Error(`Failed to fetch models: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await safeJsonParse(response, { models: [], count: 0 });
       console.log('[ModelsPage] Fetched models:', data.count);
       setModels(data.models || []);
 
@@ -152,7 +167,7 @@ function ModelsPageContent() {
         return;
       }
 
-      const data = await response.json();
+      const data = await safeJsonParse(response, { servers: [] });
       console.log('[ModelsPage] Fetched servers:', data.servers?.length || 0);
 
       // Create lookup map: model_id -> server info
@@ -192,7 +207,7 @@ function ModelsPageContent() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = await safeJsonParse(response, { error: 'Failed to delete model' });
         throw new Error(data.error || 'Failed to delete model');
       }
 

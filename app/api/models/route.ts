@@ -128,9 +128,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { modelManager } from '@/lib/models/model-manager.service';
-import type { CreateModelDTO } from '@/lib/models/llm-model.types';
+import type { CreateModelDTO, LLMModelDisplay } from '@/lib/models/llm-model.types';
+import { cacheGet, cacheSet, cacheDeletePattern, generateCacheKey } from '@/lib/cache/redis-cache';
 
 export const runtime = 'nodejs';
+
+// Cache TTL for models list (2 minutes - models don't change frequently)
+const MODELS_CACHE_TTL_MS = parseInt(process.env.MODELS_CACHE_TTL_MS || '120000', 10);
+
+// Cache key prefix for models
+const CACHE_PREFIX = 'api:models';
 
 // ============================================================================
 // GET /api/models - List all available models
@@ -191,15 +198,45 @@ export async function GET(request: NextRequest) {
       console.log('[ModelsAPI] No auth header or invalid format, returning global models only');
     }
 
+    // Generate cache key based on user
+    const cacheKey = generateCacheKey(CACHE_PREFIX, userId || 'global');
+
+    // Check cache first
+    const cachedModels = await cacheGet<LLMModelDisplay[]>(cacheKey);
+    if (cachedModels) {
+      console.log('[ModelsAPI] Cache HIT, returning', cachedModels.length, 'models');
+      return NextResponse.json({
+        success: true,
+        models: cachedModels,
+        count: cachedModels.length,
+        fromCache: true,
+      }, {
+        headers: {
+          'X-Cache': 'HIT',
+        },
+      });
+    }
+
+    // Cache miss - fetch from database
+    console.log('[ModelsAPI] Cache MISS, fetching from database');
+
     // List models (global + user's personal if authenticated)
     // Pass authenticated client for RLS to work correctly
     const models = await modelManager.listModels(userId || undefined, supabase || undefined);
+
+    // Store in cache
+    await cacheSet(cacheKey, models, MODELS_CACHE_TTL_MS);
 
     console.log('[ModelsAPI] Returning', models.length, 'models');
     return NextResponse.json({
       success: true,
       models,
       count: models.length,
+      fromCache: false,
+    }, {
+      headers: {
+        'X-Cache': 'MISS',
+      },
     });
 
   } catch (error) {
@@ -296,6 +333,11 @@ export async function POST(request: NextRequest) {
 
     // Create model with encryption (pass authenticated Supabase client for RLS)
     const model = await modelManager.createModel(dto, user.id, supabase);
+
+    // Invalidate cache for this user (their model list changed)
+    const userCacheKey = generateCacheKey(CACHE_PREFIX, user.id);
+    await cacheDeletePattern(userCacheKey);
+    console.log('[ModelsAPI] Cache invalidated for user:', user.id);
 
     console.log('[ModelsAPI] Model created successfully:', model.id);
     return NextResponse.json({

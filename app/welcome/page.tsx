@@ -1,6 +1,12 @@
 import { LandingPage } from '@/components/landing';
 import { Metadata } from 'next';
 
+// Force static generation - landing page is fully static content
+export const dynamic = 'force-static';
+
+// Revalidate every hour to pick up any content changes
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: "Fine Tune Lab - Visual DAG-Based AI Training Platform",
   description: "Unify training, evaluation, and deployment with a visual DAG builder. Fine-tune LLMs locally or in the cloud with real-time telemetry.",

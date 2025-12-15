@@ -2,8 +2,15 @@ import React from 'react';
 import Link from 'next/link';
 import { Metadata } from 'next';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { academyArticles } from '@/lib/academy/content';
+import { academyArticlesMetadata } from '@/lib/academy/content-metadata';
 import { FineTuneLabFullLogoV2 } from '@/components/branding';
+
+// Force static generation - pages are pre-rendered at build time
+// This eliminates SSR overhead and serves cached HTML instantly
+export const dynamic = 'force-static';
+
+// Revalidate every hour to pick up content changes
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "Lab Academy - AI & MLOps Knowledge Base | Fine Tune Lab",
@@ -23,7 +30,7 @@ export default function LabAcademyPage() {
     "@type": "CollectionPage",
     "name": "Lab Academy",
     "description": "Expert answers to the top questions in AI, MLOps, RAG, and LLM engineering.",
-    "hasPart": academyArticles.map(article => ({
+    "hasPart": academyArticlesMetadata.map(article => ({
       "@type": "Article",
       "headline": article.title,
       "description": article.excerpt,
@@ -67,7 +74,7 @@ export default function LabAcademyPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {academyArticles.map((article) => (
+          {academyArticlesMetadata.map((article) => (
             <Link key={article.slug} href={`/lab-academy/${article.slug}`} className="group">
               <Card className="h-full transition-all hover:border-primary/50 hover:shadow-md">
                 <CardHeader>

@@ -2,10 +2,18 @@ import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
+import { academyArticlesMetadata } from '@/lib/academy/content-metadata';
 import { academyArticles } from '@/lib/academy/content';
 import { FineTuneLabFullLogoV2 } from '@/components/branding';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+
+// Force static generation - all article pages are pre-rendered at build time
+// Combined with generateStaticParams(), this ensures instant page loads
+export const dynamic = 'force-static';
+
+// Revalidate every hour to pick up content changes
+export const revalidate = 3600;
 
 interface PageProps {
   params: Promise<{
@@ -15,7 +23,8 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const article = academyArticles.find((a) => a.slug === slug);
+  // Use lightweight metadata for SEO - no need for full content
+  const article = academyArticlesMetadata.find((a) => a.slug === slug);
 
   if (!article) {
     return {
@@ -44,7 +53,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export async function generateStaticParams() {
-  return academyArticles.map((article) => ({
+  // Use lightweight metadata - only need slugs for static generation
+  return academyArticlesMetadata.map((article) => ({
     slug: article.slug,
   }));
 }

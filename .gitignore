@@ -83,3 +83,4 @@ test_provider_secret_decrypt.js
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+lib/training/configs/job_*.json

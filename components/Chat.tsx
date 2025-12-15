@@ -23,6 +23,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useAuth } from "../contexts/AuthContext";
@@ -32,11 +33,23 @@ import { getEnabledTools } from "../lib/tools/toolManager";
 import { AppSidebar } from "./layout/AppSidebar";
 import { useDocuments } from "../hooks/useDocuments";
 import { useArchive } from "../hooks/useArchive";
-import { DocumentUpload } from "./graphrag/DocumentUpload";
-import { DocumentList } from "./graphrag/DocumentList";
-import { ArchiveManager } from "./export/ArchiveManager";
-import { ResearchStreamViewer } from "./research/ResearchStreamViewer";
-import { ExportDialog } from "./export/ExportDialog";
+
+// Dynamic imports for heavy modal components - loaded only when needed
+const DocumentUpload = dynamic(() => import("./graphrag/DocumentUpload").then(mod => ({ default: mod.DocumentUpload })), {
+  loading: () => <div className="h-32 bg-muted animate-pulse rounded-lg" />
+});
+const DocumentList = dynamic(() => import("./graphrag/DocumentList").then(mod => ({ default: mod.DocumentList })), {
+  loading: () => <div className="h-32 bg-muted animate-pulse rounded-lg" />
+});
+const ArchiveManager = dynamic(() => import("./export/ArchiveManager").then(mod => ({ default: mod.ArchiveManager })), {
+  loading: () => <div className="h-32 bg-muted animate-pulse rounded-lg" />
+});
+const ResearchStreamViewer = dynamic(() => import("./research/ResearchStreamViewer").then(mod => ({ default: mod.ResearchStreamViewer })), {
+  loading: () => <div className="h-24 bg-muted animate-pulse rounded-lg" />
+});
+const ExportDialog = dynamic(() => import("./export/ExportDialog").then(mod => ({ default: mod.ExportDialog })), {
+  loading: () => null
+});
 import {
   Archive,
   Database,
@@ -53,14 +66,20 @@ import {
   User,
   Brain
 } from "lucide-react";
-import { EvaluationModal } from "./evaluation/EvaluationModal";
+const EvaluationModal = dynamic(() => import("./evaluation/EvaluationModal").then(mod => ({ default: mod.EvaluationModal })), {
+  loading: () => null
+});
 import { ModelSelector } from "./models/ModelSelector";
 import { MessageList } from "./chat/MessageList";
 import { ScrollToBottomButton } from "./chat/ScrollToBottomButton";
 import { ChatCommandPalette } from "./chat/ChatCommandPalette";
 import { ChatHeader } from "./chat/ChatHeader";
-import { ContextInspectorPanel } from "./debug/ContextInspectorPanel";
-import { ModelComparisonView } from "./evaluation/ModelComparisonView";
+const ContextInspectorPanel = dynamic(() => import("./debug/ContextInspectorPanel").then(mod => ({ default: mod.ContextInspectorPanel })), {
+  loading: () => null
+});
+const ModelComparisonView = dynamic(() => import("./evaluation/ModelComparisonView").then(mod => ({ default: mod.ModelComparisonView })), {
+  loading: () => null
+});
 import { ContextTracker } from "@/lib/context/context-tracker";
 import type { ConversationModelContextRecord } from "@/lib/context/types";
 import { ContextIndicator } from "./chat/ContextIndicator";

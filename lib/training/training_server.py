@@ -341,6 +341,16 @@ logger.info("Job queue initialized")
 failed_persists: Dict[str, Dict] = {}
 logger.info("Failed persists cache initialized")
 
+# Cache for analytics to reduce computation load under high concurrency
+# Phase 5 Enhancement - Analytics Caching
+analytics_cache: Dict[str, Any] = {
+    "system_analytics": None,
+    "system_analytics_timestamp": 0,
+    "job_analytics": {},  # job_id -> {data, timestamp}
+}
+ANALYTICS_CACHE_TTL_SECONDS = int(os.environ.get("ANALYTICS_CACHE_TTL_SECONDS", "30"))
+logger.info(f"Analytics cache initialized (TTL: {ANALYTICS_CACHE_TTL_SECONDS}s)")
+
 
 # WebSocket connection manager for real-time streaming (Phase 3)
 class ConnectionManager:
@@ -2561,6 +2571,11 @@ async def monitor_job(job_id: str):
 
                 job.completed_at = datetime.utcnow().isoformat()
 
+                # Invalidate analytics cache when job status changes
+                analytics_cache["system_analytics"] = None
+                analytics_cache["system_analytics_timestamp"] = 0
+                logger.debug(f"[Monitor] Invalidated analytics cache after job {job_id} completion")
+
                 # Extract final train_loss from progress.json metrics_history
                 # This ensures we get the last actual train_loss value before it was overwritten by eval
                 final_train_loss = job.loss  # Fallback to current value
@@ -4586,7 +4601,7 @@ async def get_job_analytics(job_id: str):
 async def get_system_analytics():
     """
     Get system-wide analytics across all training jobs.
-    
+
     Returns aggregated metrics including:
     - Total job counts by status
     - Average training duration
@@ -4594,22 +4609,44 @@ async def get_system_analytics():
     - Average throughput
     - Top performing jobs
     - Resource utilization trends
-    
+
     Returns:
         JSON response with system analytics
-    
+
     Raises:
         HTTPException: 500 for calculation errors
-    
-    Phase 5 - System Analytics
+
+    Phase 5 - System Analytics (with caching for performance)
     """
     logger.info("[Analytics] System analytics requested")
-    
+
     try:
+        current_time = time.time()
+        cache_age = current_time - analytics_cache["system_analytics_timestamp"]
+
+        # Check if cached data is still valid
+        if (analytics_cache["system_analytics"] is not None
+            and cache_age < ANALYTICS_CACHE_TTL_SECONDS):
+            logger.info(f"[Analytics] Cache HIT (age: {cache_age:.1f}s)")
+            cached_data = analytics_cache["system_analytics"].copy()
+            cached_data["from_cache"] = True
+            cached_data["cache_age_seconds"] = round(cache_age, 1)
+            return JSONResponse(content=cached_data)
+
+        # Cache miss - calculate fresh analytics
+        logger.info(f"[Analytics] Cache MISS (age: {cache_age:.1f}s), calculating...")
         analytics = calculate_system_analytics()
+
+        # Store in cache
+        analytics_cache["system_analytics"] = analytics
+        analytics_cache["system_analytics_timestamp"] = current_time
+
+        analytics["from_cache"] = False
+        analytics["cache_age_seconds"] = 0
+
         logger.info(f"[Analytics] Successfully calculated system analytics ({analytics['total_jobs']} jobs)")
         return JSONResponse(content=analytics)
-    
+
     except Exception as e:
         logger.error(f"[Analytics] Error calculating system analytics: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to calculate system analytics: {str(e)}")

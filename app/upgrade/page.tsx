@@ -17,6 +17,7 @@ import type {
   UserSubscription,
 } from "@/lib/subscriptions/types";
 import { PLAN_NAMES } from "@/lib/constants";
+import { safeJsonParse } from "@/lib/utils/safe-json";
 
 export default function UpgradePage() {
   const { user, signOut, session } = useAuth();
@@ -53,7 +54,7 @@ export default function UpgradePage() {
           throw new Error('Failed to fetch subscription');
         }
 
-        const data = await response.json();
+        const data = await safeJsonParse(response, { subscription: null, plan: null });
         setSubscription(data.subscription);
         setPlan(data.plan);
       } catch (error) {
@@ -104,16 +105,20 @@ export default function UpgradePage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await safeJsonParse(response, { error: 'Failed to create checkout session' });
         console.error('[UpgradePage] Checkout error:', errorData);
         throw new Error(errorData.error || 'Failed to create checkout session');
       }
 
-      const data = await response.json();
+      const data = await safeJsonParse(response, { url: '' });
       console.log('[UpgradePage] Checkout session created:', data);
 
       // Redirect to Stripe Checkout
-      window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL returned');
+      }
     } catch (error) {
       console.error('[UpgradePage] Error creating checkout:', error);
       const message = error instanceof Error ? error.message : 'Failed to start checkout. Please try again.';

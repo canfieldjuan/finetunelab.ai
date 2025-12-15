@@ -4,13 +4,13 @@ import OpenAI from 'openai';
 
 export const runtime = 'nodejs';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(req: NextRequest) {
   try {
+    // Initialize OpenAI client lazily to avoid build-time errors
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build',
+    });
+
     const { message } = await req.json();
 
     if (!message || typeof message !== 'string') {

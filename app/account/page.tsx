@@ -17,6 +17,7 @@ import type {
   PlanLimits
 } from "@/lib/subscriptions/types";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
+import { safeJsonParse } from "@/lib/utils/safe-json";
 
 export default function AccountPage() {
   const { user, signOut, session } = useAuth();
@@ -61,7 +62,7 @@ export default function AccountPage() {
           throw new Error('Failed to fetch subscription');
         }
 
-        const data = await response.json();
+        const data = await safeJsonParse(response, { subscription: null, plan: null });
         setSubscription(data.subscription);
         setPlan(data.plan);
       } catch (error) {
@@ -93,7 +94,7 @@ export default function AccountPage() {
           throw new Error('Failed to fetch usage');
         }
 
-        const data = await response.json();
+        const data = await safeJsonParse(response, { usage: null, limits: null, percentages: null });
         setUsage(data.usage);
         setLimits(data.limits);
         setPercentages(data.percentages);
@@ -125,16 +126,20 @@ export default function AccountPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await safeJsonParse(response, { error: 'Failed to create portal session' });
         console.error('[AccountPage] Portal session error:', errorData);
         throw new Error(errorData.error || 'Failed to create portal session');
       }
 
-      const data = await response.json();
+      const data = await safeJsonParse(response, { url: '' });
       console.log('[AccountPage] Portal session created:', data);
 
       // Redirect to Stripe billing portal
-      window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No portal URL returned');
+      }
     } catch (error) {
       console.error('[AccountPage] Error opening portal:', error);
       const message = error instanceof Error ? error.message : 'Failed to open billing portal. Please try again.';
@@ -164,7 +169,7 @@ export default function AccountPage() {
         alert('Your account has been deleted.');
         await signOut();
       } else {
-        const error = await response.json();
+        const error = await safeJsonParse(response, { error: 'Failed to delete account' });
         alert(`Error: ${error.error}`);
       }
     } catch (error) {

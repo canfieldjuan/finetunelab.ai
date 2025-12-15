@@ -25,6 +25,7 @@ import { WidgetAppsManagement } from '@/components/settings/WidgetAppsManagement
 import { IntegrationsManagement } from '@/components/settings/IntegrationsManagement';
 import type { ProviderSecretDisplay } from '@/lib/secrets/secrets.types';
 import type { ModelProvider } from '@/lib/models/llm-model.types';
+import { safeJsonParse } from '@/lib/utils/safe-json';
 
 export default function SecretsPage() {
   const { user, session, signOut, loading: authLoading } = useAuth();
@@ -69,7 +70,7 @@ export default function SecretsPage() {
         throw new Error(`Failed to fetch secrets: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await safeJsonParse(response, { secrets: [], count: 0 });
       console.log('[SecretsPage] Fetched secrets:', data.count);
       setSecrets(data.secrets || []);
     } catch (err) {
@@ -94,7 +95,7 @@ export default function SecretsPage() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = await safeJsonParse(response, { error: 'Failed to delete secret' });
         throw new Error(data.error || 'Failed to delete secret');
       }
 
@@ -380,7 +381,7 @@ function SecretDialog({
       });
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = await safeJsonParse(response, { error: `Failed to ${isEdit ? 'update' : 'create'} secret` });
         throw new Error(data.error || `Failed to ${isEdit ? 'update' : 'create'} secret`);
       }
 
