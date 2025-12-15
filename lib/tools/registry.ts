@@ -212,8 +212,8 @@ import datasetManagerTool from './dataset-manager';
 import promptTesterTool from './prompt-tester';
 import { tokenAnalyzerTool } from './token-analyzer';
 import { evaluationMetricsTool } from './evaluation-metrics';
-import promptInjectorTool from './prompt-injector';
-import promptExtractorTool from './prompt-extractor';
+// REMOVED: promptInjectorTool - developer/QA load testing tool
+// REMOVED: promptExtractorTool - developer benchmarking tool
 import intelligentEmailTool from './intelligent_email';
 import emailAnalysisTool from './intelligent_email/analysis.tool';
 import { emailSecurityTool } from './intelligent_email/security.tool';
@@ -230,8 +230,8 @@ registerTool(datasetManagerTool);
 registerTool(promptTesterTool);
 registerTool(tokenAnalyzerTool);
 registerTool(evaluationMetricsTool);
-registerTool(promptInjectorTool);
-registerTool(promptExtractorTool);
+// REMOVED: promptInjectorTool - developer/QA load testing tool
+// REMOVED: promptExtractorTool - developer benchmarking tool
 registerTool(intelligentEmailTool);
 registerTool(emailAnalysisTool);
 registerTool(emailSecurityTool);
@@ -239,18 +239,7 @@ registerTool(analyticsExportTool);
 registerTool(trainingControlTool);
 registerTool(graphragQueryTool);
 
-// Conditionally register server-only tools (Node.js dependencies)
-if (typeof window === 'undefined') {
-  console.log('[ToolRegistry] Server-side detected, registering server-only tools...');
-  // Dynamic imports for server-only tools to avoid bundling Node.js modules for client
-  import('./filesystem/filesystem.tool').then(({ filesystemTool }) => {
-    registerTool(filesystemTool);
-    console.log('[ToolRegistry] Registered filesystemTool');
-  });
-  import('./system-monitor').then(({ systemMonitorTool }) => {
-    registerTool(systemMonitorTool);
-    console.log('[ToolRegistry] Registered systemMonitorTool');
-  });
-}
+// REMOVED: Server-only tools (filesystem, system_monitor) - security risk in cloud deployments
+// These tools are kept in codebase but not registered for chat portal use
 
 console.log('[ToolRegistry] Registered', registry.count(), 'tools (client-safe)');
