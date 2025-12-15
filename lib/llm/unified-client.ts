@@ -133,13 +133,14 @@ export class UnifiedLLMClient {
 
     console.log('[UnifiedLLMClient] Sending request to:', url);
 
-    // Make API call with extended timeout for serverless cold starts
+    // Make API call with extended timeout for serverless/slow providers
     const isServerless = url.includes('runpod.net') || url.includes('runpod.io');
-    const timeoutMs = isServerless ? 120000 : 60000; // 2 minutes for serverless, 1 minute otherwise
-    
+    const isHuggingFace = url.includes('huggingface.co');
+    const timeoutMs = (isServerless || isHuggingFace) ? 120000 : 60000; // 2 minutes for serverless/HF, 1 minute otherwise
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    
+
     let response: Response;
     try {
       response = await fetch(url, {
@@ -152,7 +153,7 @@ export class UnifiedLLMClient {
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeoutMs/1000}s. ${isServerless ? 'Serverless endpoint may be cold-starting or the model failed to load.' : 'Check endpoint availability.'}`);
+        throw new Error(`Request timeout after ${timeoutMs/1000}s. ${(isServerless || isHuggingFace) ? 'Endpoint may be cold-starting or processing. Try again in a minute.' : 'Check endpoint availability.'}`);
       }
       throw error;
     }
@@ -250,9 +251,10 @@ export class UnifiedLLMClient {
       console.log('[UnifiedLLMClient] Making request to:', url);
       console.log('[UnifiedLLMClient] Request body keys:', Object.keys(body));
 
-      // Make API call with extended timeout for serverless cold starts
+      // Make API call with extended timeout for serverless/slow providers
       const isServerless = url.includes('runpod.net') || url.includes('runpod.io');
-      const timeoutMs = isServerless ? 120000 : 60000; // 2 minutes for serverless, 1 minute otherwise
+      const isHuggingFace = url.includes('huggingface.co');
+      const timeoutMs = (isServerless || isHuggingFace) ? 120000 : 60000; // 2 minutes for serverless/HF, 1 minute otherwise
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -269,7 +271,7 @@ export class UnifiedLLMClient {
       } catch (error) {
         clearTimeout(timeoutId);
         if (error instanceof Error && error.name === 'AbortError') {
-          throw new Error(`Request timeout after ${timeoutMs/1000}s. ${isServerless ? 'RunPod serverless endpoint may be cold-starting (this can take 30-120s on first request). Try again in a minute.' : 'Check endpoint availability.'}`);
+          throw new Error(`Request timeout after ${timeoutMs/1000}s. ${(isServerless || isHuggingFace) ? 'Endpoint may be cold-starting or processing. Try again in a minute.' : 'Check endpoint availability.'}`);
         }
         throw error;
       }
