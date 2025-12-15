@@ -8,18 +8,18 @@ export const dynamic = 'force-static';
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Fine Tune Lab - Visual DAG-Based AI Training Platform",
-  description: "Unify training, evaluation, and deployment with a visual DAG builder. Fine-tune LLMs locally or in the cloud with real-time telemetry.",
-  keywords: ["AI training", "LLM fine-tuning", "DAG builder", "Graph RAG", "Local LLM", "vLLM", "Ollama", "AI analytics", "RLHF", "DPO"],
+  title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
+  description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
+  keywords: ["AI training", "LLM fine-tuning", "production monitoring", "Graph RAG", "Local LLM", "vLLM", "Ollama", "AI analytics", "RLHF", "DPO"],
   openGraph: {
-    title: "Fine Tune Lab - Visual DAG-Based AI Training Platform",
-    description: "Unify training, evaluation, and deployment with a visual DAG builder. Fine-tune LLMs locally or in the cloud with real-time telemetry.",
+    title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
+    description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fine Tune Lab - Visual DAG-Based AI Training Platform",
-    description: "Unify training, evaluation, and deployment with a visual DAG builder. Fine-tune LLMs locally or in the cloud with real-time telemetry.",
+    title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
+    description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
   }
 };
 

@@ -1,0 +1,207 @@
+{
+  "metadata": {
+    "templateId": "engineering",
+    "templateName": "Engineering Report",
+    "generatedAt": "2025-12-15T07:48:02.674Z",
+    "userId": "demo-user",
+    "dateRange": {
+      "start": "2025-12-01T00:00:00.000Z",
+      "end": "2025-12-15T00:00:00.000Z"
+    }
+  },
+  "header": "Engineering Performance Report",
+  "sections": [
+    {
+      "id": "eng-performance",
+      "title": "Performance Metrics",
+      "type": "metrics",
+      "content": {
+        "type": "metrics",
+        "metrics": [
+          {
+            "label": "Avg Latency",
+            "value": "2.17s",
+            "trend": "down",
+            "changePercent": -12,
+            "status": "good"
+          },
+          {
+            "label": "P50 Latency",
+            "value": "2.30s"
+          },
+          {
+            "label": "P95 Latency",
+            "value": "2.50s",
+            "status": "good"
+          },
+          {
+            "label": "P99 Latency",
+            "value": "2.50s",
+            "status": "good"
+          },
+          {
+            "label": "Tokens/sec",
+            "value": "61.5",
+            "status": "good"
+          },
+          {
+            "label": "Error Rate",
+            "value": "2.50%",
+            "trend": "down",
+            "changePercent": -18,
+            "status": "warning"
+          },
+          {
+            "label": "Success Rate",
+            "value": "97.50%",
+            "status": "warning"
+          }
+        ]
+      }
+    },
+    {
+      "id": "eng-errors",
+      "title": "Error Analysis",
+      "type": "breakdown",
+      "content": {
+        "type": "breakdown",
+        "title": "Error Distribution (3 total)",
+        "items": [
+          {
+            "label": "rate_limit",
+            "value": 2,
+            "percentage": 66.66666666666666
+          },
+          {
+            "label": "timeout",
+            "value": 1,
+            "percentage": 33.33333333333333
+          }
+        ]
+      }
+    },
+    {
+      "id": "eng-tools",
+      "title": "Tool Performance",
+      "type": "table",
+      "content": {
+        "type": "table",
+        "headers": [
+          "Tool Name",
+          "Calls",
+          "Success Rate",
+          "Avg Time",
+          "Failures"
+        ],
+        "rows": [
+          [
+            "web_search",
+            3,
+            "66.7%",
+            "1943ms",
+            1
+          ],
+          [
+            "dataset_manager",
+            2,
+            "50.0%",
+            "2100ms",
+            1
+          ],
+          [
+            "analytics_export",
+            1,
+            "100.0%",
+            "2500ms",
+            0
+          ],
+          [
+            "training_control",
+            1,
+            "100.0%",
+            "800ms",
+            0
+          ],
+          [
+            "token_analyzer",
+            1,
+            "100.0%",
+            "600ms",
+            0
+          ]
+        ],
+        "footer": "5 unique tools analyzed"
+      }
+    },
+    {
+      "id": "eng-models",
+      "title": "Model Comparison",
+      "type": "table",
+      "content": {
+        "type": "table",
+        "headers": [
+          "Model",
+          "Messages",
+          "Total Tokens",
+          "Total Cost",
+          "Cost/Msg",
+          "Tokens/Msg"
+        ],
+        "rows": [
+          [
+            "gpt-4",
+            "3",
+            "42,000",
+            "$2.10",
+            "$0.7000",
+            "14000"
+          ],
+          [
+            "claude-3-sonnet",
+            "1",
+            "11,000",
+            "$0.44",
+            "$0.4400",
+            "11000"
+          ]
+        ],
+        "footer": "2 models used"
+      }
+    },
+    {
+      "id": "eng-recommendations",
+      "title": "Technical Recommendations",
+      "type": "recommendations",
+      "content": {
+        "type": "recommendations",
+        "items": [
+          {
+            "priority": "medium",
+            "title": "Improve Tool Reliability",
+            "description": "Tool failure rate at 25.0%",
+            "impact": "Reliable tools reduce fallbacks and improve response quality",
+            "actions": [
+              "Add timeout handling to tool implementations",
+              "Implement retry logic with exponential backoff",
+              "Add better error messages for debugging",
+              "Consider circuit breaker patterns for external APIs"
+            ]
+          },
+          {
+            "priority": "medium",
+            "title": "Reduce Token Usage",
+            "description": "Cost per message ($0.0880) is above threshold",
+            "impact": "Token optimization can reduce costs by 30-50%",
+            "actions": [
+              "Audit prompts for unnecessary verbosity",
+              "Implement prompt compression techniques",
+              "Use smaller models for simpler tasks",
+              "Cache common responses where appropriate"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "footer": "Generated by FineTuneLab Analytics"
+}

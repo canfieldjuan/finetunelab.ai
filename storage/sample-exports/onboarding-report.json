@@ -1,0 +1,263 @@
+{
+  "metadata": {
+    "templateId": "onboarding",
+    "templateName": "System Onboarding Guide",
+    "generatedAt": "2025-12-15T07:48:02.682Z",
+    "userId": "demo-user",
+    "dateRange": {
+      "start": "2025-12-01T00:00:00.000Z",
+      "end": "2025-12-15T00:00:00.000Z"
+    }
+  },
+  "header": "FineTuneLab System Overview",
+  "sections": [
+    {
+      "id": "onboard-intro",
+      "title": "System Overview",
+      "type": "summary",
+      "content": {
+        "type": "summary",
+        "headline": "Welcome to FineTuneLab",
+        "highlights": [
+          "FineTuneLab is an AI operations platform for managing LLM interactions, fine-tuning models, and monitoring performance.",
+          "This system has processed 82 conversations and 487 messages in the selected time period.",
+          "Key capabilities include: conversation management, model fine-tuning, analytics dashboards, and automated quality evaluation.",
+          "This report shows current system health and explains the metrics you'll be working with."
+        ],
+        "concerns": []
+      }
+    },
+    {
+      "id": "onboard-metrics",
+      "title": "Key Metrics Explained",
+      "type": "table",
+      "content": {
+        "type": "table",
+        "headers": [
+          "Metric",
+          "What It Measures",
+          "Why It Matters"
+        ],
+        "rows": [
+          [
+            "Success Rate",
+            "Percentage of requests completed without errors",
+            "Indicates system reliability - higher is better"
+          ],
+          [
+            "Error Rate",
+            "Percentage of requests that failed",
+            "Inverse of success rate - lower is better"
+          ],
+          [
+            "Latency",
+            "Time from request to complete response",
+            "User experience - faster is better"
+          ],
+          [
+            "P95 Latency",
+            "95% of requests complete within this time",
+            "Worst-case user experience indicator"
+          ],
+          [
+            "Tokens",
+            "Units of text processed by the AI model",
+            "Directly impacts cost - 1 token ≈ 4 characters"
+          ],
+          [
+            "Cost per Message",
+            "Average spend per AI interaction",
+            "Budget efficiency metric"
+          ],
+          [
+            "Quality Rating",
+            "User feedback score (1-5 scale)",
+            "Measures output quality and usefulness"
+          ],
+          [
+            "Tool Success Rate",
+            "Percentage of tool calls that worked",
+            "Reliability of integrations and actions"
+          ]
+        ],
+        "footer": "These are the core metrics you'll see throughout the platform."
+      }
+    },
+    {
+      "id": "onboard-baselines",
+      "title": "Current Baselines",
+      "type": "metrics",
+      "content": {
+        "type": "metrics",
+        "metrics": [
+          {
+            "label": "Daily Conversations",
+            "value": "12",
+            "status": "good"
+          },
+          {
+            "label": "Success Rate",
+            "value": "97.5%",
+            "status": "good"
+          },
+          {
+            "label": "Average Latency",
+            "value": "2.2s",
+            "status": "good"
+          },
+          {
+            "label": "P95 Latency",
+            "value": "2.5s",
+            "status": "good"
+          },
+          {
+            "label": "Quality Rating",
+            "value": "4.3/5.0",
+            "status": "good"
+          },
+          {
+            "label": "Cost per Message",
+            "value": "$0.0880",
+            "status": "warning"
+          }
+        ]
+      }
+    },
+    {
+      "id": "onboard-healthy",
+      "title": "Healthy System Indicators",
+      "type": "table",
+      "content": {
+        "type": "table",
+        "headers": [
+          "Metric",
+          "Target Range",
+          "Current Value",
+          "Status"
+        ],
+        "rows": [
+          [
+            "Success Rate",
+            "≥ 95% (excellent: ≥ 98%)",
+            "97.5%",
+            "Good"
+          ],
+          [
+            "Average Latency",
+            "< 3s (excellent: < 2s)",
+            "2.17s",
+            "Good"
+          ],
+          [
+            "Quality Rating",
+            "≥ 4.0 (excellent: ≥ 4.5)",
+            "4.3/5.0",
+            "Good"
+          ],
+          [
+            "Error Rate",
+            "< 2% (excellent: < 1%)",
+            "2.50%",
+            "Needs Attention"
+          ]
+        ],
+        "footer": "These targets help you quickly assess system health."
+      }
+    },
+    {
+      "id": "onboard-tools",
+      "title": "Available Tools",
+      "type": "table",
+      "content": {
+        "type": "table",
+        "headers": [
+          "Tool Name",
+          "Description",
+          "Usage Count",
+          "Success Rate"
+        ],
+        "rows": [
+          [
+            "web_search",
+            "Search the web for information",
+            "3",
+            "67%"
+          ],
+          [
+            "dataset_manager",
+            "Manage training datasets",
+            "2",
+            "50%"
+          ],
+          [
+            "analytics_export",
+            "Export analytics reports",
+            "1",
+            "100%"
+          ],
+          [
+            "training_control",
+            "Control training jobs",
+            "1",
+            "100%"
+          ],
+          [
+            "token_analyzer",
+            "Analyze token usage",
+            "1",
+            "100%"
+          ]
+        ],
+        "footer": "5 tools available in the system."
+      }
+    },
+    {
+      "id": "onboard-faq",
+      "title": "Common Questions",
+      "type": "table",
+      "content": {
+        "type": "table",
+        "headers": [
+          "Question",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "What does \"success rate\" measure?",
+            "The percentage of AI requests that complete without errors. Our current rate is 97.5%."
+          ],
+          [
+            "What is a \"token\"?",
+            "A token is roughly 4 characters of text. Both input (your message) and output (AI response) consume tokens, which affect cost."
+          ],
+          [
+            "Why does latency matter?",
+            "Latency is how long users wait for responses. Current average is 2.2s. Target is under 3 seconds."
+          ],
+          [
+            "How is quality measured?",
+            "Users rate responses 1-5. We also track success/failure. Current average rating is 4.3/5.0."
+          ],
+          [
+            "What should I monitor?",
+            "Watch the dashboard for error rate spikes (> 5%), latency increases (> 5s), and quality drops (< 4.0)."
+          ],
+          [
+            "How much does this cost?",
+            "Current cost is $0.0880 per message. Total spend this period: $42.75."
+          ],
+          [
+            "Where do I find detailed logs?",
+            "Check the Analytics Dashboard for real-time data, or export detailed reports using the analytics_export tool."
+          ],
+          [
+            "Who do I contact for help?",
+            "Reach out to the platform team on Slack (#finetunelab-support) or check the internal documentation."
+          ]
+        ],
+        "footer": "For more questions, check the internal wiki or ask in #finetunelab-support."
+      }
+    }
+  ],
+  "footer": "Welcome to the team!"
+}

@@ -11,10 +11,10 @@ const siteUrl = 'https://finetunelab.ai';
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Fine Tune Lab - Visual DAG-Based AI Training Platform",
+    default: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
     template: "%s | Fine Tune Lab",
   },
-  description: "Unify training, evaluation, and deployment with a visual DAG builder. Fine-tune LLMs locally or in the cloud with real-time telemetry.",
+  description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
   keywords: ["AI training", "LLM fine-tuning", "DAG builder", "MLOps", "model evaluation", "RLHF", "DPO", "SFT", "local LLM", "vLLM", "Ollama"],
   authors: [{ name: "Fine Tune Lab Team" }],
   creator: "Fine Tune Lab",
@@ -24,13 +24,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: siteUrl,
     siteName: "Fine Tune Lab",
-    title: "Fine Tune Lab - Visual DAG-Based AI Training Platform",
-    description: "Unify training, evaluation, and deployment with a visual DAG builder. Fine-tune LLMs locally or in the cloud with real-time telemetry.",
+    title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
+    description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fine Tune Lab - Visual DAG-Based AI Training Platform",
-    description: "Unify training, evaluation, and deployment with a visual DAG builder. Fine-tune LLMs locally or in the cloud with real-time telemetry.",
+    title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
+    description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
     creator: "@finetunelab",
   },
   robots: {

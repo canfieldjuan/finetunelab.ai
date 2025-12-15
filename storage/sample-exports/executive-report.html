@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Executive Summary - Analytics Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      line-height: 1.6;
+      color: #1a1a1a;
+      background: #f5f5f5;
+    }
+
+    .report-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .report-header {
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      color: white;
+      padding: 2rem;
+    }
+
+    .report-title {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .report-meta {
+      display: flex;
+      gap: 2rem;
+      font-size: 0.875rem;
+      opacity: 0.9;
+    }
+
+    .meta-label {
+      font-weight: 500;
+    }
+
+    .report-content {
+      padding: 2rem;
+    }
+
+    .report-section {
+      margin-bottom: 2rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid #e5e5e5;
+    }
+
+    .report-section:last-child {
+      border-bottom: none;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1e40af;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #2563eb;
+    }
+
+    /* Summary styles */
+    .headline {
+      font-size: 1.125rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      color: #374151;
+    }
+
+    .highlights, .concerns {
+      margin-top: 1rem;
+    }
+
+    .highlights h3, .concerns h3 {
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .highlights h3 { color: #059669; }
+    .concerns h3 { color: #dc2626; }
+
+    .highlight-list, .concern-list {
+      list-style: none;
+      padding-left: 1rem;
+    }
+
+    .highlight-item::before {
+      content: "\2713 ";
+      color: #059669;
+      font-weight: bold;
+    }
+
+    .concern-item::before {
+      content: "\26A0 ";
+      color: #dc2626;
+    }
+
+    /* Metrics styles */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+    }
+
+    .metric-card {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      border-left: 4px solid #e5e7eb;
+    }
+
+    .metric-card.status-good { border-left-color: #10b981; }
+    .metric-card.status-warning { border-left-color: #f59e0b; }
+    .metric-card.status-critical { border-left-color: #ef4444; }
+
+    .metric-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      margin-bottom: 0.25rem;
+    }
+
+    .metric-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .metric-trend {
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+    }
+
+    .trend-up { color: #10b981; }
+    .trend-down { color: #ef4444; }
+    .trend-stable { color: #6b7280; }
+
+    /* Table styles */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    .data-table, .chart-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    .data-table th, .data-table td,
+    .chart-table th, .chart-table td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .data-table th, .chart-table th {
+      background: #f3f4f6;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .data-table tbody tr:hover {
+      background: #f9fafb;
+    }
+
+    .table-footer {
+      font-size: 0.75rem;
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    /* Recommendations styles */
+    .recommendations-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .recommendation-card {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 1rem;
+      border-left: 4px solid #e5e7eb;
+    }
+
+    .recommendation-card.priority-high { border-left-color: #ef4444; background: #fef2f2; }
+    .recommendation-card.priority-medium { border-left-color: #f59e0b; background: #fffbeb; }
+    .recommendation-card.priority-low { border-left-color: #10b981; background: #ecfdf5; }
+
+    .recommendation-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .priority-badge {
+      font-size: 0.625rem;
+      font-weight: 700;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      text-transform: uppercase;
+    }
+
+    .priority-high .priority-badge { background: #fee2e2; color: #991b1b; }
+    .priority-medium .priority-badge { background: #fef3c7; color: #92400e; }
+    .priority-low .priority-badge { background: #d1fae5; color: #065f46; }
+
+    .recommendation-title {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .recommendation-description {
+      color: #4b5563;
+      margin-bottom: 0.5rem;
+    }
+
+    .recommendation-impact {
+      font-size: 0.875rem;
+      color: #6b7280;
+    }
+
+    .action-list {
+      margin-top: 0.75rem;
+      padding-left: 1.5rem;
+      font-size: 0.875rem;
+    }
+
+    /* Alert styles */
+    .alert {
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .alert-info { background: #eff6ff; border: 1px solid #bfdbfe; }
+    .alert-warning { background: #fffbeb; border: 1px solid #fcd34d; }
+    .alert-critical { background: #fef2f2; border: 1px solid #fecaca; }
+
+    .alert-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .alert-icon {
+      font-size: 1.25rem;
+    }
+
+    .alert-critical .alert-icon { color: #dc2626; }
+    .alert-warning .alert-icon { color: #d97706; }
+    .alert-info .alert-icon { color: #2563eb; }
+
+    .alert-title {
+      font-weight: 600;
+    }
+
+    .alert-timestamp {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    .alert-message {
+      color: #4b5563;
+    }
+
+    /* Breakdown styles */
+    .breakdown-items {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .breakdown-item {
+      position: relative;
+      background: #f3f4f6;
+      border-radius: 4px;
+      padding: 0.75rem;
+    }
+
+    .breakdown-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+      border-radius: 4px;
+      opacity: 0.1;
+    }
+
+    .breakdown-info {
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .breakdown-label {
+      font-weight: 500;
+    }
+
+    .breakdown-value {
+      color: #6b7280;
+      font-size: 0.875rem;
+    }
+
+    /* Footer styles */
+    .report-footer {
+      background: #f9fafb;
+      padding: 1rem 2rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #6b7280;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    /* Print styles */
+    @media print {
+      body { background: white; }
+      .report-container { box-shadow: none; }
+      .report-section { page-break-inside: avoid; }
+    }
+
+    /* Chart note */
+    .chart-note {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-top: 0.5rem;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    
+    <header class="report-header">
+      <div class="header-content">
+        <h1 class="report-title">AI Operations Executive Summary</h1>
+        <div class="report-meta">
+          <span class="meta-item">
+            <span class="meta-label">Period:</span>
+            <span class="meta-value">November 30, 2025 - December 14, 2025</span>
+          </span>
+          <span class="meta-item">
+            <span class="meta-label">Generated:</span>
+            <span class="meta-value">12/15/2025, 1:48:02 AM</span>
+          </span>
+        </div>
+      </div>
+    </header>
+    <main class="report-content">
+      
+    <section class="report-section section-summary" id="exec-summary">
+      <h2 class="section-title">Overview</h2>
+      <div class="section-content">
+        
+    <div class="summary-content">
+      <p class="headline">Excellent Performance Across All Metrics</p>
+      <div class="highlights">
+        <h3>Highlights</h3>
+        <ul class="highlight-list">
+          <li class="highlight-item">Excellent reliability with 97.5% success rate</li><li class="highlight-item">High user satisfaction with 4.3/5.0 average rating</li><li class="highlight-item">Processed 82 conversations this period</li>
+        </ul>
+      </div>
+      
+    </div>
+      </div>
+    </section>
+
+    <section class="report-section section-metrics" id="exec-kpis">
+      <h2 class="section-title">Key Performance Indicators</h2>
+      <div class="section-content">
+        <div class="metrics-grid">
+      <div class="metric-card status-good">
+        <div class="metric-label">Total Spend</div>
+        <div class="metric-value">$42.75</div>
+        <div class="metric-trend">
+          <span class="trend-icon trend-up">&#9650;</span>
+          <span class="change">+8.5%</span>
+        </div>
+      </div>
+      <div class="metric-card status-good">
+        <div class="metric-label">Success Rate</div>
+        <div class="metric-value">97.5%</div>
+        <div class="metric-trend">
+          
+          
+        </div>
+      </div>
+      <div class="metric-card status-good">
+        <div class="metric-label">User Satisfaction</div>
+        <div class="metric-value">4.3/5.0</div>
+        <div class="metric-trend">
+          <span class="trend-icon trend-stable">&#9644;</span>
+          <span class="change">+1.2%</span>
+        </div>
+      </div>
+      <div class="metric-card ">
+        <div class="metric-label">Conversations</div>
+        <div class="metric-value">82</div>
+        <div class="metric-trend">
+          
+          
+        </div>
+      </div>
+      <div class="metric-card ">
+        <div class="metric-label">Messages Processed</div>
+        <div class="metric-value">487</div>
+        <div class="metric-trend">
+          
+          
+        </div>
+      </div>
+      <div class="metric-card status-critical">
+        <div class="metric-label">Cost per Message</div>
+        <div class="metric-value">$0.0880</div>
+        <div class="metric-trend">
+          
+          
+        </div>
+      </div></div>
+      </div>
+    </section>
+
+    <section class="report-section section-chart" id="exec-cost-chart">
+      <h2 class="section-title">Cost Trend</h2>
+      <div class="section-content">
+        
+    <div class="chart-container">
+      <h4 class="chart-title">Daily Spend</h4>
+      <table class="chart-table">
+        <thead><tr><th>Label</th><th>Cost ($)</th></tr></thead>
+        <tbody><tr><td>Nov 30</td><td>0.65</td></tr><tr><td>Dec 4</td><td>0.75</td></tr><tr><td>Dec 9</td><td>0.44</td></tr><tr><td>Dec 14</td><td>0.7</td></tr></tbody>
+      </table>
+      <p class="chart-note">Chart type: line</p>
+    </div>
+      </div>
+    </section>
+
+    <section class="report-section section-recommendations" id="exec-actions">
+      <h2 class="section-title">Recommended Actions</h2>
+      <div class="section-content">
+        <div class="recommendations-list">
+      <div class="recommendation-card priority-medium">
+        <div class="recommendation-header">
+          <span class="priority-badge">MEDIUM</span>
+          <h4 class="recommendation-title">Optimize Cost Efficiency</h4>
+        </div>
+        <p class="recommendation-description">Cost per interaction is above target threshold</p>
+        <p class="recommendation-impact"><strong>Impact:</strong> Potential 30-40% cost reduction with model optimization</p>
+        
+      </div></div>
+      </div>
+    </section>
+    </main>
+    
+    <footer class="report-footer">
+      <p>Generated by FineTuneLab Analytics</p>
+    </footer>
+  </div>
+</body>
+</html>
