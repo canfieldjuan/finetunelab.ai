@@ -23,15 +23,29 @@ export interface RedisClientConfig {
  * Supports both UPSTASH_REDIS_URL format and individual host/port config
  */
 export function getRedisConfig(overrides?: RedisClientConfig): RedisOptions {
+  // Common timeout/retry options to prevent build hangs
+  const baseOptions: Partial<RedisOptions> = {
+    maxRetriesPerRequest: null, // Required for BullMQ
+    enableReadyCheck: false,
+    connectTimeout: 5000, // 5 second connection timeout
+    commandTimeout: 5000, // 5 second command timeout
+    retryStrategy: (times: number) => {
+      // Give up after 3 retries to prevent build hangs
+      if (times > 3) {
+        return null;
+      }
+      return Math.min(times * 200, 1000);
+    },
+    lazyConnect: true, // Don't connect until first command
+  };
+
   // Priority 1: Upstash Redis URL (production/Vercel)
   // Format: rediss://default:password@host:port
   const upstashUrl = process.env.UPSTASH_REDIS_URL;
   if (upstashUrl) {
     return {
-      // ioredis can parse the URL directly
       ...parseRedisUrl(upstashUrl),
-      maxRetriesPerRequest: null, // Required for BullMQ
-      enableReadyCheck: false,
+      ...baseOptions,
     };
   }
 
@@ -40,8 +54,7 @@ export function getRedisConfig(overrides?: RedisClientConfig): RedisOptions {
   if (redisUrl) {
     return {
       ...parseRedisUrl(redisUrl),
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
+      ...baseOptions,
     };
   }
 
@@ -56,8 +69,7 @@ export function getRedisConfig(overrides?: RedisClientConfig): RedisOptions {
     port,
     password,
     db,
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
+    ...baseOptions,
   };
 }
 
