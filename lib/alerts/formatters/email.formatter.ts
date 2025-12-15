@@ -215,7 +215,7 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
           <tr>
             <td style="background: #f9f9f9; padding: 16px 24px; text-align: center; border-top: 1px solid #eee;">
               <p style="margin: 0; color: #999; font-size: 12px;">
-                Sent from Training Platform
+                Sent from FineTuneLab
                 <br>
                 <a href="${config.appBaseUrl}/settings/alerts" style="color: #666;">Manage alert preferences</a>
               </p>

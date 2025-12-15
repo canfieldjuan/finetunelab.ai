@@ -55,6 +55,10 @@ interface UseChatOptions {
   contextInjectionEnabled: boolean;
   /** Whether thinking mode is enabled (for Qwen3 and similar models with <think> tags). */
   enableThinking?: boolean;
+  /** Allow anonymous (demo/widget) usage without auth/DB writes. */
+  allowAnonymous?: boolean;
+  /** Optional widget config for API auth in widget mode. */
+  widgetConfig?: { sessionId: string; modelId: string; apiKey: string; userId?: string; theme?: string } | null;
 }
 
 /**
@@ -62,7 +66,7 @@ interface UseChatOptions {
  * @param options - The options for the hook.
  * @returns The chat state and actions.
  */
-export function useChat({ user, activeId, tools, enableDeepResearch, selectedModelId, contextTrackerRef, setContextUsage, isStreamingRef, researchProgress, setResearchProgress, setActiveResearchJob, contextInjectionEnabled, enableThinking }: UseChatOptions) {
+export function useChat({ user, activeId, tools, enableDeepResearch, selectedModelId, contextTrackerRef, setContextUsage, isStreamingRef, researchProgress, setResearchProgress, setActiveResearchJob, contextInjectionEnabled, enableThinking, allowAnonymous, widgetConfig }: UseChatOptions) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -394,42 +398,44 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       timestamp: new Date().toISOString()
     } : undefined;
 
-    void supabase
-      .from('messages')
-      .insert({
-        conversation_id: activeId,
-        user_id: user!.id,
-        role: 'assistant',
-        content: assistantMessage,
-        model_id: modelId,
-        provider: provider,
-        latency_ms: streamLatencyMs,
-        input_tokens: finalInputTokens,
-        output_tokens: finalOutputTokens,
-        ...(messageMetadata && { metadata: messageMetadata })
-      })
-      .select()
-      .single()
-      .then(({ data: aiMsg, error: dbError }) => {
-        if (dbError) {
-          log.error('useChat', 'Failed to save message', { error: dbError });
-        } else if (aiMsg) {
-          log.debug('useChat', 'Message saved successfully', { messageId: aiMsg.id });
-          // Replace temp message with real one from database
-          setMessages((msgs) =>
-            msgs.map((m) =>
-              m.id === tempMessageId
-                ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed }
-                : m
-            )
-          );
-          log.debug('useChat', 'Message updated with real ID', { realId: aiMsg.id, tempId: tempMessageId });
-        }
-      });
+    if (user && activeId && !allowAnonymous) {
+      void supabase
+        .from('messages')
+        .insert({
+          conversation_id: activeId,
+          user_id: user.id,
+          role: 'assistant',
+          content: assistantMessage,
+          model_id: modelId,
+          provider: provider,
+          latency_ms: streamLatencyMs,
+          input_tokens: finalInputTokens,
+          output_tokens: finalOutputTokens,
+          ...(messageMetadata && { metadata: messageMetadata })
+        })
+        .select()
+        .single()
+        .then(({ data: aiMsg, error: dbError }) => {
+          if (dbError) {
+            log.error('useChat', 'Failed to save message', { error: dbError });
+          } else if (aiMsg) {
+            log.debug('useChat', 'Message saved successfully', { messageId: aiMsg.id });
+            // Replace temp message with real one from database
+            setMessages((msgs) =>
+              msgs.map((m) =>
+                m.id === tempMessageId
+                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed }
+                  : m
+              )
+            );
+            log.debug('useChat', 'Message updated with real ID', { realId: aiMsg.id, tempId: tempMessageId });
+          }
+        });
+    }
   };
 
   const prepareAndSendMessage = async (input: string) => {
-    if (!user) {
+    if (!user && !allowAnonymous) {
       throw new Error('User not authenticated');
     }
 
@@ -439,53 +445,55 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     const tempUserMessageId = `temp-user-${Date.now()}`;
     const optimisticUserMessage = {
       id: tempUserMessageId,
-      conversation_id: activeId,
-      user_id: user.id,
+      conversation_id: activeId || 'temp',
+      user_id: user?.id || 'anonymous',
       role: "user" as const,
       content: userMessage,
       created_at: new Date().toISOString()
-    };
+    } as Message;
 
     // Add optimistic message to UI immediately using functional setState
     setMessages((msgs) => [...msgs, optimisticUserMessage]);
 
     // [UI_FREEZE_FIX] Save user message to database in background (non-blocking)
     // Don't await - let it complete in the background while UI stays responsive
-    void supabase
-      .from("messages")
-      .insert({
-        conversation_id: activeId,
-        user_id: user.id,
-        role: "user",
-        content: userMessage
-      })
-      .select()
-      .single()
-      .then(({ data: realMsgData, error }) => {
-        if (error) {
-          log.error('useChat', 'Failed to save user message', { error });
-        } else if (realMsgData) {
-          // Replace temp message with real one from database
-          setMessages((msgs) => msgs.map(m =>
-            m.id === tempUserMessageId ? realMsgData : m
-          ));
+    if (user && !allowAnonymous) {
+      void supabase
+        .from("messages")
+        .insert({
+          conversation_id: activeId,
+          user_id: user.id,
+          role: "user",
+          content: userMessage
+        })
+        .select()
+        .single()
+        .then(({ data: realMsgData, error }) => {
+          if (error) {
+            log.error('useChat', 'Failed to save user message', { error });
+          } else if (realMsgData) {
+            // Replace temp message with real one from database
+            setMessages((msgs) => msgs.map(m =>
+              m.id === tempUserMessageId ? realMsgData : m
+            ));
 
-          // [UI_FREEZE_FIX] Update conversation title in background (non-blocking)
-          if (messages.length === 0) {
-            supabase
-              .from("conversations")
-              .update({
-                title: userMessage.slice(0, 50) + (userMessage.length > 50 ? "..." : "")
-              })
-              .eq("id", activeId)
-              .then(({ error: titleError }) => {
-                if (titleError) {
-                  log.error('useChat', 'Failed to update conversation title', { error: titleError });
-                }
-              });
+            // [UI_FREEZE_FIX] Update conversation title in background (non-blocking)
+            if (messages.length === 0) {
+              supabase
+                .from("conversations")
+                .update({
+                  title: userMessage.slice(0, 50) + (userMessage.length > 50 ? "..." : "")
+                })
+                .eq("id", activeId)
+                .then(({ error: titleError }) => {
+                  if (titleError) {
+                    log.error('useChat', 'Failed to update conversation title', { error: titleError });
+                  }
+                });
+            }
           }
-        }
-      });
+        });
+    }
 
     // Use optimistic message for API call (will be replaced with real one when DB responds)
     const conversationMessages = [...messages, optimisticUserMessage].map((m) => ({ role: m.role, content: m.content }));
@@ -516,12 +524,12 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       return;
     }
 
-    if (!user) {
+    if (!user && !allowAnonymous) {
       setError("You must be logged in to send messages");
       return;
     }
 
-    if (!activeId) {
+    if (!activeId && !allowAnonymous) {
       setError("Please create or select a conversation first");
       return;
     }
@@ -546,15 +554,27 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       // Track latency for analytics
       const streamStartTime = Date.now();
 
+      // Sanitize header values to avoid non ISO-8859-1 code points in fetch headers
+      const sanitizeHeaderValue = (val: string) => val.replace(/[^\x00-\xFF]/g, '');
+      const rawApiKey = widgetConfig?.apiKey;
+      const safeApiKey = typeof rawApiKey === 'string' ? sanitizeHeaderValue(rawApiKey) : undefined;
+      if (rawApiKey && safeApiKey !== rawApiKey) {
+        log.warn('useChat', 'Sanitized API key to remove non-Latin1 characters');
+      }
+
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(safeApiKey ? { "X-API-Key": safeApiKey } : {}),
+        },
         body: JSON.stringify({
           messages: conversationMessages,
           tools: modifiedTools,
-          conversationId: activeId,
-          modelId: selectedModelId === '__default__' ? null : selectedModelId,
-          userId: user?.id,
+          conversationId: activeId || null,
+          modelId: widgetConfig?.modelId || (selectedModelId === '__default__' ? null : selectedModelId),
+          userId: user?.id || null,
+          widgetSessionId: widgetConfig?.sessionId || null,
           enableDeepResearch,
           contextInjectionEnabled,
           enableThinking,

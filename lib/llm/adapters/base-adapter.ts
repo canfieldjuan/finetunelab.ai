@@ -121,6 +121,41 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
   }
 
   /**
+   * Convert chat messages to a single prompt string for base/completion models
+   * Base models don't have chat templates, so we format messages as text
+   */
+  protected messagesToPrompt(messages: ChatMessage[]): string {
+    let prompt = '';
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        prompt += `${msg.content}\n\n`;
+      } else if (msg.role === 'user') {
+        prompt += `User: ${msg.content}\n`;
+      } else if (msg.role === 'assistant') {
+        prompt += `Assistant: ${msg.content}\n`;
+      }
+    }
+    // Add final prompt for assistant to continue
+    prompt += 'Assistant:';
+    return prompt;
+  }
+
+  /**
+   * Auto-detect if a model supports chat format based on model ID
+   * Models with "instruct", "chat", "-it", "rlhf", "dpo", "sft" are chat models
+   * Override with config.is_chat_model if set
+   */
+  protected isChatModel(modelId: string, configOverride?: boolean): boolean {
+    // If explicitly set in config, use that
+    if (configOverride !== undefined && configOverride !== null) {
+      return configOverride;
+    }
+    // Auto-detect based on model name patterns
+    const chatPatterns = /instruct|chat|-it$|rlhf|dpo|sft/i;
+    return chatPatterns.test(modelId);
+  }
+
+  /**
    * Subclasses must implement these methods
    */
   abstract formatRequest(request: AdapterRequest): {

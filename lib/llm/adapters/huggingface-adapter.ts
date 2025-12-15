@@ -61,25 +61,46 @@ export class HuggingFaceAdapter extends BaseProviderAdapter {
       throw new Error('HuggingFace Inference API (api-inference.huggingface.co) has been deprecated. Please use the Router API (router.huggingface.co/v1) instead.');
     }
 
-    // HuggingFace Router endpoint
-    const url = `${baseUrl}/chat/completions`;
     const headers = this.buildAuthHeaders(config);
 
     // HuggingFace auto-routes models to available providers
     // Use model_id as-is (supports explicit provider suffix if user specifies)
     const modelId = config.model_id;
 
-    // Build request body in OpenAI format
-    const body: Record<string, unknown> = {
-      model: modelId,
-      messages: messages.map(msg => ({
-        role: msg.role,
-        content: msg.content || '',
-      })),
-      temperature: options.temperature ?? config.default_temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? config.max_output_tokens ?? 2000,
-      stream: options.stream ?? false,
-    };
+    // Detect if model supports chat format or needs completion format
+    const useChatFormat = this.isChatModel(modelId, config.is_chat_model);
+
+    // HuggingFace Router only supports /chat/completions endpoint
+    // For base models, we wrap the prompt as a user message
+    const url = `${baseUrl}/chat/completions`;
+
+    // Build request body
+    // For chat models: use messages array (OpenAI format)
+    // For base/completion models: wrap prompt in a user message
+    let body: Record<string, unknown>;
+    if (useChatFormat) {
+      body = {
+        model: modelId,
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content || '',
+        })),
+        temperature: options.temperature ?? config.default_temperature ?? 0.7,
+        max_tokens: options.maxTokens ?? config.max_output_tokens ?? 2000,
+        stream: options.stream ?? false,
+      };
+    } else {
+      // Base model - convert messages to single prompt string and wrap as user message
+      // HuggingFace Router doesn't have /completions endpoint, so we use chat format
+      const prompt = this.messagesToPrompt(messages);
+      body = {
+        model: modelId,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: options.temperature ?? config.default_temperature ?? 0.7,
+        max_tokens: options.maxTokens ?? config.max_output_tokens ?? 2000,
+        stream: options.stream ?? false,
+      };
+    }
 
     // EXTENSIVE DEBUG LOGGING
     const sanitizedHeaders = { ...headers };
@@ -92,6 +113,7 @@ export class HuggingFaceAdapter extends BaseProviderAdapter {
     console.log('[HuggingFaceAdapter] Model ID:', modelId);
     console.log('[HuggingFaceAdapter] Base URL:', baseUrl);
     console.log('[HuggingFaceAdapter] Full URL:', url);
+    console.log('[HuggingFaceAdapter] Use Chat Format:', useChatFormat);
     console.log('[HuggingFaceAdapter] Headers:', sanitizedHeaders);
     console.log('[HuggingFaceAdapter] Request body:', JSON.stringify(body, null, 2));
     console.log('[HuggingFaceAdapter] Message count:', messages.length);

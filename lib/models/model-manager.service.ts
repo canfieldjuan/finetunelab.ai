@@ -293,22 +293,43 @@ class ModelManagerService {
     try {
       console.log('[ModelManager] Getting config for model:', modelId, 'userId:', userId || 'not provided');
 
-      // Validate UUID format - if not a valid UUID, return null (legacy model names not supported)
+      // Validate UUID format; if not a UUID, attempt alias resolution by name/model_id/served_model_name
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(modelId)) {
-        console.log('[ModelManager] Invalid UUID format (likely legacy model name), returning null:', modelId);
-        return null;
-      }
+      const isUUID = uuidRegex.test(modelId);
 
       // Use admin client to bypass RLS for runtime model access
       // This is a server-side operation that needs access to all models (user + global)
       const client = supabaseAdmin || defaultSupabase;
 
-      const { data, error } = await client
-        .from('llm_models')
-        .select('*')
-        .eq('id', modelId)
-        .single();
+      let data: any | null = null;
+      let error: any | null = null;
+
+      if (isUUID) {
+        ({ data, error } = await client
+          .from('llm_models')
+          .select('*')
+          .eq('id', modelId)
+          .single());
+      } else {
+        console.log('[ModelManager] Alias resolution for model:', modelId);
+        // Try matching by name, model_id, or served_model_name on enabled/global models
+        const { data: aliasList, error: aliasErr } = await client
+          .from('llm_models')
+          .select('*')
+          .eq('enabled', true)
+          .or(`is_global.eq.true`) // prioritize global models for aliases
+          .or(`name.eq.${modelId},model_id.eq.${modelId},served_model_name.eq.${modelId}`);
+
+        if (aliasErr) {
+          error = aliasErr;
+        } else if (aliasList && aliasList.length > 0) {
+          data = aliasList[0];
+          console.log('[ModelManager] Alias matched model:', data.name, 'provider:', data.provider);
+        } else {
+          console.log('[ModelManager] No alias match found for:', modelId);
+          return null;
+        }
+      }
 
       // Handle "not found" case gracefully (PGRST116 = no rows returned)
       if (error) {

@@ -53,6 +53,33 @@ export async function writeExportFile(
 }
 
 /**
+ * Write binary export file to storage (for PDFs)
+ */
+export async function writeBinaryExportFile(
+  exportId: string,
+  format: string,
+  content: Buffer
+): Promise<{ filePath: string; fileSize: number }> {
+  console.log('[Storage] Writing binary export file:', exportId, format);
+
+  await ensureExportDirectory();
+
+  const fileName = `${exportId}.${format}`;
+  const filePath = path.join(EXPORT_DIR, fileName);
+
+  try {
+    await fs.writeFile(filePath, content);
+    const stats = await fs.stat(filePath);
+
+    console.log('[Storage] Binary file written:', filePath, 'Size:', stats.size);
+    return { filePath: fileName, fileSize: stats.size };
+  } catch (error) {
+    console.error('[Storage] Binary write error:', error);
+    throw new Error('Failed to write binary export file');
+  }
+}
+
+/**
  * Read export file from storage
  */
 export async function readExportFile(fileName: string): Promise<Buffer> {

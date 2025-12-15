@@ -74,7 +74,7 @@ export const analyticsExportTool: ToolDefinition = {
     maxExportsPerUser: analyticsExportConfig.maxExportsPerUser,
   },
 
-  async execute(params: Record<string, unknown>, conversationId?: string, userId?: string) {
+  async execute(params: Record<string, unknown>, conversationId?: string, userId?: string, supabaseClient?: unknown) {
     const { operation } = params;
 
     if (!operation || typeof operation !== 'string') {
@@ -145,7 +145,7 @@ export const analyticsExportTool: ToolDefinition = {
             userId,
             limit,
             showExpired,
-          });
+          }, supabaseClient);
 
           if (!result.success) {
             throw new Error(`[AnalyticsExport] List exports failed: ${result.error}`);
@@ -167,7 +167,7 @@ export const analyticsExportTool: ToolDefinition = {
             );
           }
 
-          const result = await analyticsExportService.getDownloadLink(exportId, userId);
+          const result = await analyticsExportService.getDownloadLink(exportId, userId, supabaseClient);
 
           if (!result.success) {
             throw new Error(

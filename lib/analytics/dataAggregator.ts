@@ -15,6 +15,7 @@ import {
   ErrorDataPoint,
   LatencyDataPoint,
 } from './types';
+import type { AnalyticsExportFilters } from './export/types';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,6 +62,7 @@ export async function aggregateTokenUsageData(
     period?: 'hour' | 'day' | 'week' | 'month' | 'all';
     startDate?: string;
     endDate?: string;
+    filters?: AnalyticsExportFilters;
   } = {}
 ): Promise<TokenUsageDataPoint[]> {
   console.log('[DataAggregator] Aggregating token usage', {
@@ -77,6 +79,30 @@ export async function aggregateTokenUsageData(
         }
       : calculateDateRange(options.period || 'week');
 
+    const filters = options.filters;
+
+    // First get conversation IDs for this user
+    let convQuery = supabase
+      .from('conversations')
+      .select('id')
+      .eq('user_id', userId);
+
+    // Apply conversation ID filter if specified
+    if (filters?.conversationIds && filters.conversationIds.length > 0) {
+      convQuery = convQuery.in('id', filters.conversationIds);
+    }
+
+    const { data: convData, error: convError } = await convQuery;
+
+    if (convError) throw convError;
+
+    const conversationIds = convData?.map(c => c.id) || [];
+
+    if (conversationIds.length === 0) {
+      console.log('[DataAggregator] No conversations found for user');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('messages')
       .select(`
@@ -87,14 +113,14 @@ export async function aggregateTokenUsageData(
         output_tokens,
         metadata
       `)
-      .eq('conversations.user_id', userId)
+      .in('conversation_id', conversationIds)
       .gte('created_at', dateRange.start.toISOString())
       .lte('created_at', dateRange.end.toISOString())
       .order('created_at', { ascending: true });
 
     if (error) throw error;
 
-    const dataPoints: TokenUsageDataPoint[] = (data || []).map((msg) => ({
+    let dataPoints: TokenUsageDataPoint[] = (data || []).map((msg) => ({
       timestamp: new Date(msg.created_at),
       messageId: msg.id,
       conversationId: msg.conversation_id,
@@ -108,6 +134,11 @@ export async function aggregateTokenUsageData(
         msg.metadata?.model
       ),
     }));
+
+    // Apply model filter in JavaScript (metadata field filtering)
+    if (filters?.models && filters.models.length > 0) {
+      dataPoints = dataPoints.filter(dp => filters.models!.includes(dp.modelId));
+    }
 
     console.log('[DataAggregator] Token usage aggregated', {
       dataPoints: dataPoints.length,
@@ -150,6 +181,7 @@ export async function aggregateQualityMetrics(
     period?: 'hour' | 'day' | 'week' | 'month' | 'all';
     startDate?: string;
     endDate?: string;
+    filters?: AnalyticsExportFilters;
   } = {}
 ): Promise<QualityDataPoint[]> {
   console.log('[DataAggregator] Aggregating quality metrics', {
@@ -166,41 +198,87 @@ export async function aggregateQualityMetrics(
         }
       : calculateDateRange(options.period || 'week');
 
+    const filters = options.filters;
+
+    // First get message IDs for this user's conversations
+    let convQuery = supabase
+      .from('conversations')
+      .select('id')
+      .eq('user_id', userId);
+
+    // Apply conversation ID filter if specified
+    if (filters?.conversationIds && filters.conversationIds.length > 0) {
+      convQuery = convQuery.in('id', filters.conversationIds);
+    }
+
+    const { data: convData, error: convError } = await convQuery;
+
+    if (convError) throw convError;
+
+    const conversationIds = convData?.map(c => c.id) || [];
+
+    if (conversationIds.length === 0) {
+      console.log('[DataAggregator] No conversations found for user');
+      return [];
+    }
+
+    const { data: msgData, error: msgError } = await supabase
+      .from('messages')
+      .select('id, conversation_id, metadata')
+      .in('conversation_id', conversationIds);
+
+    if (msgError) throw msgError;
+
+    const messageIds = msgData?.map(m => m.id) || [];
+    const messageMap = new Map(msgData?.map(m => [m.id, m]) || []);
+
+    if (messageIds.length === 0) {
+      console.log('[DataAggregator] No messages found for user');
+      return [];
+    }
+
     const { data, error } = await supabase
-      .from('evaluations')
+      .from('message_evaluations')
       .select(`
         id,
         message_id,
         created_at,
         rating,
-        success_status,
-        evaluation_type,
-        notes,
-        messages!inner(conversation_id, metadata)
+        success,
+        notes
       `)
-      .eq('messages.conversations.user_id', userId)
+      .in('message_id', messageIds)
       .gte('created_at', dateRange.start.toISOString())
       .lte('created_at', dateRange.end.toISOString())
       .order('created_at', { ascending: true });
 
     if (error) throw error;
 
-    const dataPoints: QualityDataPoint[] = (data || []).map((evaluation) => {
-      const messageData = Array.isArray(evaluation.messages) 
-        ? evaluation.messages[0] 
-        : evaluation.messages;
-      
+    let dataPoints: QualityDataPoint[] = (data || []).map((evaluation) => {
+      const messageData = messageMap.get(evaluation.message_id);
+
       return {
         timestamp: new Date(evaluation.created_at),
         messageId: evaluation.message_id,
         conversationId: messageData?.conversation_id || 'unknown',
         modelId: messageData?.metadata?.model || 'unknown',
         rating: evaluation.rating || 0,
-        successStatus: evaluation.success_status || 'partial',
-        evaluationType: evaluation.evaluation_type || 'manual',
+        successStatus: evaluation.success ? 'success' : 'failure',
+        evaluationType: 'manual',
         notes: evaluation.notes,
       };
     });
+
+    // Apply filters in JavaScript
+    if (filters?.models && filters.models.length > 0) {
+      dataPoints = dataPoints.filter(dp => filters.models!.includes(dp.modelId));
+    }
+    if (filters?.status && filters.status !== 'all') {
+      dataPoints = dataPoints.filter(dp => dp.successStatus === filters.status);
+    }
+    if (filters?.minRating && filters.minRating > 0) {
+      dataPoints = dataPoints.filter(dp => dp.rating >= filters.minRating!);
+    }
 
     console.log('[DataAggregator] Quality metrics aggregated', {
       dataPoints: dataPoints.length,
@@ -224,6 +302,7 @@ export async function aggregateToolUsageData(
     period?: 'hour' | 'day' | 'week' | 'month' | 'all';
     startDate?: string;
     endDate?: string;
+    filters?: AnalyticsExportFilters;
   } = {}
 ): Promise<ToolUsageDataPoint[]> {
   console.log('[DataAggregator] Aggregating tool usage', {
@@ -240,6 +319,30 @@ export async function aggregateToolUsageData(
         }
       : calculateDateRange(options.period || 'week');
 
+    const filters = options.filters;
+
+    // First get conversation IDs for this user
+    let convQuery = supabase
+      .from('conversations')
+      .select('id')
+      .eq('user_id', userId);
+
+    // Apply conversation ID filter if specified
+    if (filters?.conversationIds && filters.conversationIds.length > 0) {
+      convQuery = convQuery.in('id', filters.conversationIds);
+    }
+
+    const { data: convData, error: convError } = await convQuery;
+
+    if (convError) throw convError;
+
+    const conversationIds = convData?.map(c => c.id) || [];
+
+    if (conversationIds.length === 0) {
+      console.log('[DataAggregator] No conversations found for user');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('messages')
       .select(`
@@ -251,7 +354,7 @@ export async function aggregateToolUsageData(
         error_type,
         latency_ms
       `)
-      .eq('conversations.user_id', userId)
+      .in('conversation_id', conversationIds)
       .not('tools_called', 'is', null)
       .gte('created_at', dateRange.start.toISOString())
       .lte('created_at', dateRange.end.toISOString())
@@ -259,8 +362,8 @@ export async function aggregateToolUsageData(
 
     if (error) throw error;
 
-    const dataPoints: ToolUsageDataPoint[] = [];
-    
+    let dataPoints: ToolUsageDataPoint[] = [];
+
     (data || []).forEach((msg) => {
       const tools = msg.tools_called || [];
       tools.forEach((toolName: string, index: number) => {
@@ -275,6 +378,15 @@ export async function aggregateToolUsageData(
         });
       });
     });
+
+    // Apply filters in JavaScript
+    if (filters?.toolNames && filters.toolNames.length > 0) {
+      dataPoints = dataPoints.filter(dp => filters.toolNames!.includes(dp.toolName));
+    }
+    if (filters?.status && filters.status !== 'all') {
+      const successFilter = filters.status === 'success';
+      dataPoints = dataPoints.filter(dp => dp.success === successFilter);
+    }
 
     console.log('[DataAggregator] Tool usage aggregated', {
       dataPoints: dataPoints.length,
@@ -298,6 +410,7 @@ export async function aggregateConversationMetrics(
     period?: 'hour' | 'day' | 'week' | 'month' | 'all';
     startDate?: string;
     endDate?: string;
+    filters?: AnalyticsExportFilters;
   } = {}
 ): Promise<ConversationDataPoint[]> {
   console.log('[DataAggregator] Aggregating conversation metrics', {
@@ -314,7 +427,9 @@ export async function aggregateConversationMetrics(
         }
       : calculateDateRange(options.period || 'week');
 
-    const { data, error} = await supabase
+    const filters = options.filters;
+
+    let query = supabase
       .from('conversations')
       .select(`
         id,
@@ -327,14 +442,21 @@ export async function aggregateConversationMetrics(
       .lte('created_at', dateRange.end.toISOString())
       .order('created_at', { ascending: true });
 
+    // Apply conversation ID filter if specified
+    if (filters?.conversationIds && filters.conversationIds.length > 0) {
+      query = query.in('id', filters.conversationIds);
+    }
+
+    const { data, error } = await query;
+
     if (error) throw error;
 
-    const dataPoints: ConversationDataPoint[] = (data || []).map((conv) => {
+    let dataPoints: ConversationDataPoint[] = (data || []).map((conv) => {
       const messageCount = Array.isArray(conv.messages) ? conv.messages.length : 0;
       const firstMessage = Array.isArray(conv.messages) && conv.messages[0] ? conv.messages[0] : null;
       const createdTime = new Date(conv.created_at).getTime();
       const updatedTime = new Date(conv.updated_at).getTime();
-      
+
       return {
         timestamp: new Date(conv.created_at),
         conversationId: conv.id,
@@ -345,6 +467,11 @@ export async function aggregateConversationMetrics(
         modelId: (firstMessage && 'metadata' in firstMessage) ? firstMessage.metadata?.model || 'unknown' : 'unknown',
       };
     });
+
+    // Apply model filter in JavaScript
+    if (filters?.models && filters.models.length > 0) {
+      dataPoints = dataPoints.filter(dp => filters.models!.includes(dp.modelId));
+    }
 
     console.log('[DataAggregator] Conversation metrics aggregated', {
       dataPoints: dataPoints.length,
@@ -368,6 +495,7 @@ export async function aggregateErrorData(
     period?: 'hour' | 'day' | 'week' | 'month' | 'all';
     startDate?: string;
     endDate?: string;
+    filters?: AnalyticsExportFilters;
   } = {}
 ): Promise<ErrorDataPoint[]> {
   console.log('[DataAggregator] Aggregating error data', {
@@ -384,6 +512,30 @@ export async function aggregateErrorData(
         }
       : calculateDateRange(options.period || 'week');
 
+    const filters = options.filters;
+
+    // First get conversation IDs for this user
+    let convQuery = supabase
+      .from('conversations')
+      .select('id')
+      .eq('user_id', userId);
+
+    // Apply conversation ID filter if specified
+    if (filters?.conversationIds && filters.conversationIds.length > 0) {
+      convQuery = convQuery.in('id', filters.conversationIds);
+    }
+
+    const { data: convData, error: convError } = await convQuery;
+
+    if (convError) throw convError;
+
+    const conversationIds = convData?.map(c => c.id) || [];
+
+    if (conversationIds.length === 0) {
+      console.log('[DataAggregator] No conversations found for user');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('messages')
       .select(`
@@ -394,7 +546,7 @@ export async function aggregateErrorData(
         fallback_used,
         metadata
       `)
-      .eq('conversations.user_id', userId)
+      .in('conversation_id', conversationIds)
       .not('error_type', 'is', null)
       .gte('created_at', dateRange.start.toISOString())
       .lte('created_at', dateRange.end.toISOString())
@@ -402,7 +554,7 @@ export async function aggregateErrorData(
 
     if (error) throw error;
 
-    const dataPoints: ErrorDataPoint[] = (data || []).map((msg) => ({
+    let dataPoints: ErrorDataPoint[] = (data || []).map((msg) => ({
       timestamp: new Date(msg.created_at),
       messageId: msg.id,
       conversationId: msg.conversation_id,
@@ -411,6 +563,11 @@ export async function aggregateErrorData(
       fallbackUsed: msg.fallback_used || false,
       modelId: msg.metadata?.model || 'unknown',
     }));
+
+    // Apply model filter in JavaScript
+    if (filters?.models && filters.models.length > 0) {
+      dataPoints = dataPoints.filter(dp => filters.models!.includes(dp.modelId));
+    }
 
     console.log('[DataAggregator] Error data aggregated', {
       dataPoints: dataPoints.length,
@@ -434,6 +591,7 @@ export async function aggregateLatencyData(
     period?: 'hour' | 'day' | 'week' | 'month' | 'all';
     startDate?: string;
     endDate?: string;
+    filters?: AnalyticsExportFilters;
   } = {}
 ): Promise<LatencyDataPoint[]> {
   console.log('[DataAggregator] Aggregating latency data', {
@@ -450,6 +608,30 @@ export async function aggregateLatencyData(
         }
       : calculateDateRange(options.period || 'week');
 
+    const filters = options.filters;
+
+    // First get conversation IDs for this user
+    let convQuery = supabase
+      .from('conversations')
+      .select('id')
+      .eq('user_id', userId);
+
+    // Apply conversation ID filter if specified
+    if (filters?.conversationIds && filters.conversationIds.length > 0) {
+      convQuery = convQuery.in('id', filters.conversationIds);
+    }
+
+    const { data: convData, error: convError } = await convQuery;
+
+    if (convError) throw convError;
+
+    const conversationIds = convData?.map(c => c.id) || [];
+
+    if (conversationIds.length === 0) {
+      console.log('[DataAggregator] No conversations found for user');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('messages')
       .select(`
@@ -460,7 +642,7 @@ export async function aggregateLatencyData(
         output_tokens,
         metadata
       `)
-      .eq('conversations.user_id', userId)
+      .in('conversation_id', conversationIds)
       .not('latency_ms', 'is', null)
       .gte('created_at', dateRange.start.toISOString())
       .lte('created_at', dateRange.end.toISOString())
@@ -468,10 +650,10 @@ export async function aggregateLatencyData(
 
     if (error) throw error;
 
-    const dataPoints: LatencyDataPoint[] = (data || []).map((msg) => {
+    let dataPoints: LatencyDataPoint[] = (data || []).map((msg) => {
       const latency = msg.latency_ms || 0;
       const tokens = msg.output_tokens || 1;
-      
+
       return {
         timestamp: new Date(msg.created_at),
         messageId: msg.id,
@@ -482,6 +664,11 @@ export async function aggregateLatencyData(
         tokensPerSecond: latency > 0 ? (tokens / latency) * 1000 : 0,
       };
     });
+
+    // Apply model filter in JavaScript
+    if (filters?.models && filters.models.length > 0) {
+      dataPoints = dataPoints.filter(dp => filters.models!.includes(dp.modelId));
+    }
 
     console.log('[DataAggregator] Latency data aggregated', {
       dataPoints: dataPoints.length,

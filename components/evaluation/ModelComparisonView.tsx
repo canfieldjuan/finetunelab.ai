@@ -50,6 +50,18 @@ export interface ModelComparisonViewProps {
   onClose: () => void;
   /** Initial prompt (optional) */
   initialPrompt?: string;
+  /** Demo mode - enables blind comparison and demo data storage */
+  demoMode?: boolean;
+  /** Pre-selected models for demo mode */
+  demoModels?: { modelA: { id: string; name: string }; modelB: { id: string; name: string } };
+  /** Callback when comparison is submitted in demo mode */
+  onDemoSubmit?: (data: {
+    prompt: string;
+    preferredModel: 'a' | 'b' | 'tie' | null;
+    modelARating: ComparisonRating;
+    modelBRating: ComparisonRating;
+    displayOrder: 'ab' | 'ba';
+  }) => void;
 }
 
 /**
@@ -67,6 +79,9 @@ export function ModelComparisonView({
   open,
   onClose,
   initialPrompt = '',
+  demoMode = false,
+  demoModels,
+  onDemoSubmit,
 }: ModelComparisonViewProps) {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
@@ -75,38 +90,146 @@ export function ModelComparisonView({
   const [isComparing, setIsComparing] = useState(false);
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string }>>([]);
 
+  // Demo mode state
+  const [displayOrder, setDisplayOrder] = useState<'ab' | 'ba'>('ab');
+  const [revealed, setRevealed] = useState(false);
+  const [bothRated, setBothRated] = useState(false);
+
+  // Demo mode allowed models
+  const DEMO_ALLOWED_MODELS = [
+    'gpt-4o-mini',
+    'gpt-4o',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-haiku-20240307',
+  ];
+
   // Fetch available models
   const fetchModels = React.useCallback(async () => {
     try {
       const response = await fetch('/api/models', {
         headers: sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {},
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setAvailableModels(data.models.map((m: { id: string; name: string }) => ({
+          let models = data.models.map((m: { id: string; name: string }) => ({
             id: m.id,
             name: m.name,
-          })));
+          }));
+
+          // Filter to demo-allowed models in demo mode
+          if (demoMode) {
+            models = models.filter((m: { id: string }) => DEMO_ALLOWED_MODELS.includes(m.id));
+          }
+
+          setAvailableModels(models);
         }
       }
     } catch (error) {
       console.error('[ModelComparisonView] Error fetching models:', error);
     }
-  }, [sessionToken]);
+  }, [sessionToken, demoMode]);
+
+  // Setup demo mode models and randomize display order
+  useEffect(() => {
+    if (demoMode && demoModels && open) {
+      // Set pre-selected models for demo
+      setSelectedModels([demoModels.modelA.id, demoModels.modelB.id]);
+      setAvailableModels([demoModels.modelA, demoModels.modelB]);
+
+      // Randomize display order for blind comparison
+      const order = Math.random() > 0.5 ? 'ab' : 'ba';
+      setDisplayOrder(order);
+      setRevealed(false);
+      setBothRated(false);
+
+      console.log('[ModelComparisonView] Demo mode setup:', {
+        modelA: demoModels.modelA.name,
+        modelB: demoModels.modelB.name,
+        displayOrder: order,
+      });
+    }
+  }, [demoMode, demoModels, open]);
+
+  // Check if both models have been rated (for reveal button)
+  useEffect(() => {
+    if (demoMode && selectedModels.length === 2) {
+      const modelARating = ratings.get(selectedModels[0]);
+      const modelBRating = ratings.get(selectedModels[1]);
+
+      const aRated = modelARating && modelARating.overall > 0;
+      const bRated = modelBRating && modelBRating.overall > 0;
+
+      setBothRated(Boolean(aRated && bRated));
+    }
+  }, [demoMode, ratings, selectedModels]);
 
   useEffect(() => {
-    if (open && sessionToken) {
+    if (open && sessionToken && !demoMode) {
       fetchModels();
     }
-  }, [open, sessionToken, fetchModels]);
+  }, [open, sessionToken, fetchModels, demoMode]);
 
   useEffect(() => {
     if (initialPrompt) {
       setPrompt(initialPrompt);
     }
   }, [initialPrompt]);
+
+  // Get display label for blind comparison
+  const getBlindLabel = (index: number): string => {
+    if (!demoMode || revealed) {
+      return '';
+    }
+    // In blind mode, show "Response A" or "Response B" based on display order
+    const labels = displayOrder === 'ab' ? ['Response A', 'Response B'] : ['Response B', 'Response A'];
+    return labels[index];
+  };
+
+  // Get the actual model display order for blind comparison
+  const getDisplayOrderedModels = (): string[] => {
+    if (!demoMode || selectedModels.length !== 2) {
+      return selectedModels;
+    }
+    // Reorder based on display order
+    return displayOrder === 'ab' ? selectedModels : [selectedModels[1], selectedModels[0]];
+  };
+
+  // Handle reveal in demo mode
+  const handleReveal = () => {
+    setRevealed(true);
+
+    // Determine winner based on ratings
+    if (onDemoSubmit && selectedModels.length === 2) {
+      const modelARating = ratings.get(selectedModels[0]);
+      const modelBRating = ratings.get(selectedModels[1]);
+
+      let preferredModel: 'a' | 'b' | 'tie' | null = null;
+
+      if (modelARating?.preference === 'preferred') {
+        preferredModel = 'a';
+      } else if (modelBRating?.preference === 'preferred') {
+        preferredModel = 'b';
+      } else if (modelARating && modelBRating) {
+        if (modelARating.overall > modelBRating.overall) {
+          preferredModel = 'a';
+        } else if (modelBRating.overall > modelARating.overall) {
+          preferredModel = 'b';
+        } else {
+          preferredModel = 'tie';
+        }
+      }
+
+      onDemoSubmit({
+        prompt,
+        preferredModel,
+        modelARating: modelARating || { modelId: selectedModels[0], clarity: 0, accuracy: 0, conciseness: 0, overall: 0 },
+        modelBRating: modelBRating || { modelId: selectedModels[1], clarity: 0, accuracy: 0, conciseness: 0, overall: 0 },
+        displayOrder,
+      });
+    }
+  };
 
   const toggleModelSelection = (modelId: string) => {
     setSelectedModels(prev => {
@@ -375,13 +498,50 @@ export function ModelComparisonView({
 
           <Separator />
 
+          {/* Demo Mode: Reveal Button */}
+          {demoMode && bothRated && !revealed && (
+            <div className="flex justify-center">
+              <Button
+                onClick={handleReveal}
+                className="gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+              >
+                <Sparkles className="h-4 w-4" />
+                Reveal Model Identities
+              </Button>
+            </div>
+          )}
+
+          {/* Demo Mode: Revealed Summary */}
+          {demoMode && revealed && selectedModels.length === 2 && (
+            <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+              <div className="text-center mb-3">
+                <h4 className="font-semibold text-purple-900">Models Revealed!</h4>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="text-center">
+                  <Badge variant="outline" className="mb-1">Response A</Badge>
+                  <p className="font-medium">{displayOrder === 'ab' ? responses.get(selectedModels[0])?.modelName : responses.get(selectedModels[1])?.modelName}</p>
+                </div>
+                <div className="text-center">
+                  <Badge variant="outline" className="mb-1">Response B</Badge>
+                  <p className="font-medium">{displayOrder === 'ab' ? responses.get(selectedModels[1])?.modelName : responses.get(selectedModels[0])?.modelName}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Responses Grid */}
           {responses.size > 0 && (
             <div className={`grid gap-4 ${selectedModels.length === 2 ? 'grid-cols-2' : selectedModels.length === 3 ? 'grid-cols-3' : 'grid-cols-2 xl:grid-cols-4'}`}>
-              {selectedModels.map(modelId => {
+              {(demoMode ? getDisplayOrderedModels() : selectedModels).map((modelId, index) => {
                 const response = responses.get(modelId);
                 const rating = ratings.get(modelId);
                 if (!response) return null;
+
+                // Determine display name: blind label or actual model name
+                const displayName = demoMode && !revealed
+                  ? getBlindLabel(index)
+                  : response.modelName;
 
                 return (
                   <div key={modelId} className="border rounded-lg p-4 space-y-4">
@@ -390,7 +550,14 @@ export function ModelComparisonView({
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <Sparkles className="h-4 w-4 text-blue-500" />
-                          <h3 className="font-medium">{response.modelName}</h3>
+                          <h3 className="font-medium">
+                            {displayName}
+                            {demoMode && revealed && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                (was {getBlindLabel(index)})
+                              </span>
+                            )}
+                          </h3>
                         </div>
                         {response.status === 'complete' && response.responseTime && (
                           <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
@@ -398,7 +565,7 @@ export function ModelComparisonView({
                               <Clock className="h-3 w-3" />
                               {(response.responseTime / 1000).toFixed(2)}s
                             </span>
-                            {response.tokensUsed && (
+                            {response.tokensUsed && !demoMode && (
                               <span className="flex items-center gap-1">
                                 <Zap className="h-3 w-3" />
                                 {response.tokensUsed} tokens

@@ -7,15 +7,40 @@
 
 import { AnalyticsDataset } from '../types';
 
+/**
+ * Filters for analytics data aggregation and export
+ * Allows filtering by model, status, training job, and more
+ */
+export interface AnalyticsExportFilters {
+  /** Filter by specific model IDs (e.g., ['gpt-4', 'claude-3-sonnet']) */
+  models?: string[];
+  /** Filter by success/failure status */
+  status?: 'all' | 'success' | 'failure';
+  /** Filter by specific training job ID */
+  trainingJobId?: string;
+  /** Filter by specific conversation IDs */
+  conversationIds?: string[];
+  /** Minimum quality rating (1-5) */
+  minRating?: number;
+  /** Filter by specific tool names */
+  toolNames?: string[];
+  /** Filter by conversation tags */
+  tags?: string[];
+}
+
 export interface AnalyticsExportOptions {
   userId: string;
-  format: 'csv' | 'json';
+  format: 'csv' | 'json' | 'html';
   metrics: ('tokens' | 'quality' | 'tools' | 'conversations' | 'errors' | 'latency' | 'all')[];
   timeRange: {
     start: Date;
     end: Date;
     period: 'hour' | 'day' | 'week' | 'month' | 'all';
   };
+  /** Optional filters for data selection */
+  filters?: AnalyticsExportFilters;
+  /** Target audience for report formatting */
+  audience?: 'executive' | 'engineering' | 'onboarding' | 'custom';
   includeVisualizations?: boolean;
   includeRecommendations?: boolean;
 }

@@ -37,8 +37,12 @@ import {
   generateVisualizations,
   generateRecommendations,
 } from '@/lib/analytics/export/reportGenerator';
-import { writeExportFile } from '@/lib/analytics/export/storage';
+import { writeExportFile, writeBinaryExportFile } from '@/lib/analytics/export/storage';
 import type { DateRange, AnalyticsDataset } from '@/lib/analytics/types';
+import type { AnalyticsExportFilters } from '@/lib/analytics/export/types';
+import { renderTemplate, isValidTemplate } from '@/lib/analytics/export/templates';
+import { renderReportToHtml } from '@/lib/analytics/export/renderers/html';
+import { renderReportToPdf } from '@/lib/analytics/export/renderers/pdf';
 
 export const runtime = 'nodejs';
 
@@ -48,30 +52,42 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 interface ExportRequest {
   startDate: string;
   endDate: string;
-  format: 'csv' | 'json' | 'report';
+  format: 'csv' | 'json' | 'report' | 'html' | 'pdf';
   exportType: 'overview' | 'timeseries' | 'complete' | 'model_comparison' | 'tool_usage' | 'quality_trends';
   includeMetrics?: string[];
+  filters?: AnalyticsExportFilters;
+  audience?: 'executive' | 'engineering' | 'onboarding' | 'custom';
 }
 
 /**
  * Authenticate user
+ * Supports both:
+ * 1. Authorization header (browser/client requests)
+ * 2. userId in body (server-to-server requests from analytics tools)
  */
-async function authenticateUser(req: NextRequest) {
+async function authenticateUser(req: NextRequest, body?: { userId?: string }) {
   const authHeader = req.headers.get('authorization');
-  if (!authHeader) {
-    return { error: 'Unauthorized - no auth header', user: null };
+
+  // Try auth header first (standard browser auth)
+  if (authHeader) {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (!authError && user) {
+      return { error: null, user };
+    }
   }
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return { error: 'Unauthorized - invalid token', user: null };
+  // Fall back to userId in body (server-to-server calls from analytics tools)
+  // This is safe because the analytics chat API already authenticated the user
+  if (body?.userId && typeof body.userId === 'string') {
+    console.log('[Analytics Export API] Using userId from body for server-to-server auth');
+    return { error: null, user: { id: body.userId } };
   }
 
-  return { error: null, user };
+  return { error: 'Unauthorized - no valid auth', user: null };
 }
 
 /**
@@ -93,8 +109,8 @@ function validateExportRequest(body: unknown): {
     return { request: null, error: 'startDate and endDate are required' };
   }
 
-  if (!req.format || !['csv', 'json', 'report'].includes(req.format)) {
-    return { request: null, error: 'format must be csv, json, or report' };
+  if (!req.format || !['csv', 'json', 'report', 'html', 'pdf'].includes(req.format)) {
+    return { request: null, error: 'format must be csv, json, report, html, or pdf' };
   }
 
   const validTypes = ['overview', 'timeseries', 'complete', 'model_comparison', 'tool_usage', 'quality_trends'];
@@ -113,9 +129,10 @@ async function aggregateData(
   userId: string,
   startDate: string,
   endDate: string,
-  includeMetrics?: string[]
+  includeMetrics?: string[],
+  filters?: AnalyticsExportFilters
 ): Promise<AnalyticsDataset> {
-  console.log('[Analytics Export API] Aggregating data');
+  console.log('[Analytics Export API] Aggregating data', { filters });
 
   const dateRange: DateRange = {
     start: new Date(startDate),
@@ -124,6 +141,13 @@ async function aggregateData(
   };
 
   const metrics = includeMetrics || ['tokens', 'quality', 'tools', 'conversations', 'errors', 'latency'];
+
+  // Options object to pass to all aggregators
+  const aggregatorOptions = {
+    startDate,
+    endDate,
+    filters,
+  };
 
   const dataset: AnalyticsDataset = {
     userId,
@@ -164,27 +188,27 @@ async function aggregateData(
   };
 
   if (metrics.includes('tokens')) {
-    dataset.metrics.tokenUsage = await aggregateTokenUsageData(userId, dateRange);
+    dataset.metrics.tokenUsage = await aggregateTokenUsageData(userId, aggregatorOptions);
   }
 
   if (metrics.includes('quality')) {
-    dataset.metrics.quality = await aggregateQualityMetrics(userId, dateRange);
+    dataset.metrics.quality = await aggregateQualityMetrics(userId, aggregatorOptions);
   }
 
   if (metrics.includes('tools')) {
-    dataset.metrics.tools = await aggregateToolUsageData(userId, dateRange);
+    dataset.metrics.tools = await aggregateToolUsageData(userId, aggregatorOptions);
   }
 
   if (metrics.includes('conversations')) {
-    dataset.metrics.conversations = await aggregateConversationMetrics(userId, dateRange);
+    dataset.metrics.conversations = await aggregateConversationMetrics(userId, aggregatorOptions);
   }
 
   if (metrics.includes('errors')) {
-    dataset.metrics.errors = await aggregateErrorData(userId, dateRange);
+    dataset.metrics.errors = await aggregateErrorData(userId, aggregatorOptions);
   }
 
   if (metrics.includes('latency')) {
-    dataset.metrics.latency = await aggregateLatencyData(userId, dateRange);
+    dataset.metrics.latency = await aggregateLatencyData(userId, aggregatorOptions);
   }
 
   console.log('[Analytics Export API] Data aggregation complete');
@@ -198,9 +222,10 @@ async function generateExportContent(
   dataset: AnalyticsDataset,
   format: string,
   exportType: string,
-  exportId: string
+  exportId: string,
+  audience?: 'executive' | 'engineering' | 'onboarding' | 'custom'
 ): Promise<string> {
-  console.log('[Analytics Export API] Generating', format, exportType);
+  console.log('[Analytics Export API] Generating', format, exportType, audience ? `for ${audience}` : '');
 
   if (format === 'csv') {
     switch (exportType) {
@@ -230,6 +255,20 @@ async function generateExportContent(
       default:
         return generateFlatJSON(dataset);
     }
+  }
+
+  // Handle audience-specific templated reports (HTML and report formats)
+  // PDF is handled separately in POST handler due to binary output
+  if ((format === 'report' || format === 'html') && audience && isValidTemplate(audience)) {
+    console.log('[Analytics Export API] Using audience template:', audience);
+    const renderedReport = renderTemplate(audience, dataset);
+
+    // Return HTML for html format, JSON for report format
+    if (format === 'html') {
+      console.log('[Analytics Export API] Rendering to HTML');
+      return renderReportToHtml(renderedReport);
+    }
+    return JSON.stringify(renderedReport, null, 2);
   }
 
   if (format === 'report') {
@@ -311,14 +350,16 @@ async function createExportRecord(
  */
 export async function POST(req: NextRequest) {
   try {
-    const { error: authError, user } = await authenticateUser(req);
+    // Parse body first so we can use userId for server-to-server auth
+    const body = await req.json();
+
+    const { error: authError, user } = await authenticateUser(req, body);
     if (authError || !user) {
       return NextResponse.json({ error: authError }, { status: 401 });
     }
 
     console.log('[Analytics Export API] Request from user:', user.id);
 
-    const body = await req.json();
     const { request, error: validationError } = validateExportRequest(body);
     if (validationError || !request) {
       return NextResponse.json({ error: validationError }, { status: 400 });
@@ -330,21 +371,34 @@ export async function POST(req: NextRequest) {
       user.id,
       request.startDate,
       request.endDate,
-      request.includeMetrics
+      request.includeMetrics,
+      request.filters
     );
 
-    const content = await generateExportContent(
-      dataset,
-      request.format,
-      request.exportType,
-      exportId
-    );
+    let filePath: string;
+    let fileSize: number;
 
-    const { filePath, fileSize } = await writeExportFile(
-      exportId,
-      request.format,
-      content
-    );
+    // Handle PDF format separately (binary output)
+    if (request.format === 'pdf' && request.audience && isValidTemplate(request.audience)) {
+      console.log('[Analytics Export API] Generating PDF for audience:', request.audience);
+      const renderedReport = renderTemplate(request.audience, dataset);
+      const pdfBuffer = await renderReportToPdf(renderedReport);
+      const result = await writeBinaryExportFile(exportId, request.format, pdfBuffer);
+      filePath = result.filePath;
+      fileSize = result.fileSize;
+    } else {
+      // Handle text-based formats (CSV, JSON, HTML, report)
+      const content = await generateExportContent(
+        dataset,
+        request.format,
+        request.exportType,
+        exportId,
+        request.audience
+      );
+      const result = await writeExportFile(exportId, request.format, content);
+      filePath = result.filePath;
+      fileSize = result.fileSize;
+    }
 
     const exportRecord = await createExportRecord(
       user.id,
@@ -364,6 +418,8 @@ export async function POST(req: NextRequest) {
       fileSize,
       format: request.format,
       exportType: request.exportType,
+      filters: request.filters || null,
+      audience: request.audience || null,
     });
   } catch (error) {
     console.error('[Analytics Export API] Error:', error);

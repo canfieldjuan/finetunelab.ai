@@ -199,7 +199,7 @@ export interface AlertConfig {
 
 export function getAlertConfig(): AlertConfig {
   return {
-    emailFromAddress: process.env.EMAIL_DEFAULT_FROM || process.env.ALERT_EMAIL_FROM || 'alerts@example.com',
+    emailFromAddress: process.env.EMAIL_DEFAULT_FROM || process.env.ALERT_EMAIL_FROM || 'alerts@finetunelab.ai',
     appBaseUrl: process.env.ALERT_APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || 'https://finetunelab.ai',
     maxWebhookRetries: parseInt(process.env.ALERT_WEBHOOK_MAX_RETRIES || '3', 10),
     webhookTimeoutMs: parseInt(process.env.ALERT_WEBHOOK_TIMEOUT_MS || '10000', 10),

@@ -253,6 +253,73 @@ const toolsToAdd = [
     },
     enabled: true,
   },
+  {
+    name: 'analytics_export',
+    description: 'Create analytics export files (CSV, JSON, or Report) and get download links. Export types: overview, timeseries, complete, model_comparison, tool_usage, quality_trends.',
+    parameters: {
+      type: 'object',
+      properties: {
+        operation: {
+          type: 'string',
+          description: 'Operation to perform',
+          enum: ['create_export', 'list_exports', 'get_download_link'],
+        },
+        format: {
+          type: 'string',
+          description: 'Export format (for create_export)',
+          enum: ['csv', 'json', 'report'],
+        },
+        exportType: {
+          type: 'string',
+          description: 'Type of analytics data to export (for create_export)',
+          enum: ['overview', 'timeseries', 'complete', 'model_comparison', 'tool_usage', 'quality_trends'],
+        },
+        startDate: {
+          type: 'string',
+          description: 'Start date for data range (YYYY-MM-DD format)',
+        },
+        endDate: {
+          type: 'string',
+          description: 'End date for data range (YYYY-MM-DD format)',
+        },
+        exportId: {
+          type: 'string',
+          description: 'Export ID (for get_download_link)',
+        },
+      },
+      required: ['operation'],
+    },
+    enabled: true,
+  },
+  {
+    name: 'training_control',
+    description: 'Control training jobs: list configurations, attach datasets, and start training.',
+    parameters: {
+      type: 'object',
+      properties: {
+        operation: {
+          type: 'string',
+          description: 'Training operation to perform',
+          enum: ['list_configs', 'get_config', 'list_datasets', 'attach_dataset', 'start_training'],
+        },
+        config_id: {
+          type: 'string',
+          description: 'Configuration ID (required for get_config, attach_dataset, start_training)',
+        },
+        dataset_id: {
+          type: 'string',
+          description: 'Dataset ID (required for attach_dataset)',
+        },
+        target: {
+          type: 'string',
+          description: 'Training target platform (for start_training, default: local)',
+          enum: ['local', 'kaggle', 'hf-spaces', 'runpod'],
+        },
+      },
+      required: ['operation'],
+    },
+    enabled: true,
+  },
 ];
 
 async function seedTools() {

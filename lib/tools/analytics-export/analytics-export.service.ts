@@ -5,6 +5,7 @@
  */
 
 import { analyticsExportConfig } from './config';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface ExportCreationParams {
   userId: string;
@@ -98,8 +99,12 @@ class AnalyticsExportService {
         };
       }
 
-      // Call the API endpoint
-      const response = await fetch('/api/analytics/export', {
+      // Call the API endpoint (use full URL for server-side execution)
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+        || 'http://localhost:3000';
+
+      const response = await fetch(`${baseUrl}/api/analytics/export`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,6 +114,7 @@ class AnalyticsExportService {
           endDate: finalEndDate,
           format,
           exportType,
+          userId, // Include userId for server-side auth
         }),
       });
 
@@ -141,7 +147,7 @@ class AnalyticsExportService {
    * Get list of user's exports
    * Queries analytics_exports table via Supabase
    */
-  async listExports(params: ExportListParams): Promise<{
+  async listExports(params: ExportListParams, passedClient?: unknown): Promise<{
     success: boolean;
     exports?: ExportRecord[];
     error?: string;
@@ -172,10 +178,13 @@ class AnalyticsExportService {
           exports: data.exports,
         };
       } else {
-        // Server-side: query Supabase directly
+        // Server-side: use passed client (authenticated) or fallback to default
         const { supabase } = await import('@/lib/supabaseClient');
+        const dbClient = (passedClient && typeof passedClient === 'object' && 'from' in passedClient)
+          ? passedClient as SupabaseClient
+          : supabase;
 
-        const query = supabase
+        const query = dbClient
           .from('analytics_exports')
           .select('*')
           .eq('user_id', userId)
@@ -214,7 +223,7 @@ class AnalyticsExportService {
   /**
    * Get download link for an export
    */
-  async getDownloadLink(exportId: string, userId: string): Promise<{
+  async getDownloadLink(exportId: string, userId: string, passedClient?: unknown): Promise<{
     success: boolean;
     downloadUrl?: string;
     error?: string;
@@ -222,10 +231,13 @@ class AnalyticsExportService {
     console.log('[AnalyticsExportService] Getting download link:', exportId);
 
     try {
-      // Server-side: query Supabase directly
+      // Use passed client (authenticated) or fallback to default
       const { supabase } = await import('@/lib/supabaseClient');
+      const dbClient = (passedClient && typeof passedClient === 'object' && 'from' in passedClient)
+        ? passedClient as SupabaseClient
+        : supabase;
 
-      const { data, error } = await supabase
+      const { data, error } = await dbClient
         .from('analytics_exports')
         .select('download_url, expires_at, status')
         .eq('id', exportId)

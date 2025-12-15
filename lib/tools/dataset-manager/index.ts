@@ -64,7 +64,7 @@ const datasetManagerTool: ToolDefinition = {
     maxExportSize: datasetConfig.maxExportSize,
   },
   
-  async execute(params: Record<string, unknown>) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, supabaseClient?: unknown) {
     const { operation, dataset_filter, export_format, limit, user_id } = params;
     
     if (!operation || typeof operation !== 'string') {
@@ -95,7 +95,7 @@ const datasetManagerTool: ToolDefinition = {
     try {
       switch (operation) {
         case 'list': {
-          const datasets = await datasetService.listDatasets(userId);
+          const datasets = await datasetService.listDatasets(userId, supabaseClient);
           return {
             operation: 'list',
             count: datasets.length,
@@ -107,7 +107,8 @@ const datasetManagerTool: ToolDefinition = {
           const filter = dataset_filter as Record<string, unknown> | undefined;
           const stats = await datasetService.getDatasetStats(
             userId,
-            filter
+            filter,
+            supabaseClient
           );
           return {
             operation: 'stats',
@@ -135,7 +136,8 @@ const datasetManagerTool: ToolDefinition = {
               userId,
               filter,
               format as 'jsonl' | 'json',
-              exportLimit
+              exportLimit,
+              supabaseClient
             );
 
             return {
@@ -157,7 +159,8 @@ const datasetManagerTool: ToolDefinition = {
               userId,
               filter,
               format as 'jsonl' | 'json' | 'csv',
-              exportLimit
+              exportLimit,
+              supabaseClient
             );
 
             return {
@@ -175,7 +178,8 @@ const datasetManagerTool: ToolDefinition = {
           const filter = dataset_filter as Record<string, unknown> | undefined;
           const validation = await datasetService.validateDataset(
             userId,
-            filter
+            filter,
+            supabaseClient
           );
           return {
             operation: 'validate',
@@ -206,7 +210,8 @@ const datasetManagerTool: ToolDefinition = {
           
           const result = await datasetService.deleteConversations(
             userId,
-            idsArray
+            idsArray,
+            supabaseClient
           );
           
           return {
@@ -243,7 +248,8 @@ const datasetManagerTool: ToolDefinition = {
           const result = await datasetService.mergeConversations(
             userId,
             sourceIds,
-            target_conversation_id
+            target_conversation_id,
+            supabaseClient
           );
           
           return {

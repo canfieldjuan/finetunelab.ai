@@ -120,6 +120,17 @@ class Logger {
     }
   }
 
+  private shouldPrintStackTrace(): boolean {
+    if (!this.config.enableStackTrace) return false;
+    try {
+      // In production builds, avoid noisy stack traces in console
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
+        return false;
+      }
+    } catch (_e) { /* noop */ }
+    return true;
+  }
+
   private loadBrowserConfig(): void {
     try {
       const stored = localStorage.getItem('logger_config');
@@ -319,12 +330,12 @@ class Logger {
     
     if (data !== undefined) {
       console.error(formatted, data);
-      if (entry.stackTrace) {
+      if (entry.stackTrace && this.shouldPrintStackTrace()) {
         console.error('Stack trace:', entry.stackTrace);
       }
     } else {
       console.error(formatted);
-      if (entry.stackTrace) {
+      if (entry.stackTrace && this.shouldPrintStackTrace()) {
         console.error('Stack trace:', entry.stackTrace);
       }
     }

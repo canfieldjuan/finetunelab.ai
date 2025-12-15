@@ -64,17 +64,35 @@ export class RunPodAdapter extends BaseProviderAdapter {
       max_tokens: options.maxTokens ?? config.max_output_tokens ?? 2000,
     };
 
+    // Detect if model supports chat format or needs completion format
+    const useChatFormat = this.isChatModel(config.model_id, config.is_chat_model);
+
     // Build request body in RunPod format
-    const body: Record<string, unknown> = {
-      input: {
-        messages: this.formatMessages(messages),
-        sampling_params,
-      },
-    };
+    // For chat models: use messages array
+    // For base/completion models: use prompt string
+    let body: Record<string, unknown>;
+    if (useChatFormat) {
+      body = {
+        input: {
+          messages: this.formatMessages(messages),
+          sampling_params,
+        },
+      };
+    } else {
+      // Base model - convert messages to single prompt string
+      const prompt = this.messagesToPrompt(messages);
+      body = {
+        input: {
+          prompt,
+          sampling_params,
+        },
+      };
+    }
 
     console.log('[RunPodAdapter] Request:', {
       url,
       messageCount: messages.length,
+      useChatFormat,
       temperature: sampling_params.temperature,
       max_tokens: sampling_params.max_tokens,
     });

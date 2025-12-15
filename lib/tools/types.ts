@@ -36,7 +36,7 @@ export interface ToolDefinition {
     required: string[];
   };
   config: ToolConfig;
-  execute: (params: Record<string, unknown>, conversationId?: string, userId?: string) => Promise<unknown>;
+  execute: (params: Record<string, unknown>, conversationId?: string, userId?: string, supabaseClient?: unknown) => Promise<unknown>;
 }
 
 /**

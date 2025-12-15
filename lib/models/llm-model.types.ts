@@ -215,4 +215,5 @@ export interface ModelConfig {
   max_output_tokens: number;
   default_temperature: number;
   default_top_p: number;
+  is_chat_model?: boolean; // Override auto-detection: true=chat format, false=completion format, undefined=auto-detect
 }

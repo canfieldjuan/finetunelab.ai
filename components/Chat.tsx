@@ -265,6 +265,10 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Thinking mode state - for Qwen3 and similar models with <think> tags
   const [enableThinking, setEnableThinking] = useState(false);
 
+  // Determine widget/demo mode early so it's available to hooks below
+  const isWidgetMode = !!widgetConfig;
+  const isDemoOrWidget = demoMode || isWidgetMode;
+
   // Chat messaging state and actions - using useChat hook
   const {
     input,
@@ -294,6 +298,8 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     setActiveResearchJob,
     contextInjectionEnabled,
     enableThinking,
+    allowAnonymous: isDemoOrWidget,
+    widgetConfig: widgetConfig || null,
   });
 
   // Auto-scroll behavior with sticky scroll-to-bottom button
@@ -460,8 +466,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     speakRef.current = speak;
   }, [speak]);
 
-  const isWidgetMode = !!widgetConfig;
-  const isDemoOrWidget = demoMode || isWidgetMode;
+  
 
   const { documents, refetch: refetchDocuments } = useDocuments({
     userId: userId || undefined,

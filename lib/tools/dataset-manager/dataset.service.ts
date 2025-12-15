@@ -13,14 +13,25 @@ import type {
   ValidationResult,
 } from './types';
 import { datasetConfig } from './dataset.config';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+// Helper to get the database client - uses passed client if available, otherwise falls back to supabase
+// This preserves RLS protection by using the authenticated client passed from the API route
+function getDbClient(passedClient?: unknown): SupabaseClient {
+  if (passedClient && typeof passedClient === 'object' && 'from' in passedClient) {
+    return passedClient as SupabaseClient;
+  }
+  return supabase;
+}
 
 class DatasetService {
-  async listDatasets(userId: string): Promise<DatasetItem[]> {
+  async listDatasets(userId: string, client?: unknown): Promise<DatasetItem[]> {
+    const dbClient = getDbClient(client);
     console.debug(
       `[DatasetService] Calling get_conversation_stats for user: ${userId}`
     );
     try {
-      const { data, error } = await supabase.rpc('get_conversation_stats', {
+      const { data, error } = await dbClient.rpc('get_conversation_stats', {
         p_user_id: userId,
       });
 
@@ -73,10 +84,12 @@ class DatasetService {
 
   async getDatasetStats(
     userId: string,
-    filter?: DatasetFilter
+    filter?: DatasetFilter,
+    client?: unknown
   ): Promise<DatasetStats> {
+    const dbClient = getDbClient(client);
     try {
-      let convQuery = supabase
+      let convQuery = dbClient
         .from('conversations')
         .select('id')
         .eq('user_id', userId);
@@ -91,36 +104,36 @@ class DatasetService {
         convQuery = convQuery.in('id', filter.conversation_ids);
       }
 
-      const { data: conversations, error: convError } = 
+      const { data: conversations, error: convError } =
         await convQuery;
 
       if (convError) throw convError;
 
       const convIds = conversations?.map(c => c.id) || [];
 
-      const { count: totalConvCount } = await supabase
+      const { count: totalConvCount } = await dbClient
         .from('conversations')
         .select('*', { count: 'exact', head: true })
         .in('id', convIds);
 
-      const { count: totalMsgCount } = await supabase
+      const { count: totalMsgCount } = await dbClient
         .from('messages')
         .select('*', { count: 'exact', head: true })
         .in('conversation_id', convIds);
 
-      const { count: userMsgCount } = await supabase
+      const { count: userMsgCount } = await dbClient
         .from('messages')
         .select('*', { count: 'exact', head: true })
         .in('conversation_id', convIds)
         .eq('role', 'user');
 
-      const { count: assistantMsgCount } = await supabase
+      const { count: assistantMsgCount } = await dbClient
         .from('messages')
         .select('*', { count: 'exact', head: true })
         .in('conversation_id', convIds)
         .eq('role', 'assistant');
 
-      const { count: evalCount } = await supabase
+      const { count: evalCount } = await dbClient
         .from('message_evaluations')
         .select('*', { count: 'exact', head: true });
 
@@ -156,14 +169,16 @@ class DatasetService {
     userId: string,
     filter?: DatasetFilter,
     format: 'jsonl' | 'json' | 'csv' = 'jsonl',
-    limit?: number
+    limit?: number,
+    client?: unknown
   ): Promise<DatasetExport> {
+    const dbClient = getDbClient(client);
     try {
       const maxLimit = datasetConfig.maxExportSize;
       const actualLimit = limit && limit < maxLimit ? limit : maxLimit;
 
       // Step 1: Get conversation IDs for the user
-      const { data: convData, error: convError } = await supabase
+      const { data: convData, error: convError } = await dbClient
         .from('conversations')
         .select('id')
         .eq('user_id', userId);
@@ -185,7 +200,7 @@ class DatasetService {
       }
 
       // Step 2: Fetch messages using the retrieved conversation IDs
-      let query = supabase
+      let query = dbClient
         .from('messages')
         .select(`
           id, conversation_id, role, content, created_at,
@@ -276,8 +291,10 @@ class DatasetService {
     userId: string,
     filter?: DatasetFilter,
     format: 'jsonl' | 'json' = 'jsonl',
-    limit?: number
+    limit?: number,
+    client?: unknown
   ): Promise<DatasetExportWithDownload> {
+    const dbClient = getDbClient(client);
     console.debug('[DatasetService] exportDatasetWithDownload called', {
       userId,
       format,
@@ -287,7 +304,7 @@ class DatasetService {
 
     try {
       // Step 1: Get conversation IDs matching filter
-      let convQuery = supabase
+      let convQuery = dbClient
         .from('conversations')
         .select('id')
         .eq('user_id', userId);
@@ -317,7 +334,7 @@ class DatasetService {
       }
 
       // Step 2: Count messages that will be exported
-      let msgQuery = supabase
+      let msgQuery = dbClient
         .from('messages')
         .select('id', { count: 'exact', head: true })
         .in('conversation_id', conversationIds);
@@ -372,10 +389,11 @@ class DatasetService {
 
   async validateDataset(
     userId: string,
-    filter?: DatasetFilter
+    filter?: DatasetFilter,
+    client?: unknown
   ): Promise<ValidationResult> {
     try {
-      const stats = await this.getDatasetStats(userId, filter);
+      const stats = await this.getDatasetStats(userId, filter, client);
 
       const issues: string[] = [];
       const recommendations: string[] = [];
@@ -431,8 +449,10 @@ class DatasetService {
 
   async deleteConversations(
     userId: string,
-    conversationIds: string[]
+    conversationIds: string[],
+    client?: unknown
   ): Promise<{ deleted_count: number }> {
+    const dbClient = getDbClient(client);
     console.debug(
       `[DatasetService] Delete requested for user ${userId}, conversations:`,
       conversationIds
@@ -440,7 +460,7 @@ class DatasetService {
 
     try {
       // Verify ownership
-      const { data: conversations, error: verifyError } = await supabase
+      const { data: conversations, error: verifyError } = await dbClient
         .from('conversations')
         .select('id')
         .eq('user_id', userId)
@@ -461,7 +481,7 @@ class DatasetService {
 
       // Delete cascade: evaluations -> messages -> conversations
       console.debug('[DatasetService] Step 1: Deleting message evaluations...');
-      const { data: messageIds } = await supabase
+      const { data: messageIds } = await dbClient
         .from('messages')
         .select('id')
         .in('conversation_id', ownedIds);
@@ -469,20 +489,20 @@ class DatasetService {
       const msgIds = messageIds?.map(m => m.id) || [];
 
       if (msgIds.length > 0) {
-        await supabase
+        await dbClient
           .from('message_evaluations')
           .delete()
           .in('message_id', msgIds);
       }
 
       console.debug('[DatasetService] Step 2: Deleting messages...');
-      await supabase
+      await dbClient
         .from('messages')
         .delete()
         .in('conversation_id', ownedIds);
 
       console.debug('[DatasetService] Step 3: Deleting conversations...');
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await dbClient
         .from('conversations')
         .delete()
         .in('id', ownedIds);
@@ -505,8 +525,10 @@ class DatasetService {
   async mergeConversations(
     userId: string,
     sourceConversationIds: string[],
-    targetConversationId: string
+    targetConversationId: string,
+    client?: unknown
   ): Promise<{ merged_count: number; messages_moved: number }> {
+    const dbClient = getDbClient(client);
     console.debug(
       `[DatasetService] Merge requested: ${sourceConversationIds.length} conversations into ${targetConversationId}`
     );
@@ -514,7 +536,7 @@ class DatasetService {
     try {
       // Verify ownership of all conversations
       const allIds = [...sourceConversationIds, targetConversationId];
-      const { data: conversations, error: verifyError } = await supabase
+      const { data: conversations, error: verifyError } = await dbClient
         .from('conversations')
         .select('id, title')
         .eq('user_id', userId)
@@ -539,7 +561,7 @@ class DatasetService {
 
       // Move messages from source to target
       console.debug('[DatasetService] Moving messages to target conversation...');
-      const { data: messages, error: fetchError } = await supabase
+      const { data: messages, error: fetchError } = await dbClient
         .from('messages')
         .select('id')
         .in('conversation_id', sourceConversationIds);
@@ -549,7 +571,7 @@ class DatasetService {
       const messageIds = messages?.map(m => m.id) || [];
 
       if (messageIds.length > 0) {
-        const { error: updateError } = await supabase
+        const { error: updateError } = await dbClient
           .from('messages')
           .update({ conversation_id: targetConversationId })
           .in('id', messageIds);
@@ -559,7 +581,7 @@ class DatasetService {
 
       // Delete source conversations
       console.debug('[DatasetService] Deleting source conversations...');
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await dbClient
         .from('conversations')
         .delete()
         .in('id', sourceConversationIds);

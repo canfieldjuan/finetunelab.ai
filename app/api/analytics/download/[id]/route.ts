@@ -120,6 +120,8 @@ export async function GET(
       csv: 'text/csv',
       json: 'application/json',
       report: 'application/json',
+      html: 'text/html',
+      pdf: 'application/pdf',
     };
 
     const contentType = contentTypeMap[exportRecord.format] || 'application/octet-stream';

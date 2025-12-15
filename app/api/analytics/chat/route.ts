@@ -1061,7 +1061,7 @@ async function executeAnalyticsTool(toolName: string, args: Record<string, unkno
         );
 
       case 'training_control':
-        const trainingResult = await executeTool('training_control', args, '', undefined, userId);
+        const trainingResult = await executeTool('training_control', args, '', undefined, userId, authClient);
         if (trainingResult.error) {
           return { error: trainingResult.error };
         }
@@ -1088,35 +1088,35 @@ async function executeAnalyticsTool(toolName: string, args: Record<string, unkno
         return await executeAdvancedAnalytics(args, userId, authHeader, authClient);
 
       case 'web_search':
-        const webSearchResult = await executeTool('web_search', args, '', undefined, userId);
+        const webSearchResult = await executeTool('web_search', args, '', undefined, userId, authClient);
         if (webSearchResult.error) {
           return { error: webSearchResult.error };
         }
         return webSearchResult.data;
 
       case 'dataset_manager':
-        const datasetResult = await executeTool('dataset_manager', { ...args, user_id: userId }, '', undefined, userId);
+        const datasetResult = await executeTool('dataset_manager', { ...args, user_id: userId }, '', undefined, userId, authClient);
         if (datasetResult.error) {
           return { error: datasetResult.error };
         }
         return datasetResult.data;
 
       case 'token_analyzer':
-        const tokenResult = await executeTool('token_analyzer', { ...args, userId }, '', undefined, userId);
+        const tokenResult = await executeTool('token_analyzer', { ...args, userId }, '', undefined, userId, authClient);
         if (tokenResult.error) {
           return { error: tokenResult.error };
         }
         return tokenResult.data;
 
       case 'analytics_export':
-        const exportResult = await executeTool('analytics_export', args, '', undefined, userId);
+        const exportResult = await executeTool('analytics_export', args, '', undefined, userId, authClient);
         if (exportResult.error) {
           return { error: exportResult.error };
         }
         return exportResult.data;
 
       case 'query_knowledge_graph':
-        const graphResult = await executeTool('query_knowledge_graph', args, '', undefined, userId);
+        const graphResult = await executeTool('query_knowledge_graph', args, '', undefined, userId, authClient);
         if (graphResult.error) {
           return { error: graphResult.error };
         }

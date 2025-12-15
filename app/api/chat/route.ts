@@ -137,6 +137,10 @@ export async function POST(req: NextRequest) {
 
     const allowDeepResearch = enableDeepResearch === true;
 
+    // Normalize model UUID for DB writes (allow human-readable names for routing logic)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const llmModelIdForDb: string | null = modelId && uuidRegex.test(modelId) ? modelId : null;
+
     const tools = Array.isArray(rawTools) ? rawTools.filter(isToolDefinition) : [];
     const activeTools = tools.length > 0 ? tools : undefined;
 
@@ -254,7 +258,8 @@ export async function POST(req: NextRequest) {
               title: title,
               widget_session_id: widgetSessionId,
               is_widget_session: true,
-              llm_model_id: modelId || null,
+              // Only store UUIDs; ignore human-readable model names for this column
+              llm_model_id: llmModelIdForDb,
               run_id: runId || null,
             })
             .select()
@@ -514,6 +519,13 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
     }
 
+    // In widget mode, if the selectedModelId is not a UUID (likely a friendly alias),
+    // prefer the legacy provider path to avoid unified registry lookups causing 404s.
+    if (isWidgetMode && selectedModelId && !uuidRegex.test(String(selectedModelId))) {
+      console.log('[API] [MODEL-SELECT] Widget alias detected, disabling unified client for fallback:', selectedModelId);
+      useUnifiedClient = false;
+    }
+
     // ========================================================================
     // BACKWARD COMPATIBILITY: Fall back to old config-based provider selection
     // ========================================================================
@@ -704,16 +716,39 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
           if (errorMsg.includes('Model not found') || errorMsg.includes('Cannot coerce the result')) {
             console.error('[API] Model not found:', selectedModelId);
-            return new Response(
-              JSON.stringify({
-                error: `Model not found. Please select a different model from the dropdown.`,
-                details: `The selected model (ID: ${selectedModelId.slice(0, 8)}...) no longer exists or you don't have access to it.`
-              }),
-              {
-                status: 404,
-                headers: { 'Content-Type': 'application/json' }
-              }
-            );
+            if (isWidgetMode) {
+              console.log('[API] Widget mode: Falling back to legacy default model');
+              // Fallback to legacy provider path using default configured model
+              llmResponse = await runLLMWithToolCalls(
+                enhancedMessages,
+                model,
+                temperature,
+                maxTokens,
+                tools,
+                toolCallHandler
+              );
+              // Load model config for metadata (legacy path)
+              try {
+                actualModelConfig = await modelManager.getModelConfig(model, userId || undefined);
+              } catch {}
+              messageMetadata = {
+                model_name: actualModelConfig?.name || model,
+                provider: actualModelConfig?.provider || provider,
+                model_id: model,
+                timestamp: new Date().toISOString()
+              };
+            } else {
+              return new Response(
+                JSON.stringify({
+                  error: `Model not found. Please select a different model from the dropdown.`,
+                  details: `The selected model (ID: ${selectedModelId.slice(0, 8)}...) no longer exists or you don't have access to it.`
+                }),
+                {
+                  status: 404,
+                  headers: { 'Content-Type': 'application/json' }
+                }
+              );
+            }
           }
 
           // Handle authentication errors (401)
@@ -1226,12 +1261,28 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 const errorMsg = modelError instanceof Error ? modelError.message : String(modelError);
                 if (errorMsg.includes('Model not found') || errorMsg.includes('Cannot coerce the result')) {
                   console.error('[API] Model not found during streaming:', selectedModelId);
-                  const errorData = `data: ${JSON.stringify({
-                    error: `Model not found. Please select a different model from the dropdown. The selected model no longer exists or you don't have access to it.`
-                  })}\n\n`;
-                  controller.enqueue(encoder.encode(errorData));
-                  controller.close();
-                  return;
+                  if (isWidgetMode) {
+                    console.log('[API] Widget mode (streaming): Falling back to legacy default model');
+                    for await (const chunk of streamLLMResponse(
+                      enhancedMessages,
+                      model,
+                      temperature,
+                      maxTokens,
+                      activeTools
+                    )) {
+                      accumulatedResponse += chunk;
+                      const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
+                      controller.enqueue(encoder.encode(data));
+                    }
+                    // After fallback streaming, continue to closing logic (no early return)
+                  } else {
+                    const errorData = `data: ${JSON.stringify({
+                      error: `Model not found. Please select a different model from the dropdown. The selected model no longer exists or you don't have access to it.`
+                    })}\n\n`;
+                    controller.enqueue(encoder.encode(errorData));
+                    controller.close();
+                    return;
+                  }
                 }
                 // Re-throw other errors
                 throw modelError;
