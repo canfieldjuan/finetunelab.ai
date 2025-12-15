@@ -203,7 +203,7 @@ export async function POST(req: NextRequest) {
     prompt_limit: (config.prompt_limit as number) || parseInt(process.env.BATCH_TESTING_DEFAULT_PROMPT_LIMIT || '25', 10),
     concurrency: (config.concurrency as number) || parseInt(process.env.BATCH_TESTING_DEFAULT_CONCURRENCY || '3', 10),
     delay_ms: (config.delay_ms as number) || parseInt(process.env.BATCH_TESTING_DEFAULT_DELAY_MS || '1000', 10),
-    source_path: config.source_path as string | undefined,
+    source_path: (config.source_path as string) || '',
     benchmark_id: config.benchmark_id as string | undefined,
     session_tag: config.session_tag as { session_id?: string; experiment_name?: string } | undefined,
     judge_config: config.judge_config as { enabled: boolean; model: string; criteria: string[] } | undefined
