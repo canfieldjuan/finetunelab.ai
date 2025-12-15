@@ -564,7 +564,8 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
         judgeConfig
       });
 
-      const response = await fetch('/api/batch-testing/run', {
+      // Use SSE streaming endpoint for serverless compatibility
+      const response = await fetch('/api/batch-testing/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -597,10 +598,58 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
         }
       }
 
-      const data = await response.json();
-      log.debug('BatchTesting', 'Batch test started successfully', { testRunId: data.test_run_id });
+      // Process SSE stream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
 
-      fetchTestRuns();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const event = JSON.parse(data);
+              log.debug('BatchTesting', 'SSE event received', { type: event.type });
+
+              if (event.type === 'started') {
+                log.debug('BatchTesting', 'Batch test started', { testRunId: event.test_run_id });
+                fetchTestRuns(); // Refresh to show the new run
+              } else if (event.type === 'progress' || event.type === 'result') {
+                // Refresh runs periodically during progress
+                fetchTestRuns();
+              } else if (event.type === 'completed') {
+                log.debug('BatchTesting', 'Batch test completed', {
+                  testRunId: event.test_run_id,
+                  completed: event.completed_prompts,
+                  failed: event.failed_prompts
+                });
+                fetchTestRuns();
+              } else if (event.type === 'error') {
+                log.error('BatchTesting', 'Batch test error', { error: event.error });
+                setError(event.error || 'Batch test failed');
+              }
+            } catch {
+              // Ignore parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      log.debug('BatchTesting', 'Batch test stream completed');
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.error('BatchTesting', 'Error starting test', {
