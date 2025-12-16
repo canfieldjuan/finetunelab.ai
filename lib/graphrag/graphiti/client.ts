@@ -95,11 +95,14 @@ export class GraphitiClient {
   private embedderConfig?: EmbedderConfig;
 
   constructor(config?: Partial<GraphitiConfig>) {
-    // Client-side needs NEXT_PUBLIC_ prefix, server-side works without
-    this.baseUrl = config?.baseUrl ||
-                   process.env.NEXT_PUBLIC_GRAPHITI_API_URL ||
-                   process.env.GRAPHITI_API_URL ||
-                   'http://localhost:8001';
+    // Server-side: use GRAPHITI_API_URL
+    // Client-side: use NEXT_PUBLIC_GRAPHITI_API_URL
+    const isServer = typeof window === 'undefined';
+    const envUrl = isServer
+      ? process.env.GRAPHITI_API_URL
+      : process.env.NEXT_PUBLIC_GRAPHITI_API_URL;
+
+    this.baseUrl = config?.baseUrl || envUrl || 'http://localhost:8001';
     // Use 5 minutes for document processing (embedding + entity extraction can be slow)
     // 60 minutes default for large document processing (1848 Q&As can take a while)
     const defaultTimeout = parseInt(process.env.GRAPHITI_TIMEOUT || '3600000', 10);
