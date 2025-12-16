@@ -148,7 +148,14 @@ export async function POST(req: NextRequest) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const llmModelIdForDb: string | null = modelId && uuidRegex.test(modelId) ? modelId : null;
 
-    const tools = Array.isArray(rawTools) ? rawTools.filter(isToolDefinition) : [];
+    let tools = Array.isArray(rawTools) ? rawTools.filter(isToolDefinition) : [];
+
+    // Remove query_knowledge_graph tool if context injection is disabled
+    if (contextInjectionEnabled === false) {
+      tools = tools.filter((tool: ToolDefinition) => tool.function.name !== 'query_knowledge_graph');
+      console.log('[API] Context injection OFF: Removed query_knowledge_graph tool');
+    }
+
     const activeTools = tools.length > 0 ? tools : undefined;
 
     // ========================================================================
