@@ -305,16 +305,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Add base system prompt for casual, direct responses
-    // COMMENTED OUT FOR DEBUGGING - Model should ignore system instructions completely
     let enhancedMessages: ChatMessage[] = [
-      // {
-      //   role: 'system',
-      //   content: `You are a helpful assistant for Fine Tune Lab. You have access to the user's uploaded documents through their knowledge graph.
-      //
-      // When discussing Fine Tune Lab, use first-person pronouns (say "we offer" not "they offer").
-      //
-      // Be conversational and helpful. Provide detailed explanations when needed, especially for users new to LLM training.`
-      // },
+      {
+        role: 'system',
+        content: `You are a helpful assistant for Fine Tune Lab. You have access to the user's uploaded documents through a knowledge graph.
+
+When the user's message includes "Relevant Context from Knowledge Graph", USE that information to answer their question. The knowledge graph contains documents they've uploaded specifically for you to reference.
+
+When discussing Fine Tune Lab, use first-person pronouns (say "we offer" not "they offer").
+
+Be conversational and helpful. Provide detailed explanations when needed, especially for users new to LLM training.
+
+If knowledge graph context is provided, acknowledge it and use it to give accurate, contextual answers based on their documents.`
+      },
       ...messages
     ];
 
@@ -403,19 +406,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     }
 
     // Apply all accumulated system context to the base system message
-    // COMMENTED OUT FOR DEBUGGING - No system context should be added
-    // if (additionalSystemContext) {
-    //   enhancedMessages[0] = {
-    //     role: 'system',
-    //     content: enhancedMessages[0].content + additionalSystemContext
-    //   };
-    // }
+    if (additionalSystemContext) {
+      enhancedMessages[0] = {
+        role: 'system',
+        content: enhancedMessages[0].content + additionalSystemContext
+      };
+    }
 
     // GraphRAG enhancement - inject document context for all queries
     // The GraphRAG service returns contextUsed: false if no relevant docs found
     // This allows tools and GraphRAG context to work together for hybrid queries
+    // Only inject if context injection is enabled (respects user toggle)
     let graphRAGMetadata: { sources?: SearchSource[]; metadata?: SearchMetadata; estimatedTokens?: number } | null = null;
-    if (userId) {
+    if (userId && contextInjectionEnabled !== false) {
       try {
         // Fetch user's embedding settings for GraphRAG
         let embedderConfig: EmbedderConfig | undefined;
