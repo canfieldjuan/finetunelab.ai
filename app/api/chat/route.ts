@@ -387,6 +387,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // Only inject if user has enabled it (default: true for backwards compatibility)
     let contextInjection: ContextInjectionResult | null = null;
     console.log('[API] ===== CONTEXT INJECTION CHECK =====');
+    console.log('[API] contextInjectionEnabled VALUE:', contextInjectionEnabled);
+    console.log('[API] contextInjectionEnabled TYPE:', typeof contextInjectionEnabled);
     console.log('[API] Condition check: userId && contextInjectionEnabled !== false');
     console.log('[API] userId:', !!userId);
     console.log('[API] contextInjectionEnabled !== false:', contextInjectionEnabled !== false);
@@ -432,6 +434,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // Only inject if context injection is enabled (respects user toggle)
     let graphRAGMetadata: { sources?: SearchSource[]; metadata?: SearchMetadata; estimatedTokens?: number } | null = null;
     console.log('[API] ===== GRAPHRAG INJECTION CHECK =====');
+    console.log('[API] contextInjectionEnabled VALUE:', contextInjectionEnabled);
+    console.log('[API] contextInjectionEnabled TYPE:', typeof contextInjectionEnabled);
     console.log('[API] Condition check: userId && contextInjectionEnabled !== false');
     console.log('[API] userId:', !!userId);
     console.log('[API] contextInjectionEnabled !== false:', contextInjectionEnabled !== false);
