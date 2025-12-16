@@ -338,9 +338,10 @@ If knowledge graph context is provided, acknowledge it and use it to give accura
     // Collect additional system context to append (not prepend)
     let additionalSystemContext = '';
 
-    // Inject memory context if provided
-    if (memory && (Object.keys(memory.userPreferences || {}).length > 0 ||
-                   Object.keys(memory.conversationMemories || {}).length > 0)) {
+    // Inject memory context if provided (only if context injection enabled)
+    if (memory && contextInjectionEnabled !== false &&
+        (Object.keys(memory.userPreferences || {}).length > 0 ||
+         Object.keys(memory.conversationMemories || {}).length > 0)) {
       const memoryContext = `Memory Context:
 User Preferences: ${JSON.stringify(memory.userPreferences, null, 2)}
 Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
@@ -349,8 +350,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       additionalSystemContext += `\n\n${memoryContext}`;
     }
 
-    // Inject conversation history from Supabase (last 10 messages, with character limit)
-    if (conversationId && userId) {
+    // Inject conversation history from Supabase (only if context injection enabled)
+    if (conversationId && userId && contextInjectionEnabled !== false) {
       try {
         const { data: recentMessages } = await supabase
           .from('messages')

@@ -255,6 +255,11 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     toggleEnabled: toggleContextInjection,
   } = useContextInjection();
 
+  // Debug: Watch contextInjectionEnabled in Chat component
+  useEffect(() => {
+    console.log('[Chat.tsx] ===== contextInjectionEnabled changed =====', contextInjectionEnabled);
+  }, [contextInjectionEnabled]);
+
   // Context tracking state - using useChatContext hook
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
   const { contextTrackerRef } = useChatContext(activeId, selectedModelId, selectedModel);
@@ -1566,6 +1571,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                       {/* Context Injection Toggle Button */}
                       <Button
                         onClick={() => {
+                          console.log('[Chat] Button 1 clicked, current state:', contextInjectionEnabled);
                           toggleContextInjection();
                           log.debug('Chat', 'Context Injection toggled', { to: !contextInjectionEnabled });
                         }}
@@ -1578,6 +1584,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                         }`}
                         title={contextInjectionEnabled ? "Context Injection On" : "Context Injection Off"}
                         aria-label={contextInjectionEnabled ? "Context Injection On" : "Context Injection Off"}
+                        key={`context-toggle-${contextInjectionEnabled}`}
                       >
                         <User className="w-4 h-4" />
                       </Button>
@@ -1660,6 +1667,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                   {/* Context Injection Toggle Button */}
                   <Button
                     onClick={() => {
+                      console.log('[Chat] Button 2 clicked, current state:', contextInjectionEnabled);
                       toggleContextInjection();
                       log.debug('Chat', 'Context Injection toggled', { to: !contextInjectionEnabled });
                     }}
@@ -1672,6 +1680,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                     }`}
                     title={contextInjectionEnabled ? "Context Injection On" : "Context Injection Off"}
                     aria-label={contextInjectionEnabled ? "Context Injection On" : "Context Injection Off"}
+                    key={`context-toggle-${contextInjectionEnabled}`}
                   >
                     <User className="w-4 h-4" />
                   </Button>

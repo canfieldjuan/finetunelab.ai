@@ -433,18 +433,36 @@ echo ""
 
 # Install dependencies
 echo "[$(date)] Installing dependencies..."
-echo "[$(date)] Current TRL version (before upgrade): $(pip show trl 2>/dev/null | grep Version || echo 'not installed')"
+
+# Verify Python is available
+if ! python --version >/dev/null 2>&1; then
+  echo "[$(date)] ✗ ERROR: Python not found in PATH"
+  echo "[$(date)] Waiting 60s before exit for log inspection..."
+  sleep 60
+  exit 1
+fi
+
+# Upgrade pip first to avoid version issues
+echo "[$(date)] Upgrading pip..."
+if python -m pip install --upgrade pip >/dev/null 2>&1; then
+  echo "[$(date)] ✓ Pip upgraded: $(python -m pip --version)"
+else
+  echo "[$(date)] ✗ WARNING: Failed to upgrade pip, continuing with existing version"
+fi
+
+echo "[$(date)] Current TRL version (before upgrade): $(python -m pip show trl 2>/dev/null | grep Version || echo 'not installed')"
 
 # Uninstall old trl first, then install fresh to avoid caching issues
-pip uninstall -y trl 2>/dev/null || true
-if pip install --no-cache-dir "trl==0.26.0" && \
-   pip install --no-cache-dir --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
+python -m pip uninstall -y trl 2>/dev/null || true
+
+if python -m pip install --no-cache-dir "trl==0.26.0" && \
+   python -m pip install --no-cache-dir --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
   echo "[$(date)] ✓ Dependencies installed successfully"
-  echo "[$(date)] TRL version (after upgrade): $(pip show trl | grep Version)"
+  echo "[$(date)] TRL version (after upgrade): $(python -m pip show trl | grep Version)"
   # Verify the import works
   python -c "from trl import DataCollatorForCompletionOnlyLM; print('[$(date)] ✓ DataCollatorForCompletionOnlyLM import verified')" || {
     echo "[$(date)] ✗ ERROR: DataCollatorForCompletionOnlyLM still not available after upgrade"
-    pip show trl
+    python -m pip show trl
     echo "[$(date)] Waiting 60s before exit for log inspection..."
     sleep 60
     exit 1
