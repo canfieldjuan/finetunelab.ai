@@ -562,9 +562,15 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
         log.warn('useChat', 'Sanitized API key to remove non-Latin1 characters');
       }
 
+      console.log('[useChat] ===== SENDING MESSAGE TO API =====');
+      console.log('[useChat] contextInjectionEnabled:', contextInjectionEnabled);
+      console.log('[useChat] typeof contextInjectionEnabled:', typeof contextInjectionEnabled);
+      console.log('[useChat] enableDeepResearch:', enableDeepResearch);
+      console.log('[useChat] enableThinking:', enableThinking);
+
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           ...(safeApiKey ? { "X-API-Key": safeApiKey } : {}),
         },

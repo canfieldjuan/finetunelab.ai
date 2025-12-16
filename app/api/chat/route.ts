@@ -137,6 +137,13 @@ export async function POST(req: NextRequest) {
 
     const allowDeepResearch = enableDeepResearch === true;
 
+    console.log('[API] ===== RECEIVED REQUEST =====');
+    console.log('[API] contextInjectionEnabled:', contextInjectionEnabled);
+    console.log('[API] typeof contextInjectionEnabled:', typeof contextInjectionEnabled);
+    console.log('[API] contextInjectionEnabled === false:', contextInjectionEnabled === false);
+    console.log('[API] contextInjectionEnabled !== false:', contextInjectionEnabled !== false);
+    console.log('[API] userId:', userId ? 'present' : 'missing');
+
     // Normalize model UUID for DB writes (allow human-readable names for routing logic)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const llmModelIdForDb: string | null = modelId && uuidRegex.test(modelId) ? modelId : null;
@@ -379,6 +386,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // Context Provider - inject user context before GraphRAG
     // Only inject if user has enabled it (default: true for backwards compatibility)
     let contextInjection: ContextInjectionResult | null = null;
+    console.log('[API] ===== CONTEXT INJECTION CHECK =====');
+    console.log('[API] Condition check: userId && contextInjectionEnabled !== false');
+    console.log('[API] userId:', !!userId);
+    console.log('[API] contextInjectionEnabled !== false:', contextInjectionEnabled !== false);
+    console.log('[API] Will inject context:', !!(userId && contextInjectionEnabled !== false));
+
     if (userId && contextInjectionEnabled !== false) {
       try {
         const userMessage = messages[messages.length - 1]?.content;
@@ -418,6 +431,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // This allows tools and GraphRAG context to work together for hybrid queries
     // Only inject if context injection is enabled (respects user toggle)
     let graphRAGMetadata: { sources?: SearchSource[]; metadata?: SearchMetadata; estimatedTokens?: number } | null = null;
+    console.log('[API] ===== GRAPHRAG INJECTION CHECK =====');
+    console.log('[API] Condition check: userId && contextInjectionEnabled !== false');
+    console.log('[API] userId:', !!userId);
+    console.log('[API] contextInjectionEnabled !== false:', contextInjectionEnabled !== false);
+    console.log('[API] Will inject GraphRAG:', !!(userId && contextInjectionEnabled !== false));
+
     if (userId && contextInjectionEnabled !== false) {
       try {
         // Fetch user's embedding settings for GraphRAG
