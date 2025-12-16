@@ -12,8 +12,15 @@ export async function POST(
   try {
     const { id: documentId } = await params;
 
+    console.log(`[GraphRAG Process] ===== PROCESSING REQUEST RECEIVED =====`);
+    console.log(`[GraphRAG Process] Document ID: ${documentId}`);
+    console.log(`[GraphRAG Process] Timestamp: ${new Date().toISOString()}`);
+
     const authHeader = request.headers.get('authorization');
+    console.log(`[GraphRAG Process] Has Auth Header: ${!!authHeader}`);
+
     if (!authHeader) {
+      console.error(`[GraphRAG Process] Missing authorization header`);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -33,15 +40,19 @@ export async function POST(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      console.error(`[GraphRAG Process] Auth failed:`, authError?.message);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    console.log(`[GraphRAG Process] Starting background processing for document ${documentId}`);
-    console.log(`[GraphRAG Process] User: ${user.id}`);
-    console.log(`[GraphRAG Process] Timestamp: ${new Date().toISOString()}`);
+    console.log(`[GraphRAG Process] ===== AUTHENTICATED =====`);
+    console.log(`[GraphRAG Process] User ID: ${user.id}`);
+    console.log(`[GraphRAG Process] User Email: ${user.email}`);
+    console.log(`[GraphRAG Process] GRAPHITI_API_URL: ${process.env.GRAPHITI_API_URL || 'NOT SET'}`);
+    console.log(`[GraphRAG Process] NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`[GraphRAG Process] Starting document processing...`);
 
     const result = await documentService.processDocument(supabase, documentId);
 

@@ -281,6 +281,11 @@ export class DocumentService {
     documentId: string,
     processingOptions: ProcessingOptions = {}
   ): Promise<ProcessingStatus> {
+    console.log(`[DocumentService] ===== PROCESS DOCUMENT START =====`);
+    console.log(`[DocumentService] Document ID: ${documentId}`);
+    console.log(`[DocumentService] Processing options:`, processingOptions);
+    console.log(`[DocumentService] Timestamp: ${new Date().toISOString()}`);
+
     const {
       maxRetries = this.DEFAULT_MAX_RETRIES,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -289,10 +294,18 @@ export class DocumentService {
 
     try {
       // Get document
+      console.log(`[DocumentService] Fetching document from database...`);
       const document = await documentStorage.getDocument(supabase, documentId);
       if (!document) {
+        console.error(`[DocumentService] Document not found: ${documentId}`);
         throw new Error('Document not found');
       }
+
+      console.log(`[DocumentService] Document found:`);
+      console.log(`[DocumentService]   - Filename: ${document.filename}`);
+      console.log(`[DocumentService]   - File type: ${document.fileType}`);
+      console.log(`[DocumentService]   - User ID: ${document.userId}`);
+      console.log(`[DocumentService]   - Already processed: ${document.processed}`);
 
       // Download from storage
       const { data, error } = await supabase.storage

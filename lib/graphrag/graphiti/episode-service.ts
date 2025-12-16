@@ -99,7 +99,12 @@ export class EpisodeService {
     chunks: Array<{ content: string; filename: string }>,
     userId: string
   ): Promise<BulkAddResult> {
+    console.log(`[EpisodeService] ===== BULK ADD DOCUMENTS =====`);
+    console.log(`[EpisodeService] User ID: ${userId}`);
+    console.log(`[EpisodeService] Number of chunks: ${chunks.length}`);
+
     if (chunks.length === 0) {
+      console.log(`[EpisodeService] No chunks to process, returning empty result`);
       return { episodeIds: [], totalEntities: 0, totalRelations: 0 };
     }
 
@@ -112,20 +117,32 @@ export class EpisodeService {
       group_id: userId,
     }));
 
-    console.log(`[EpisodeService] Sending ${episodes.length} chunks to bulk endpoint`);
+    console.log(`[EpisodeService] Built ${episodes.length} episodes`);
+    console.log(`[EpisodeService] First episode name: ${episodes[0]?.name}`);
+    console.log(`[EpisodeService] First episode body length: ${episodes[0]?.episode_body.length}`);
+    console.log(`[EpisodeService] Calling client.addEpisodesBulk()...`);
 
-    const response = await this.client.addEpisodesBulk({
-      episodes,
-      group_id: userId,
-    });
+    try {
+      const response = await this.client.addEpisodesBulk({
+        episodes,
+        group_id: userId,
+      });
 
-    console.log(`[EpisodeService] Bulk processing complete: ${response.episode_ids.length} episodes, ${response.total_entities} entities, ${response.total_relations} relations`);
+      console.log(`[EpisodeService] ===== BULK ADD SUCCESS =====`);
+      console.log(`[EpisodeService] Episode IDs: ${response.episode_ids.length}`);
+      console.log(`[EpisodeService] Total entities: ${response.total_entities}`);
+      console.log(`[EpisodeService] Total relations: ${response.total_relations}`);
 
-    return {
-      episodeIds: response.episode_ids,
-      totalEntities: response.total_entities,
-      totalRelations: response.total_relations,
-    };
+      return {
+        episodeIds: response.episode_ids,
+        totalEntities: response.total_entities,
+        totalRelations: response.total_relations,
+      };
+    } catch (error) {
+      console.error(`[EpisodeService] ===== BULK ADD FAILED =====`);
+      console.error(`[EpisodeService] Error:`, error);
+      throw error;
+    }
   }
 
   /**

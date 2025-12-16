@@ -100,6 +100,13 @@ export class GraphitiClient {
     // 60 minutes default for large document processing (1848 Q&As can take a while)
     const defaultTimeout = parseInt(process.env.GRAPHITI_TIMEOUT || '3600000', 10);
     this.timeout = config?.timeout || defaultTimeout;
+
+    console.log('[GraphitiClient] ===== CLIENT INITIALIZED =====');
+    console.log('[GraphitiClient] Base URL:', this.baseUrl);
+    console.log('[GraphitiClient] Config Base URL:', config?.baseUrl || 'not provided');
+    console.log('[GraphitiClient] GRAPHITI_API_URL:', process.env.GRAPHITI_API_URL || 'not set');
+    console.log('[GraphitiClient] Timeout:', this.timeout);
+    console.log('[GraphitiClient] NODE_ENV:', process.env.NODE_ENV);
   }
 
   /**
@@ -155,26 +162,61 @@ export class GraphitiClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
+    console.log(`[GraphitiClient] ===== HTTP REQUEST =====`);
+    console.log(`[GraphitiClient] URL: ${url}`);
+    console.log(`[GraphitiClient] Base URL: ${this.baseUrl}`);
+    console.log(`[GraphitiClient] Endpoint: ${endpoint}`);
+    console.log(`[GraphitiClient] Method: ${options.method || 'GET'}`);
+    console.log(`[GraphitiClient] Timeout: ${this.timeout}ms`);
+    console.log(`[GraphitiClient] Has Body: ${!!options.body}`);
+    if (options.body && typeof options.body === 'string') {
+      const bodyPreview = options.body.length > 500 ? options.body.substring(0, 500) + '...' : options.body;
+      console.log(`[GraphitiClient] Body Preview: ${bodyPreview}`);
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+    const startTime = Date.now();
+
     try {
+      console.log(`[GraphitiClient] Sending request to ${url}...`);
+
       const response = await fetch(url, {
         ...options,
         headers: this.buildHeaders(options.headers as Record<string, string>),
         signal: controller.signal,
       });
 
+      const duration = Date.now() - startTime;
+      console.log(`[GraphitiClient] Response received in ${duration}ms`);
+      console.log(`[GraphitiClient] Status: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`[GraphitiClient] ===== REQUEST FAILED =====`);
+        console.error(`[GraphitiClient] Status: ${response.status}`);
+        console.error(`[GraphitiClient] Error: ${errorText}`);
         throw new Error(
           `Graphiti API error (${response.status}): ${errorText}`
         );
       }
 
-      return await response.json() as T;
+      const data = await response.json() as T;
+      console.log(`[GraphitiClient] ===== REQUEST SUCCESS =====`);
+      console.log(`[GraphitiClient] Response data:`, JSON.stringify(data).substring(0, 500));
+
+      return data;
     } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[GraphitiClient] ===== REQUEST ERROR (after ${duration}ms) =====`);
+      console.error(`[GraphitiClient] URL: ${url}`);
+
       if (error instanceof Error) {
+        console.error(`[GraphitiClient] Error type: ${error.name}`);
+        console.error(`[GraphitiClient] Error message: ${error.message}`);
+        console.error(`[GraphitiClient] Error stack:`, error.stack);
+
         if (error.name === 'AbortError') {
           throw new Error(`Graphiti API timeout after ${this.timeout}ms`);
         }
