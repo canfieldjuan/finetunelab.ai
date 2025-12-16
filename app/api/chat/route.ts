@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     console.log('[API] typeof contextInjectionEnabled:', typeof contextInjectionEnabled);
     console.log('[API] contextInjectionEnabled === false:', contextInjectionEnabled === false);
     console.log('[API] contextInjectionEnabled !== false:', contextInjectionEnabled !== false);
-    console.log('[API] userId:', userId ? 'present' : 'missing');
+    console.log('[API] requestUserId:', requestUserId ? 'present' : 'missing');
 
     // Normalize model UUID for DB writes (allow human-readable names for routing logic)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
