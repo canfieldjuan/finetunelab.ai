@@ -35,6 +35,7 @@ async def main():
     embedder_config = EmbedderSettings(
         provider=os.getenv('EMBEDDER_PROVIDER', 'transformers'),
         model=os.getenv('EMBEDDER_MODEL', 'all-MiniLM-L6-v2'),
+        api_key=os.getenv('EMBEDDER_API_KEY') or os.getenv('OPENAI_API_KEY'),
         device=os.getenv('EMBEDDER_DEVICE', 'cpu'),
         batch_size=int(os.getenv('EMBEDDER_BATCH_SIZE', '32')),
         embedding_dim=int(os.getenv('EMBEDDER_EMBEDDING_DIM', '384')),

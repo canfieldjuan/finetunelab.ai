@@ -1,10 +1,17 @@
 // Storage service for persistent search summaries
 // Handles CRUD operations for search_summaries table in Supabase
+// Uses supabaseAdmin (service role) to bypass RLS for server-side operations
 
-import { supabase } from '@/lib/supabaseClient';
+import { supabaseAdmin } from '@/lib/supabaseClient';
 import type { SearchResultSummary, SavedSearchResult, ResearchJob } from './types';
 
 export class SearchStorageService {
+  private getClient() {
+    if (!supabaseAdmin) {
+      throw new Error('[SearchStorage] supabaseAdmin not configured - missing SUPABASE_SERVICE_ROLE_KEY');
+    }
+    return supabaseAdmin;
+  }
   /**
    * Save a summary for later use
    * Creates a new record in search_summaries table
@@ -21,7 +28,7 @@ export class SearchStorageService {
         resultUrl: summary.resultUrl,
       });
 
-      const { data, error } = await supabase
+      const { data, error } = await this.getClient()
         .from('search_summaries')
         .insert({
           user_id: userId,
@@ -102,7 +109,7 @@ export class SearchStorageService {
         userId,
       });
 
-      const { error } = await supabase
+      const { error } = await this.getClient()
         .from('search_summaries')
         .update({
           is_ingested: true,
@@ -143,7 +150,7 @@ export class SearchStorageService {
         ...options,
       });
 
-      let query = supabase
+      let query = this.getClient()
         .from('search_summaries')
         .select('*')
         .eq('user_id', userId);
@@ -222,7 +229,7 @@ export class SearchStorageService {
         userId,
       });
 
-      const { error, count } = await supabase
+      const { error, count } = await this.getClient()
         .from('search_summaries')
         .delete()
         .eq('user_id', userId)
@@ -259,7 +266,7 @@ export class SearchStorageService {
       });
 
       // Use Postgres full-text search or ILIKE for simple text matching
-      const { data, error } = await supabase
+      const { data, error } = await this.getClient()
         .from('search_summaries')
         .select('*')
         .eq('user_id', userId)
@@ -306,7 +313,7 @@ export class SearchStorageService {
     userId: string
   ): Promise<{ total: number; ingested: number; saved: number }> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.getClient()
         .from('search_summaries')
         .select('is_ingested, is_saved')
         .eq('user_id', userId);
@@ -335,7 +342,7 @@ export class SearchStorageService {
   async createResearchJob(job: ResearchJob): Promise<{ success: boolean; error?: string }> {
     try {
       console.log('[SearchStorage] Creating research job:', job.id);
-      const { error } = await supabase
+      const { error } = await this.getClient()
         .from('research_jobs')
         .insert({
           id: job.id,
@@ -366,7 +373,7 @@ export class SearchStorageService {
    */
   async updateResearchJob(job: ResearchJob): Promise<{ success: boolean; error?: string }> {
     try {
-      const { error } = await supabase
+      const { error } = await this.getClient()
         .from('research_jobs')
         .update({
           status: job.status,
@@ -397,7 +404,7 @@ export class SearchStorageService {
    */
   async getResearchJob(jobId: string): Promise<ResearchJob | null> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.getClient()
         .from('research_jobs')
         .select('*')
         .eq('id', jobId)

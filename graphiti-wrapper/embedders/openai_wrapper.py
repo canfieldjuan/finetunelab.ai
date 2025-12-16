@@ -51,22 +51,26 @@ class OpenAIEmbedderWrapper(EmbedderClient):
 
     async def create(self, input_data: str) -> List[float]:
         await self._ensure_client()
-        def _run() -> List[float]:
-            emb = self._client.create(input_data)
-            vec = emb.tolist() if hasattr(emb, "tolist") else list(emb)
-            if self.embedding_dim and len(vec) != self.embedding_dim:
-                logger.warning("Embedding dim mismatch: got %d expected %d", len(vec), self.embedding_dim)
-            return vec
-        return await asyncio.to_thread(_run)
+        # Call underlying embedder (may be sync or async)
+        emb = self._client.create(input_data)
+        # Await if it's a coroutine
+        if asyncio.iscoroutine(emb):
+            emb = await emb
+        vec = emb.tolist() if hasattr(emb, "tolist") else list(emb)
+        if self.embedding_dim and len(vec) != self.embedding_dim:
+            logger.warning("Embedding dim mismatch: got %d expected %d", len(vec), self.embedding_dim)
+        return vec
 
     async def create_batch(self, input_data_list: List[str]) -> List[List[float]]:
         await self._ensure_client()
         if not input_data_list:
             return []
-        def _run_batch() -> List[List[float]]:
-            embs = self._client.create_batch(input_data_list)
-            out = [e.tolist() if hasattr(e, "tolist") else list(e) for e in embs]
-            if self.embedding_dim and out and len(out[0]) != self.embedding_dim:
-                logger.warning("Embedding dim mismatch: got %d expected %d", len(out[0]), self.embedding_dim)
-            return out
-        return await asyncio.to_thread(_run_batch)
+        # Call underlying embedder (may be sync or async)
+        embs = self._client.create_batch(input_data_list)
+        # Await if it's a coroutine
+        if asyncio.iscoroutine(embs):
+            embs = await embs
+        out = [e.tolist() if hasattr(e, "tolist") else list(e) for e in embs]
+        if self.embedding_dim and out and len(out[0]) != self.embedding_dim:
+            logger.warning("Embedding dim mismatch: got %d expected %d", len(out[0]), self.embedding_dim)
+        return out

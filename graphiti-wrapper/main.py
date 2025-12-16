@@ -2,6 +2,7 @@
 Minimal FastAPI wrapper for graphiti-core
 Exposes native graphiti-core API for Next.js client
 """
+import asyncio
 import logging
 from datetime import datetime
 from typing import Annotated
@@ -467,8 +468,21 @@ async def add_episodes_bulk(
             group_id=request.group_id,
         )
 
-        # Extract episode IDs from result
-        episode_ids = [ep.uuid for ep in result.episodes] if hasattr(result, 'episodes') and result.episodes else []
+        # Extract episode IDs from result (handle async/sync iterables)
+        episode_ids = []
+        if hasattr(result, 'episodes') and result.episodes:
+            episodes = result.episodes
+            # If episodes is a coroutine, await it
+            if asyncio.iscoroutine(episodes):
+                episodes = await episodes
+            # If episodes is an async generator, collect items
+            if hasattr(episodes, '__aiter__'):
+                async for ep in episodes:
+                    episode_ids.append(ep.uuid)
+            else:
+                # Regular iterable
+                for ep in episodes:
+                    episode_ids.append(ep.uuid)
 
         logger.info(f"Bulk upload complete: {len(episode_ids)} episodes added for group {request.group_id}")
 
