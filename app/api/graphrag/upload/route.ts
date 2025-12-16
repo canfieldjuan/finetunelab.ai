@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { documentService } from '@/lib/graphrag';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes for document processing
 
 export async function POST(request: NextRequest) {
   try {
@@ -73,53 +74,57 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Trigger background processing (fire-and-forget) only if not already processed
+    // Process document SYNCHRONOUSLY (like promote-to-graph does)
+    console.log(`[GraphRAG Upload] ===== STARTING SYNCHRONOUS PROCESSING =====`);
+    console.log(`[GraphRAG Upload] Document ID: ${document.id}`);
+    console.log(`[GraphRAG Upload] Filename: ${document.filename}`);
+    console.log(`[GraphRAG Upload] Already processed: ${document.processed}`);
+    console.log(`[GraphRAG Upload] Timestamp: ${new Date().toISOString()}`);
+
     if (!document.processed) {
-      const baseUrl = request.nextUrl.origin;
-      const processUrl = `${baseUrl}/api/graphrag/process/${document.id}`;
+      console.log(`[GraphRAG Upload] Processing document synchronously...`);
 
-      console.log(`[GraphRAG Upload] ===== TRIGGERING BACKGROUND PROCESSING =====`);
-      console.log(`[GraphRAG Upload] Document ID: ${document.id}`);
-      console.log(`[GraphRAG Upload] Filename: ${document.filename}`);
-      console.log(`[GraphRAG Upload] Process URL: ${processUrl}`);
-      console.log(`[GraphRAG Upload] Base URL: ${baseUrl}`);
-      console.log(`[GraphRAG Upload] Has Auth Header: ${!!authHeader}`);
-      console.log(`[GraphRAG Upload] Timestamp: ${new Date().toISOString()}`);
+      const result = await documentService.processDocument(supabase, document.id);
 
-      fetch(processUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/json',
-        },
-      }).then(async (response) => {
-        console.log(`[GraphRAG Upload] Background processing response status: ${response.status}`);
-        if (!response.ok) {
-          const text = await response.text();
-          console.error(`[GraphRAG Upload] Background processing failed with status ${response.status}:`, text);
-        }
-      }).catch(err => {
-        console.error(`[GraphRAG Upload] Failed to trigger background processing for ${document.id}:`, err);
-        console.error(`[GraphRAG Upload] Error details:`, {
-          message: err.message,
-          stack: err.stack,
-        });
+      if (result.error) {
+        console.error(`[GraphRAG Upload] Processing failed:`, result.error);
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Failed to process document',
+            details: result.error,
+          },
+          { status: 500 }
+        );
+      }
+
+      console.log(`[GraphRAG Upload] ===== PROCESSING COMPLETE =====`);
+      console.log(`[GraphRAG Upload] Episodes created: ${result.episodeIds.length}`);
+      console.log(`[GraphRAG Upload] Episode IDs: ${result.episodeIds.join(', ')}`);
+
+      return NextResponse.json({
+        success: true,
+        document,
+        processed: true,
+        episodeIds: result.episodeIds,
+        message: isNewVersion
+          ? `New version (v${document.version}) created and processed successfully`
+          : `File uploaded and processed successfully`,
+        isNewVersion,
       });
-
-      console.log(`[GraphRAG Upload] Document ${document.id} uploaded, processing in background`);
     } else {
       console.log(`[GraphRAG Upload] Document ${document.id} already processed (version update)`);
-    }
 
-    return NextResponse.json({
-      success: true,
-      document,
-      message: isNewVersion
-        ? `New version (v${document.version}) created and processed successfully`
-        : `File uploaded successfully. Processing in background...`,
-      processing: !document.processed,
-      isNewVersion,
-    });
+      return NextResponse.json({
+        success: true,
+        document,
+        processed: true,
+        message: isNewVersion
+          ? `New version (v${document.version}) created (already processed)`
+          : `File uploaded (already processed)`,
+        isNewVersion,
+      });
+    }
   } catch (error) {
     console.error('[GraphRAG Upload] Error:', error);
 
