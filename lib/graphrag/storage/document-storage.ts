@@ -190,52 +190,35 @@ export class DocumentStorage {
         console.log(`[DocumentStorage] Minimal query succeeded: ${minimalTest.data?.length || 0} docs`);
       }
 
-      // Try query without large fields (metadata, neo4j_episode_ids)
-      console.log('[DocumentStorage] Attempting query without large JSONB fields...');
-      const simpleStart = Date.now();
-      const simpleResult = await supabase
+      // Query with all essential fields INCLUDING neo4j_episode_ids for status tracking
+      console.log('[DocumentStorage] Fetching documents with all essential fields...');
+      const queryStart = Date.now();
+      const result = await supabase
         .from('documents')
-        .select('id, user_id, filename, file_type, upload_path, document_hash, processed, created_at, updated_at')
+        .select('id, user_id, filename, file_type, upload_path, document_hash, processed, neo4j_episode_ids, version, parent_id, created_at, updated_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100);
 
-      const simpleDuration = Date.now() - simpleStart;
-      console.log(`[DocumentStorage] Optimized query completed in ${simpleDuration}ms`);
+      const queryDuration = Date.now() - queryStart;
+      console.log(`[DocumentStorage] Query completed in ${queryDuration}ms`);
 
-      if (simpleResult.error) {
-        console.error('[DocumentStorage] Query failed:', simpleResult.error);
-        throw new Error(`Failed to get user documents: ${simpleResult.error.message}`);
+      if (result.error) {
+        console.error('[DocumentStorage] Query failed:', result.error);
+        throw new Error(`Failed to get user documents: ${result.error.message}`);
       }
 
-      console.log(`[DocumentStorage] Query succeeded, retrieved ${simpleResult.data?.length || 0} documents`);
+      console.log(`[DocumentStorage] Query succeeded, retrieved ${result.data?.length || 0} documents`);
 
       // Check for null/undefined data
-      if (!simpleResult.data) {
+      if (!result.data) {
         console.warn('[DocumentStorage] Query returned null data');
         return [];
       }
 
-interface SimpleDocument {
-  id: string;
-  user_id: string;
-  filename: string;
-  file_type: string;
-  upload_path: string;
-  document_hash: string;
-  processed: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-// ...
-
-      // Map results with default/empty values for excluded fields
-      const documents = simpleResult.data.map((doc: SimpleDocument) => ({
+      // Map results with empty metadata (excluded for performance)
+      const documents = result.data.map((doc) => ({
         ...doc,
-        version: 1,
-        parent_id: null,
-        neo4j_episode_ids: [],
         metadata: {}
       }));
 

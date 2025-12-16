@@ -169,15 +169,16 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
       for (const file of selectedFiles) {
         // Skip already uploaded files
         if (fileSuccess.has(file.name)) continue;
-        
+
         await uploadSingleFile(file);
       }
 
-      // Call callback after all uploads
+      // Call callback immediately after uploads complete
+      console.log('[DocumentUpload] All uploads complete, triggering refresh');
       onUploadComplete?.();
 
-      // Auto-clear successful files after 3 seconds
-      console.log('[DocumentUpload] Scheduling auto-clear in 3 seconds for', fileSuccess.size, 'files');
+      // Auto-clear successful files after 1.5 seconds (faster feedback)
+      console.log('[DocumentUpload] Scheduling auto-clear in 1.5 seconds for', fileSuccess.size, 'files');
       setTimeout(() => {
         console.log('[DocumentUpload] Auto-clear executing, removing successful files');
         setSelectedFiles(prev => {
@@ -188,7 +189,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
         setFileSuccess(new Set());
         setFileErrors({});
         setFileProgress({});
-      }, 3000);
+      }, 1500);
 
     } finally {
       setIsUploading(false);
@@ -326,7 +327,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {(file.size / 1024 / 1024).toFixed(2)} MB
-                        {isSuccess && ' - Uploaded'}
+                        {isSuccess && ' - Uploaded! Processing in background...'}
                         {error && ` - ${error}`}
                       </p>
                     </div>
