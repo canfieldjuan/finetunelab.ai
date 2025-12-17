@@ -7,7 +7,7 @@ import { searchService } from '../graphiti';
 import { getGraphitiClient, type EmbedderConfig } from '../graphiti/client';
 import { graphragConfig } from '../config';
 import { classifyQuery } from '../utils/query-classifier';
-import type { SearchSource, SearchMetadata } from '../types';
+import type { SearchSource, GraphRAGRetrievalMetadata } from '../types';
 
 // ============================================================================
 // Types
@@ -25,7 +25,7 @@ export interface EnhancedPrompt {
   prompt: string;
   contextUsed: boolean;
   sources?: SearchSource[];
-  metadata?: SearchMetadata;
+  metadata?: GraphRAGRetrievalMetadata;
 }
 
 export interface Citation {
@@ -107,8 +107,18 @@ export class GraphRAGService {
 
       let filteredSources = searchResult.sources || [];
 
+      // DIAGNOSTIC: Log all sources BEFORE filtering
+      console.log('[GraphRAG] Sources returned from search:', filteredSources.length);
+      if (filteredSources.length > 0) {
+        const scores = filteredSources.map(s => (s.confidence * 100).toFixed(1) + '%').join(', ');
+        console.log('[GraphRAG] Confidence scores:', scores);
+        console.log('[GraphRAG] Threshold:', typeof minConfidence === 'number' ? (minConfidence * 100).toFixed(1) + '%' : 'none');
+      }
+
       if (typeof minConfidence === 'number') {
+        const beforeFilter = filteredSources.length;
         filteredSources = filteredSources.filter(source => source.confidence >= minConfidence);
+        console.log(`[GraphRAG] After threshold filter: ${filteredSources.length}/${beforeFilter} sources remaining`);
       }
 
       if (typeof maxSources === 'number' && maxSources > 0) {
@@ -117,7 +127,8 @@ export class GraphRAGService {
 
       // Check if we got useful results after filtering
       if (filteredSources.length === 0) {
-        console.log('[GraphRAG] No relevant context found');
+        console.log('[GraphRAG] ❌ No relevant context found - all sources filtered out by threshold');
+        console.log('[GraphRAG] 💡 TIP: Lower GRAPHRAG_SEARCH_THRESHOLD in .env.local to see more results');
         return {
           prompt: userMessage,
           contextUsed: false,
@@ -140,7 +151,17 @@ export class GraphRAGService {
         prompt: enhancedPrompt,
         contextUsed: true,
         sources: filteredSources,
-        metadata: includeMetadata ? searchResult.metadata : undefined,
+        metadata: includeMetadata ? {
+          ...searchResult.metadata,
+          graph_used: true,
+          nodes_retrieved: filteredSources.length,
+          context_chunks_used: filteredSources.length,
+          retrieval_time_ms: searchResult.metadata.queryTime,
+          context_relevance_score: filteredSources.length > 0
+            ? filteredSources.reduce((sum, s) => sum + s.confidence, 0) / filteredSources.length
+            : 0,
+          answer_grounded_in_graph: filteredSources.length > 0,
+        } : undefined,
       };
     } catch (error) {
       // Check if it's a connection error (service not running)

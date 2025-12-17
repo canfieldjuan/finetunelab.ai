@@ -8,7 +8,15 @@ export * from './types';
 
 // Configuration
 export { graphragConfig, validateGraphRAGConfig } from './config';
-export type { GraphRAGConfig, Neo4jConfig, SearchConfig, ProcessingConfig } from './types';
+export type {
+  GraphRAGConfig,
+  Neo4jConfig,
+  SearchConfig,
+  ProcessingConfig,
+  SearchMetadata,
+  SearchSource,
+  GraphRAGRetrievalMetadata,
+} from './types';
 
 // Parsers
 export { parseDocument, parserFactory } from './parsers';
