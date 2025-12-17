@@ -118,6 +118,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
 
 export const runtime = 'nodejs';
 
@@ -157,25 +158,39 @@ export async function GET(
   }
 
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Try API key authentication first (for SDK access)
+    const apiKeyValidation = await validateRequestWithScope(request.headers, 'training');
+    let userId: string | null = null;
 
-    const supabaseAuth = createClient(
-      supabaseUrl,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    if (apiKeyValidation.isValid && apiKeyValidation.userId) {
+      // API key authentication successful
+      userId = apiKeyValidation.userId;
+      console.log('[Predictions API] Authenticated via API key:', userId);
+    } else {
+      // Fall back to bearer token authentication (for web UI)
+      const authHeader = request.headers.get('authorization');
+      if (!authHeader) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAuth.auth.getUser();
+      const supabaseAuth = createClient(
+        supabaseUrl,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
 
-    if (authError || !user) {
-      console.log('[Predictions API] Auth failed:', authError?.message);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseAuth.auth.getUser();
+
+      if (authError || !user) {
+        console.log('[Predictions API] Auth failed:', authError?.message);
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      userId = user.id;
+      console.log('[Predictions API] Authenticated via bearer token:', userId);
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -184,7 +199,7 @@ export async function GET(
       .from('local_training_jobs')
       .select('id')
       .eq('id', jobId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single();
 
     if (jobQuery.error || !jobQuery.data) {
