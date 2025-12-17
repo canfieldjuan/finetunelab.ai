@@ -28,6 +28,7 @@
  */
 
 export { FinetuneLabClient, FinetuneLabError } from './client';
+export { TrainingPredictionsClient } from './training-predictions';
 
 export type {
   // Client config
@@ -48,6 +49,14 @@ export type {
   CreateTraceRequest,
   AnalyticsDataFilters,
   AnalyticsDataResponse,
+  // Training predictions types
+  TrainingPrediction,
+  PredictionsResponse,
+  EpochSummary,
+  EpochsResponse,
+  EpochMetrics,
+  TrendsResponse,
+  GetPredictionsFilters,
   // Error types
   FinetuneLabErrorDetails,
 } from './types';

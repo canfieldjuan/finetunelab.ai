@@ -158,13 +158,13 @@ export interface TracesResponse {
 }
 
 export interface CreateTraceRequest {
-  traceId: string;
-  spanId: string;
+  traceId?: string; // Auto-generated if not provided
+  spanId?: string; // Auto-generated if not provided
   spanName: string;
-  startTime: string;
+  startTime?: string; // Auto-generated if not provided
   endTime?: string;
   durationMs?: number;
-  operationType?: string;
+  operationType: string;
   modelName?: string;
   modelProvider?: string;
   inputTokens?: number;
@@ -172,6 +172,7 @@ export interface CreateTraceRequest {
   status?: string;
   errorMessage?: string;
   metadata?: Record<string, unknown>;
+  conversationId?: string;
 }
 
 export interface AnalyticsDataFilters {
@@ -209,3 +210,17 @@ export interface FinetuneLabErrorDetails {
   code?: number;
   param?: string;
 }
+
+// ============================================================================
+// Training Predictions Types (re-exported from training-predictions.ts)
+// ============================================================================
+
+export type {
+  TrainingPrediction,
+  PredictionsResponse,
+  EpochSummary,
+  EpochsResponse,
+  EpochMetrics,
+  TrendsResponse,
+  GetPredictionsFilters,
+} from './training-predictions';
