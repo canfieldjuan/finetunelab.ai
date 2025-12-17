@@ -17,7 +17,57 @@ import type {
   PlanLimits
 } from "@/lib/subscriptions/types";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
+import { ScheduledEvaluationManager } from "@/components/evaluation/ScheduledEvaluationManager";
 import { safeJsonParse } from "@/lib/utils/safe-json";
+
+// Usage Card Component
+interface UsageCardProps {
+  label: string;
+  current: number;
+  limit?: number;
+  percentage?: number;
+  unit?: string;
+}
+
+function UsageCard({ label, current, limit = -1, percentage, unit }: UsageCardProps) {
+  const isUnlimited = limit === -1;
+  const displayLimit = isUnlimited ? '∞' : limit?.toLocaleString();
+  const displayCurrent = unit ? `${current.toLocaleString()} ${unit}` : current.toLocaleString();
+  const displayLimitWithUnit = unit && !isUnlimited ? `${displayLimit} ${unit}` : displayLimit;
+
+  // Determine progress bar color based on percentage
+  const getProgressColor = () => {
+    if (isUnlimited || !percentage) return 'bg-primary';
+    if (percentage >= 90) return 'bg-red-500';
+    if (percentage >= 75) return 'bg-yellow-500';
+    return 'bg-primary';
+  };
+
+  return (
+    <div className="p-4 border border-border rounded-lg bg-background hover:bg-accent/50 transition-colors">
+      <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      <div className="text-2xl font-bold text-foreground mt-1">
+        {displayCurrent}
+        <span className="text-sm text-muted-foreground font-normal">
+          {' '}/ {displayLimitWithUnit}
+        </span>
+      </div>
+      {percentage !== undefined && !isUnlimited && (
+        <div className="mt-2">
+          <div className="w-full bg-muted rounded-full h-2">
+            <div
+              className={`${getProgressColor()} h-2 rounded-full transition-all`}
+              style={{ width: `${Math.min(percentage, 100)}%` }}
+            />
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {percentage.toFixed(1)}% used
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AccountPage() {
   const { user, signOut, session } = useAuth();
@@ -34,6 +84,11 @@ export default function AccountPage() {
     api_calls: number;
     storage: number;
     models: number;
+    batch_test_runs: number;
+    scheduled_eval_runs: number;
+    chat_messages: number;
+    inference_calls: number;
+    compute_minutes: number;
   } | null>(null);
   const [loadingUsage, setLoadingUsage] = useState(true);
 
@@ -246,59 +301,84 @@ export default function AccountPage() {
           {!loadingUsage && usage && limits && (
             <div className="bg-card border border-border rounded-lg shadow-sm p-6 mb-8">
               <h2 className="text-xl font-semibold text-foreground mb-4">Current Usage</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <span className="text-sm font-medium text-muted-foreground">API Calls</span>
-                  <div className="text-2xl font-bold text-foreground mt-1">
-                    {usage.api_calls?.toLocaleString() || 0}
-                    <span className="text-sm text-muted-foreground font-normal">
-                      {' '}/ {limits.api_calls_per_month === -1 ? '∞' : limits.api_calls_per_month?.toLocaleString()}
-                    </span>
-                  </div>
-                  {percentages && (
-                    <div className="mt-2 w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-primary h-2 rounded-full"
-                        style={{ width: `${Math.min(percentages.api_calls, 100)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-muted-foreground">Storage</span>
-                  <div className="text-2xl font-bold text-foreground mt-1">
-                    {usage.storage_mb?.toLocaleString() || 0} MB
-                    <span className="text-sm text-muted-foreground font-normal">
-                      {' '}/ {limits.storage_mb === -1 ? '∞' : `${limits.storage_mb?.toLocaleString()} MB`}
-                    </span>
-                  </div>
-                  {percentages && (
-                    <div className="mt-2 w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-primary h-2 rounded-full"
-                        style={{ width: `${Math.min(percentages.storage, 100)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-muted-foreground">Models</span>
-                  <div className="text-2xl font-bold text-foreground mt-1">
-                    {usage.models || 0}
-                    <span className="text-sm text-muted-foreground font-normal">
-                      {' '}/ {limits.models_limit === -1 ? '∞' : limits.models_limit}
-                    </span>
-                  </div>
-                  {percentages && (
-                    <div className="mt-2 w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-primary h-2 rounded-full"
-                        style={{ width: `${Math.min(percentages.models, 100)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {/* API & Inference */}
+                <UsageCard
+                  label="API Calls"
+                  current={usage.api_calls || 0}
+                  limit={limits.api_calls_per_month}
+                  percentage={percentages?.api_calls}
+                />
+                <UsageCard
+                  label="Inference Calls"
+                  current={usage.inference_calls || 0}
+                  limit={limits.inference_calls_per_month}
+                  percentage={percentages?.inference_calls}
+                />
+
+                {/* Operations */}
+                <UsageCard
+                  label="Chat Messages"
+                  current={usage.chat_messages || 0}
+                  limit={limits.chat_messages_per_month}
+                  percentage={percentages?.chat_messages}
+                />
+                <UsageCard
+                  label="Batch Tests"
+                  current={usage.batch_test_runs || 0}
+                  limit={limits.batch_test_runs_per_month}
+                  percentage={percentages?.batch_test_runs}
+                />
+                <UsageCard
+                  label="Scheduled Evals"
+                  current={usage.scheduled_eval_runs || 0}
+                  limit={limits.scheduled_eval_runs_per_month}
+                  percentage={percentages?.scheduled_eval_runs}
+                />
+
+                {/* Resources */}
+                <UsageCard
+                  label="Storage"
+                  current={usage.storage_mb || 0}
+                  limit={limits.storage_mb}
+                  percentage={percentages?.storage}
+                  unit="MB"
+                />
+                <UsageCard
+                  label="Models"
+                  current={usage.models || 0}
+                  limit={limits.models_limit}
+                  percentage={percentages?.models}
+                />
+                <UsageCard
+                  label="Compute Time"
+                  current={usage.compute_minutes || 0}
+                  limit={limits.compute_minutes_per_month}
+                  percentage={percentages?.compute_minutes}
+                  unit="min"
+                />
               </div>
+
+              {/* Hidden metrics (tracking but not displayed prominently) */}
+              <details className="mt-6">
+                <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
+                  View additional metrics
+                </summary>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-border">
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">Training Jobs</span>
+                    <div className="text-lg font-semibold text-foreground mt-1">
+                      {usage.training_jobs || 0}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">Tokens Used</span>
+                    <div className="text-lg font-semibold text-foreground mt-1">
+                      {usage.tokens?.toLocaleString() || 0}
+                    </div>
+                  </div>
+                </div>
+              </details>
             </div>
           )}
 
@@ -308,6 +388,11 @@ export default function AccountPage() {
               <NotificationSettings sessionToken={session.access_token} />
             </div>
           )}
+
+          {/* Scheduled Evaluations */}
+          <div className="mb-8">
+            <ScheduledEvaluationManager />
+          </div>
 
           {/* Danger Zone */}
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
