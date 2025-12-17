@@ -84,3 +84,14 @@ test_provider_secret_decrypt.js
 *.tsbuildinfo
 next-env.d.ts
 lib/training/configs/job_*.json
+
+# SDK build artifacts (published to npm - don't commit generated files)
+packages/*/dist/
+packages/*/build/
+packages/*/node_modules/
+!packages/*/node_modules/.package-lock.json
+
+# Python package build artifacts (published to PyPI - don't commit generated files)
+python-package/dist/
+python-package/build/
+python-package/*.egg-info/
