@@ -830,8 +830,11 @@ async function processSinglePrompt(
 
     if (auth.mode === 'apiKey') {
       headers['X-API-Key'] = auth.apiKey;
-    } else {
+    } else if (auth.mode === 'session') {
       headers['Authorization'] = auth.authorizationHeader;
+    } else if (auth.mode === 'serviceRole') {
+      // Use service role key for internal service calls
+      headers['Authorization'] = `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
     }
 
     const chatResponse = await fetch(`${baseUrl}/api/chat`, {
