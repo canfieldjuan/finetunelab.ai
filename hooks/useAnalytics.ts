@@ -22,7 +22,6 @@ type AnalyticsEvaluation = {
   message_id: string;
   rating?: number;
   success?: boolean;
-  failure_tags?: string[];
   created_at: string;
 };
 
@@ -257,8 +256,8 @@ export function useAnalytics({ userId, timeRange = '30d', filters, settings }: U
         // Fetch evaluations
         const { data: evaluations, error: evalError } = await supabase
           .from('message_evaluations')
-          .select('message_id, rating, success, failure_tags, created_at')
-          .eq('evaluator_id', userId)
+          .select('message_id, rating, success, created_at')
+          .eq('user_id', userId)
           .gte('created_at', dateFilter);
 
         if (evalError) throw evalError;
@@ -670,7 +669,13 @@ function processAnalyticsData(
 }
 
 // Aggregate failure tags from evaluations
+// Note: failure_tags column removed from schema - returning empty array
 export function aggregateFailureTags(evaluations: AnalyticsEvaluation[]): Array<{ tag: string; count: number }> {
+  // TODO: Re-implement when failure_tags is added back to message_evaluations table
+  console.log('[Analytics] Failure tags feature disabled (column not in database)');
+  return [];
+
+  /* Original implementation - restore when column exists:
   const tagCounts: Record<string, number> = {};
 
   evaluations.forEach((e) => {
@@ -692,6 +697,7 @@ export function aggregateFailureTags(evaluations: AnalyticsEvaluation[]): Array<
   });
 
   return result;
+  */
 }
 
 // Token usage by day
