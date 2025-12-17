@@ -37,6 +37,15 @@ export async function POST(request: NextRequest) {
   console.log('[Webhook] Received Stripe webhook');
 
   try {
+    // 0. Validate Stripe configuration at runtime
+    if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder_for_build') {
+      console.error('[Webhook] STRIPE_SECRET_KEY not configured');
+      return NextResponse.json(
+        { error: 'Stripe not configured' },
+        { status: 500 }
+      );
+    }
+
     // 1. Get raw body for signature verification
     const body = await request.text();
     const headersList = await headers();
