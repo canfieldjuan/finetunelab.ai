@@ -10,11 +10,18 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
  * Types of usage metrics we enforce
  */
 export type UsageMetricType =
+  // Existing metrics
   | 'api_call'
   | 'storage_mb'
   | 'model_created'
   | 'training_job'
-  | 'token_usage';
+  | 'token_usage'
+  // NEW: Critical resource metrics (added 2025-12-17)
+  | 'batch_test_run'
+  | 'scheduled_eval_run'
+  | 'chat_message'
+  | 'inference_call'
+  | 'compute_minutes';
 
 /**
  * Result of checking if an action can be performed

@@ -6,7 +6,7 @@ import { streamAnthropicResponse, runAnthropicWithToolCalls } from '@/lib/llm/an
 import { graphragService, graphragConfig } from '@/lib/graphrag';
 import type { EmbedderConfig } from '@/lib/graphrag/graphiti/client';
 import { executeTool } from '@/lib/tools/toolManager';
-import type { EnhancedPrompt, SearchSource, SearchMetadata } from '@/lib/graphrag';
+import type { EnhancedPrompt, SearchSource, SearchMetadata, GraphRAGRetrievalMetadata } from '@/lib/graphrag';
 import { supabase } from '@/lib/supabaseClient';
 import { loadLLMConfig } from '@/lib/config/llmConfig';
 import { unifiedLLMClient } from '@/lib/llm/unified-client';
@@ -26,6 +26,7 @@ import { calculateBasicQualityScore } from '@/lib/batch-testing/evaluation-integ
 import crypto from 'crypto';
 import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext } from '@/lib/tracing/types';
+import { recordUsageEvent } from '@/lib/usage/checker';
 
 // Use Node.js runtime instead of Edge for OpenAI SDK compatibility
 export const runtime = 'nodejs';
@@ -440,7 +441,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // The GraphRAG service returns contextUsed: false if no relevant docs found
     // This allows tools and GraphRAG context to work together for hybrid queries
     // Only inject if context injection is enabled (respects user toggle)
-    let graphRAGMetadata: { sources?: SearchSource[]; metadata?: SearchMetadata; estimatedTokens?: number } | null = null;
+    let graphRAGMetadata: { sources?: SearchSource[]; metadata?: GraphRAGRetrievalMetadata; estimatedTokens?: number } | null = null;
     console.log('[API] ===== GRAPHRAG INJECTION CHECK =====');
     console.log('[API] contextInjectionEnabled VALUE:', contextInjectionEnabled);
     console.log('[API] contextInjectionEnabled TYPE:', typeof contextInjectionEnabled);
@@ -692,7 +693,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           model_name: actualModelConfig?.name || selectedModelId,
           provider: actualModelConfig?.provider || provider,
           model_id: selectedModelId,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          // Add GraphRAG metadata if available
+          ...(graphRAGMetadata?.metadata && {
+            graphrag: {
+              graph_used: graphRAGMetadata.metadata.graph_used,
+              nodes_retrieved: graphRAGMetadata.metadata.nodes_retrieved,
+              context_chunks_used: graphRAGMetadata.metadata.context_chunks_used,
+              retrieval_time_ms: graphRAGMetadata.metadata.retrieval_time_ms,
+              context_relevance_score: graphRAGMetadata.metadata.context_relevance_score,
+              answer_grounded_in_graph: graphRAGMetadata.metadata.answer_grounded_in_graph,
+              retrieval_method: graphRAGMetadata.metadata.searchMethod,
+            }
+          })
         };
 
         // Calculate safe max_tokens based on model's context window
@@ -769,7 +782,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 model_name: actualModelConfig?.name || model,
                 provider: actualModelConfig?.provider || provider,
                 model_id: model,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                // Add GraphRAG metadata if available
+                ...(graphRAGMetadata?.metadata && {
+                  graphrag: {
+                    graph_used: graphRAGMetadata.metadata.graph_used,
+                    nodes_retrieved: graphRAGMetadata.metadata.nodes_retrieved,
+                    context_chunks_used: graphRAGMetadata.metadata.context_chunks_used,
+                    retrieval_time_ms: graphRAGMetadata.metadata.retrieval_time_ms,
+                    context_relevance_score: graphRAGMetadata.metadata.context_relevance_score,
+                    answer_grounded_in_graph: graphRAGMetadata.metadata.answer_grounded_in_graph,
+                    retrieval_method: graphRAGMetadata.metadata.searchMethod,
+                  }
+                })
               };
             } else {
               return new Response(
@@ -833,7 +858,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           model_name: actualModelConfig?.name || model,
           provider: actualModelConfig?.provider || provider,
           model_id: model,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          // Add GraphRAG metadata if available
+          ...(graphRAGMetadata?.metadata && {
+            graphrag: {
+              graph_used: graphRAGMetadata.metadata.graph_used,
+              nodes_retrieved: graphRAGMetadata.metadata.nodes_retrieved,
+              context_chunks_used: graphRAGMetadata.metadata.context_chunks_used,
+              retrieval_time_ms: graphRAGMetadata.metadata.retrieval_time_ms,
+              context_relevance_score: graphRAGMetadata.metadata.context_relevance_score,
+              answer_grounded_in_graph: graphRAGMetadata.metadata.answer_grounded_in_graph,
+              retrieval_method: graphRAGMetadata.metadata.searchMethod,
+            }
+          })
         };
       }
 
@@ -895,6 +932,23 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               console.error('[API] Widget mode: Failed to save user message:', userMsgError);
             } else {
               console.log('[API] Widget mode: User message saved');
+
+              // Record chat message usage (fire-and-forget, only for user messages)
+              recordUsageEvent({
+                userId: userId,
+                metricType: 'chat_message',
+                value: 1,
+                resourceType: 'message',
+                resourceId: widgetConversationId,
+                metadata: {
+                  conversation_id: widgetConversationId,
+                  is_widget_mode: isWidgetMode || false,
+                  is_batch_test_mode: isBatchTestMode || false,
+                }
+              }).catch(err => {
+                console.error('[API] Failed to record chat usage:', err);
+                // Don't fail the request if usage recording fails
+              });
             }
           }
 
@@ -1223,7 +1277,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         model_name: (actualModelConfig as unknown as { name?: string })?.name || selectedModelId || model || 'unknown',
         provider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || 'unknown',
         model_id: selectedModelId || model || 'unknown',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        // Add GraphRAG metadata if available
+        ...(graphRAGMetadata?.metadata && {
+          graphrag: {
+            graph_used: graphRAGMetadata.metadata.graph_used,
+            nodes_retrieved: graphRAGMetadata.metadata.nodes_retrieved,
+            context_chunks_used: graphRAGMetadata.metadata.context_chunks_used,
+            retrieval_time_ms: graphRAGMetadata.metadata.retrieval_time_ms,
+            context_relevance_score: graphRAGMetadata.metadata.context_relevance_score,
+            answer_grounded_in_graph: graphRAGMetadata.metadata.answer_grounded_in_graph,
+            retrieval_method: graphRAGMetadata.metadata.searchMethod,
+          }
+        })
       };
 
       // Start trace for streaming LLM operation
@@ -1370,6 +1436,24 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                       content: userMessageContent,
                     });
                   console.log('[API] Widget mode (streaming): User message saved');
+
+                  // Record chat message usage (fire-and-forget, only for user messages)
+                  recordUsageEvent({
+                    userId: userId,
+                    metricType: 'chat_message',
+                    value: 1,
+                    resourceType: 'message',
+                    resourceId: widgetConversationId,
+                    metadata: {
+                      conversation_id: widgetConversationId,
+                      is_widget_mode: isWidgetMode || false,
+                      is_batch_test_mode: isBatchTestMode || false,
+                      is_streaming: true,
+                    }
+                  }).catch(err => {
+                    console.error('[API] Failed to record chat usage (streaming):', err);
+                    // Don't fail the request if usage recording fails
+                  });
                 }
 
                 // Save assistant message with latency and token estimates

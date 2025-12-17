@@ -134,6 +134,7 @@ import { STATUS } from '@/lib/constants';
 import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
 import { sendBatchTestAlert } from '@/lib/alerts';
 import { logApiKeyUsage, extractClientInfo } from '@/lib/auth/api-key-usage-logger';
+import { recordUsageEvent } from '@/lib/usage/checker';
 
 // Use Node.js runtime for file system operations
 export const runtime = 'nodejs';
@@ -145,12 +146,27 @@ const API_KEY_PREFIX = 'wak_';
 
 type BatchTestingAuth =
   | { mode: 'session'; userId: string; authorizationHeader: string }
-  | { mode: 'apiKey'; userId: string; apiKey: string; keyId?: string };
+  | { mode: 'apiKey'; userId: string; apiKey: string; keyId?: string }
+  | { mode: 'serviceRole'; userId: string };
 
 async function authenticateBatchTesting(req: NextRequest): Promise<
   | { ok: true; auth: BatchTestingAuth }
   | { ok: false; status: number; error: string }
 > {
+  // Check for service role key (used by background workers)
+  const serviceRoleKeyHeader = req.headers.get('x-service-role-key');
+  const userIdHeader = req.headers.get('x-user-id');
+
+  if (serviceRoleKeyHeader && userIdHeader) {
+    const expectedServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceRoleKeyHeader === expectedServiceKey) {
+      console.log('[Batch Testing Auth] Service role authentication for user:', userIdHeader);
+      return { ok: true, auth: { mode: 'serviceRole', userId: userIdHeader } };
+    } else {
+      return { ok: false, status: 401, error: 'Invalid service role key' };
+    }
+  }
+
   const headerApiKey = req.headers.get('x-api-key') || req.headers.get('x-workspace-api-key');
   const authHeader = req.headers.get('authorization');
 
@@ -250,12 +266,41 @@ export async function POST(req: NextRequest) {
     }
     const auth = authResult.auth;
 
+    // Detect scheduled evaluation run
+    const isScheduledRun = req.headers.get('x-scheduled-evaluation') === 'true';
+    const scheduledEvalId = req.headers.get('x-scheduled-evaluation-id');
+
+    let scheduledEvaluationRunId: string | null = null;
+
+    if (isScheduledRun && scheduledEvalId) {
+      console.log('[Batch Testing Run] Scheduled evaluation run detected:', scheduledEvalId);
+
+      // Create scheduled_evaluation_run record
+      const supabaseWrite = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: schedRun, error: schedError } = await supabaseWrite
+        .from('scheduled_evaluation_runs')
+        .insert({
+          scheduled_evaluation_id: scheduledEvalId,
+          status: 'triggered',
+          triggered_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (schedError) {
+        console.error('[Batch Testing Run] Failed to create scheduled run record:', schedError);
+      } else {
+        scheduledEvaluationRunId = schedRun?.id || null;
+        console.log('[Batch Testing Run] Scheduled run record created:', scheduledEvaluationRunId);
+      }
+    }
+
     const supabaseReadClient =
       auth.mode === 'session'
         ? createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
             global: { headers: { Authorization: auth.authorizationHeader } },
           })
-        : createClient(supabaseUrl, supabaseServiceKey);
+        : createClient(supabaseUrl, supabaseServiceKey); // Used for apiKey and serviceRole modes
 
     // Parse and validate request body
     const body = await req.json();
@@ -441,6 +486,24 @@ export async function POST(req: NextRequest) {
     const batchTestRun = batchTestRuns[0];
 
     console.log('[Batch Testing Run] Created batch test run:', batchTestRun.id);
+
+    // Record batch test usage (fire-and-forget)
+    recordUsageEvent({
+      userId: auth.userId,
+      metricType: 'batch_test_run',
+      value: 1,
+      resourceType: 'batch_test',
+      resourceId: batchTestRun.id,
+      metadata: {
+        model_name: batchConfig.model_name,
+        test_suite_id: config.test_suite_id || null,
+        dataset_id: config.dataset_id || null,
+        total_prompts: extractionResult.total,
+      }
+    }).catch(err => {
+      console.error('[Batch Testing Run] Failed to record usage:', err);
+      // Don't fail the request if usage recording fails
+    });
 
     // Step 2.5: Create experiment run for tracking
     console.log('[Batch Testing Run] Attempting to create experiment run...');
@@ -638,11 +701,12 @@ async function processBackgroundBatch(
     }
 
     // Mark batch test run as completed
+    const completedAt = new Date().toISOString();
     await supabaseAdmin
       .from('batch_test_runs')
       .update({
         status: STATUS.COMPLETED,
-        completed_at: new Date().toISOString(),
+        completed_at: completedAt,
         completed_prompts: completed,
         failed_prompts: failed
       })
@@ -653,6 +717,40 @@ async function processBackgroundBatch(
       completed,
       failed
     });
+
+    // Record compute time usage (fire-and-forget)
+    try {
+      const { data: batchRun } = await supabaseAdmin
+        .from('batch_test_runs')
+        .select('created_at, user_id, config')
+        .eq('id', testRunId)
+        .single();
+
+      if (batchRun && batchRun.created_at) {
+        const startTime = new Date(batchRun.created_at).getTime();
+        const endTime = new Date(completedAt).getTime();
+        const durationMs = endTime - startTime;
+        const durationMinutes = Math.ceil(durationMs / 60000);
+
+        await recordUsageEvent({
+          userId: batchRun.user_id,
+          metricType: 'compute_minutes',
+          value: durationMinutes,
+          resourceType: 'batch_test',
+          resourceId: testRunId,
+          metadata: {
+            model_name: config.model_name,
+            total_prompts: prompts.length,
+            duration_ms: durationMs,
+            job_type: 'batch_test',
+          }
+        });
+        console.log('[Background Batch] Compute time recorded:', durationMinutes, 'minutes');
+      }
+    } catch (usageErr) {
+      console.error('[Background Batch] Failed to record compute time:', usageErr);
+      // Don't fail the completion if usage recording fails
+    }
 
     await safeSendBatchTestAlert(failed > 0 ? 'batch_test_failed' : 'batch_test_completed', {
       testRunId,

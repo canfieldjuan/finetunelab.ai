@@ -23,6 +23,7 @@ config({ path: envPath });
 import { createClient } from '@supabase/supabase-js';
 import { isTimeDue, calculateNextRun } from '../lib/evaluation/schedule-calculator';
 import type { ScheduledEvaluation } from '../lib/batch-testing/types';
+import { recordUsageEvent } from '../lib/usage/checker';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -122,6 +123,23 @@ async function executeSchedule(
     }
 
     console.log(`[Scheduler] Created run record: ${run.id}`);
+
+    // Record scheduled eval usage (fire-and-forget)
+    recordUsageEvent({
+      userId: schedule.user_id,
+      metricType: 'scheduled_eval_run',
+      value: 1,
+      resourceType: 'scheduled_eval',
+      resourceId: run.id,
+      metadata: {
+        schedule_id: schedule.id,
+        schedule_name: schedule.name,
+        test_suite_id: schedule.batch_test_config?.test_suite_id || null,
+      }
+    }).catch(err => {
+      console.error('[Scheduler] Failed to record usage:', err);
+      // Don't fail the execution if usage recording fails
+    });
 
     // Trigger batch test via API
     const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/batch-testing/run`, {

@@ -81,11 +81,19 @@ export async function GET(request: NextRequest) {
 
     // Build usage metrics from summary
     const usage: UsageMetrics = {
+      // Existing metrics
       api_calls: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'api_call')?.total_value || 0,
       tokens: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'token_usage')?.total_value || 0,
       storage_mb: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'storage_mb')?.total_value || 0,
       training_jobs: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'training_job')?.total_value || 0,
       models: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'model_created')?.total_value || 0,
+
+      // NEW: Critical resource metrics (added 2025-12-17)
+      batch_test_runs: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'batch_test_run')?.total_value || 0,
+      scheduled_eval_runs: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'scheduled_eval_run')?.total_value || 0,
+      chat_messages: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'chat_message')?.total_value || 0,
+      inference_calls: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'inference_call')?.total_value || 0,
+      compute_minutes: (usageSummary as UsageSummaryRow[] | null)?.find((u) => u.metric_type === 'compute_minutes')?.total_value || 0,
     };
 
     // Extract plan limits (type assertion needed due to Supabase join structure)
@@ -108,9 +116,17 @@ export async function GET(request: NextRequest) {
     };
 
     const percentages = {
+      // Existing
       api_calls: calculatePercentage(usage.api_calls, limits.api_calls_per_month),
       storage: calculatePercentage(usage.storage_mb, limits.storage_mb),
       models: calculatePercentage(usage.models, limits.models_limit),
+
+      // NEW: Critical resource percentages (added 2025-12-17)
+      batch_test_runs: calculatePercentage(usage.batch_test_runs, limits.batch_test_runs_per_month || -1),
+      scheduled_eval_runs: calculatePercentage(usage.scheduled_eval_runs, limits.scheduled_eval_runs_per_month || -1),
+      chat_messages: calculatePercentage(usage.chat_messages, limits.chat_messages_per_month || -1),
+      inference_calls: calculatePercentage(usage.inference_calls, limits.inference_calls_per_month || -1),
+      compute_minutes: calculatePercentage(usage.compute_minutes, limits.compute_minutes_per_month || -1),
     };
 
     console.log('[Usage API] Usage:', usage);

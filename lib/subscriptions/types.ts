@@ -5,11 +5,19 @@
 
 // Plan limits structure
 export interface PlanLimits {
+  // Existing limits
   api_calls_per_month: number; // -1 means unlimited
   storage_mb: number; // -1 means unlimited
   team_members: number; // -1 means unlimited
   concurrent_training_jobs: number;
   models_limit: number; // -1 means unlimited
+
+  // NEW: Critical usage limits (added 2025-12-17)
+  batch_test_runs_per_month?: number; // -1 means unlimited
+  scheduled_eval_runs_per_month?: number; // -1 means unlimited
+  chat_messages_per_month?: number; // -1 means unlimited
+  inference_calls_per_month?: number; // -1 means unlimited
+  compute_minutes_per_month?: number; // -1 means unlimited
 }
 
 // Subscription plan from database
@@ -68,11 +76,19 @@ export interface GetAllPlansResponse {
 
 // Usage tracking types
 export interface UsageMetrics {
+  // Existing metrics
   api_calls: number;
   tokens: number;
   storage_mb: number;
   training_jobs: number;
   models: number;
+
+  // NEW: Critical resource metrics (added 2025-12-17)
+  batch_test_runs: number;
+  scheduled_eval_runs: number;
+  chat_messages: number;
+  inference_calls: number;
+  compute_minutes: number;
 }
 
 export interface UsageWithLimits {
@@ -90,9 +106,16 @@ export interface GetUsageResponse {
   usage: UsageMetrics;
   limits: PlanLimits;
   percentages: {
+    // Existing
     api_calls: number;
     storage: number;
     models: number;
+    // NEW: Critical resource percentages (added 2025-12-17)
+    batch_test_runs: number;
+    scheduled_eval_runs: number;
+    chat_messages: number;
+    inference_calls: number;
+    compute_minutes: number;
   };
   error?: string;
 }
