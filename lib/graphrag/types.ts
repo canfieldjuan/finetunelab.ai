@@ -97,6 +97,27 @@ export interface SearchMetadata {
   queryTime: number;
 }
 
+/**
+ * Enhanced metadata for GraphRAG retrieval analytics
+ * Used for testing fine-tuned models with RAG to validate retrieval effectiveness
+ */
+export interface GraphRAGRetrievalMetadata extends SearchMetadata {
+  // Core retrieval metrics
+  graph_used: boolean;
+  nodes_retrieved: number;
+  context_chunks_used: number;
+  retrieval_time_ms: number;
+
+  // Quality signals
+  context_relevance_score: number;  // 0-1 average relevance
+  answer_grounded_in_graph: boolean;
+
+  // Inherited from SearchMetadata:
+  // searchMethod: 'semantic' | 'keyword' | 'hybrid';
+  // resultsCount: number;
+  // queryTime: number;
+}
+
 export interface SearchOptions {
   topK?: number;
   groupIds?: string[];
