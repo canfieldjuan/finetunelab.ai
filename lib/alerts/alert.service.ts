@@ -13,6 +13,7 @@ import {
   UserWebhook,
   TrainingJobAlertData,
   BatchTestAlertData,
+  ScheduledEvaluationAlertData,
   AlertType,
 } from './alert.types';
 import { emailChannel } from './channels/email.channel';
@@ -29,6 +30,10 @@ const DEFAULT_PREFERENCES: Omit<UserAlertPreferences, 'id' | 'user_id' | 'create
   alert_job_cancelled: false,
   alert_batch_test_completed: false,
   alert_batch_test_failed: true,
+  alert_scheduled_eval_completed: false,
+  alert_scheduled_eval_failed: true,
+  alert_scheduled_eval_disabled: true,
+  alert_scheduled_eval_regression: true,
   alert_gpu_oom: true,
   alert_disk_warning: true,
   alert_timeout_warning: true,
@@ -159,6 +164,39 @@ export class AlertService {
       title: titleMap[type] || `Batch Test Alert: ${type}`,
       message: messageMap[type] || '',
       metadata: testData,
+    };
+
+    await this.sendAlert(alert);
+  }
+
+  async sendScheduledEvaluationAlert(
+    type: AlertType,
+    evalData: ScheduledEvaluationAlertData
+  ): Promise<void> {
+    const titleMap: Record<string, string> = {
+      scheduled_eval_completed: `Scheduled Evaluation Complete: ${evalData.scheduleName}`,
+      scheduled_eval_failed: `Scheduled Evaluation Failed: ${evalData.scheduleName}`,
+      scheduled_eval_disabled: `Scheduled Evaluation Auto-Disabled: ${evalData.scheduleName}`,
+      scheduled_eval_regression: `Regression Detected: ${evalData.scheduleName}`,
+    };
+
+    const successRate = evalData.totalPrompts && evalData.successfulPrompts
+      ? Math.round((evalData.successfulPrompts / evalData.totalPrompts) * 100)
+      : null;
+
+    const messageMap: Record<string, string> = {
+      scheduled_eval_completed: `Your scheduled evaluation completed successfully${successRate !== null ? ` with ${successRate}% success rate` : ''}.`,
+      scheduled_eval_failed: `Your scheduled evaluation failed. ${evalData.errorMessage || ''}`.trim(),
+      scheduled_eval_disabled: `Your scheduled evaluation has been auto-disabled after ${evalData.consecutiveFailures || 3} consecutive failures. Please check the configuration and re-enable manually.`,
+      scheduled_eval_regression: `Performance regression detected${evalData.regressionPercent ? `: Quality score dropped ${evalData.regressionPercent.toFixed(1)}%` : ''}.`,
+    };
+
+    const alert: AlertPayload = {
+      type,
+      userId: evalData.userId,
+      title: titleMap[type] || `Scheduled Evaluation Alert: ${type}`,
+      message: messageMap[type] || '',
+      metadata: evalData,
     };
 
     await this.sendAlert(alert);
@@ -373,4 +411,12 @@ export async function sendBatchTestAlert(
 ): Promise<void> {
   const service = getAlertService();
   await service.sendBatchTestAlert(type, testData);
+}
+
+export async function sendScheduledEvaluationAlert(
+  type: AlertType,
+  evalData: ScheduledEvaluationAlertData
+): Promise<void> {
+  const service = getAlertService();
+  await service.sendScheduledEvaluationAlert(type, evalData);
 }

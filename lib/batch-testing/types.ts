@@ -81,3 +81,87 @@ export interface BatchTestResult {
   success: boolean;
   error?: string;
 }
+
+// ============================================================================
+// SCHEDULED EVALUATIONS TYPES
+// Added: 2025-12-16
+// Purpose: Support recurring automated batch test evaluations
+// Breaking Changes: NONE (new types only)
+// ============================================================================
+
+/**
+ * Schedule type - defines how often evaluations run
+ */
+export type ScheduleType = 'hourly' | 'daily' | 'weekly' | 'custom';
+
+/**
+ * Scheduled evaluation record - stores recurring evaluation configuration
+ */
+export interface ScheduledEvaluation {
+  id: string;
+  user_id: string;
+
+  // Schedule identification
+  name: string;
+  description?: string;
+
+  // Schedule configuration
+  schedule_type: ScheduleType;
+  cron_expression?: string;
+  timezone: string;
+
+  // Test configuration
+  test_suite_id: string;
+  model_id: string;
+  batch_test_config: BatchTestConfig;
+
+  // Status tracking
+  is_active: boolean;
+  last_run_at?: string;
+  next_run_at: string;
+  last_run_status?: 'success' | 'failed' | 'cancelled';
+  last_run_id?: string;
+  consecutive_failures: number;
+
+  // Alerting configuration
+  alert_on_failure: boolean;
+  alert_on_regression: boolean;
+  regression_threshold_percent: number;
+
+  // Metadata
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Scheduled evaluation run record - tracks execution history
+ */
+export interface ScheduledEvaluationRun {
+  id: string;
+  scheduled_evaluation_id: string;
+  batch_test_run_id?: string;
+
+  // Execution tracking
+  status: 'triggered' | 'running' | 'completed' | 'failed' | 'cancelled';
+  triggered_at: string;
+  started_at?: string;
+  completed_at?: string;
+
+  // Results summary (denormalized for quick queries)
+  total_prompts?: number;
+  successful_prompts?: number;
+  failed_prompts?: number;
+  avg_latency_ms?: number;
+  avg_quality_score?: number;
+
+  // Regression detection (Phase 2 feature)
+  regression_detected: boolean;
+  regression_details?: Record<string, unknown>;
+  baseline_run_id?: string;
+
+  // Error tracking
+  error_message?: string;
+  error_details?: Record<string, unknown>;
+
+  created_at: string;
+}

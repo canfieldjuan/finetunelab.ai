@@ -10,6 +10,10 @@ export type AlertType =
   | 'job_cancelled'
   | 'batch_test_completed'
   | 'batch_test_failed'
+  | 'scheduled_eval_completed'
+  | 'scheduled_eval_failed'
+  | 'scheduled_eval_disabled'
+  | 'scheduled_eval_regression'
   | 'gpu_oom'
   | 'disk_warning'
   | 'timeout_warning'
@@ -29,6 +33,10 @@ export interface UserAlertPreferences {
   alert_job_cancelled: boolean;
   alert_batch_test_completed: boolean;
   alert_batch_test_failed: boolean;
+  alert_scheduled_eval_completed: boolean;
+  alert_scheduled_eval_failed: boolean;
+  alert_scheduled_eval_disabled: boolean;
+  alert_scheduled_eval_regression: boolean;
   alert_gpu_oom: boolean;
   alert_disk_warning: boolean;
   alert_timeout_warning: boolean;
@@ -57,6 +65,10 @@ export interface UserWebhook {
   alert_job_cancelled: boolean;
   alert_batch_test_completed: boolean;
   alert_batch_test_failed: boolean;
+  alert_scheduled_eval_completed: boolean;
+  alert_scheduled_eval_failed: boolean;
+  alert_scheduled_eval_disabled: boolean;
+  alert_scheduled_eval_regression: boolean;
   alert_gpu_oom: boolean;
   alert_disk_warning: boolean;
   alert_timeout_warning: boolean;
@@ -124,6 +136,24 @@ export interface BatchTestAlertData {
   failedPrompts: number;
   errorMessage: string | null;
   [key: string]: string | number | null;
+}
+
+export interface ScheduledEvaluationAlertData {
+  scheduledEvaluationId: string;
+  userId: string;
+  scheduleName: string;
+  modelId: string;
+  status: string;
+  totalPrompts?: number;
+  successfulPrompts?: number;
+  failedPrompts?: number;
+  avgLatency?: number;
+  avgQualityScore?: number;
+  regressionDetected?: boolean;
+  regressionPercent?: number;
+  errorMessage: string | null;
+  consecutiveFailures?: number;
+  [key: string]: string | number | boolean | null | undefined;
 }
 
 export interface AlertDeliveryResult {
@@ -215,6 +245,10 @@ export function alertTypeToPreferenceKey(type: AlertType): keyof UserAlertPrefer
     job_cancelled: 'alert_job_cancelled',
     batch_test_completed: 'alert_batch_test_completed',
     batch_test_failed: 'alert_batch_test_failed',
+    scheduled_eval_completed: 'alert_scheduled_eval_completed',
+    scheduled_eval_failed: 'alert_scheduled_eval_failed',
+    scheduled_eval_disabled: 'alert_scheduled_eval_disabled',
+    scheduled_eval_regression: 'alert_scheduled_eval_regression',
     gpu_oom: 'alert_gpu_oom',
     disk_warning: 'alert_disk_warning',
     timeout_warning: 'alert_timeout_warning',
@@ -232,6 +266,10 @@ export function alertTypeToWebhookKey(type: AlertType): keyof UserWebhook | null
     job_cancelled: 'alert_job_cancelled',
     batch_test_completed: 'alert_batch_test_completed',
     batch_test_failed: 'alert_batch_test_failed',
+    scheduled_eval_completed: 'alert_scheduled_eval_completed',
+    scheduled_eval_failed: 'alert_scheduled_eval_failed',
+    scheduled_eval_disabled: 'alert_scheduled_eval_disabled',
+    scheduled_eval_regression: 'alert_scheduled_eval_regression',
     gpu_oom: 'alert_gpu_oom',
     disk_warning: 'alert_disk_warning',
     timeout_warning: 'alert_timeout_warning',
@@ -252,6 +290,10 @@ export function alertTypeToIntegrationKey(type: AlertType): string | null {
     job_cancelled: 'log_job_cancelled',
     batch_test_completed: null,
     batch_test_failed: null,
+    scheduled_eval_completed: null,
+    scheduled_eval_failed: null,
+    scheduled_eval_disabled: null,
+    scheduled_eval_regression: null,
     gpu_oom: 'log_gpu_oom',
     disk_warning: null,
     timeout_warning: null,
