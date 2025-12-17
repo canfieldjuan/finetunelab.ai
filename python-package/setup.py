@@ -10,7 +10,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="finetune-lab",
-    version="0.2.0",
+    version="0.5.1",
     author="FineTune Lab Team",
     author_email="support@finetunelab.com",
     description="FineTune Lab SDK - Training, inference, batch testing, and analytics for LLMs",

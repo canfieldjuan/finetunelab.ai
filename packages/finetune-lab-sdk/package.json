@@ -1,6 +1,6 @@
 {
   "name": "@finetunelab/sdk",
-  "version": "0.2.0",
+  "version": "0.5.1",
   "description": "FineTune Lab SDK - Inference, batch testing, and analytics for LLMs",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

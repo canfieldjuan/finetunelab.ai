@@ -20,6 +20,7 @@ import type {
   AnalyticsDataResponse,
   FinetuneLabErrorDetails,
 } from './types';
+import { TrainingPredictionsClient } from './training-predictions';
 
 // ============================================================================
 // Error Class
@@ -149,22 +150,50 @@ class AnalyticsClient {
    * Create a trace
    */
   async createTrace(trace: CreateTraceRequest): Promise<{ id: string }> {
-    const payload = {
-      trace_id: trace.traceId,
-      span_id: trace.spanId,
+    // Auto-generate IDs if not provided
+    const traceId = trace.traceId || crypto.randomUUID();
+    const spanId = trace.spanId || crypto.randomUUID();
+    const startTime = trace.startTime || new Date().toISOString();
+
+    const payload: Record<string, unknown> = {
+      trace_id: traceId,
+      span_id: spanId,
       span_name: trace.spanName,
-      start_time: trace.startTime,
-      end_time: trace.endTime,
-      duration_ms: trace.durationMs,
+      start_time: startTime,
       operation_type: trace.operationType,
-      model_name: trace.modelName,
-      model_provider: trace.modelProvider,
-      input_tokens: trace.inputTokens,
-      output_tokens: trace.outputTokens,
-      status: trace.status,
-      error_message: trace.errorMessage,
-      metadata: trace.metadata,
     };
+
+    // Add optional fields only if provided
+    if (trace.conversationId !== undefined) {
+      payload.conversation_id = trace.conversationId;
+    }
+    if (trace.endTime !== undefined) {
+      payload.end_time = trace.endTime;
+    }
+    if (trace.durationMs !== undefined) {
+      payload.duration_ms = trace.durationMs;
+    }
+    if (trace.modelName !== undefined) {
+      payload.model_name = trace.modelName;
+    }
+    if (trace.modelProvider !== undefined) {
+      payload.model_provider = trace.modelProvider;
+    }
+    if (trace.inputTokens !== undefined) {
+      payload.input_tokens = trace.inputTokens;
+    }
+    if (trace.outputTokens !== undefined) {
+      payload.output_tokens = trace.outputTokens;
+    }
+    if (trace.status !== undefined) {
+      payload.status = trace.status;
+    }
+    if (trace.errorMessage !== undefined) {
+      payload.error_message = trace.errorMessage;
+    }
+    if (trace.metadata !== undefined) {
+      payload.metadata = trace.metadata;
+    }
 
     return this.client.request<{ id: string }>('POST', '/api/analytics/traces', payload);
   }
@@ -187,10 +216,43 @@ class AnalyticsClient {
 }
 
 // ============================================================================
+// Training Client
+// ============================================================================
+
+class TrainingClient {
+  constructor(private client: FinetuneLabClient) {}
+
+  /**
+   * Create or update a training job record
+   */
+  async createJob(config: {
+    jobId: string;
+    modelName?: string;
+    datasetPath?: string;
+    status?: string;
+    config?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    const payload = {
+      job_id: config.jobId,
+      model_name: config.modelName,
+      dataset_path: config.datasetPath,
+      status: config.status || 'running',
+      config: config.config,
+    };
+
+    return this.client.request<Record<string, unknown>>(
+      'POST',
+      '/api/training/local/jobs',
+      payload
+    );
+  }
+}
+
+// ============================================================================
 // Main Client
 // ============================================================================
 
-const DEFAULT_BASE_URL = 'https://app.finetunelab.com';
+const DEFAULT_BASE_URL = 'https://finetunelab.ai';
 const DEFAULT_TIMEOUT = 60000;
 
 export class FinetuneLabClient {
@@ -203,6 +265,12 @@ export class FinetuneLabClient {
 
   /** Analytics operations (production scope) */
   public readonly analytics: AnalyticsClient;
+
+  /** Training operations (training scope) */
+  public readonly training: TrainingClient;
+
+  /** Training predictions operations (training scope) */
+  public readonly trainingPredictions: TrainingPredictionsClient;
 
   constructor(config: FinetuneLabClientConfig = {}) {
     this.apiKey = config.apiKey ?? process.env.FINETUNE_LAB_API_KEY ?? '';
@@ -218,6 +286,24 @@ export class FinetuneLabClient {
 
     this.batchTest = new BatchTestClient(this);
     this.analytics = new AnalyticsClient(this);
+    this.training = new TrainingClient(this);
+    this.trainingPredictions = new TrainingPredictionsClient(this);
+  }
+
+  /**
+   * Get the configured base URL
+   * @internal Used by child clients for custom requests
+   */
+  get getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  /**
+   * Get the configured timeout
+   * @internal Used by child clients for custom requests
+   */
+  get getTimeout(): number {
+    return this.timeout;
   }
 
   /**
@@ -239,7 +325,7 @@ export class FinetuneLabClient {
         headers: {
           'X-API-Key': this.apiKey,
           'Content-Type': 'application/json',
-          'User-Agent': 'finetune-lab-sdk/0.2.0',
+          'User-Agent': 'finetune-lab-sdk/0.5.1',
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,

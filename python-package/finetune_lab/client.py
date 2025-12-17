@@ -8,6 +8,8 @@ import requests
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass
 
+from .training_predictions import TrainingPredictionsClient
+
 
 @dataclass
 class PredictResponse:
@@ -211,6 +213,130 @@ class AnalyticsClient:
 
         return self._parent._request("GET", "/api/analytics/data", params=params)
 
+    def create_trace(
+        self,
+        span_name: str,
+        operation_type: str,
+        model_name: Optional[str] = None,
+        duration_ms: Optional[int] = None,
+        conversation_id: Optional[str] = None,
+        input_data: Optional[Dict[str, Any]] = None,
+        output_data: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+        span_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a trace for production monitoring.
+
+        Args:
+            span_name: Name of the span (e.g., "llm.completion")
+            operation_type: Type of operation (e.g., "llm_call", "embedding", "tool_call")
+            model_name: Model identifier (optional)
+            duration_ms: Duration in milliseconds (optional)
+            conversation_id: Conversation/request ID (optional)
+            input_data: Input data (optional)
+            output_data: Output data (optional)
+            metadata: Additional metadata (optional)
+            trace_id: Trace ID (auto-generated if not provided)
+            span_id: Span ID (auto-generated if not provided)
+
+        Returns:
+            Created trace response
+
+        Example:
+            >>> client.analytics.create_trace(
+            ...     span_name="llm.completion",
+            ...     operation_type="llm_call",
+            ...     model_name="gpt-4",
+            ...     duration_ms=245,
+            ...     input_data={"prompt": "Hello"},
+            ...     output_data={"response": "Hi there!"}
+            ... )
+        """
+        import uuid
+
+        # Auto-generate IDs if not provided
+        final_trace_id = trace_id or str(uuid.uuid4())
+        final_span_id = span_id or str(uuid.uuid4())
+
+        payload = {
+            "trace_id": final_trace_id,
+            "span_id": final_span_id,
+            "span_name": span_name,
+            "operation_type": operation_type,
+        }
+
+        # Add optional fields only if provided
+        if conversation_id is not None:
+            payload["conversation_id"] = conversation_id
+        if model_name is not None:
+            payload["model_name"] = model_name
+        if duration_ms is not None:
+            payload["duration_ms"] = duration_ms
+        if input_data is not None:
+            payload["input_data"] = input_data
+        if output_data is not None:
+            payload["output_data"] = output_data
+        if metadata is not None:
+            payload["metadata"] = metadata
+
+        return self._parent._request("POST", "/api/analytics/traces", json=payload)
+
+
+class TrainingClient:
+    """Client for training job management (training scope)."""
+
+    def __init__(self, parent: "FinetuneLabClient"):
+        self._parent = parent
+
+    def create_job(
+        self,
+        job_id: str,
+        model_name: Optional[str] = None,
+        dataset_path: Optional[str] = None,
+        status: str = "running",
+        config: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create or update a training job record.
+
+        This creates a job record in the platform and returns a job_token
+        that you'll use to send training predictions.
+
+        Args:
+            job_id: Unique identifier for this training job
+            model_name: Name of the model being trained (optional)
+            dataset_path: Path to training dataset (optional)
+            status: Job status (default: "running")
+            config: Training configuration dict (optional)
+
+        Returns:
+            Job record with job_token for authentication
+
+        Example:
+            >>> job = client.training.create_job(
+            ...     job_id="local_training_001",
+            ...     model_name="llama-3-8b-tool-use",
+            ...     dataset_path="./data/tiny_tool_use.jsonl",
+            ...     config={"epochs": 3, "batch_size": 4}
+            ... )
+            >>> print(f"Job token: {job['job_token']}")
+        """
+        payload = {
+            "job_id": job_id,
+            "status": status,
+        }
+
+        if model_name is not None:
+            payload["model_name"] = model_name
+        if dataset_path is not None:
+            payload["dataset_path"] = dataset_path
+        if config is not None:
+            payload["config"] = config
+
+        return self._parent._request("POST", "/api/training/local/jobs", json=payload)
+
 
 class FinetuneLabClient:
     """
@@ -226,7 +352,7 @@ class FinetuneLabClient:
         >>> print(response.content)
     """
 
-    DEFAULT_BASE_URL = "https://app.finetunelab.com"
+    DEFAULT_BASE_URL = "https://finetunelab.ai"
 
     def __init__(
         self,
@@ -261,12 +387,14 @@ class FinetuneLabClient:
         self._session.headers.update({
             "X-API-Key": self.api_key,
             "Content-Type": "application/json",
-            "User-Agent": "finetune-lab-python/0.2.0",
+            "User-Agent": "finetune-lab-python/0.5.1",
         })
 
         # Sub-clients
         self.batch_test = BatchTestClient(self)
         self.analytics = AnalyticsClient(self)
+        self.training = TrainingClient(self)
+        self.training_predictions = TrainingPredictionsClient(self)
 
     def _request(
         self,

@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { authenticateTraining } from '@/lib/auth/training-auth';
+import crypto from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -140,28 +141,19 @@ export async function POST(request: NextRequest) {
       max_learning_rate
     } = body;
 
-    // Extract user_id from token if missing
+    // Authenticate request - supports both session tokens and API keys
     let user_id = body_user_id;
     if (!user_id) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader) {
-        try {
-          const supabaseAuth = createClient(
-            supabaseUrl,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            { global: { headers: { Authorization: authHeader } } }
-          );
-          const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
-          if (user) {
-            user_id = user.id;
-            console.log('[LocalTrainingJobs] Extracted user_id from token:', user_id);
-          } else {
-            console.warn('[LocalTrainingJobs] Failed to extract user from token:', authError?.message);
-          }
-        } catch (e) {
-          console.error('[LocalTrainingJobs] Error extracting user from token:', e);
-        }
+      const authResult = await authenticateTraining(request);
+      if (!authResult.ok) {
+        console.log('[LocalTrainingJobs] Authentication failed:', authResult.error);
+        return NextResponse.json(
+          { error: authResult.error },
+          { status: authResult.status }
+        );
       }
+      user_id = authResult.userId;
+      console.log('[LocalTrainingJobs] Extracted user_id from', authResult.mode, 'auth:', user_id);
     }
 
     console.log('[LocalTrainingJobs] Persisting job:', job_id, 'Status:', status);
@@ -175,9 +167,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user_id) {
-      console.error('[LocalTrainingJobs] Missing user_id in request body');
+      console.error('[LocalTrainingJobs] Missing user_id after authentication');
       return NextResponse.json(
-        { error: 'user_id is required in request body' },
+        { error: 'Unable to determine user_id' },
         { status: 400 }
       );
     }
@@ -332,10 +324,12 @@ export async function POST(request: NextRequest) {
         return { data, error };
       } else {
         // Row doesn't exist - INSERT with all fields
-        console.log('[LocalTrainingJobs] Inserting new job:', job_id);
+        // Generate job_token if not provided (for SDK usage)
+        const finalJobToken = job_token || crypto.randomBytes(32).toString('base64url');
+        console.log('[LocalTrainingJobs] Inserting new job:', job_id, job_token ? '(token provided)' : '(token generated)');
         const { data, error } = await supabase
           .from('local_training_jobs')
-          .insert({ ...jobData, id: job_id })
+          .insert({ ...jobData, id: job_id, job_token: finalJobToken })
           .select()
           .single();
 
@@ -359,17 +353,23 @@ export async function POST(request: NextRequest) {
         timeoutHandle = setTimeout(() => reject(new Error('Persistence timeout')), parseInt(process.env.TRAINING_JOB_PERSISTENCE_TIMEOUT_MS || '25000', 10));
       });
 
-      await Promise.race([persistencePromise, timeoutPromise]);
-      
+      const result = await Promise.race([persistencePromise, timeoutPromise]);
+
       // If we get here, persistence succeeded within timeout
       // Clear the timeout to prevent memory leak
       clearTimeout(timeoutHandle!);
       console.log('[LocalTrainingJobs] Job persisted successfully:', job_id);
+
+      // Extract job_token from persisted data
+      const persistedData = (result as { data: any }).data;
+      const returnedJobToken = persistedData?.job_token;
+
       return NextResponse.json({
         success: true,
         persisted: true,
         job_id,
-        user_id
+        user_id,
+        job_token: returnedJobToken
       }, { status: 200 });
       
     } catch (timeoutError) {
