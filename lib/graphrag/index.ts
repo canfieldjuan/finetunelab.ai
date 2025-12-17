@@ -44,4 +44,7 @@ export type {
   EnhanceOptions,
   EnhancedPrompt,
   Citation,
+  GraphRAGRetrievalMetadata,
+  SearchSource,
+  SearchMetadata,
 } from './service';

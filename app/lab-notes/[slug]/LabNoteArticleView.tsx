@@ -14,12 +14,23 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LabNote, categoryConfig } from '../data';
+import { RelatedArticles } from '@/components/content/RelatedArticles';
+
+interface RelatedArticle {
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  readTime: string;
+  type: 'lab-note' | 'academy';
+}
 
 interface LabNoteArticleViewProps {
   article: LabNote | null;
+  relatedArticles?: RelatedArticle[];
 }
 
-export function LabNoteArticleView({ article }: LabNoteArticleViewProps) {
+export function LabNoteArticleView({ article, relatedArticles }: LabNoteArticleViewProps) {
   if (!article) {
     return (
       <div className="min-h-screen bg-background">
@@ -125,6 +136,11 @@ export function LabNoteArticleView({ article }: LabNoteArticleViewProps) {
             ))}
           </div>
         </div>
+
+        {/* Related Articles */}
+        {relatedArticles && relatedArticles.length > 0 && (
+          <RelatedArticles articles={relatedArticles} />
+        )}
 
         {/* CTA */}
         <div className="mt-12 p-6 bg-muted/50 border rounded-lg text-center">

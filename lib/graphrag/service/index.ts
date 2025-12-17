@@ -23,3 +23,10 @@ export type {
   EnhancedPrompt,
   Citation,
 } from './graphrag-service';
+
+// Re-export types from parent types module for convenience
+export type {
+  GraphRAGRetrievalMetadata,
+  SearchSource,
+  SearchMetadata,
+} from '../types';
