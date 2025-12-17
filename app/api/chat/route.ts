@@ -6,7 +6,8 @@ import { streamAnthropicResponse, runAnthropicWithToolCalls } from '@/lib/llm/an
 import { graphragService, graphragConfig } from '@/lib/graphrag';
 import type { EmbedderConfig } from '@/lib/graphrag/graphiti/client';
 import { executeTool } from '@/lib/tools/toolManager';
-import type { EnhancedPrompt, SearchSource, SearchMetadata, GraphRAGRetrievalMetadata } from '@/lib/graphrag';
+import type { EnhancedPrompt, SearchSource, SearchMetadata } from '@/lib/graphrag';
+import type { GraphRAGRetrievalMetadata } from '@/lib/graphrag/types';
 import { supabase } from '@/lib/supabaseClient';
 import { loadLLMConfig } from '@/lib/config/llmConfig';
 import { unifiedLLMClient } from '@/lib/llm/unified-client';
