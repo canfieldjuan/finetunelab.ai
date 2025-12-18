@@ -203,7 +203,8 @@ export async function GET(
       .from('local_training_metrics')
       .select('*')
       .eq('job_id', jobId)
-      .order('step', { ascending: true });
+      .order('step', { ascending: true })
+      .limit(100000);
 
     if (error) {
       console.error('[LocalTraining Metrics GET] Database error:', error);

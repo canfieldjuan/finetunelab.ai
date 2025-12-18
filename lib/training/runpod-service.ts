@@ -460,8 +460,8 @@ if python -m pip install --no-cache-dir "trl==0.26.0" && \
   echo "[$(date)] ✓ Dependencies installed successfully"
   echo "[$(date)] TRL version (after upgrade): $(python -m pip show trl | grep Version)"
   # Verify the import works
-  python -c "from trl import DataCollatorForCompletionOnlyLM; print('[$(date)] ✓ DataCollatorForCompletionOnlyLM import verified')" || {
-    echo "[$(date)] ✗ ERROR: DataCollatorForCompletionOnlyLM still not available after upgrade"
+  python -c "from trl import SFTTrainer; print('[$(date)] ✓ TRL imports verified')" || {
+    echo "[$(date)] ✗ ERROR: TRL imports failed after upgrade"
     python -m pip show trl
     echo "[$(date)] Waiting 60s before exit for log inspection..."
     sleep 60
@@ -514,10 +514,10 @@ import time
 import torch
 import logging
 from typing import Dict, Any, Optional
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, TrainingArguments, Trainer, BitsAndBytesConfig, TrainerCallback
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, TrainingArguments, Trainer, BitsAndBytesConfig, TrainerCallback, DataCollatorForSeq2Seq
 from datasets import load_dataset, Dataset
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from trl import SFTTrainer, DPOTrainer, ORPOTrainer, SFTConfig, DPOConfig, ORPOConfig, DataCollatorForCompletionOnlyLM
+from trl import SFTTrainer, DPOTrainer, ORPOTrainer, SFTConfig, DPOConfig, ORPOConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1581,10 +1581,10 @@ if training_method == "sft":
 
     data_collator = None
     if response_template:
-        print("[SFT] Using DataCollatorForCompletionOnlyLM for response masking")
-        data_collator = DataCollatorForCompletionOnlyLM(
-            response_template=response_template,
-            tokenizer=tokenizer
+        print("[SFT] Using DataCollatorForSeq2Seq (response masking via labels)")
+        data_collator = DataCollatorForSeq2Seq(
+            tokenizer=tokenizer,
+            padding=True
         )
 
     trainer = SFTTrainer(
