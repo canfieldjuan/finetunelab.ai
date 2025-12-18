@@ -496,7 +496,7 @@ class FinetuneLabClient:
         self._session.headers.update({
             "X-API-Key": self.api_key,
             "Content-Type": "application/json",
-            "User-Agent": "finetune-lab-python/0.5.1",
+            "User-Agent": "finetune-lab-python/0.6.0",
         })
 
         # Sub-clients
