@@ -28,6 +28,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { TrendingUp, TrendingDown, Info } from 'lucide-react';
 import type { PredictionsTrendsResponse } from '@/lib/training/types/predictions-types';
+import { useTrainingPredictionsSSE } from '@/lib/hooks/useTrainingPredictionsSSE';
 
 interface PredictionsTrendsChartProps {
   jobId: string;
@@ -42,6 +43,13 @@ export function PredictionsTrendsChart({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasPredictions, setHasPredictions] = useState<boolean | null>(null);
+
+  // SSE for live updates
+  const { latestPrediction, isConnected: sseConnected } = useTrainingPredictionsSSE({
+    jobId,
+    authToken,
+    enabled: hasPredictions === true,
+  });
 
   const checkPredictions = useCallback(async () => {
     try {
@@ -111,12 +119,17 @@ export function PredictionsTrendsChart({
   useEffect(() => {
     if (hasPredictions === true) {
       fetchTrends();
-      const interval = setInterval(fetchTrends, 30000);
-      return () => clearInterval(interval);
     } else if (hasPredictions === false) {
       setLoading(false);
     }
   }, [hasPredictions, fetchTrends]);
+
+  // Refetch when new prediction arrives via SSE (replaces polling)
+  useEffect(() => {
+    if (latestPrediction && hasPredictions === true) {
+      fetchTrends();
+    }
+  }, [latestPrediction, hasPredictions, fetchTrends]);
 
   if (hasPredictions === null) {
     return (
@@ -219,11 +232,19 @@ export function PredictionsTrendsChart({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Prediction Quality Trends</CardTitle>
-            <CardDescription>
-              Quality metrics across {trends.length} epochs
-            </CardDescription>
+          <div className="flex items-center gap-2">
+            <div>
+              <CardTitle>Prediction Quality Trends</CardTitle>
+              <CardDescription>
+                Quality metrics across {trends.length} epochs
+              </CardDescription>
+            </div>
+            {sseConnected && (
+              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                <span className="w-2 h-2 bg-green-600 dark:bg-green-400 rounded-full animate-pulse" />
+                Live
+              </span>
+            )}
           </div>
           {improvement !== null && (
             <div className="text-right">

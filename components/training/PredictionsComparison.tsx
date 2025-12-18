@@ -25,6 +25,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Info, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { TrainingPrediction } from '@/lib/training/types/predictions-types';
+import { useTrainingPredictionsSSE } from '@/lib/hooks/useTrainingPredictionsSSE';
 
 interface PredictionsComparisonProps {
   jobId: string;
@@ -40,6 +41,13 @@ export function PredictionsComparison({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasPredictions, setHasPredictions] = useState<boolean | null>(null);
+
+  // SSE for live updates
+  const { latestPrediction, isConnected: sseConnected } = useTrainingPredictionsSSE({
+    jobId,
+    authToken,
+    enabled: hasPredictions === true,
+  });
 
   // Check if predictions exist before polling
   const checkPredictions = useCallback(async () => {
@@ -116,6 +124,13 @@ export function PredictionsComparison({
       setLoading(false);
     }
   }, [hasPredictions, fetchAllPredictions]);
+
+  // Refetch when new prediction arrives via SSE
+  useEffect(() => {
+    if (latestPrediction && hasPredictions === true) {
+      fetchAllPredictions();
+    }
+  }, [latestPrediction, hasPredictions, fetchAllPredictions]);
 
   const sampleIndices = [
     ...new Set(predictions.map((p) => p.sample_index)),
@@ -202,11 +217,19 @@ export function PredictionsComparison({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Prediction Evolution</CardTitle>
-            <CardDescription>
-              Track how predictions improve across epochs
-            </CardDescription>
+          <div className="flex items-center gap-2">
+            <div>
+              <CardTitle>Prediction Evolution</CardTitle>
+              <CardDescription>
+                Track how predictions improve across epochs
+              </CardDescription>
+            </div>
+            {sseConnected && (
+              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                <span className="w-2 h-2 bg-green-600 dark:bg-green-400 rounded-full animate-pulse" />
+                Live
+              </span>
+            )}
           </div>
           {sampleIndices.length > 0 && (
             <Select

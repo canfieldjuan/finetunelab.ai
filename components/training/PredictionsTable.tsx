@@ -36,6 +36,7 @@ import type {
   TrainingPrediction,
   PredictionsEpochSummary,
 } from '@/lib/training/types/predictions-types';
+import { useTrainingPredictionsSSE } from '@/lib/hooks/useTrainingPredictionsSSE';
 
 interface PredictionsTableProps {
   jobId: string;
@@ -57,6 +58,17 @@ export function PredictionsTable({
   const [hasPredictions, setHasPredictions] = useState<boolean | null>(null);
 
   const pageSize = 10;
+
+  // SSE for live updates (only when viewing all epochs on first page)
+  const {
+    latestPrediction,
+    totalCount: sseCount,
+    isConnected: sseConnected,
+  } = useTrainingPredictionsSSE({
+    jobId,
+    authToken,
+    enabled: hasPredictions === true && selectedEpoch === null,
+  });
 
   // Check if predictions exist before polling
   const checkPredictions = useCallback(async () => {
@@ -178,6 +190,23 @@ export function PredictionsTable({
     }
   }, [hasPredictions, fetchPredictions]);
 
+  // Auto-update from SSE when new prediction arrives
+  useEffect(() => {
+    if (!latestPrediction || page !== 0 || selectedEpoch !== null) {
+      return;
+    }
+
+    setPredictions((prev) => {
+      const exists = prev.find((p) => p.id === latestPrediction.id);
+      if (exists) return prev;
+      return [latestPrediction, ...prev].slice(0, pageSize);
+    });
+
+    if (sseCount > 0) {
+      setTotalCount(sseCount);
+    }
+  }, [latestPrediction, sseCount, page, selectedEpoch, pageSize]);
+
   const toggleRow = (predId: string) => {
     setExpandedRows((prev) => {
       const next = new Set(prev);
@@ -278,11 +307,19 @@ export function PredictionsTable({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Training Predictions</CardTitle>
-            <CardDescription>
-              Model predictions on sample prompts across epochs
-            </CardDescription>
+          <div className="flex items-center gap-2">
+            <div>
+              <CardTitle>Training Predictions</CardTitle>
+              <CardDescription>
+                Model predictions on sample prompts across epochs
+              </CardDescription>
+            </div>
+            {sseConnected && (
+              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                <span className="w-2 h-2 bg-green-600 dark:bg-green-400 rounded-full animate-pulse" />
+                Live
+              </span>
+            )}
           </div>
           {epochs.length > 0 && (
             <div className="flex items-center gap-2">
