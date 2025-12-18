@@ -183,10 +183,10 @@ async function handleTrainingExecution(
     );
   }
 
-  if (!['sft', 'dpo', 'rlhf'].includes(method)) {
+  if (!['sft', 'dpo', 'rlhf', 'orpo', 'cpt'].includes(method)) {
     console.error('[TrainingExecute] Invalid method:', method);
     return NextResponse.json(
-      { error: 'Invalid method. Must be sft, dpo, or rlhf' },
+      { error: 'Invalid method. Must be sft, dpo, rlhf, orpo, or cpt' },
       { status: 400 }
     );
   }

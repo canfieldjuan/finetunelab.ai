@@ -273,7 +273,7 @@ export function PackageGenerator({ configId, configName, sessionToken, variant =
     }
   };
 
-  const getCodeSnippet = (method: 'sft' | 'dpo' | 'rlhf' | 'orpo') => {
+  const getCodeSnippet = (method: 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt') => {
     return `# Install the package
 !pip install finetune-lab-loader
 
@@ -299,7 +299,7 @@ train_${method}("${publicId}")`;
 
     console.log('[PackageGenerator] Determining compatible methods for', linkedDatasets.length, 'datasets');
 
-    const allMethods: TrainingMethod[] = ['sft', 'dpo', 'rlhf'];
+    const allMethods: TrainingMethod[] = ['sft', 'dpo', 'rlhf', 'orpo', 'cpt'];
     const compatibleMethods = allMethods.filter(method => {
       return linkedDatasets.every(dataset => isFormatCompatible(dataset.format, method));
     });
@@ -309,7 +309,7 @@ train_${method}("${publicId}")`;
   };
 
   const getMethodLabel = (method: TrainingMethod): string => {
-    const labels = { sft: 'SFT', dpo: 'DPO', rlhf: 'RLHF', orpo: 'ORPO' };
+    const labels: Record<TrainingMethod, string> = { sft: 'SFT', dpo: 'DPO', rlhf: 'RLHF', orpo: 'ORPO', cpt: 'CPT' };
     return labels[method];
   };
 

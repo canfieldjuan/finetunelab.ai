@@ -186,6 +186,7 @@ DEFAULT_MAX_GRAD_NORM_DPO = float(os.getenv("DEFAULT_MAX_GRAD_NORM_DPO", "0.3"))
 DEFAULT_MAX_LENGTH_SFT = int(os.getenv("DEFAULT_MAX_LENGTH_SFT", "2048"))
 DEFAULT_MAX_LENGTH_DPO = int(os.getenv("DEFAULT_MAX_LENGTH_DPO", "512"))
 DEFAULT_MAX_LENGTH_PPO = int(os.getenv("DEFAULT_MAX_LENGTH_PPO", "1024"))
+DEFAULT_MAX_LENGTH_CPT = int(os.getenv("DEFAULT_MAX_LENGTH_CPT", "4096"))
 DEFAULT_MAX_PROMPT_LENGTH = int(os.getenv("DEFAULT_MAX_PROMPT_LENGTH", "512"))
 LOSS_IMPROVEMENT_THRESHOLD = float(os.getenv("LOSS_IMPROVEMENT_THRESHOLD", "0.01"))
 TOKEN_SAMPLE_SIZE = int(os.getenv("TOKEN_SAMPLE_SIZE", "1000"))
@@ -209,6 +210,7 @@ DEFAULT_LEARNING_RATE_SFT = float(os.getenv("DEFAULT_LEARNING_RATE_SFT", "5e-5")
 DEFAULT_LEARNING_RATE_DPO = float(os.getenv("DEFAULT_LEARNING_RATE_DPO", "5e-6"))
 DEFAULT_LEARNING_RATE_PPO = float(os.getenv("DEFAULT_LEARNING_RATE_PPO", "1e-5"))
 DEFAULT_LEARNING_RATE_ORPO = float(os.getenv("DEFAULT_LEARNING_RATE_ORPO", "8e-6"))
+DEFAULT_LEARNING_RATE_CPT = float(os.getenv("DEFAULT_LEARNING_RATE_CPT", "2e-5"))
 DEFAULT_WEIGHT_DECAY = float(os.getenv("DEFAULT_WEIGHT_DECAY", "0.01"))
 DEFAULT_BETA = float(os.getenv("DEFAULT_BETA", "0.1"))
 
@@ -1789,12 +1791,14 @@ class ToolTrainer:
             self._train_rlhf(resume_from_checkpoint)
         elif self.training_method == "orpo":
             self._train_orpo(resume_from_checkpoint)
+        elif self.training_method == "cpt":
+            self._train_cpt(resume_from_checkpoint)
         elif self.training_method == "teacher_mode":
             self._train_teacher_mode(resume_from_checkpoint)
         else:
             raise ValueError(
                 f"Unknown training method: {self.training_method}. "
-                f"Supported methods: sft, dpo, rlhf, orpo, teacher_mode"
+                f"Supported methods: sft, dpo, rlhf, orpo, cpt, teacher_mode"
             )
 
         logger.info("=" * 80)
@@ -2898,6 +2902,100 @@ class ToolTrainer:
         orpo_output_dir = self.output_dir / "orpo_model"
         trainer.save_model(orpo_output_dir)
         logger.info(f"[ORPO] Model saved to {orpo_output_dir}")
+
+    def _train_cpt(self, resume_from_checkpoint: Optional[str] = None):
+        """Continued pre-training with causal language modeling on raw text."""
+        logger.info("[CPT] Configuring continued pre-training")
+
+        training_config = self.config["training"]
+        num_epochs = training_config.get("num_epochs", DEFAULT_NUM_EPOCHS)
+        batch_size = training_config.get("batch_size", DEFAULT_BATCH_SIZE)
+        learning_rate = training_config.get("learning_rate", DEFAULT_LEARNING_RATE_CPT)
+
+        lr_scheduler_type = training_config.get("lr_scheduler_type", DEFAULT_LR_SCHEDULER_TYPE)
+        warmup_ratio = training_config.get("warmup_ratio")
+        save_steps = training_config.get("save_steps", DEFAULT_SAVE_STEPS)
+        save_total_limit = training_config.get("save_total_limit", DEFAULT_SAVE_TOTAL_LIMIT)
+        evaluation_strategy = training_config.get("evaluation_strategy", DEFAULT_EVALUATION_STRATEGY_SFT)
+        eval_steps = training_config.get("eval_steps", DEFAULT_EVAL_STEPS)
+        eval_batch_size = training_config.get("eval_batch_size", batch_size)
+
+        packing = training_config.get("packing", True)
+
+        logger.info(f"[CPT] Training config: epochs={num_epochs}, batch_size={batch_size}, lr={learning_rate}")
+        logger.info(f"[CPT] Packing: {packing} (recommended for raw text)")
+
+        # Initialize metrics callback for progress tracking
+        progress_file = self.output_dir / PROGRESS_FILENAME
+        metrics_callback = TrainingMetricsCallback(
+            progress_file=progress_file,
+            total_epochs=num_epochs
+        )
+        metrics_callback.set_dataset_info(self.train_dataset, self.eval_dataset)
+        logger.info(f"[CPT] Progress tracking enabled: {progress_file}")
+
+        # NOTE: Predictions callback is intentionally NOT used for CPT.
+        # CPT is unsupervised learning on raw text - there are no prompt/response pairs
+        # to evaluate. Perplexity and loss curves are the appropriate quality metrics
+        # for continued pre-training. Predictions are only relevant for instruction-following
+        # models (SFT, DPO, RLHF, ORPO).
+        logger.info("[CPT] Predictions disabled (not applicable for unsupervised pre-training)")
+
+        max_seq_length = training_config.get("max_length", DEFAULT_MAX_LENGTH_CPT)
+        logger.info(f"[CPT] Max sequence length: {max_seq_length}")
+
+        training_args = SFTConfig(
+            output_dir=self.output_dir,
+            num_train_epochs=num_epochs,
+            per_device_train_batch_size=batch_size,
+            per_device_eval_batch_size=eval_batch_size,
+            gradient_accumulation_steps=training_config.get("gradient_accumulation_steps", DEFAULT_GRADIENT_ACCUMULATION_STEPS),
+            learning_rate=learning_rate,
+            lr_scheduler_type=lr_scheduler_type,
+            warmup_ratio=warmup_ratio,
+            warmup_steps=training_config.get("warmup_steps", DEFAULT_WARMUP_STEPS),
+            logging_steps=training_config.get("logging_steps", DEFAULT_LOGGING_STEPS),
+            save_steps=save_steps,
+            save_total_limit=save_total_limit,
+            eval_strategy=evaluation_strategy,
+            eval_steps=eval_steps,
+            bf16=training_config.get("bf16", True),
+            fp16=training_config.get("fp16", False),
+            optim=training_config.get("optim", DEFAULT_OPTIM_SFT),
+            gradient_checkpointing=training_config.get("gradient_checkpointing", False),
+            max_grad_norm=training_config.get("max_grad_norm", 1.0),
+            weight_decay=training_config.get("weight_decay", 0.01),
+            dataloader_num_workers=training_config.get("dataloader_num_workers", 0),
+            dataloader_prefetch_factor=training_config.get("dataloader_prefetch_factor"),
+            dataloader_pin_memory=training_config.get("dataloader_pin_memory", True),
+            group_by_length=training_config.get("group_by_length", False),
+            report_to="tensorboard" if self.config.get("tensorboard", {}).get("enabled") else None,
+            remove_unused_columns=False,
+            disable_tqdm=True
+        )
+
+        # Create formatting function for raw text
+        def format_raw_text(example):
+            """Format raw text example for CPT training."""
+            return example["text"]
+
+        logger.info("[CPT] Initializing SFT trainer for causal LM")
+        trainer = SFTTrainer(
+            model=self.model,
+            args=training_args,
+            train_dataset=self.train_dataset,
+            eval_dataset=self.eval_dataset,
+            processing_class=self.tokenizer,
+            formatting_func=format_raw_text,
+            callbacks=[metrics_callback],
+        )
+
+        logger.info("[CPT] Starting training")
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+
+        logger.info(f"[CPT] Saving final model to {self.output_dir}")
+        trainer.save_model(self.output_dir)
+        self.tokenizer.save_pretrained(self.output_dir)
 
     def _train_teacher_mode(self, resume_from_checkpoint: Optional[str] = None):
         """Teacher mode training (Toolformer-style)."""

@@ -904,6 +904,38 @@ def detect_architecture_params(model_name):
         return ['q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj']
 
 
+class IntegerDtypeCollator:
+    """
+    Custom data collator that ensures integer dtypes for embedding tensors.
+    
+    This fixes a bug in TRL 0.26+ where pre-tokenized data can be cast to FloatTensor,
+    causing "Expected tensor for argument #1 'indices' to have scalar type Long/Int" errors.
+    
+    GitHub issue: https://github.com/huggingface/trl/issues/4103
+    """
+    
+    def __init__(self, tokenizer, pad_to_multiple_of=None):
+        self.base_collator = DataCollatorForSeq2Seq(
+            tokenizer=tokenizer,
+            padding=True,
+            pad_to_multiple_of=pad_to_multiple_of
+        )
+    
+    def __call__(self, features):
+        # Use base collator for padding
+        batch = self.base_collator(features)
+        
+        # Ensure integer dtypes for embedding-related tensors
+        # This fixes TRL bug where tensors get cast to float
+        integer_keys = ['input_ids', 'labels', 'attention_mask']
+        for key in integer_keys:
+            if key in batch and hasattr(batch[key], 'dtype'):
+                if batch[key].dtype not in (torch.long, torch.int, torch.int32, torch.int64):
+                    batch[key] = batch[key].long()
+        
+        return batch
+
+
 def create_preference_dataset(dataset, split_name="train"):
     """Convert dataset to preference format for DPO/ORPO (prompt, chosen, rejected)."""
     logger.info(f"[{split_name.upper()}] Creating preference dataset")
@@ -1375,7 +1407,7 @@ class TrainingMetricsCallback(TrainerCallback):
             logger.warning(f"[Evaluation] Failed to process eval metrics: {e}")
 
 # Extract config with backward compatibility
-training_method = "${training?.method || 'sft'}"  # sft, dpo, orpo, rlhf
+training_method = "${training?.method || 'sft'}"  # sft, dpo, orpo, rlhf, cpt
 logger.info(f"[Training] Method: {training_method}")
 
 lora_config_dict = ${JSON.stringify(training?.lora_config || {}).replace(/true/g, 'True').replace(/false/g, 'False')}
@@ -1488,21 +1520,25 @@ predictions_enabled = predictions_config.get('enabled', False)
 
 # Create predictions callback if enabled
 callbacks = [metrics_callback] if IS_CLOUD else []
-if predictions_enabled and IS_CLOUD:
+
+# NOTE: Predictions are only applicable for instruction-following models (SFT, DPO, RLHF, ORPO).
+# CPT is unsupervised pre-training on raw text - there are no prompt/response pairs to evaluate.
+# Perplexity and loss curves are the appropriate quality metrics for CPT.
+if predictions_enabled and IS_CLOUD and training_method != "cpt":
     try:
         # Import predictions modules from the correct path
         import sys
         import os
-        
+
         # TrainingPredictionsCallback is now embedded above
-        
+
         # Ensure required predictions parameters
         job_id = JOB_ID
         user_id = os.getenv('USER_ID', 'default')  # TODO: Pass user_id from deployment
-        
+
         logger.info(f"[Predictions] Enabled with config: {predictions_config}")
         logger.info(f"[Predictions] Job ID: {job_id}, User ID: {user_id}")
-        
+
         predictions_callback = TrainingPredictionsCallback(
             dataset_path="/workspace/dataset.jsonl",
             job_id=job_id,
@@ -1522,6 +1558,8 @@ if predictions_enabled and IS_CLOUD:
 else:
     if not IS_CLOUD:
         logger.info("[Predictions] Disabled in local mode")
+    elif training_method == "cpt":
+        logger.info("[Predictions] Disabled for CPT (not applicable for unsupervised pre-training)")
     else:
         logger.info("[Predictions] Disabled in config")
 
@@ -1579,13 +1617,11 @@ if training_method == "sft":
         packing=${(training?.packing ?? false) ? 'True' : 'False'},
     )
 
-    data_collator = None
-    if response_template:
-        print("[SFT] Using DataCollatorForSeq2Seq (response masking via labels)")
-        data_collator = DataCollatorForSeq2Seq(
-            tokenizer=tokenizer,
-            padding=True
-        )
+    # Always use IntegerDtypeCollator to fix TRL 0.26+ dtype bug
+    # This ensures input_ids/labels/attention_mask remain as integer tensors
+    # GitHub issue: https://github.com/huggingface/trl/issues/4103
+    data_collator = IntegerDtypeCollator(tokenizer=tokenizer)
+    logger.info("[SFT] Using IntegerDtypeCollator to fix TRL dtype bug")
 
     trainer = SFTTrainer(
         model=model,
@@ -1676,8 +1712,25 @@ elif training_method in ["dpo", "orpo"]:
             callbacks=callbacks,
         )
 
+elif training_method == "cpt":
+    # Continued Pre-Training (CPT) - causal LM on raw text
+    logger.info("[CPT] Configuring continued pre-training with SFTTrainer")
+
+    def format_raw_text(example):
+        return example["text"]
+
+    trainer = SFTTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        processing_class=tokenizer,
+        formatting_func=format_raw_text,
+        callbacks=callbacks,
+    )
+
 else:
-    raise ValueError(f"Unsupported training method: {training_method}. Supported: sft, dpo, orpo")
+    raise ValueError(f"Unsupported training method: {training_method}. Supported: sft, dpo, orpo, cpt")
 
 # Train
 logger.info(f"[{training_method.upper()}] Starting training...")

@@ -102,7 +102,7 @@ export interface SessionMetrics {
 
 // Training effectiveness metrics interface
 export interface TrainingEffectivenessMetrics {
-  trainingMethod: string; // 'base', 'sft', 'dpo', 'rlhf'
+  trainingMethod: string; // 'base', 'sft', 'dpo', 'rlhf', 'orpo', 'cpt'
   modelCount: number;
 
   // Aggregated performance
@@ -1261,8 +1261,8 @@ function aggregateTrainingEffectiveness(
     });
   }
 
-  // Sort by training method (base, sft, dpo, rlhf, others)
-  const methodOrder: Record<string, number> = { 'base': 0, 'sft': 1, 'dpo': 2, 'rlhf': 3 };
+  // Sort by training method (base, sft, dpo, rlhf, orpo, cpt, others)
+  const methodOrder: Record<string, number> = { 'base': 0, 'sft': 1, 'dpo': 2, 'rlhf': 3, 'orpo': 4, 'cpt': 5 };
   trainingMetrics.sort((a, b) => {
     const aOrder = methodOrder[a.trainingMethod as keyof typeof methodOrder] ?? 999;
     const bOrder = methodOrder[b.trainingMethod as keyof typeof methodOrder] ?? 999;

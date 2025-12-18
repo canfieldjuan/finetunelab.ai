@@ -372,8 +372,8 @@ export const trainingJobHandler: JobHandler = async (config: JobConfig, context:
     throw new Error(error);
   }
 
-  if (!['sft', 'dpo', 'rlhf'].includes(method)) {
-    const error = `Invalid method: ${method}. Must be sft, dpo, or rlhf`;
+  if (!['sft', 'dpo', 'rlhf', 'orpo', 'cpt'].includes(method)) {
+    const error = `Invalid method: ${method}. Must be sft, dpo, rlhf, orpo, or cpt`;
     console.error('[DAG-TrainingHandler] Error:', error);
     context.log(`ERROR: ${error}`);
     throw new Error(error);
@@ -751,7 +751,7 @@ export const trainingJobHandler: JobHandler = async (config: JobConfig, context:
 
     const requestBody: TrainingExecutionRequest = {
       public_id: publicId,
-      method: method as 'sft' | 'dpo' | 'rlhf' | 'orpo',
+      method: method as 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt',
       provider: provider as 'colab' | 'huggingface' | 'openai' | 'local',
       callback_url,
       openai_model,
