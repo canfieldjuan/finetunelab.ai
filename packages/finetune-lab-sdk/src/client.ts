@@ -246,6 +246,59 @@ class TrainingClient {
       payload
     );
   }
+
+  /**
+   * List all training jobs for the authenticated user
+   */
+  async listJobs(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<Record<string, unknown>> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', options.limit.toString());
+    if (options?.offset) params.set('offset', options.offset.toString());
+
+    const endpoint = `/api/training/jobs${params.toString() ? `?${params.toString()}` : ''}`;
+    return this.client.request<Record<string, unknown>>('GET', endpoint);
+  }
+
+  /**
+   * Get complete training metrics history for a job
+   */
+  async getMetrics(jobId: string): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(
+      'GET',
+      `/api/training/local/${jobId}/metrics`
+    );
+  }
+
+  /**
+   * Get training logs for debugging and monitoring
+   */
+  async getLogs(
+    jobId: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<Record<string, unknown>> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', options.limit.toString());
+    if (options?.offset) params.set('offset', options.offset.toString());
+
+    const endpoint = `/api/training/local/${jobId}/logs${params.toString() ? `?${params.toString()}` : ''}`;
+    return this.client.request<Record<string, unknown>>('GET', endpoint);
+  }
+
+  /**
+   * Get structured error information from training logs
+   */
+  async getErrors(jobId: string): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(
+      'GET',
+      `/api/training/local/${jobId}/errors`
+    );
+  }
 }
 
 // ============================================================================

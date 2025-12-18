@@ -337,6 +337,115 @@ class TrainingClient:
 
         return self._parent._request("POST", "/api/training/local/jobs", json=payload)
 
+    def list_jobs(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        List all training jobs for the authenticated user.
+
+        Args:
+            limit: Maximum number of jobs to return (default 50)
+            offset: Offset for pagination (default 0)
+
+        Returns:
+            Dict with 'jobs' array and pagination info
+
+        Example:
+            >>> jobs = client.training.list_jobs(limit=10)
+            >>> for job in jobs['jobs']:
+            ...     print(f"{job['id']}: {job['status']}")
+        """
+        params = {"limit": str(limit), "offset": str(offset)}
+        return self._parent._request("GET", "/api/training/jobs", params=params)
+
+    def get_metrics(self, job_id: str) -> Dict[str, Any]:
+        """
+        Get complete training metrics history for a job.
+
+        Returns all metric points including:
+        - Loss metrics (train_loss, eval_loss)
+        - GPU metrics (memory, utilization)
+        - Performance (samples/sec, tokens/sec)
+        - Training params (learning_rate, grad_norm)
+
+        Args:
+            job_id: Training job ID
+
+        Returns:
+            Dict with 'job_id' and 'metrics' array
+
+        Example:
+            >>> metrics = client.training.get_metrics("job_abc123")
+            >>> for point in metrics['metrics']:
+            ...     print(f"Step {point['step']}: Loss {point['train_loss']}")
+        """
+        return self._parent._request("GET", f"/api/training/local/{job_id}/metrics")
+
+    def get_logs(
+        self,
+        job_id: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Get training logs for debugging and monitoring.
+
+        Access raw console output including:
+        - Model initialization logs
+        - Training progress messages
+        - Warnings and errors
+        - Checkpoint notifications
+
+        Args:
+            job_id: Training job ID
+            limit: Max log lines to return (default 100)
+            offset: Line offset for pagination (default 0)
+
+        Returns:
+            Dict with 'logs' array, 'total_lines', 'offset', 'limit'
+
+        Example:
+            >>> logs = client.training.get_logs("job_abc123", limit=50)
+            >>> for line in logs['logs']:
+            ...     print(line)
+            >>>
+            >>> # Get next page
+            >>> more_logs = client.training.get_logs("job_abc123", limit=50, offset=50)
+        """
+        params = {"limit": str(limit), "offset": str(offset)}
+        return self._parent._request(
+            "GET",
+            f"/api/training/local/{job_id}/logs",
+            params=params,
+        )
+
+    def get_errors(self, job_id: str) -> Dict[str, Any]:
+        """
+        Get structured error information from training logs.
+
+        Returns:
+        - Deduplicated error messages with counts
+        - Full traceback with parsed frames
+        - Error classification and phase info
+
+        Args:
+            job_id: Training job ID
+
+        Returns:
+            Dict with unique errors, counts, and tracebacks
+
+        Example:
+            >>> errors = client.training.get_errors("job_abc123")
+            >>> print(f"Found {errors['unique_error_count']} unique errors")
+            >>> for error in errors['errors']:
+            ...     print(f"{error['message']} (count: {error['count']})")
+            ...     if error['traceback']:
+            ...         print(error['traceback'])
+        """
+        return self._parent._request("GET", f"/api/training/local/{job_id}/errors")
+
 
 class FinetuneLabClient:
     """
