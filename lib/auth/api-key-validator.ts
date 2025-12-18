@@ -23,10 +23,14 @@ export const API_KEY_SCOPES: Record<ApiKeyScope, { label: string; description: s
     label: 'Training',
     description: 'Training metrics, predictions, and job management',
     endpoints: [
+      '/api/training/jobs',
+      '/api/training/jobs/*',
       '/api/training/local/metrics',
       '/api/training/local/predictions',
+      '/api/training/local/*/metrics',
+      '/api/training/local/*/logs',
+      '/api/training/local/*/errors',
       '/api/training/predictions/*',
-      '/api/training/jobs/*/metrics',
     ],
   },
   production: {
