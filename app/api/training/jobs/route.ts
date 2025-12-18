@@ -72,50 +72,68 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { STATUS } from '@/lib/constants';
 import type { TrainingJob } from '@/lib/hooks/useTrainingJobsRealtime';
+import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
 
 interface ReconciledTrainingJob extends TrainingJob {
   _stale?: boolean;
   _originalStatus?: string;
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(request: NextRequest) {
   console.log('[Training Jobs API] GET request');
 
   try {
-    // Get auth token
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Missing authorization' },
-        { status: 401 }
-      );
+    let userId: string | null = null;
+
+    // Try API key authentication first (for SDK access)
+    const apiKeyValidation = await validateRequestWithScope(request.headers, 'training');
+
+    if (apiKeyValidation.isValid && apiKeyValidation.userId) {
+      userId = apiKeyValidation.userId;
+      console.log('[Training Jobs API] Authenticated via API key:', userId);
+    } else {
+      // Fallback to Bearer token authentication (for web UI)
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return NextResponse.json(
+          { error: 'Missing authorization' },
+          { status: 401 }
+        );
+      }
+
+      const token = authHeader.substring(7);
+
+      const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+
+      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+
+      if (authError || !user) {
+        console.error('[Training Jobs API] Auth error:', authError);
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      userId = user.id;
+      console.log('[Training Jobs API] Authenticated via Bearer token:', userId);
     }
 
-    const token = authHeader.substring(7);
-
-    // Verify user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      console.error('[Training Jobs API] Auth error:', authError);
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    console.log('[Training Jobs API] Fetching jobs for user:', user.id);
+    console.log('[Training Jobs API] Fetching jobs for user:', userId);
 
     // Fetch recent training jobs (last 50 for search/filter, but display will show 5 by default)
     const { data: jobs, error: fetchError } = await supabase
       .from('local_training_jobs')
       .select('id, model_name, status, started_at, completed_at, created_at')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(parseInt(process.env.TRAINING_JOBS_LIST_LIMIT || '50', 10));
 
