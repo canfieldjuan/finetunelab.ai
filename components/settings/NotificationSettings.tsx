@@ -20,6 +20,10 @@ interface AlertPreferences {
   alert_job_cancelled: boolean;
   alert_batch_test_completed: boolean;
   alert_batch_test_failed: boolean;
+  alert_scheduled_eval_completed: boolean;
+  alert_scheduled_eval_failed: boolean;
+  alert_scheduled_eval_disabled: boolean;
+  alert_scheduled_eval_regression: boolean;
   alert_gpu_oom: boolean;
   alert_disk_warning: boolean;
   alert_timeout_warning: boolean;
@@ -41,6 +45,10 @@ interface UserWebhook {
   alert_job_cancelled: boolean;
   alert_batch_test_completed: boolean;
   alert_batch_test_failed: boolean;
+  alert_scheduled_eval_completed: boolean;
+  alert_scheduled_eval_failed: boolean;
+  alert_scheduled_eval_disabled: boolean;
+  alert_scheduled_eval_regression: boolean;
   alert_gpu_oom: boolean;
   last_success_at: string | null;
   last_failure_at: string | null;
@@ -57,6 +65,10 @@ const ALERT_TYPES = [
   { key: 'alert_gpu_oom', label: 'GPU Out of Memory', description: 'When CUDA runs out of memory' },
   { key: 'alert_batch_test_failed', label: 'Test Run Failed', description: 'When a batch test run fails (or has failed prompts)' },
   { key: 'alert_batch_test_completed', label: 'Test Run Completed', description: 'When a batch test run completes successfully' },
+  { key: 'alert_scheduled_eval_completed', label: 'Scheduled Eval Completed', description: 'When a scheduled evaluation completes successfully' },
+  { key: 'alert_scheduled_eval_failed', label: 'Scheduled Eval Failed', description: 'When a scheduled evaluation fails' },
+  { key: 'alert_scheduled_eval_disabled', label: 'Scheduled Eval Disabled', description: 'When a scheduled evaluation is auto-disabled after failures' },
+  { key: 'alert_scheduled_eval_regression', label: 'Scheduled Eval Regression', description: 'When a scheduled evaluation detects performance regression' },
   { key: 'alert_job_started', label: 'Job Started', description: 'When training begins' },
   { key: 'alert_job_cancelled', label: 'Job Cancelled', description: 'When training is manually cancelled' },
   { key: 'alert_disk_warning', label: 'Disk Warning', description: 'When disk space is low' },

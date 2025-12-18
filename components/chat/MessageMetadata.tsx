@@ -1,6 +1,6 @@
 'use client';
 
-import { Cpu, Zap, Activity } from 'lucide-react';
+import { Cpu, Zap, Activity, Database } from 'lucide-react';
 
 interface MessageMetadataProps {
   modelName?: string;
@@ -8,6 +8,15 @@ interface MessageMetadataProps {
   inputTokens?: number;
   outputTokens?: number;
   latencyMs?: number;
+
+  // GraphRAG metadata
+  graphragUsed?: boolean;
+  graphragNodes?: number;
+  graphragChunks?: number;
+  graphragRetrievalMs?: number;
+  graphragRelevance?: number;
+  graphragGrounded?: boolean;
+  graphragMethod?: string;
 }
 
 /**
@@ -20,9 +29,16 @@ export function MessageMetadata({
   inputTokens,
   outputTokens,
   latencyMs,
+  graphragUsed,
+  graphragNodes,
+  graphragChunks,
+  graphragRetrievalMs,
+  graphragRelevance,
+  graphragGrounded,
+  graphragMethod,
 }: MessageMetadataProps) {
   // Only display if we have at least one piece of metadata
-  const hasMetadata = modelName || inputTokens || outputTokens || latencyMs;
+  const hasMetadata = modelName || inputTokens || outputTokens || latencyMs || graphragUsed;
   
   if (!hasMetadata) {
     return null;
@@ -70,6 +86,20 @@ export function MessageMetadata({
         <div className="flex items-center gap-1.5">
           <Zap className="w-3.5 h-3.5" />
           <span>{formatLatency(latencyMs)}</span>
+        </div>
+      )}
+
+      {/* GraphRAG Retrieval Stats */}
+      {graphragUsed && (
+        <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+          <Database className="w-3.5 h-3.5" />
+          <span className="font-medium">RAG:</span>
+          <span className="text-muted-foreground/90">
+            {graphragNodes} nodes
+            {graphragChunks !== undefined && ` · ${graphragChunks} chunks`}
+            {graphragRetrievalMs !== undefined && ` · ${Math.round(graphragRetrievalMs)}ms`}
+            {graphragRelevance !== undefined && ` · ${Math.round(graphragRelevance * 100)}% rel`}
+          </span>
         </div>
       )}
     </div>

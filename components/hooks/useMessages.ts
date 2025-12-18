@@ -131,13 +131,36 @@ export function useMessages(
 
             // PRIORITY 1: Use persisted metadata if available
             if (msg.metadata && typeof msg.metadata === 'object') {
-              const meta = msg.metadata as { model_name?: string; provider?: string };
+              const meta = msg.metadata as {
+                model_name?: string;
+                provider?: string;
+                graphrag?: {
+                  graph_used?: boolean;
+                  nodes_retrieved?: number;
+                  context_chunks_used?: number;
+                  retrieval_time_ms?: number;
+                  context_relevance_score?: number;
+                  answer_grounded_in_graph?: boolean;
+                  retrieval_method?: string;
+                };
+              };
               if (meta.model_name) {
                 enrichedMsg.model_name = meta.model_name;
                 enrichedCount++;
                 // Also use persisted provider if message provider field is missing
                 if (!enrichedMsg.provider && meta.provider) {
                   enrichedMsg.provider = meta.provider;
+                }
+
+                // Extract GraphRAG metadata if available
+                if (meta.graphrag) {
+                  enrichedMsg.graphrag_used = meta.graphrag.graph_used;
+                  enrichedMsg.graphrag_nodes = meta.graphrag.nodes_retrieved;
+                  enrichedMsg.graphrag_chunks = meta.graphrag.context_chunks_used;
+                  enrichedMsg.graphrag_retrieval_ms = meta.graphrag.retrieval_time_ms;
+                  enrichedMsg.graphrag_relevance = meta.graphrag.context_relevance_score;
+                  enrichedMsg.graphrag_grounded = meta.graphrag.answer_grounded_in_graph;
+                  enrichedMsg.graphrag_method = meta.graphrag.retrieval_method;
                 }
 
                 // Apply content truncation if needed

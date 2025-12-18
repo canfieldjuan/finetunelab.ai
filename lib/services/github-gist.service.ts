@@ -26,12 +26,12 @@ interface CreateGistResult {
 /**
  * Create a GitHub Gist with training notebook
  * @param publicId - Public training configuration ID
- * @param trainingMethod - Training method (sft/dpo/rlhf/orpo)
+ * @param trainingMethod - Training method (sft/dpo/rlhf/orpo/cpt)
  * @param userGithubToken - Optional user's GitHub OAuth token (preferred over server token)
  */
 export async function createTrainingGist(
   publicId: string,
-  trainingMethod: 'sft' | 'dpo' | 'rlhf' | 'orpo',
+  trainingMethod: 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt',
   userGithubToken?: string
 ): Promise<CreateGistResult> {
   console.log(`[GistService] Creating Gist for ${trainingMethod} training: ${publicId}`);
@@ -120,7 +120,7 @@ function buildColabUrl(gistId: string, filename: string): string {
  */
 export async function createTrainingGists(
   publicId: string,
-  methods: Array<'sft' | 'dpo' | 'rlhf' | 'orpo'>,
+  methods: Array<'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt'>,
   userGithubToken?: string
 ): Promise<Record<string, CreateGistResult>> {
   console.log(`[GistService] Creating ${methods.length} Gists for: ${publicId}`);

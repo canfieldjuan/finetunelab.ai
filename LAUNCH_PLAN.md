@@ -9,21 +9,22 @@
 **Status: IN PROGRESS**
 
 #### Content Creation
-- [ ] **3-minute demo video** - Screen recording of full workflow
+- [x] **How-to videos created** - Screen recordings of key workflows ✅
   - Upload dataset → Train with live predictions → Deploy → Monitor
   - Emphasize: Training predictions, batch testing, production monitoring
-  - Platform: Loom/OBS → Upload to YouTube
+  - **Video URL: https://app.guidde.com/share/playbooks/4bo1pisi2GNonHGAD8f9AF**
+  - **Status: COMPLETED - Video embedded on welcome page**
   
 - [ ] **Before/After comparison infographic**
   - Traditional MLOps (10+ tools, 3 days) vs Finetune Lab (1 platform, 10 minutes)
   - Tool: Canva/Figma
   
-- [ ] **5 Screenshot threads** (Twitter-ready)
-  1. Training predictions dashboard
-  2. Batch testing analytics
-  3. Production monitoring
-  4. Cost tracking
-  5. Full workflow end-to-end
+- [ ] **Extract video thumbnails for Twitter threads**
+  1. Training predictions dashboard (from video)
+  2. Batch testing analytics (from video)
+  3. Production monitoring (from video)
+  4. Cost tracking (from video)
+  5. Full workflow end-to-end (from video)
   
 - [ ] **Product Hunt assets**
   - [x] Launch copy written

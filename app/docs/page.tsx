@@ -4,6 +4,7 @@ import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Head from 'next/head';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -13,14 +14,10 @@ export default function DocsPage() {
   const { user, signOut, loading } = useAuth();
   const router = useRouter();
 
-  if (loading) {
-    return <LoadingState fullScreen />;
-  }
-
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
+  // Public page - no auth required
+  // if (loading) {
+  //   return <LoadingState fullScreen />;
+  // }
 
   const docSections = [
     {
@@ -98,11 +95,41 @@ export default function DocsPage() {
   ];
 
   return (
-    <PageWrapper currentPage="docs" user={user} signOut={signOut}>
-      <PageHeader
-        title="Documentation Hub"
-        description="LLM-First documentation designed for AI-assisted development"
-      />
+    <>
+      <Head>
+        <title>AI Model Fine-Tuning Documentation | API Reference, Guides & Examples - Fine-Tune Lab</title>
+        <meta
+          name="description"
+          content="Complete LLM fine-tuning documentation with API reference, Python/Node.js SDKs, training guides, troubleshooting, and copy-paste code examples. Built for AI-assisted development with Llama 3.3, Mistral, Qwen models."
+        />
+        <meta
+          name="keywords"
+          content="LLM fine-tuning documentation, AI model training API reference, Llama 3.3 training guide, Python fine-tuning SDK, Node.js AI training library, OpenAI API alternative docs, LoRA fine-tuning tutorial, QLoRA 4-bit training guide, custom AI model API, RunPod GPU training documentation, fine-tuning troubleshooting guide, JSONL dataset format examples, AI training REST API, machine learning API documentation, LLM deployment guide, model inference API reference, batch testing API docs, training metrics WebSocket API, fine-tuning cost calculator, AI model evaluation guide, Hugging Face model deployment, vLLM inference documentation, A4000 A5000 H100 GPU pricing, AI training Python examples, LLM API authentication guide, model endpoint configuration, training hyperparameters reference, gradient accumulation guide, early stopping configuration, learning rate scheduler docs, AI model versioning guide, fine-tuning best practices"
+        />
+        <meta name="author" content="Fine-Tune Lab" />
+        <meta name="robots" content="index, follow" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="AI Model Fine-Tuning Documentation | Complete API Reference & Guides" />
+        <meta property="og:description" content="LLM-first documentation for fine-tuning Llama, Mistral, and Qwen models. API reference, SDKs, guides, and working code examples optimized for AI assistants." />
+        <meta property="og:url" content="https://finetunelab.ai/docs" />
+        
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="AI Model Fine-Tuning Documentation | API Reference & Guides" />
+        <meta name="twitter:description" content="Complete documentation for training custom LLMs. API reference, Python/Node.js SDKs, troubleshooting guides, and copy-paste examples." />
+        
+        {/* Canonical URL */}
+        <link rel="canonical" href="https://finetunelab.ai/docs" />
+      </Head>
+
+      <PageWrapper currentPage="docs" user={user} signOut={signOut}>
+        <PageHeader
+          title="Documentation Hub"
+          description="LLM-First documentation designed for AI-assisted development"
+        />
 
           {/* What Makes This Different */}
           <div className="mb-12 p-6 bg-muted/50 border rounded-lg">
@@ -178,6 +205,82 @@ export default function DocsPage() {
               </Link>
             </div>
           </div>
+
+          {/* JSON-LD Structured Data */}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'TechArticle',
+                headline: 'AI Model Fine-Tuning Documentation and API Reference',
+                description: 'Complete documentation for fine-tuning LLMs including API reference, Python and Node.js SDKs, training guides, troubleshooting, and code examples for Llama 3.3, Mistral, and Qwen models.',
+                author: {
+                  '@type': 'Organization',
+                  name: 'Fine-Tune Lab',
+                  url: 'https://finetunelab.ai'
+                },
+                publisher: {
+                  '@type': 'Organization',
+                  name: 'Fine-Tune Lab',
+                  url: 'https://finetunelab.ai'
+                },
+                datePublished: '2024-01-01',
+                dateModified: new Date().toISOString().split('T')[0],
+                inLanguage: 'en-US',
+                about: [
+                  {
+                    '@type': 'Thing',
+                    name: 'LLM Fine-Tuning'
+                  },
+                  {
+                    '@type': 'Thing',
+                    name: 'API Documentation'
+                  },
+                  {
+                    '@type': 'Thing',
+                    name: 'Machine Learning'
+                  }
+                ],
+                mainEntity: {
+                  '@type': 'ItemList',
+                  itemListElement: [
+                    {
+                      '@type': 'ListItem',
+                      position: 1,
+                      name: 'Quick Start Guide',
+                      url: 'https://finetunelab.ai/docs/quick-start'
+                    },
+                    {
+                      '@type': 'ListItem',
+                      position: 2,
+                      name: 'API Reference',
+                      url: 'https://finetunelab.ai/docs/api-reference'
+                    },
+                    {
+                      '@type': 'ListItem',
+                      position: 3,
+                      name: 'Python & Node.js SDKs',
+                      url: 'https://finetunelab.ai/docs/sdk'
+                    },
+                    {
+                      '@type': 'ListItem',
+                      position: 4,
+                      name: 'Training Guides',
+                      url: 'https://finetunelab.ai/docs/guides'
+                    },
+                    {
+                      '@type': 'ListItem',
+                      position: 5,
+                      name: 'Troubleshooting',
+                      url: 'https://finetunelab.ai/docs/troubleshooting'
+                    }
+                  ]
+                }
+              })
+            }}
+          />
     </PageWrapper>
+    </>
   );
 }

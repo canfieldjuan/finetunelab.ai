@@ -5,7 +5,7 @@
 
 import { getGraphitiClient, type GraphitiSearchParams, type GraphitiSearchResult } from './client';
 import { graphragConfig } from '../config';
-import type { SearchResult, SearchSource } from '../types';
+import type { SearchResult, SearchSource, GraphRAGRetrievalMetadata } from '../types';
 
 // ============================================================================
 // Search Service
@@ -44,14 +44,31 @@ export class SearchService {
 
     console.log('[SearchService] Extracted sources:', sources.length);
 
+    // Calculate relevance score from edges
+    const relevanceScores = graphitiResult.edges.map(e => e.score || 0);
+    const avgRelevance = relevanceScores.length > 0
+      ? relevanceScores.reduce((a, b) => a + b, 0) / relevanceScores.length
+      : 0;
+
+    const queryTime = Date.now() - startTime;
+
     return {
       context,
       sources,
       metadata: {
+        // Existing fields
         searchMethod: graphragConfig.search.searchMethod,
         resultsCount: graphitiResult.edges.length,
-        queryTime: Date.now() - startTime,
-      },
+        queryTime,
+
+        // New GraphRAG analytics fields
+        graph_used: graphitiResult.edges.length > 0,
+        nodes_retrieved: graphitiResult.edges.length,
+        context_chunks_used: sources.length,
+        retrieval_time_ms: queryTime,
+        context_relevance_score: avgRelevance,
+        answer_grounded_in_graph: sources.length > 0, // Will be refined post-response if needed
+      } as GraphRAGRetrievalMetadata,
     };
   }
 
@@ -84,14 +101,31 @@ export class SearchService {
     const context = this.buildContextFromEdges(filteredEdges);
     const sources = this.extractSourcesFromEdges(filteredEdges);
 
+    // Calculate relevance score from filtered edges
+    const relevanceScores = filteredEdges.map(e => e.score || 0);
+    const avgRelevance = relevanceScores.length > 0
+      ? relevanceScores.reduce((a, b) => a + b, 0) / relevanceScores.length
+      : 0;
+
+    const queryTime = Date.now() - startTime;
+
     return {
       context,
       sources,
       metadata: {
+        // Existing fields
         searchMethod: 'hybrid',
         resultsCount: filteredEdges.length,
-        queryTime: Date.now() - startTime,
-      },
+        queryTime,
+
+        // New GraphRAG analytics fields
+        graph_used: filteredEdges.length > 0,
+        nodes_retrieved: filteredEdges.length,
+        context_chunks_used: sources.length,
+        retrieval_time_ms: queryTime,
+        context_relevance_score: avgRelevance,
+        answer_grounded_in_graph: sources.length > 0,
+      } as GraphRAGRetrievalMetadata,
     };
   }
 

@@ -27,6 +27,8 @@ export interface NormalizedExample {
   // RLHF format
   response?: string;
   reward?: number;
+  // CPT/raw text format - preserve raw text
+  text?: string;
   // Preserve metadata
   metadata?: Record<string, unknown>;
 }
@@ -224,12 +226,14 @@ function normalizeExample(
   }
 
   // Standard text format: {text: "..."}
+  // Used for Continued Pre-Training (CPT) - raw text without structure
   if (DATASET_FIELDS.TEXT in example && typeof example.text === 'string') {
-    console.log('[FormatNormalizer] Converting standard text format');
+    console.log('[FormatNormalizer] Converting standard text format (CPT/raw text)');
 
-    // Keep as-is for standard format
-    // Validation will handle this differently
-    return null;
+    // Return text as-is (no conversion to messages format)
+    return {
+      text: example.text
+    } as unknown as NormalizedExample;
   }
 
   // Unnatural Instructions format: {instruction: "...", instances: [{input: "...", output: "..."}]}

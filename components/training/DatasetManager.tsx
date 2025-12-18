@@ -13,10 +13,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RefreshCw, Upload, Search, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp, Filter, X } from 'lucide-react';
-import type { TrainingDatasetRecord } from '@/lib/training/dataset.types';
+import type { TrainingDatasetRecord, StorageProvider } from '@/lib/training/dataset.types';
 import { supabase } from '@/lib/supabaseClient';
 
-type DatasetFormat = 'chatml' | 'sharegpt' | 'jsonl' | 'dpo' | 'rlhf' | 'alpaca' | 'openorca' | 'unnatural';
+type DatasetFormat = 'chatml' | 'sharegpt' | 'jsonl' | 'dpo' | 'rlhf' | 'alpaca' | 'openorca' | 'unnatural' | 'raw_text';
 
 interface DatasetManagerProps {
   sessionToken?: string;
@@ -34,6 +34,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
   // Filter state
   const [filterFormat, setFilterFormat] = useState<string>('all');
   const [filterSize, setFilterSize] = useState<string>('all');
+  const [filterStorage, setFilterStorage] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('newest');
 
   // Upload form state
@@ -41,6 +42,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [format, setFormat] = useState<DatasetFormat>('chatml');
+  const [storageProvider, setStorageProvider] = useState<StorageProvider>('supabase');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -157,6 +159,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
       formData.append('file', file);
       formData.append('name', name);
       formData.append('format', format);
+      formData.append('storage_provider', storageProvider);
       if (description) formData.append('description', description);
       if (configId) formData.append('config_id', configId);
 
@@ -234,6 +237,11 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
 
       // Format filter
       if (filterFormat !== 'all' && dataset.format !== filterFormat) {
+        return false;
+      }
+
+      // Storage provider filter
+      if (filterStorage !== 'all' && dataset.storage_provider !== filterStorage) {
         return false;
       }
 
@@ -340,6 +348,26 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="storage-provider">Storage Provider</Label>
+              <Select
+                value={storageProvider}
+                onValueChange={(v: StorageProvider) => setStorageProvider(v)}
+                disabled={uploading}
+              >
+                <SelectTrigger id="storage-provider">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="supabase">Supabase Storage</SelectItem>
+                  <SelectItem value="s3">AWS S3</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Choose where to store your dataset. RunPod uses Supabase, AWS SageMaker uses S3.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="dataset-name">Name</Label>
               <Input
                 id="dataset-name"
@@ -351,12 +379,12 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="dataset-description">Description (optional)</Label>
+              <Label htmlFor="dataset-description">Description</Label>
               <Input
                 id="dataset-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe your dataset..."
+                placeholder="Describe your dataset (optional)..."
                 disabled={uploading}
               />
             </div>
@@ -376,6 +404,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
                   <SelectItem value="alpaca">Alpaca (Instruction-Input-Output)</SelectItem>
                   <SelectItem value="openorca">OpenOrca (System-Question-Response)</SelectItem>
                   <SelectItem value="unnatural">Unnatural Instructions (Task-Based)</SelectItem>
+                  <SelectItem value="raw_text">Raw Text (Continued Pre-Training)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -479,6 +508,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
                   <SelectItem value="alpaca">Alpaca</SelectItem>
                   <SelectItem value="openorca">OpenOrca</SelectItem>
                   <SelectItem value="unnatural">Unnatural</SelectItem>
+                  <SelectItem value="raw_text">Raw Text</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -491,6 +521,17 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
                   <SelectItem value="small">&lt; 1 MB</SelectItem>
                   <SelectItem value="medium">1-10 MB</SelectItem>
                   <SelectItem value="large">&gt; 10 MB</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterStorage} onValueChange={setFilterStorage}>
+                <SelectTrigger className="w-32 h-8 text-xs">
+                  <SelectValue placeholder="Storage" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Storage</SelectItem>
+                  <SelectItem value="supabase">Supabase</SelectItem>
+                  <SelectItem value="s3">AWS S3</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -507,7 +548,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
                 </SelectContent>
               </Select>
 
-              {(filterFormat !== 'all' || filterSize !== 'all' || searchQuery) && (
+              {(filterFormat !== 'all' || filterSize !== 'all' || filterStorage !== 'all' || searchQuery) && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -515,6 +556,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
                   onClick={() => {
                     setFilterFormat('all');
                     setFilterSize('all');
+                    setFilterStorage('all');
                     setSearchQuery('');
                   }}
                 >
@@ -546,6 +588,7 @@ export function DatasetManager({ sessionToken, configId }: DatasetManagerProps) 
                   setSearchQuery('');
                   setFilterFormat('all');
                   setFilterSize('all');
+                  setFilterStorage('all');
                 }}
                 variant="outline"
               >

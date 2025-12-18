@@ -49,29 +49,39 @@ export function Hero() {
       <div className="relative z-10 max-w-6xl mx-auto text-center space-y-8">
         {/* Headline */}
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
-          Talk to Atlas
+          Fine-Tune Any Model
           <br />
-          <span className="text-blue-600 dark:text-blue-400">Our Fine-Tuned Lab Assistant</span>
+          <span className="text-blue-600 dark:text-blue-400">In Under 2 Minutes</span>
         </h1>
 
         {/* Subheadline */}
         <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-          Atlas is your AI-powered guide to model training, deployment, and optimization.
-          Ask questions, get expert advice, and explore Fine Tune Lab's capabilities—all powered by the same technology you'll use in production.
+          From zero to production in under 2 minutes. Watch how easy it is to fine-tune models with Fine Tune Lab—no complex setup, no DevOps headaches.
         </p>
 
-        {/* Chat Component */}
+        {/* Video Demo Embed */}
         <div className="rounded-2xl shadow-2xl overflow-hidden bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 mx-auto max-w-5xl">
-          <div className="h-[700px] overflow-hidden">
-            <Chat demoMode={true} />
+          <div className="aspect-video w-full">
+            <iframe
+              width="100%"
+              height="100%"
+              src="https://embed.app.guidde.com/playbooks/4bo1pisi2GNonHGAD8f9AF?mode=videoOnly"
+              title="Start Fine Tuning and Launch Training Job Quickly"
+              frameBorder="0"
+              referrerPolicy="unsafe-url"
+              allowFullScreen
+              allow="clipboard-write"
+              sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts allow-forms allow-same-origin allow-presentation"
+              className="rounded-lg"
+            />
           </div>
         </div>
 
-        {/* CTA Below Chat */}
+        {/* CTA Below Video */}
         <div className="pt-4">
           <Link href="/signup">
             <Button size="lg" className="gap-2 text-lg px-8 py-6 bg-blue-600 hover:bg-blue-700 text-white">
-              Build Your Own Assistant
+              Start Training Your Model
               <ArrowRight className="w-5 h-5" />
             </Button>
           </Link>

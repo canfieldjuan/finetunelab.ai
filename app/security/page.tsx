@@ -1,0 +1,416 @@
+import type { Metadata } from 'next'
+import { Shield, Lock, Eye, Database, Server, CheckCircle, AlertTriangle } from 'lucide-react'
+
+export const metadata: Metadata = {
+  title: 'Security | Fine-Tune Lab - How We Protect Your AI Training Data & Models',
+  description: 'Fine-Tune Lab security practices. Learn about encryption, access controls, compliance, and how we protect your training data, models, and infrastructure.',
+}
+
+export default function SecurityPage() {
+  const securityFeatures = [
+    {
+      icon: Lock,
+      title: 'Encryption Everywhere',
+      description: 'AES-256 encryption at rest, TLS 1.3 in transit. Your data is encrypted end-to-end.',
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-500/10',
+    },
+    {
+      icon: Eye,
+      title: 'Zero Data Sharing',
+      description: 'We never use your training data to improve our platform or train other models.',
+      color: 'text-green-500',
+      bgColor: 'bg-green-500/10',
+    },
+    {
+      icon: Shield,
+      title: 'Access Controls',
+      description: 'Role-based permissions, 2FA support, and API key management with scoped permissions.',
+      color: 'text-purple-500',
+      bgColor: 'bg-purple-500/10',
+    },
+    {
+      icon: Database,
+      title: 'Isolated Environments',
+      description: 'Each training job runs in an isolated container with no cross-user access.',
+      color: 'text-orange-500',
+      bgColor: 'bg-orange-500/10',
+    },
+    {
+      icon: Server,
+      title: 'Infrastructure Security',
+      description: 'Hosted on SOC 2 compliant cloud infrastructure with automated backups.',
+      color: 'text-red-500',
+      bgColor: 'bg-red-500/10',
+    },
+    {
+      icon: AlertTriangle,
+      title: 'Incident Response',
+      description: '24/7 monitoring and rapid response to security incidents.',
+      color: 'text-yellow-500',
+      bgColor: 'bg-yellow-500/10',
+    },
+  ]
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Hero Section */}
+      <section className="relative py-20 px-4 border-b">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+              <Shield className="w-10 h-10 text-primary" />
+            </div>
+          </div>
+          <h1 className="text-4xl md:text-6xl font-bold mb-6">
+            Security at Fine-Tune Lab
+          </h1>
+          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+            Your training data, models, and infrastructure are protected with enterprise-grade security measures.
+          </p>
+        </div>
+      </section>
+
+      {/* Security Features */}
+      <section className="py-20 px-4 border-b">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-12 text-center">Security Features</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {securityFeatures.map((feature, index) => {
+              const Icon = feature.icon
+              return (
+                <div key={index} className="bg-background p-6 rounded-lg border hover:shadow-lg transition-shadow">
+                  <div className={`${feature.bgColor} w-12 h-12 rounded-lg flex items-center justify-center mb-4`}>
+                    <Icon className={`w-6 h-6 ${feature.color}`} />
+                  </div>
+                  <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    {feature.description}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Detailed Security Practices */}
+      <section className="py-20 px-4 border-b bg-muted/30">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-12 text-center">Security Practices</h2>
+
+          <div className="space-y-12">
+            <div>
+              <h3 className="text-2xl font-bold mb-4 flex items-center gap-3">
+                <Lock className="w-6 h-6 text-primary" />
+                Data Encryption
+              </h3>
+              <div className="bg-background p-6 rounded-lg border">
+                <ul className="space-y-3 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>At Rest:</strong> All data stored with AES-256 encryption</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>In Transit:</strong> TLS 1.3 for all API and web traffic</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Backups:</strong> Encrypted backups with separate encryption keys</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Key Management:</strong> Hardware security modules (HSM) for key storage</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-bold mb-4 flex items-center gap-3">
+                <Shield className="w-6 h-6 text-primary" />
+                Access Control
+              </h3>
+              <div className="bg-background p-6 rounded-lg border">
+                <ul className="space-y-3 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Authentication:</strong> OAuth 2.0, SAML 2.0 for SSO (enterprise)</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Multi-Factor Auth:</strong> TOTP-based 2FA support</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>API Keys:</strong> Scoped permissions with rotation support</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>RBAC:</strong> Role-based access control for team members</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Audit Logs:</strong> Complete audit trail of all access and actions</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-bold mb-4 flex items-center gap-3">
+                <Database className="w-6 h-6 text-primary" />
+                Infrastructure Security
+              </h3>
+              <div className="bg-background p-6 rounded-lg border">
+                <ul className="space-y-3 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Isolation:</strong> Training jobs run in isolated Docker containers</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Network Security:</strong> Private VPCs, firewall rules, DDoS protection</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Vulnerability Scanning:</strong> Automated scanning of dependencies</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Patch Management:</strong> Regular security updates and patches</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Backups:</strong> Automated daily backups with 30-day retention</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-bold mb-4 flex items-center gap-3">
+                <Eye className="w-6 h-6 text-primary" />
+                Monitoring & Response
+              </h3>
+              <div className="bg-background p-6 rounded-lg border">
+                <ul className="space-y-3 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>24/7 Monitoring:</strong> Real-time security event monitoring</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Intrusion Detection:</strong> Automated threat detection systems</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Incident Response:</strong> Documented response procedures</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Alerting:</strong> Immediate alerts for suspicious activity</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Logging:</strong> Comprehensive logs for forensic analysis</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Compliance */}
+      <section className="py-20 px-4 border-b">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-center">Compliance & Certifications</h2>
+          <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
+            We meet industry standards for security and privacy
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="border rounded-lg p-6 bg-background">
+              <h3 className="text-xl font-bold mb-3">GDPR Compliant</h3>
+              <p className="text-muted-foreground mb-4">
+                Full compliance with EU General Data Protection Regulation
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Data portability and right to deletion</li>
+                <li>• Data processing agreements available</li>
+                <li>• Privacy by design principles</li>
+              </ul>
+            </div>
+
+            <div className="border rounded-lg p-6 bg-background">
+              <h3 className="text-xl font-bold mb-3">SOC 2 Type II</h3>
+              <p className="text-muted-foreground mb-4">
+                In progress - completing certification for enterprise customers
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Security controls audit</li>
+                <li>• Availability and processing integrity</li>
+                <li>• Confidentiality and privacy</li>
+              </ul>
+            </div>
+
+            <div className="border rounded-lg p-6 bg-background">
+              <h3 className="text-xl font-bold mb-3">CCPA Compliant</h3>
+              <p className="text-muted-foreground mb-4">
+                California Consumer Privacy Act compliance for US users
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Data disclosure and opt-out rights</li>
+                <li>• No sale of personal information</li>
+                <li>• Transparent privacy practices</li>
+              </ul>
+            </div>
+
+            <div className="border rounded-lg p-6 bg-background">
+              <h3 className="text-xl font-bold mb-3">ISO 27001</h3>
+              <p className="text-muted-foreground mb-4">
+                Pursuing ISO 27001 certification for information security
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Information security management</li>
+                <li>• Risk assessment and treatment</li>
+                <li>• Continuous improvement</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Your Data Privacy */}
+      <section className="py-20 px-4 border-b bg-primary/5">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6 text-center">Your Data Privacy Guarantee</h2>
+          <div className="bg-background border-2 border-primary/20 rounded-lg p-8">
+            <div className="space-y-4 text-muted-foreground">
+              <p className="text-lg leading-relaxed">
+                <strong className="text-foreground">We Never Use Your Training Data:</strong>
+              </p>
+              <ul className="space-y-3 pl-6">
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <span>Your datasets are used ONLY for your fine-tuning jobs</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <span>We don't train models on your data or use it to improve our platform</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <span>Your data is never shared with other users or third parties</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <span>You can delete your data at any time - it's immediately removed</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <span>All data is encrypted at rest and in transit</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Best Practices */}
+      <section className="py-20 px-4 border-b">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-center">Security Best Practices</h2>
+          <p className="text-center text-muted-foreground mb-12">
+            Recommendations to keep your account secure
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="border rounded-lg p-6 bg-background">
+              <h3 className="font-bold mb-3 text-lg">✓ Do</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Enable two-factor authentication (2FA)</li>
+                <li>• Use strong, unique passwords</li>
+                <li>• Rotate API keys regularly</li>
+                <li>• Review audit logs periodically</li>
+                <li>• Use scoped API keys with minimal permissions</li>
+                <li>• Keep your email address up to date</li>
+              </ul>
+            </div>
+
+            <div className="border rounded-lg p-6 bg-background">
+              <h3 className="font-bold mb-3 text-lg">✗ Don't</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Share your password or API keys</li>
+                <li>• Use the same password across services</li>
+                <li>• Commit API keys to public repositories</li>
+                <li>• Leave API keys in client-side code</li>
+                <li>• Ignore security alerts or notifications</li>
+                <li>• Use root API keys for applications</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Responsible Disclosure */}
+      <section className="py-20 px-4 border-b bg-muted/30">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6 text-center">Responsible Disclosure</h2>
+          <div className="bg-background border rounded-lg p-8">
+            <p className="text-muted-foreground mb-6 leading-relaxed">
+              We take security vulnerabilities seriously. If you discover a security issue, please report it responsibly:
+            </p>
+            <div className="space-y-4 text-muted-foreground">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
+                  <span className="text-primary font-bold">1</span>
+                </div>
+                <div>
+                  <strong className="text-foreground">Report Privately:</strong>
+                  <p className="text-sm">Email <a href="mailto:security@finetunelab.ai" className="text-primary hover:underline">security@finetunelab.ai</a> with details</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
+                  <span className="text-primary font-bold">2</span>
+                </div>
+                <div>
+                  <strong className="text-foreground">Allow Time to Fix:</strong>
+                  <p className="text-sm">Give us 90 days to address the issue before public disclosure</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
+                  <span className="text-primary font-bold">3</span>
+                </div>
+                <div>
+                  <strong className="text-foreground">Get Recognition:</strong>
+                  <p className="text-sm">We'll acknowledge your contribution (if desired) and may offer bounties for critical vulnerabilities</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Contact */}
+      <section className="py-20 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6">Questions About Security?</h2>
+          <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
+            Our security team is here to help answer your questions.
+          </p>
+          <a
+            href="mailto:security@finetunelab.ai"
+            className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 h-11 rounded-md px-8"
+          >
+            Contact Security Team
+          </a>
+        </div>
+      </section>
+    </div>
+  )
+}

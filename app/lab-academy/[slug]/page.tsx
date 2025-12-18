@@ -7,6 +7,9 @@ import { academyArticles } from '@/lib/academy/content';
 import { FineTuneLabFullLogoV2 } from '@/components/branding';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { getRelatedArticles } from '@/lib/utils/related-articles';
+import { labNotes } from '@/app/lab-notes/data';
+import { RelatedArticles } from '@/components/content/RelatedArticles';
 
 // Force static generation - all article pages are pre-rendered at build time
 // Combined with generateStaticParams(), this ensures instant page loads
@@ -66,6 +69,14 @@ export default async function ArticlePage({ params }: PageProps) {
   if (!article) {
     notFound();
   }
+  
+  const relatedArticles = getRelatedArticles(
+    article.slug,
+    article.tags,
+    article.category,
+    labNotes,
+    academyArticles
+  );
 
   const faqEntities = (article.faq && article.faq.length > 0)
     ? article.faq.map((item) => ({
@@ -171,6 +182,13 @@ export default async function ArticlePage({ params }: PageProps) {
             </div>
           </div>
         </article>
+
+        {/* Related Articles */}
+        {relatedArticles.length > 0 && (
+          <div className="mt-8">
+            <RelatedArticles articles={relatedArticles} />
+          </div>
+        )}
 
         <div className="mt-16 p-8 bg-muted/30 rounded-2xl text-center">
           <h3 className="text-2xl font-bold mb-4">Ready to put this into practice?</h3>

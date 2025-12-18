@@ -242,7 +242,8 @@ export async function POST(request: NextRequest) {
           datasetStoragePath,
           user.id,
           supabase,
-          2 // 2-hour expiry
+          2,
+          dataset.storage_provider || 'supabase'
         );
 
         datasetDownloadUrl = urlData.url;

@@ -7,14 +7,14 @@ import { FineTuneLabFullLogoV2 } from "@/components/branding";
 
 const footerLinks = {
   product: [
-    { label: "Features", href: "#features" },
+    { label: "Features", href: "/features" },
     { label: "Pricing", href: "#pricing" },
-    { label: "Use Cases", href: "#use-cases" },
+    { label: "Use Cases", href: "/use-cases" },
     { label: "Documentation", href: "/docs" }
   ],
   company: [
     { label: "About", href: "/about" },
-    { label: "Blog", href: "/blog" },
+    { label: "Lab Academy", href: "/lab-academy" },
     { label: "Careers", href: "/careers" },
     { label: "Contact", href: "/contact" }
   ],

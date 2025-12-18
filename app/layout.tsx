@@ -14,8 +14,8 @@ export const metadata: Metadata = {
     default: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
     template: "%s | Fine Tune Lab",
   },
-  description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
-  keywords: ["AI training", "LLM fine-tuning", "DAG builder", "MLOps", "model evaluation", "RLHF", "DPO", "SFT", "local LLM", "vLLM", "Ollama"],
+  description: "AI training platform for fine-tuning LLMs with RunPod cloud GPUs, GraphRAG knowledge integration, automated evaluation, and real-time analytics. Train models with SFT, DPO, RLHF, and deploy with confidence.",
+  keywords: ["AI training platform", "LLM fine-tuning", "GraphRAG", "RunPod training", "model evaluation", "RLHF", "DPO", "SFT", "LLM analytics", "batch testing", "A/B model comparison"],
   authors: [{ name: "Fine Tune Lab Team" }],
   creator: "Fine Tune Lab",
   publisher: "Fine Tune Lab",
@@ -25,12 +25,12 @@ export const metadata: Metadata = {
     url: siteUrl,
     siteName: "Fine Tune Lab",
     title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
-    description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
+    description: "AI training platform for fine-tuning LLMs with RunPod cloud GPUs, GraphRAG knowledge integration, automated evaluation, and real-time analytics.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
-    description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
+    description: "AI training platform for fine-tuning LLMs with RunPod cloud GPUs, GraphRAG knowledge integration, automated evaluation, and real-time analytics.",
     creator: "@finetunelab",
   },
   robots: {
@@ -58,10 +58,11 @@ const organizationJsonLd = {
   "name": "Fine Tune Lab",
   "url": "https://finetunelab.ai",
   "logo": "https://finetunelab.ai/finetune-lab-icon.svg",
-  "description": "Visual DAG-based AI training platform for fine-tuning LLMs locally or in the cloud with real-time telemetry.",
+  "description": "AI training platform for fine-tuning and testing LLMs with real-time analytics, GraphRAG knowledge integration, and automated evaluation workflows.",
   "sameAs": [
     "https://twitter.com/finetunelab",
-    "https://github.com/finetunelab"
+    "https://github.com/finetunelab",
+    "https://www.linkedin.com/company/finetunelab"
   ],
   "contactPoint": {
     "@type": "ContactPoint",

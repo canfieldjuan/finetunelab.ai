@@ -440,9 +440,10 @@ export function ConfigEditor({
               <option value="dpo">Direct Preference Optimization (DPO)</option>
               <option value="rlhf">Reinforcement Learning from Human Feedback (RLHF)</option>
               <option value="orpo">Odds Ratio Preference Optimization (ORPO)</option>
+              <option value="cpt">Continued Pre-Training (CPT)</option>
             </select>
             <p className="text-xs text-gray-500">
-              SFT: Standard | DPO: Preference pairs | RLHF: PPO + reward model | ORPO: Efficient (no ref model)
+              SFT: Standard | DPO: Preference pairs | RLHF: PPO + reward model | ORPO: Efficient (no ref model) | CPT: Domain adaptation
             </p>
           </div>
 

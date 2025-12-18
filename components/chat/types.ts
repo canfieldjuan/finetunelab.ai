@@ -30,6 +30,14 @@ export interface Message {
   tools_called?: unknown;
   // Model name for display (persisted in metadata, computed for old messages via useMessages)
   model_name?: string;
+  // GraphRAG retrieval metadata (extracted from metadata.graphrag)
+  graphrag_used?: boolean;
+  graphrag_nodes?: number;
+  graphrag_chunks?: number;
+  graphrag_retrieval_ms?: number;
+  graphrag_relevance?: number;
+  graphrag_grounded?: boolean;
+  graphrag_method?: string;
   // Index signature for compatibility with MessageData from conversation-validator
   [key: string]: unknown;
 }

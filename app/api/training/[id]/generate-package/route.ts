@@ -54,7 +54,7 @@ async function getCompatibleMethods(
 
   console.log('[GeneratePackageAPI] Found datasets:', datasets.map((d) => ({ format: d.format })));
 
-  const allMethods: TrainingMethod[] = ['sft', 'dpo', 'rlhf'];
+  const allMethods: TrainingMethod[] = ['sft', 'dpo', 'rlhf', 'orpo', 'cpt'];
   const compatibleMethods = allMethods.filter((method) => {
     const isCompatible = datasets.every((dataset) => {
       const compatible = isFormatCompatible(dataset.format, method);

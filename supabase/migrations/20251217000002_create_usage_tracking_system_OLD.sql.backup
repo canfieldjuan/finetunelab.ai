@@ -1,0 +1,414 @@
+-- ============================================================================
+-- Migration: Create Usage Tracking System
+-- Created: 2025-12-17
+-- Purpose: Implement comprehensive usage tracking for resource limits
+--
+-- This migration creates the foundation for tracking user resource usage:
+-- - Raw usage events table
+-- - Materialized view for current month aggregation
+-- - Database functions for checking limits and recording usage
+-- - RLS policies for security
+--
+-- Breaking Changes: NONE (new tables and functions)
+-- Dependencies: Assumes subscription_plans and user_subscriptions exist
+-- ============================================================================
+
+-- ============================================================================
+-- TABLE: usage_events
+-- Purpose: Store all raw usage events for all metric types
+-- Performance: Indexed by user_id, period, and metric_type
+-- Retention: Archive old periods periodically (not auto-deleted)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.usage_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- Metric information
+  metric_type TEXT NOT NULL,
+  metric_value NUMERIC NOT NULL DEFAULT 1,
+
+  -- Resource context (optional - links to specific resource)
+  resource_type TEXT,  -- 'batch_test', 'message', 'training_job', 'scheduled_eval', 'inference'
+  resource_id UUID,    -- ID of the specific resource
+
+  -- Flexible metadata for additional context
+  metadata JSONB DEFAULT '{}'::jsonb,
+
+  -- Period tracking (for monthly aggregation)
+  -- period_month format: YYYYMM (e.g., 202512 for December 2025)
+  period_month INTEGER NOT NULL,
+  period_year INTEGER NOT NULL,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================================
+-- INDEXES for usage_events
+-- ============================================================================
+
+-- Primary lookup: Get user's usage for current period
+CREATE INDEX IF NOT EXISTS idx_usage_events_user_period
+  ON public.usage_events(user_id, period_year, period_month);
+
+-- Metric-specific queries
+CREATE INDEX IF NOT EXISTS idx_usage_events_metric_type
+  ON public.usage_events(metric_type, user_id);
+
+-- Time-series queries and cleanup
+CREATE INDEX IF NOT EXISTS idx_usage_events_created
+  ON public.usage_events(created_at DESC);
+
+-- Resource tracking (find all usage for a specific resource)
+CREATE INDEX IF NOT EXISTS idx_usage_events_resource
+  ON public.usage_events(resource_type, resource_id)
+  WHERE resource_id IS NOT NULL;
+
+-- Composite index for aggregation queries
+CREATE INDEX IF NOT EXISTS idx_usage_events_aggregation
+  ON public.usage_events(user_id, metric_type, period_month, period_year);
+
+-- ============================================================================
+-- RLS POLICIES for usage_events
+-- ============================================================================
+
+ALTER TABLE public.usage_events ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own usage events
+CREATE POLICY "Users can view own usage events"
+  ON public.usage_events
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() = user_id);
+
+-- Only system (service role) can insert usage events
+-- No INSERT policy for authenticated users = only service role can insert
+-- This prevents users from manipulating their own usage
+
+-- ============================================================================
+-- MATERIALIZED VIEW: current_usage_summary
+-- Purpose: Fast monthly usage aggregation per user and metric type
+-- Refresh: Call refresh_current_usage_summary() periodically
+-- Query Performance: O(1) lookup instead of aggregating millions of events
+-- ============================================================================
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS public.current_usage_summary AS
+SELECT
+  user_id,
+  metric_type,
+  SUM(metric_value) as total_value,
+  COUNT(*) as event_count,
+  MAX(created_at) as last_updated
+FROM public.usage_events
+WHERE
+  -- Current month only
+  period_year = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER
+  AND period_month = (EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER * 100 + EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER)
+GROUP BY user_id, metric_type;
+
+-- Unique index for fast lookups and concurrent refresh
+CREATE UNIQUE INDEX IF NOT EXISTS idx_current_usage_summary_user_metric
+  ON public.current_usage_summary(user_id, metric_type);
+
+-- Additional index for metric-specific queries
+CREATE INDEX IF NOT EXISTS idx_current_usage_summary_metric
+  ON public.current_usage_summary(metric_type);
+
+-- ============================================================================
+-- FUNCTION: refresh_current_usage_summary
+-- Purpose: Refresh the materialized view (call periodically via cron)
+-- Security: SECURITY DEFINER allows any role to refresh
+-- Concurrency: CONCURRENTLY doesn't lock the view during refresh
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.refresh_current_usage_summary()
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.current_usage_summary;
+END;
+$$;
+
+COMMENT ON FUNCTION public.refresh_current_usage_summary() IS 'Refreshes the current_usage_summary materialized view. Call periodically (e.g., every 5 minutes) via cron or after bulk operations.';
+
+-- ============================================================================
+-- FUNCTION: check_usage_limit
+-- Purpose: Check if user can perform an action based on subscription limits
+-- Returns: Current usage, limit, and whether action is allowed
+-- Performance: Reads from materialized view (fast)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.check_usage_limit(
+  p_user_id UUID,
+  p_metric_type TEXT,
+  p_increment NUMERIC DEFAULT 1
+)
+RETURNS TABLE (
+  allowed BOOLEAN,
+  current_value NUMERIC,
+  limit_value NUMERIC,
+  percentage NUMERIC,
+  remaining NUMERIC,
+  is_unlimited BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current NUMERIC;
+  v_limit NUMERIC;
+  v_plan_limits JSONB;
+BEGIN
+  -- Get current usage from materialized view
+  SELECT COALESCE(total_value, 0) INTO v_current
+  FROM public.current_usage_summary
+  WHERE user_id = p_user_id AND metric_type = p_metric_type;
+
+  -- If no usage record found, default to 0
+  IF v_current IS NULL THEN
+    v_current := 0;
+  END IF;
+
+  -- Get user's active subscription plan limits
+  SELECT sp.limits INTO v_plan_limits
+  FROM public.user_subscriptions us
+  JOIN public.subscription_plans sp ON sp.id = us.plan_id
+  WHERE us.user_id = p_user_id
+    AND us.status = 'active'
+  LIMIT 1;
+
+  -- If no subscription found, deny access
+  IF v_plan_limits IS NULL THEN
+    RETURN QUERY SELECT
+      false::BOOLEAN as allowed,
+      v_current as current_value,
+      0::NUMERIC as limit_value,
+      100::NUMERIC as percentage,
+      0::NUMERIC as remaining,
+      false::BOOLEAN as is_unlimited;
+    RETURN;
+  END IF;
+
+  -- Extract limit for this specific metric type
+  v_limit := CASE p_metric_type
+    -- Existing metrics
+    WHEN 'api_call' THEN (v_plan_limits->>'api_calls_per_month')::NUMERIC
+    WHEN 'storage_mb' THEN (v_plan_limits->>'storage_mb')::NUMERIC
+    WHEN 'model_created' THEN (v_plan_limits->>'models_limit')::NUMERIC
+    WHEN 'training_job' THEN -1  -- No limit defined in plan
+    WHEN 'token_usage' THEN -1   -- No limit defined in plan
+
+    -- NEW: Critical metrics
+    WHEN 'batch_test_run' THEN COALESCE((v_plan_limits->>'batch_test_runs_per_month')::NUMERIC, -1)
+    WHEN 'scheduled_eval_run' THEN COALESCE((v_plan_limits->>'scheduled_eval_runs_per_month')::NUMERIC, -1)
+    WHEN 'chat_message' THEN COALESCE((v_plan_limits->>'chat_messages_per_month')::NUMERIC, -1)
+    WHEN 'inference_call' THEN COALESCE((v_plan_limits->>'inference_calls_per_month')::NUMERIC, -1)
+    WHEN 'compute_minutes' THEN COALESCE((v_plan_limits->>'compute_minutes_per_month')::NUMERIC, -1)
+
+    ELSE -1  -- Unlimited for unknown metrics
+  END;
+
+  -- -1 means unlimited
+  IF v_limit = -1 THEN
+    RETURN QUERY SELECT
+      true::BOOLEAN as allowed,
+      v_current as current_value,
+      -1::NUMERIC as limit_value,
+      -1::NUMERIC as percentage,
+      -1::NUMERIC as remaining,
+      true::BOOLEAN as is_unlimited;
+    RETURN;
+  END IF;
+
+  -- Check if adding increment would exceed limit
+  RETURN QUERY SELECT
+    (v_current + p_increment <= v_limit)::BOOLEAN as allowed,
+    v_current as current_value,
+    v_limit as limit_value,
+    CASE
+      WHEN v_limit > 0 THEN ROUND((v_current / v_limit) * 100, 2)
+      ELSE 0
+    END as percentage,
+    GREATEST(v_limit - v_current, 0) as remaining,
+    false::BOOLEAN as is_unlimited;
+END;
+$$;
+
+COMMENT ON FUNCTION public.check_usage_limit(UUID, TEXT, NUMERIC) IS 'Check if user can perform an action based on subscription limits. Returns current usage, limit, percentage, and whether action is allowed. -1 indicates unlimited.';
+
+-- ============================================================================
+-- FUNCTION: record_usage
+-- Purpose: Record a usage event for a user
+-- Performance: Single INSERT, no blocking operations
+-- Side Effects: Does NOT refresh materialized view (do that periodically)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.record_usage(
+  p_user_id UUID,
+  p_metric_type TEXT,
+  p_value NUMERIC DEFAULT 1,
+  p_resource_type TEXT DEFAULT NULL,
+  p_resource_id UUID DEFAULT NULL,
+  p_metadata JSONB DEFAULT '{}'::jsonb
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_period_month INTEGER;
+  v_period_year INTEGER;
+BEGIN
+  -- Calculate current period
+  v_period_year := EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER;
+  v_period_month := v_period_year * 100 + EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER;
+
+  -- Insert usage event
+  INSERT INTO public.usage_events (
+    user_id,
+    metric_type,
+    metric_value,
+    resource_type,
+    resource_id,
+    metadata,
+    period_month,
+    period_year
+  ) VALUES (
+    p_user_id,
+    p_metric_type,
+    p_value,
+    p_resource_type,
+    p_resource_id,
+    p_metadata,
+    v_period_month,
+    v_period_year
+  );
+
+  -- Note: Materialized view will be refreshed periodically by cron job
+  -- Not refreshing here to avoid performance impact on every usage event
+END;
+$$;
+
+COMMENT ON FUNCTION public.record_usage(UUID, TEXT, NUMERIC, TEXT, UUID, JSONB) IS 'Record a usage event. Call this after a user performs a metered action. Does not refresh materialized view (do that periodically for performance).';
+
+-- ============================================================================
+-- FUNCTION: get_usage_with_limits
+-- Purpose: Get all usage metrics with limits for a user
+-- Returns: JSONB object with all metrics and their current status
+-- Use Case: Dashboard showing all usage at once
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.get_usage_with_limits(p_user_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_result JSONB := '{}'::jsonb;
+  v_metric RECORD;
+BEGIN
+  -- Get all metric types for this user from current month
+  FOR v_metric IN
+    SELECT metric_type, total_value
+    FROM public.current_usage_summary
+    WHERE user_id = p_user_id
+  LOOP
+    -- Build result object with usage check for each metric
+    SELECT v_result || jsonb_build_object(
+      v_metric.metric_type,
+      (SELECT row_to_json(r) FROM (
+        SELECT * FROM public.check_usage_limit(p_user_id, v_metric.metric_type, 0)
+      ) r)
+    ) INTO v_result;
+  END LOOP;
+
+  -- If no usage records, return empty object (not null)
+  IF v_result = '{}'::jsonb THEN
+    RETURN '{}'::jsonb;
+  END IF;
+
+  RETURN v_result;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_usage_with_limits(UUID) IS 'Get all usage metrics with limits for a user. Returns JSONB object with each metric type as a key.';
+
+-- ============================================================================
+-- HELPER FUNCTION: get_current_period
+-- Purpose: Get current period values (used internally)
+-- Returns: Record with period_year and period_month
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.get_current_period()
+RETURNS TABLE (
+  period_year INTEGER,
+  period_month INTEGER
+)
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT
+    EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER as period_year,
+    (EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER * 100 + EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER) as period_month;
+$$;
+
+COMMENT ON FUNCTION public.get_current_period() IS 'Get current billing period values. Immutable for query optimization.';
+
+-- ============================================================================
+-- COMMENTS for documentation
+-- ============================================================================
+
+COMMENT ON TABLE public.usage_events IS 'Raw usage events for all metered actions. Aggregated into current_usage_summary materialized view for fast queries.';
+COMMENT ON MATERIALIZED VIEW public.current_usage_summary IS 'Aggregated usage for current month. Refresh periodically via refresh_current_usage_summary() function.';
+
+-- ============================================================================
+-- GRANTS (ensure functions are executable)
+-- ============================================================================
+
+-- Allow authenticated users to call check functions (read-only)
+GRANT EXECUTE ON FUNCTION public.check_usage_limit(UUID, TEXT, NUMERIC) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_usage_with_limits(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_current_period() TO authenticated;
+
+-- Only service role should call these (use service role key in API)
+-- GRANT EXECUTE ON FUNCTION public.record_usage(...) TO service_role;
+-- GRANT EXECUTE ON FUNCTION public.refresh_current_usage_summary() TO service_role;
+
+-- Note: SECURITY DEFINER functions run with owner privileges, so grants determine who can call them
+
+-- ============================================================================
+-- VERIFICATION QUERIES (run after migration to verify)
+-- ============================================================================
+
+-- Check table exists
+-- SELECT COUNT(*) FROM public.usage_events; -- Should return 0
+
+-- Check materialized view exists
+-- SELECT COUNT(*) FROM public.current_usage_summary; -- Should return 0
+
+-- Check functions exist
+-- SELECT proname FROM pg_proc WHERE proname LIKE '%usage%';
+
+-- Test record_usage function (insert sample event)
+-- SELECT public.record_usage(
+--   (SELECT id FROM auth.users LIMIT 1),
+--   'api_call',
+--   1,
+--   'test',
+--   NULL,
+--   '{"test": true}'::jsonb
+-- );
+
+-- Test check_usage_limit function
+-- SELECT * FROM public.check_usage_limit(
+--   (SELECT id FROM auth.users LIMIT 1),
+--   'api_call',
+--   1
+-- );
+
+-- ============================================================================
+-- END OF MIGRATION
+-- ============================================================================

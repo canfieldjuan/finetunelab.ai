@@ -6,7 +6,7 @@ export interface TrainingParams {
   num_epochs: number;
   batch_size: number;
   learning_rate: number;
-  method: 'sft' | 'dpo' | 'rlhf' | 'orpo';
+  method: 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt';
   beta?: number;  // DPO/ORPO preference strength parameter
 }
 
@@ -37,7 +37,7 @@ export function TrainingParamsComponent({ params, onChange, disabled }: Training
   };
 
   const handleMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ ...params, method: e.target.value as 'sft' | 'dpo' | 'rlhf' | 'orpo' });
+    onChange({ ...params, method: e.target.value as 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt' });
   };
 
   const showEpochWarning = params.num_epochs > 10;
@@ -60,9 +60,12 @@ export function TrainingParamsComponent({ params, onChange, disabled }: Training
           >
             <option value="sft">Supervised Fine-Tuning (SFT)</option>
             <option value="dpo">Direct Preference Optimization (DPO)</option>
+            <option value="rlhf">Reinforcement Learning from Human Feedback (RLHF)</option>
+            <option value="orpo">Odds Ratio Preference Optimization (ORPO)</option>
+            <option value="cpt">Continued Pre-Training (CPT)</option>
           </select>
           <p className="mt-1 text-xs text-gray-500">
-            SFT for standard training, DPO for preference-based learning
+            Choose method: SFT for instructions, DPO/ORPO/RLHF for preference learning, CPT for domain adaptation
           </p>
         </div>
 

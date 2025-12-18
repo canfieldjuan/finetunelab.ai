@@ -5,7 +5,7 @@
  */
 
 export type TrainingProvider = 'colab' | 'huggingface' | 'openai' | 'local';
-export type TrainingMethod = 'sft' | 'dpo' | 'rlhf' | 'orpo';
+export type TrainingMethod = 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt';
 
 /**
  * Request to execute training

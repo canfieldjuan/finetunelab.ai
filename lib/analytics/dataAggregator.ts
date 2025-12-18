@@ -237,24 +237,53 @@ export async function aggregateQualityMetrics(
       return [];
     }
 
-    const { data, error } = await supabase
-      .from('message_evaluations')
-      .select(`
-        id,
-        message_id,
-        created_at,
-        rating,
-        success,
-        notes
-      `)
-      .in('message_id', messageIds)
-      .gte('created_at', dateRange.start.toISOString())
-      .lte('created_at', dateRange.end.toISOString())
-      .order('created_at', { ascending: true });
+    // Batch messageIds to avoid URL length limits (PostgREST has ~2048 char limit)
+    // With UUIDs at 36 chars each, use batches of 50 to be safe
+    const BATCH_SIZE = 50;
+    const batches: string[][] = [];
+    for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+      batches.push(messageIds.slice(i, i + BATCH_SIZE));
+    }
 
-    if (error) throw error;
+    console.log('[DataAggregator] Querying message_evaluations in', batches.length, 'batches');
 
-    let dataPoints: QualityDataPoint[] = (data || []).map((evaluation) => {
+    // Query each batch and combine results
+    const allEvaluations: any[] = [];
+    for (const batch of batches) {
+      const { data, error } = await supabase
+        .from('message_evaluations')
+        .select(`
+          id,
+          message_id,
+          created_at,
+          rating,
+          success,
+          notes
+        `)
+        .in('message_id', batch)
+        .gte('created_at', dateRange.start.toISOString())
+        .lte('created_at', dateRange.end.toISOString())
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.log('[DataAggregator] Quality metrics batch query error:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          batchSize: batch.length,
+          dateRange: { start: dateRange.start, end: dateRange.end }
+        });
+        // Continue with other batches even if one fails
+        continue;
+      }
+
+      if (data) {
+        allEvaluations.push(...data);
+      }
+    }
+
+    let dataPoints: QualityDataPoint[] = allEvaluations.map((evaluation) => {
       const messageData = messageMap.get(evaluation.message_id);
 
       return {
@@ -435,7 +464,7 @@ export async function aggregateConversationMetrics(
         id,
         created_at,
         updated_at,
-        messages(count, metadata)
+        messages(metadata)
       `)
       .eq('user_id', userId)
       .gte('created_at', dateRange.start.toISOString())

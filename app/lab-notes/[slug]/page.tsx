@@ -3,6 +3,8 @@ import { Metadata } from 'next';
 import { LabNoteArticleView } from './LabNoteArticleView';
 import { labNotes } from '../data';
 import { generateArticleSchema } from '../schema';
+import { getRelatedArticles } from '@/lib/utils/related-articles';
+import { academyArticles } from '@/lib/academy/content';
 
 interface PageProps {
   params: Promise<{
@@ -49,6 +51,10 @@ export default async function LabNoteArticlePage({ params }: PageProps) {
   const { slug } = await params;
   const article = labNotes.find((note) => note.slug === slug);
   const jsonLd = article ? generateArticleSchema(article) : null;
+  
+  const relatedArticles = article
+    ? getRelatedArticles(article.slug, article.tags, article.category, labNotes, academyArticles)
+    : [];
 
   return (
     <>
@@ -58,7 +64,7 @@ export default async function LabNoteArticlePage({ params }: PageProps) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       )}
-      <LabNoteArticleView article={article || null} />
+      <LabNoteArticleView article={article || null} relatedArticles={relatedArticles} />
     </>
   );
 }

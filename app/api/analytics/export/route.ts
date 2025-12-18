@@ -332,6 +332,7 @@ async function createExportRecord(
       file_size: fileSize,
       file_name: `analytics_${request.exportType}_${exportId}.${request.format}`,
       expires_at: expiresAt.toISOString(),
+      audience: request.audience || null,
     })
     .select()
     .single();

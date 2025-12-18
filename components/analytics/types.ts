@@ -1,7 +1,7 @@
 // Analytics Export Component Types
 // Date: October 25, 2025
 
-export type ExportFormat = 'csv' | 'json' | 'report';
+export type ExportFormat = 'csv' | 'json' | 'report' | 'pdf' | 'html';
 
 export type ExportType =
   | 'overview'
@@ -10,6 +10,8 @@ export type ExportType =
   | 'model_comparison'
   | 'tool_usage'
   | 'quality_trends';
+
+export type AudienceType = 'executive' | 'engineering' | 'onboarding' | 'custom';
 
 export interface ExportRecord {
   id: string;
@@ -34,6 +36,7 @@ export interface ExportCreationRequest {
   startDate: string;
   endDate: string;
   includedMetrics?: string[];
+  audience?: AudienceType;
 }
 
 export interface ExportCreationResponse {
@@ -76,10 +79,28 @@ export const FORMAT_LABELS: Record<ExportFormat, string> = {
   csv: 'CSV (Spreadsheet)',
   json: 'JSON (Structured Data)',
   report: 'Report (PDF/HTML)',
+  pdf: 'PDF Report',
+  html: 'HTML Report',
 };
 
 export const FORMAT_DESCRIPTIONS: Record<ExportFormat, string> = {
   csv: 'Best for Excel, Google Sheets, and data analysis tools',
   json: 'Best for programmatic processing and API integration',
   report: 'Best for presentations and executive summaries',
+  pdf: 'Printable report with audience-specific templates',
+  html: 'Web-viewable report with audience-specific templates',
+};
+
+export const AUDIENCE_LABELS: Record<AudienceType, string> = {
+  executive: 'Executive Summary',
+  engineering: 'Engineering Report',
+  onboarding: 'Onboarding Guide',
+  custom: 'Custom Report',
+};
+
+export const AUDIENCE_DESCRIPTIONS: Record<AudienceType, string> = {
+  executive: 'High-level metrics for leadership (1 page)',
+  engineering: 'Detailed technical metrics for debugging',
+  onboarding: 'System overview for new team members',
+  custom: 'Select specific sections to include',
 };

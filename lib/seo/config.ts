@@ -6,7 +6,7 @@
 export const siteConfig = {
   name: 'Fine Tune Lab',
   url: 'https://finetunelab.ai',
-  description: 'Visual DAG-based AI training platform for fine-tuning LLMs locally or in the cloud with real-time telemetry.',
+  description: 'AI training platform for fine-tuning and testing LLMs with real-time analytics, GraphRAG knowledge integration, and automated evaluation workflows.',
   twitter: '@finetunelab',
   github: 'https://github.com/finetunelab',
 };
@@ -19,6 +19,20 @@ export const publicPages = [
   // Main pages
   { path: '/', priority: 1.0, changeFreq: 'daily' as const },
   { path: '/welcome', priority: 1.0, changeFreq: 'weekly' as const },
+
+  // Product & Marketing pages
+  { path: '/features', priority: 0.95, changeFreq: 'weekly' as const },
+  { path: '/use-cases', priority: 0.95, changeFreq: 'weekly' as const },
+  { path: '/docs', priority: 0.95, changeFreq: 'weekly' as const },
+
+  // Company pages
+  { path: '/about', priority: 0.8, changeFreq: 'monthly' as const },
+  { path: '/contact', priority: 0.8, changeFreq: 'monthly' as const },
+
+  // Legal pages
+  { path: '/privacy', priority: 0.6, changeFreq: 'yearly' as const },
+  { path: '/terms', priority: 0.6, changeFreq: 'yearly' as const },
+  { path: '/security', priority: 0.7, changeFreq: 'monthly' as const },
 
   // Content hubs
   { path: '/lab-notes', priority: 0.9, changeFreq: 'weekly' as const },
@@ -43,6 +57,7 @@ export const organizationSchema = {
   "sameAs": [
     `https://twitter.com/${siteConfig.twitter.replace('@', '')}`,
     siteConfig.github,
+    "https://www.linkedin.com/company/finetunelab"
   ],
   "contactPoint": {
     "@type": "ContactPoint",
@@ -86,12 +101,12 @@ export const softwareSchema = {
   },
   "description": siteConfig.description,
   "featureList": [
-    "Visual DAG-based workflow builder",
-    "LLM fine-tuning (SFT, DPO, RLHF, ORPO)",
-    "Local and cloud training",
-    "Real-time telemetry and monitoring",
-    "Model evaluation and testing",
-    "Multi-provider support (OpenAI, Anthropic, local models)"
+    "LLM fine-tuning (SFT, DPO, RLHF, ORPO) on RunPod cloud GPUs",
+    "GraphRAG knowledge graph integration with Neo4j",
+    "Real-time training telemetry and analytics dashboard",
+    "Automated model evaluation with LLM-as-Judge",
+    "Batch testing and A/B model comparison",
+    "Multi-provider chat interface (OpenAI, Anthropic, custom models)"
   ]
 };
 

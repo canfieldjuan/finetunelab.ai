@@ -35,9 +35,13 @@ export class DatasetValidator {
   /**
    * NEW: Validate with automatic format detection and normalization
    * This is the recommended method for all dataset uploads
+   *
+   * @param file - Dataset file to validate
+   * @param expectedFormat - Optional expected format (used to override detection for special cases like CPT)
    */
   async validateWithNormalization(
-    file: File
+    file: File,
+    expectedFormat?: DatasetFormat
   ): Promise<ValidationResult> {
     try {
       console.log('[DatasetValidator] Starting validation with normalization');
@@ -53,15 +57,23 @@ export class DatasetValidator {
       console.log('[DatasetValidator] Detected format:', detectionResult.format);
       console.log('[DatasetValidator] Confidence:', detectionResult.confidence);
       console.log('[DatasetValidator] Details:', JSON.stringify(detectionResult.details));
+      console.log('[DatasetValidator] Expected format:', expectedFormat || 'none');
 
       if (detectionResult.confidence === 'low') {
         console.warn('[DatasetValidator] Low confidence detection');
       }
 
+      // Override detection for raw_text/CPT if user explicitly selected it
+      let formatToUse = detectionResult.format;
+      if (expectedFormat === 'raw_text' && detectionResult.format === 'standard-text') {
+        console.log('[DatasetValidator] User selected raw_text format, using standard-text detection');
+        formatToUse = 'standard-text';
+      }
+
       // Step 2: Normalize format
       let normalized: NormalizedDataset;
       try {
-        normalized = normalizeDatasetFormat(content, detectionResult.format);
+        normalized = normalizeDatasetFormat(content, formatToUse);
         console.log('[DatasetValidator] Normalization complete');
         console.log('[DatasetValidator] Converted:', normalized.stats.convertedCount, '/', normalized.stats.totalExamples);
       } catch (error) {
@@ -69,7 +81,7 @@ export class DatasetValidator {
         return {
           valid: false,
           errors: [`Normalization failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
-          detectedFormat: detectionResult.format
+          detectedFormat: formatToUse
         };
       }
 
@@ -93,8 +105,9 @@ export class DatasetValidator {
 
         if (detectionResult.format === 'standard-text') {
           errors.push(
-            `Detected standard text format ("text" field). This upload path expects structured training examples; ` +
-            `convert to ChatML (messages) or an instruction format (instruction/input/output).`
+            `Detected standard text format ("text" field). ` +
+            `For Continued Pre-Training (CPT), select "Raw Text" format during upload. ` +
+            `For supervised fine-tuning, convert to ChatML (messages) or an instruction format (instruction/input/output).`
           );
         }
 
@@ -134,7 +147,10 @@ export class DatasetValidator {
           totalInputLen += userMsgs.reduce((sum, m) => sum + m.content.length, 0);
           totalOutputLen += assistantMsgs.reduce((sum, m) => sum + m.content.length, 0);
         } else if ('text' in example && typeof example.text === 'string') {
+          // For CPT/raw text, treat the entire text as "input"
+          // (no separation between input/output since it's unsupervised pretraining)
           totalInputLen += example.text.length;
+          totalOutputLen += 0; // Raw text has no output
         }
       }
 

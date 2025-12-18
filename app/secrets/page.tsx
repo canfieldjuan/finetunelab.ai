@@ -136,6 +136,7 @@ export default function SecretsPage() {
     kaggle: { name: 'Kaggle', description: 'Kaggle API credentials for notebook deployment and datasets' },
     runpod: { name: 'RunPod', description: 'RunPod API key for serverless GPU deployment' },
     lambda: { name: 'Lambda Labs', description: 'Lambda Labs API key for cloud GPU training (42% cheaper than RunPod)' },
+    aws: { name: 'AWS', description: 'AWS credentials for SageMaker training and S3 dataset storage' },
     fireworks: { name: 'Fireworks.ai', description: 'Fast inference API with <1s cold starts - no hosting fees for fine-tuned models' },
     'google-colab': { name: 'Google Colab', description: 'Google Cloud API credentials for Colab notebooks' },
     local: { name: 'Local', description: 'Local model deployment (vLLM/Ollama)' },
@@ -322,12 +323,25 @@ function SecretDialog({
   const [lambdaSshKeyName, setLambdaSshKeyName] = useState(
     (existingSecret?.metadata as { lambda?: { ssh_key_name?: string } } | null)?.lambda?.ssh_key_name || ''
   );
+  const [awsAccessKeyId, setAwsAccessKeyId] = useState(
+    (existingSecret?.metadata as { aws?: { access_key_id?: string } } | null)?.aws?.access_key_id || ''
+  );
+  const [awsS3Bucket, setAwsS3Bucket] = useState(
+    (existingSecret?.metadata as { aws?: { s3_bucket?: string } } | null)?.aws?.s3_bucket || ''
+  );
+  const [awsRegion, setAwsRegion] = useState(
+    (existingSecret?.metadata as { aws?: { region?: string } } | null)?.aws?.region || 'us-east-1'
+  );
+  const [awsIamRoleArn, setAwsIamRoleArn] = useState(
+    (existingSecret?.metadata as { aws?: { iam_role_arn?: string } } | null)?.aws?.iam_role_arn || ''
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isEdit = !!existingSecret;
   const isHuggingFace = provider === 'huggingface';
   const isLambda = provider === 'lambda';
+  const isAWS = provider === 'aws';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -339,6 +353,11 @@ function SecretDialog({
 
     if (isLambda && !lambdaSshKeyName.trim()) {
       setError('SSH key name is required for Lambda Labs');
+      return;
+    }
+
+    if (isAWS && (!awsAccessKeyId.trim() || !awsS3Bucket.trim() || !awsRegion.trim())) {
+      setError('Access Key ID, S3 Bucket, and Region are required for AWS');
       return;
     }
 
@@ -365,9 +384,22 @@ function SecretDialog({
 
       // Include Lambda SSH key name in metadata
       if (isLambda && lambdaSshKeyName.trim()) {
-        body.metadata = { 
+        body.metadata = {
           ...body.metadata,
-          lambda: { ssh_key_name: lambdaSshKeyName.trim() } 
+          lambda: { ssh_key_name: lambdaSshKeyName.trim() }
+        };
+      }
+
+      // Include AWS metadata
+      if (isAWS && awsAccessKeyId.trim() && awsS3Bucket.trim() && awsRegion.trim()) {
+        body.metadata = {
+          ...body.metadata,
+          aws: {
+            access_key_id: awsAccessKeyId.trim(),
+            s3_bucket: awsS3Bucket.trim(),
+            region: awsRegion.trim(),
+            ...(awsIamRoleArn.trim() && { iam_role_arn: awsIamRoleArn.trim() })
+          }
         };
       }
 
@@ -405,17 +437,43 @@ function SecretDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-2">
-              API Key {!isEdit && <span className="text-destructive">*</span>}
+              {isAWS ? 'AWS Secret Access Key' : 'API Key'} {!isEdit && <span className="text-destructive">*</span>}
             </label>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={isEdit ? 'Leave empty to keep current key' : 'sk-...'}
+              placeholder={isEdit ? 'Leave empty to keep current secret' : (isAWS ? 'Your AWS Secret Access Key' : 'sk-...')}
               className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
               disabled={submitting}
             />
+            {isAWS && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Your AWS Secret Access Key (shown only once when created in AWS console).
+              </p>
+            )}
           </div>
+
+          {/* AWS Access Key ID - shown right after Secret Access Key for AWS */}
+          {isAWS && (
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                AWS Access Key ID <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="text"
+                value={awsAccessKeyId}
+                onChange={(e) => setAwsAccessKeyId(e.target.value)}
+                placeholder="AKIAIOSFODNN7EXAMPLE"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                required
+                disabled={submitting}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Your AWS Access Key ID (starts with AKIA).
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-2">
@@ -425,7 +483,7 @@ function SecretDialog({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g., Personal key, Production key"
+              placeholder={isAWS ? 'e.g., Development, Production' : 'e.g., Personal key, Production key'}
               className="w-full px-3 py-2 border border-input rounded-md bg-background"
               disabled={submitting}
             />
@@ -470,6 +528,69 @@ function SecretDialog({
                 The name of the SSH key you added in your Lambda Labs dashboard (Settings → SSH Keys).
               </p>
             </div>
+          )}
+
+          {/* AWS Additional Configuration - S3 Bucket and Region */}
+          {isAWS && (
+            <>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  S3 Bucket Name <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={awsS3Bucket}
+                  onChange={(e) => setAwsS3Bucket(e.target.value)}
+                  placeholder="my-finetunelab-datasets"
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  required
+                  disabled={submitting}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  S3 bucket for storing training datasets (bucket must exist).
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  AWS Region <span className="text-destructive">*</span>
+                </label>
+                <select
+                  value={awsRegion}
+                  onChange={(e) => setAwsRegion(e.target.value)}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  required
+                  disabled={submitting}
+                >
+                  <option value="us-east-1">US East (N. Virginia)</option>
+                  <option value="us-east-2">US East (Ohio)</option>
+                  <option value="us-west-1">US West (N. California)</option>
+                  <option value="us-west-2">US West (Oregon)</option>
+                  <option value="eu-west-1">EU (Ireland)</option>
+                  <option value="eu-central-1">EU (Frankfurt)</option>
+                  <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                  <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  The AWS region where your SageMaker training jobs will run.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  IAM Role ARN <span className="text-muted-foreground text-xs">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={awsIamRoleArn}
+                  onChange={(e) => setAwsIamRoleArn(e.target.value)}
+                  placeholder="arn:aws:iam::710699192374:role/FineTune-Lab-DEV"
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-xs"
+                  disabled={submitting}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Optional: Specify a custom IAM role with SageMaker permissions. If not provided, a default role will be created.
+                </p>
+              </div>
+            </>
           )}
 
           {error && (

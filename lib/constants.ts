@@ -51,6 +51,7 @@ export const DATASET_FORMATS = {
   ALPACA: 'alpaca',
   OPENORCA: 'openorca',
   UNNATURAL: 'unnatural',
+  RAW_TEXT: 'raw_text',
 } as const;
 
 export type DatasetFormat = typeof DATASET_FORMATS[keyof typeof DATASET_FORMATS];
@@ -59,6 +60,8 @@ export const TRAINING_METHODS = {
   SFT: 'sft',
   DPO: 'dpo',
   RLHF: 'rlhf',
+  ORPO: 'orpo',
+  CPT: 'cpt',
 } as const;
 
 export type TrainingMethod = typeof TRAINING_METHODS[keyof typeof TRAINING_METHODS];

@@ -17,6 +17,7 @@ export type ModelProvider =
   | 'kaggle'
   | 'runpod'
   | 'lambda'    // Lambda Labs cloud GPU provider
+  | 'aws'       // AWS SageMaker and S3
   | 'fireworks' // Fireworks.ai - fast inference with <1s cold starts
   | 'google-colab'
   | 'local'     // Local model deployment (vLLM/Ollama)

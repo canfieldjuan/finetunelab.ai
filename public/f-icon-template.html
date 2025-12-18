@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 512px;
+      height: 512px;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <svg viewBox="0 0 100 100" width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+    <!-- Tilted F (lighter) - rotated in reverse around bottom axis -->
+    <g transform="translate(30, 20)">
+      <g transform="rotate(-15, 3, 60)" opacity="0.3">
+        <rect x="0" y="0" width="6" height="60" fill="#FF6B35" rx="3" />
+        <rect x="0" y="0" width="35" height="6" fill="#FF6B35" rx="3" />
+        <rect x="0" y="27" width="30" height="6" fill="#FF6B35" rx="3" />
+      </g>
+    </g>
+
+    <!-- Straight F (solid) -->
+    <g transform="translate(30, 20)">
+      <rect x="0" y="0" width="6" height="60" fill="#FF6B35" rx="3" />
+      <rect x="0" y="0" width="35" height="6" fill="#FF6B35" rx="3" />
+      <rect x="0" y="27" width="30" height="6" fill="#FF6B35" rx="3" />
+    </g>
+  </svg>
+</body>
+</html>

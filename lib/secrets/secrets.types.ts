@@ -17,9 +17,17 @@ export interface LambdaMetadata {
   ssh_key_name: string;  // SSH key name registered in Lambda Labs dashboard
 }
 
+export interface AWSMetadata {
+  access_key_id: string;  // AWS Access Key ID
+  s3_bucket: string;      // S3 bucket name for dataset storage
+  region: string;         // AWS region (e.g., us-east-1)
+  iam_role_arn?: string;  // Optional IAM role ARN for SageMaker
+}
+
 export interface ProviderMetadata {
   huggingface?: HuggingFaceMetadata;
   lambda?: LambdaMetadata;
+  aws?: AWSMetadata;
   [key: string]: unknown;  // Allow other provider-specific metadata
 }
 

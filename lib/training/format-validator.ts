@@ -4,7 +4,7 @@
 
 import type { DatasetFormat } from './dataset.types';
 
-export type TrainingMethod = 'sft' | 'dpo' | 'rlhf' | 'orpo';
+export type TrainingMethod = 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt';
 
 export interface MethodCompatibility {
   compatible: boolean;
@@ -16,6 +16,7 @@ const FORMAT_COMPATIBILITY: Record<TrainingMethod, DatasetFormat[]> = {
   dpo: ['dpo'],
   rlhf: ['rlhf'],
   orpo: ['dpo'],  // ORPO uses same format as DPO (chosen/rejected pairs)
+  cpt: ['raw_text'],  // CPT uses raw text for continued pre-training
 };
 
 export function isFormatCompatible(format: DatasetFormat, method: TrainingMethod): boolean {

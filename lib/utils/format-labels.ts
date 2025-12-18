@@ -48,7 +48,7 @@ export function formatTrainingMethod(method: string | null | undefined): string 
   if (!method) return '';
 
   // Known acronyms that should be uppercase
-  const acronyms = ['sft', 'dpo', 'rlhf'];
+  const acronyms = ['sft', 'dpo', 'rlhf', 'orpo', 'cpt'];
 
   if (acronyms.includes(method.toLowerCase())) {
     return method.toUpperCase();

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { BenchmarkManager } from '@/components/training/BenchmarkManager';
 import { BatchTesting } from '@/components/training/BatchTesting';
+import { ScheduledEvaluationManager } from '@/components/evaluation/ScheduledEvaluationManager';
 
 function TestingPageContent() {
   const { user, session, signOut } = useAuth();
@@ -27,6 +28,7 @@ function TestingPageContent() {
       />
 
       <div className="space-y-6">
+        <ScheduledEvaluationManager />
         <BenchmarkManager sessionToken={session?.access_token || ''} />
         <BatchTesting sessionToken={session?.access_token || ''} />
       </div>

@@ -412,6 +412,13 @@ model = prepare_model_for_kbit_training(model)
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
+# Disable use_cache when gradient checkpointing is enabled
+if ${gradientCheckpointing ? 'True' : 'False'}:
+    print("[Training] Disabling use_cache (required for gradient checkpointing)")
+    model.config.use_cache = False
+    if hasattr(model, "base_model"):
+        model.base_model.model.config.use_cache = False
+
 # Training configuration
 print("Configuring training...")
 training_args = TrainingArguments(
@@ -436,6 +443,13 @@ trainer = Trainer(
     args=training_args,
     train_dataset=dataset["train"],
 )
+
+# Ensure use_cache is disabled when gradient checkpointing is enabled
+if ${gradientCheckpointing ? 'True' : 'False'}:
+    print("[Training] Enforcing use_cache=False (gradient checkpointing active)")
+    model.config.use_cache = False
+    if hasattr(model, "base_model"):
+        model.base_model.model.config.use_cache = False
 
 trainer.train()
 

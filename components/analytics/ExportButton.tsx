@@ -10,9 +10,11 @@ import { Card } from '@/components/ui/card';
 import { Download, Loader2, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { ExportFormatSelector } from './ExportFormatSelector';
 import { ExportTypeSelector } from './ExportTypeSelector';
+import { AudienceSelector } from './AudienceSelector';
 import type {
   ExportFormat,
   ExportType,
+  AudienceType,
   DateRange,
   ExportCreationResponse,
   ExportErrorResponse,
@@ -23,6 +25,7 @@ export interface ExportButtonProps {
   dateRange: DateRange;
   defaultFormat?: ExportFormat;
   defaultType?: ExportType;
+  defaultAudience?: AudienceType;
   includedMetrics?: string[];
   onExportCreated?: (exportId: string, downloadUrl: string) => void;
   onError?: (error: string) => void;
@@ -36,6 +39,7 @@ export function ExportButton({
   dateRange,
   defaultFormat = 'csv',
   defaultType = 'overview',
+  defaultAudience = 'executive',
   includedMetrics,
   onExportCreated,
   onError,
@@ -49,6 +53,7 @@ export function ExportButton({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>(defaultFormat);
   const [selectedType, setSelectedType] = useState<ExportType>(defaultType);
+  const [selectedAudience, setSelectedAudience] = useState<AudienceType>(defaultAudience);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -70,6 +75,7 @@ export function ExportButton({
     console.log('[ExportButton] Export clicked', {
       format: selectedFormat,
       type: selectedType,
+      audience: selectedAudience,
       dateRange,
     });
 
@@ -131,6 +137,9 @@ export function ExportButton({
       startDate: dateRange.startDate.toISOString(),
       endDate: dateRange.endDate.toISOString(),
       includedMetrics: includedMetrics || [],
+      audience: (selectedFormat === 'pdf' || selectedFormat === 'html' || selectedFormat === 'report') 
+        ? selectedAudience 
+        : undefined,
     };
 
     const response = await fetch('/api/analytics/export', {
@@ -214,6 +223,14 @@ export function ExportButton({
             selectedFormat={selectedFormat}
             onChange={setSelectedFormat}
           />
+
+          {(selectedFormat === 'pdf' || selectedFormat === 'html' || selectedFormat === 'report') && (
+            <AudienceSelector
+              selectedAudience={selectedAudience}
+              onChange={setSelectedAudience}
+              disabled={isLoading}
+            />
+          )}
 
           <ExportTypeSelector
             selectedType={selectedType}

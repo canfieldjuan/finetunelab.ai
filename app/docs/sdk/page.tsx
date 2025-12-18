@@ -37,14 +37,10 @@ export default function SDKDocsPage() {
   const { user, signOut, loading } = useAuth();
   const router = useRouter();
 
-  if (loading) {
-    return <LoadingState fullScreen />;
-  }
-
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
+  // Public page - no auth required
+  // if (loading) {
+  //   return <LoadingState fullScreen />;
+  // }
 
   return (
     <PageWrapper currentPage="docs" user={user} signOut={signOut}>

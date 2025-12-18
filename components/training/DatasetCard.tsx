@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2, FileText, Calendar, Database, Eye } from 'lucide-react';
+import { Download, Trash2, FileText, Calendar, Database, Eye, Cloud, Server } from 'lucide-react';
 import type { TrainingDatasetRecord } from '@/lib/training/dataset.types';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -164,6 +164,20 @@ export function DatasetCard({ dataset, onDelete, isExpanded, onPreviewClick }: D
             <Calendar className="h-4 w-4 flex-shrink-0" />
             <span className="truncate">{formatDate(dataset.created_at)}</span>
           </div>
+        </div>
+
+        <div className="flex items-center gap-1 text-xs">
+          {dataset.storage_provider === 's3' ? (
+            <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
+              <Cloud className="h-3 w-3" />
+              <span className="font-medium">AWS S3</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+              <Server className="h-3 w-3" />
+              <span className="font-medium">Supabase</span>
+            </div>
+          )}
         </div>
 
         {(dataset.avg_input_length || dataset.avg_output_length) && (

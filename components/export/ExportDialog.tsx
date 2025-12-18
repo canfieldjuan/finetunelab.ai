@@ -78,6 +78,9 @@ export function ExportDialog({ conversationIds, onClose, onSuccess }: ExportDial
               <option value="markdown">Markdown (.md)</option>
               <option value="json">JSON (.json)</option>
               <option value="txt">Plain Text (.txt)</option>
+              <option value="jsonl">JSONL - Training Format (.jsonl)</option>
+              <option value="html">HTML - Web Format (.html)</option>
+              <option value="pdf">PDF - Printable (.pdf)</option>
             </select>
           </div>
 

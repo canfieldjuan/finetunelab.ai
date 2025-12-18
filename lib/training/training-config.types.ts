@@ -56,7 +56,7 @@ export interface LoRAConfig {
   modules_to_save?: string[];
 }
 
-export type TrainingMethod = 'sft' | 'dpo' | 'rlhf' | 'orpo';
+export type TrainingMethod = 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt';
 export type DataStrategy = 'standard' | 'toolbench' | 'pc_building' | 'teacher_mode' | 'knowledge_dense' | 'manual_templates' | 'custom' | 'alpaca' | 'openorca' | 'unnatural_instructions';
 export type GenerationType = 'real' | 'synthetic';
 

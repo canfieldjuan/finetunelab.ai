@@ -555,7 +555,7 @@ async def search(
 
         # Convert EntityEdge objects to dicts and apply temporal filters
         edge_dicts = []
-        for edge in edges:
+        for idx, edge in enumerate(edges):
             edge_dict = {
                 'uuid': edge.uuid,
                 'name': edge.name,
@@ -613,9 +613,17 @@ async def search(
             if not should_include:
                 continue
 
-            # Add score if available
-            if hasattr(edge, 'score'):
+            # Add score - use native score if available, otherwise generate synthetic score
+            # Synthetic scores: rank-based, decreasing from 1.0 to 0.1
+            if hasattr(edge, 'score') and edge.score is not None:
                 edge_dict['score'] = edge.score
+            else:
+                # Generate synthetic relevance score based on position in results
+                # First result = 1.0, last result approaches 0.1
+                # Formula: 1.0 - (idx / total_results) * 0.9
+                total_results = len(edges)
+                synthetic_score = max(0.1, 1.0 - (idx / max(1, total_results)) * 0.9)
+                edge_dict['score'] = synthetic_score
 
             edge_dicts.append(edge_dict)
 
@@ -680,7 +688,7 @@ async def get_entity_edges(
 
         # Convert to dicts (same as search endpoint)
         edge_dicts = []
-        for edge in filtered_edges:
+        for idx, edge in enumerate(filtered_edges):
             edge_dict = {
                 'uuid': edge.uuid,
                 'name': edge.name,
@@ -715,9 +723,14 @@ async def get_entity_edges(
                 except Exception as e:
                     logger.warning(f"Could not get source_description for edge {edge.uuid}: {e}")
 
-            # Add score if available
-            if hasattr(edge, 'score'):
+            # Add score - use native score if available, otherwise generate synthetic score
+            if hasattr(edge, 'score') and edge.score is not None:
                 edge_dict['score'] = edge.score
+            else:
+                # Generate synthetic relevance score based on position in results
+                total_results = len(filtered_edges)
+                synthetic_score = max(0.1, 1.0 - (idx / max(1, total_results)) * 0.9)
+                edge_dict['score'] = synthetic_score
 
             edge_dicts.append(edge_dict)
 

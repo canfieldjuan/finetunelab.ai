@@ -541,6 +541,20 @@ def _persist_metrics_sync(job_id: str, metrics: List[Dict]) -> bool:
         return True
 
     import time
+    import math
+
+    # Sanitize metrics: replace NaN/Inf with None for JSON compatibility
+    def sanitize_value(val):
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+            return None
+        return val
+
+    sanitized_metrics = []
+    for metric in metrics:
+        sanitized_metric = {key: sanitize_value(value) for key, value in metric.items()}
+        sanitized_metrics.append(sanitized_metric)
+
+    metrics = sanitized_metrics
 
     retry_delay = PERSISTENCE_RETRY_DELAY
     logger.info(f"[Persistence] ===== METRICS PERSISTENCE ATTEMPT =====")
@@ -2249,27 +2263,49 @@ async def periodic_health_check():
 
                     # If process is dead (poll returns exit code, not None)
                     if poll_result is not None:
-                        logger.warning(
-                            f"[HealthCheck] Job {job_id[:8]}... process died unexpectedly "
-                            f"(exit code: {poll_result})"
-                        )
+                        if poll_result == 0:
+                            # Exit code 0 = success
+                            logger.info(
+                                f"[HealthCheck] Job {job_id[:8]}... process completed successfully "
+                                f"(exit code: 0)"
+                            )
 
-                        # Mark job as failed
-                        job.status = JobStatusEnum.FAILED
-                        job.completed_at = datetime.utcnow().isoformat()
-                        job.error_message = (
-                            f"Training process terminated unexpectedly with exit code {poll_result}. "
-                            f"Check logs at logs/job_{job_id}.log for details."
-                        )
+                            # Mark job as completed
+                            job.status = JobStatusEnum.COMPLETED
+                            job.completed_at = datetime.utcnow().isoformat()
+                            job.progress = 100.0
 
-                        # Persist to database
-                        await persist_with_cache(job_id, {
-                            'status': 'failed',
-                            'completed_at': job.completed_at,
-                            'error_message': job.error_message
-                        })
+                            # Persist to database
+                            await persist_with_cache(job_id, {
+                                'status': 'completed',
+                                'completed_at': job.completed_at,
+                                'progress': 100.0
+                            })
 
-                        logger.info(f"[HealthCheck] ✓ Marked job {job_id[:8]}... as failed")
+                            logger.info(f"[HealthCheck] ✓ Marked job {job_id[:8]}... as completed")
+                        else:
+                            # Non-zero exit code = failure
+                            logger.warning(
+                                f"[HealthCheck] Job {job_id[:8]}... process died unexpectedly "
+                                f"(exit code: {poll_result})"
+                            )
+
+                            # Mark job as failed
+                            job.status = JobStatusEnum.FAILED
+                            job.completed_at = datetime.utcnow().isoformat()
+                            job.error_message = (
+                                f"Training process terminated unexpectedly with exit code {poll_result}. "
+                                f"Check logs at logs/job_{job_id}.log for details."
+                            )
+
+                            # Persist to database
+                            await persist_with_cache(job_id, {
+                                'status': 'failed',
+                                'completed_at': job.completed_at,
+                                'error_message': job.error_message
+                            })
+
+                            logger.info(f"[HealthCheck] ✓ Marked job {job_id[:8]}... as failed")
 
                 except Exception as e:
                     logger.error(f"[HealthCheck] Error checking job {job_id[:8]}...: {e}", exc_info=True)

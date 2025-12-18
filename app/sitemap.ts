@@ -9,7 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // Static public pages from config
   const staticPages = publicPages.map((page) => ({
     url: `${baseUrl}${page.path === '/' ? '' : page.path}`,
-    lastModified: new Date(),
+    lastModified: new Date('2025-12-17'), // Updated with new pages
     changeFrequency: page.changeFreq,
     priority: page.priority,
   }));

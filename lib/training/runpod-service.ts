@@ -1716,6 +1716,36 @@ elif training_method == "cpt":
     # Continued Pre-Training (CPT) - causal LM on raw text
     logger.info("[CPT] Configuring continued pre-training with SFTTrainer")
 
+    # CPT-specific training configuration
+    training_args = SFTConfig(
+        output_dir="/workspace/results",
+        num_train_epochs=${training?.num_epochs || 3},
+        per_device_train_batch_size=${training?.batch_size || 4},
+        gradient_accumulation_steps=${training?.gradient_accumulation_steps || 1},
+        learning_rate=${training?.learning_rate || 2e-5},  # Lower LR for CPT
+        logging_steps=${training?.logging_steps || 10},
+        warmup_ratio=${training?.warmup_ratio || 0.03},
+        weight_decay=${training?.weight_decay || 0.01},  # Higher weight decay for CPT
+        lr_scheduler_type="${training?.lr_scheduler_type || 'cosine'}",
+        save_strategy=eval_strategy,
+        save_steps=${training?.save_steps || 500},
+        save_total_limit=${training?.save_total_limit || 3},
+        eval_strategy=eval_strategy,
+        eval_steps=${training?.eval_steps || 500},
+        load_best_model_at_end=True if eval_strategy != 'no' else False,
+        metric_for_best_model="${training?.metric_for_best_model || 'loss'}",
+        bf16=bf16,
+        fp16=fp16,
+        optim=optimizer,
+        gradient_checkpointing=gradient_checkpointing,
+        max_length=${training?.max_length || 2048},  # Longer sequences for CPT
+        packing=${(training?.packing ?? true) ? 'True' : 'False'},  # Packing enabled by default for CPT
+    )
+
+    # Always use IntegerDtypeCollator to fix TRL 0.26+ dtype bug
+    data_collator = IntegerDtypeCollator(tokenizer=tokenizer)
+    logger.info("[CPT] Using IntegerDtypeCollator to fix TRL dtype bug")
+
     def format_raw_text(example):
         return example["text"]
 
@@ -1727,6 +1757,7 @@ elif training_method == "cpt":
         processing_class=tokenizer,
         formatting_func=format_raw_text,
         callbacks=callbacks,
+        data_collator=data_collator,
     )
 
 else:

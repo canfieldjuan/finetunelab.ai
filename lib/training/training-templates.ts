@@ -858,6 +858,94 @@ export const ORPO_STANDARD_TEMPLATE: TrainingConfig = {
   seed: 42
 };
 
+/**
+ * CPT (Continued Pre-Training) Standard Template
+ *
+ * Domain adaptation training on raw text using causal language modeling.
+ * Used to adapt base models to specific domains before instruction fine-tuning.
+ *
+ * Key Parameters:
+ * - Lower learning rate (2e-5) for stable adaptation
+ * - Longer sequences (4096) to capture domain context
+ * - Packing enabled for efficiency with raw text
+ * - Raw text format (simple text strings, no conversations)
+ *
+ * Use Cases: Medical, legal, finance, research papers, enterprise knowledge bases
+ * Workflow: Base Model -> CPT -> SFT -> DPO -> Production
+ */
+export const CPT_STANDARD_TEMPLATE: TrainingConfig = {
+  model: {
+    name: 'meta-llama/Llama-3.2-1B',
+    trust_remote_code: true,
+    torch_dtype: 'bfloat16',
+    device_map: 'auto'
+  },
+  tokenizer: {
+    name: 'meta-llama/Llama-3.2-1B',
+    trust_remote_code: true
+  },
+  training: {
+    method: 'cpt',
+    num_epochs: 1,
+    learning_rate: 2e-5,
+    batch_size: 4,
+    gradient_accumulation_steps: 8,
+    warmup_ratio: 0.03,
+    warmup_steps: 100,
+    max_length: 4096,
+    use_lora: true,
+
+    lora_r: 16,
+    lora_alpha: 32,
+    lora_dropout: 0.1,
+
+    lora_config: {
+      r: 16,
+      lora_alpha: 32,
+      lora_dropout: 0.1,
+      target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"],
+      bias: "none",
+      task_type: "CAUSAL_LM"
+    },
+
+    quantization: {
+      load_in_4bit: true,
+      bnb_4bit_quant_type: "nf4",
+      bnb_4bit_compute_dtype: "bfloat16",
+      bnb_4bit_use_double_quant: true
+    },
+
+    optim: "paged_adamw_8bit",
+    gradient_checkpointing: true,
+    fp16: false,
+    bf16: true,
+    max_grad_norm: 1.0,
+    weight_decay: 0.01,
+    lr_scheduler_type: 'cosine',
+
+    dataloader_num_workers: 4,
+    dataloader_prefetch_factor: 2,
+    dataloader_pin_memory: true,
+    group_by_length: false,
+    eval_batch_size: 4,
+
+    logging_steps: 10,
+    eval_steps: 500,
+    save_steps: 500,
+    save_total_limit: 3,
+    evaluation_strategy: 'steps',
+    packing: true
+  },
+  data: {
+    strategy: 'standard',
+    generation_type: 'real',
+    max_samples: undefined,
+    train_split: 0.95,
+    eval_split: 0.05,
+    dataset_format: 'raw_text'
+  }
+};
+
 // DEPRECATED - Old templates with non-performant settings (kept for reference only)
 // DO NOT USE - Use SFT_STANDARD or DPO_STANDARD instead
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -877,7 +965,8 @@ export const ALL_TEMPLATES: Record<string, TrainingConfig> = {
   'sft_standard': SFT_STANDARD_TEMPLATE,
   'dpo_standard': DPO_STANDARD_TEMPLATE,
   'rlhf_standard': RLHF_STANDARD_TEMPLATE,
-  'orpo_standard': ORPO_STANDARD_TEMPLATE
+  'orpo_standard': ORPO_STANDARD_TEMPLATE,
+  'cpt_standard': CPT_STANDARD_TEMPLATE
 };
 
 export function getTemplateByType(type: string): TrainingConfig | null {

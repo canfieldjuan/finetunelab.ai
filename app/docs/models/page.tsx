@@ -29,14 +29,10 @@ export default function ModelsPage() {
   const { user, signOut, loading } = useAuth();
   const router = useRouter();
 
-  if (loading) {
-    return <LoadingState fullScreen />;
-  }
-
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
+  // Public page - no auth required
+  // if (loading) {
+  //   return <LoadingState fullScreen />;
+  // }
 
   const openAIModels: ShowcaseModel[] = [
     {

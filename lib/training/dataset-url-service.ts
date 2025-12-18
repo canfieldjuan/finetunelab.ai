@@ -27,8 +27,13 @@ export class DatasetUrlService {
     datasetPath: string,
     userId: string,
     supabase: SupabaseClient,
-    expiryHours: number = 2
+    expiryHours: number = 2,
+    storageProvider: string = 'supabase'
   ): Promise<DatasetDownloadUrl> {
+    if (storageProvider === 's3') {
+      return this.generateS3PresignedUrl(datasetPath, userId, supabase, expiryHours);
+    }
+
     console.log('[DatasetUrlService] Generating Supabase signed URL for:', datasetPath);
 
     // Calculate expiry time in seconds (Supabase uses seconds, max 2 hours = 7200s)
@@ -53,6 +58,54 @@ export class DatasetUrlService {
     return {
       url: data.signedUrl,
       token: 'supabase-signed', // Not needed anymore but kept for compatibility
+      expires_at: expiresAt.toISOString(),
+    };
+  }
+
+  /**
+   * Generate S3 presigned URL for dataset
+   */
+  private async generateS3PresignedUrl(
+    datasetPath: string,
+    userId: string,
+    supabase: SupabaseClient,
+    expiryHours: number
+  ): Promise<DatasetDownloadUrl> {
+    console.log('[DatasetUrlService] Generating S3 presigned URL for:', datasetPath);
+
+    const { secretsManager } = await import('@/lib/secrets/secrets-manager.service');
+    const awsSecret = await secretsManager.getSecret(userId, 'aws', supabase);
+
+    if (!awsSecret || !awsSecret.metadata?.aws) {
+      throw new Error('AWS credentials not configured');
+    }
+
+    const awsMetadata = awsSecret.metadata.aws as any;
+    const decryptedSecretKey = await secretsManager.getDecryptedApiKey(userId, 'aws', supabase);
+
+    if (!decryptedSecretKey) {
+      throw new Error('Failed to retrieve AWS secret key');
+    }
+
+    const { S3StorageService } = await import('@/lib/storage/s3-storage-service');
+    const s3Service = new S3StorageService({
+      accessKeyId: awsMetadata.access_key_id,
+      secretAccessKey: decryptedSecretKey,
+      region: awsMetadata.region,
+      bucket: awsMetadata.s3_bucket,
+    });
+
+    const expirySeconds = Math.min(expiryHours * 3600, 604800);
+    const expiresAt = new Date(Date.now() + expirySeconds * 1000);
+
+    const presignedUrl = await s3Service.generatePresignedUrl(datasetPath, expirySeconds);
+
+    console.log('[DatasetUrlService] ✓ S3 presigned URL created');
+    console.log('[DatasetUrlService] Expires:', expiresAt.toISOString());
+
+    return {
+      url: presignedUrl,
+      token: 's3-presigned',
       expires_at: expiresAt.toISOString(),
     };
   }

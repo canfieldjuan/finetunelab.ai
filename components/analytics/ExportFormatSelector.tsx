@@ -4,7 +4,7 @@
 // Date: October 25, 2025
 
 import { Label } from '@/components/ui/label';
-import { FileSpreadsheet, Code, FileText } from 'lucide-react';
+import { FileSpreadsheet, Code, FileText, File } from 'lucide-react';
 import type { ExportFormat } from './types';
 import { FORMAT_LABELS, FORMAT_DESCRIPTIONS } from './types';
 
@@ -19,7 +19,7 @@ export function ExportFormatSelector({
 }: ExportFormatSelectorProps) {
   console.log('[ExportFormatSelector] Rendered', { selectedFormat });
 
-  const formats: ExportFormat[] = ['csv', 'json', 'report'];
+  const formats: ExportFormat[] = ['csv', 'json', 'pdf', 'html', 'report'];
 
   const getIcon = (format: ExportFormat) => {
     const className = "h-4 w-4";
@@ -28,6 +28,10 @@ export function ExportFormatSelector({
         return <FileSpreadsheet className={className} />;
       case 'json':
         return <Code className={className} />;
+      case 'pdf':
+        return <File className={className} />;
+      case 'html':
+        return <FileText className={className} />;
       case 'report':
         return <FileText className={className} />;
     }

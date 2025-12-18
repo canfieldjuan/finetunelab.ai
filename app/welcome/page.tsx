@@ -8,17 +8,17 @@ export const dynamic = 'force-static';
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
+  title: "FineTune Lab - From Fine-Tuning to Production Monitoring",
   description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
   keywords: ["AI training", "LLM fine-tuning", "production monitoring", "Graph RAG", "Local LLM", "vLLM", "Ollama", "AI analytics", "RLHF", "DPO"],
   openGraph: {
-    title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
+    title: "FineTune Lab - From Fine-Tuning to Production Monitoring",
     description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fine Tune Lab - From Fine-Tuning to Production Monitoring",
+    title: "FineTune Lab - From Fine-Tuning to Production Monitoring",
     description: "From fine-tuning to production monitoring. Train, evaluate, and deploy LLMs locally or in the cloud with real-time telemetry.",
   }
 };
@@ -29,7 +29,7 @@ export default function WelcomePage() {
     "@graph": [
       {
         "@type": "SoftwareApplication",
-        "name": "Fine Tune Lab",
+        "name": "FineTune Lab",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Web, Linux, Windows, macOS",
         "offers": {
@@ -37,7 +37,7 @@ export default function WelcomePage() {
           "price": "0",
           "priceCurrency": "USD"
         },
-        "description": "A visual DAG-based platform that unifies training, evaluation, deployment, and real-world analytics for LLMs."
+        "description": "A unified platform for fine-tuning, testing, and deploying LLMs with GraphRAG knowledge integration, automated evaluation, and production analytics."
       },
       {
         "@type": "FAQPage",

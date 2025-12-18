@@ -111,7 +111,7 @@ def _validate_training_config(training_config: Dict[str, Any], warnings: List[st
         raise ValidationError("training.method is required (sft, dpo, etc.)")
     
     method = training_config["method"].lower()
-    valid_methods = ["sft", "dpo", "rlhf", "orpo"]
+    valid_methods = ["sft", "dpo", "rlhf", "orpo", "cpt"]
     if method not in valid_methods:
         raise ValidationError(f"Invalid training.method '{method}'. Valid: {valid_methods}")
     
@@ -217,7 +217,8 @@ def _validate_dataset_format_compatibility(training_config: Dict[str, Any], data
         "sft": ["chatml", "sharegpt", "jsonl", "alpaca", "openorca", "unnatural", "text"],
         "dpo": ["dpo"],
         "rlhf": ["rlhf"],
-        "orpo": ["dpo"]
+        "orpo": ["dpo"],
+        "cpt": ["raw_text", "text"]
     }
 
     if method in format_requirements:

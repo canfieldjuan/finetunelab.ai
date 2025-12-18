@@ -99,6 +99,14 @@ export function MessageList({
                     inputTokens={msg.input_tokens}
                     outputTokens={msg.output_tokens}
                     latencyMs={msg.latency_ms}
+                    // GraphRAG metadata
+                    graphragUsed={msg.graphrag_used}
+                    graphragNodes={msg.graphrag_nodes}
+                    graphragChunks={msg.graphrag_chunks}
+                    graphragRetrievalMs={msg.graphrag_retrieval_ms}
+                    graphragRelevance={msg.graphrag_relevance}
+                    graphragGrounded={msg.graphrag_grounded}
+                    graphragMethod={msg.graphrag_method}
                   />
                   <MessageJudgments messageId={msg.id} />
                 </>

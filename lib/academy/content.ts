@@ -8,6 +8,7 @@ export interface AcademyArticle {
   publishedAt: string;
   author: string;
   tags: string[];
+  readTime?: string; // Optional read time estimate
 }
 
 export const academyArticles: AcademyArticle[] = [

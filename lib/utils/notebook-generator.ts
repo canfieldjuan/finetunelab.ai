@@ -7,15 +7,16 @@
  */
 export function generateTrainingNotebook(
   publicId: string,
-  trainingMethod: 'sft' | 'dpo' | 'rlhf' | 'orpo'
+  trainingMethod: 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt'
 ): string {
   console.log(`[NotebookGenerator] Creating notebook for ${trainingMethod} with ID: ${publicId}`);
 
-  const methodLabels = {
+  const methodLabels: Record<typeof trainingMethod, string> = {
     sft: 'Supervised Fine-Tuning (SFT)',
     dpo: 'Direct Preference Optimization (DPO)',
     rlhf: 'RLHF Training',
-    orpo: 'ORPO Training'
+    orpo: 'ORPO Training',
+    cpt: 'Continued Pre-Training (CPT)'
   };
 
   const notebookTitle = `FineTune Lab - ${methodLabels[trainingMethod]}`;
@@ -72,7 +73,7 @@ export function generateTrainingNotebook(
 /**
  * Get filename for notebook
  */
-export function getNotebookFilename(trainingMethod: 'sft' | 'dpo' | 'rlhf' | 'orpo'): string {
+export function getNotebookFilename(trainingMethod: 'sft' | 'dpo' | 'rlhf' | 'orpo' | 'cpt'): string {
   return `finetune_lab_${trainingMethod}.ipynb`;
 }
 

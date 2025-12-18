@@ -2,7 +2,14 @@
 // Type definitions for dataset upload and management
 // Date: 2025-10-16
 
-export type DatasetFormat = 'chatml' | 'sharegpt' | 'jsonl' | 'dpo' | 'rlhf' | 'alpaca' | 'openorca' | 'unnatural';
+export type DatasetFormat = 'chatml' | 'sharegpt' | 'jsonl' | 'dpo' | 'rlhf' | 'alpaca' | 'openorca' | 'unnatural' | 'raw_text';
+
+// Raw text example for Continued Pre-Training (CPT)
+export interface RawTextExample {
+  text: string;
+}
+
+export type StorageProvider = 'supabase' | 's3';
 
 // Dataset field name constants to avoid hard-coding
 export const DATASET_FIELDS = {
@@ -172,6 +179,7 @@ export interface TrainingDatasetRecord {
   file_size_bytes: number;
   total_examples: number;
   storage_path: string;
+  storage_provider: StorageProvider;
   avg_input_length: number | null;
   avg_output_length: number | null;
   created_at: string;

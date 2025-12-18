@@ -31,6 +31,7 @@ interface Dataset {
   displayLabel: string;
   format: string;
   totalExamples: number;
+  storage_provider: string;
 }
 
 interface Model {
@@ -363,11 +364,16 @@ export function TrainingConfigForm({ config, onChange }: TrainingConfigFormProps
               <SelectValue placeholder="Select a dataset..." />
             </SelectTrigger>
             <SelectContent>
-              {datasets.map((dataset) => (
-                <SelectItem key={dataset.id} value={dataset.id} className="text-xs">
-                  {dataset.displayLabel}
-                </SelectItem>
-              ))}
+              {datasets
+                .filter((dataset) => {
+                  const requiredStorage = (config.provider === 'sagemaker' || config.provider === 'aws') ? 's3' : 'supabase';
+                  return dataset.storage_provider === requiredStorage;
+                })
+                .map((dataset) => (
+                  <SelectItem key={dataset.id} value={dataset.id} className="text-xs">
+                    {dataset.displayLabel}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         )}
