@@ -1669,6 +1669,12 @@ class ToolTrainer:
             logger.info("[Model] Resizing token embeddings")
             model.resize_token_embeddings(len(self.tokenizer))
 
+        # CRITICAL: Disable use_cache for training
+        # When use_cache=True (default for inference), model returns past_key_values
+        # but skips loss computation, causing "model did not return a loss" error
+        model.config.use_cache = False
+        logger.info("[Model] Disabled use_cache for training (prevents loss computation errors)")
+
         return model
 
     def _format_chat_messages(self, example: Dict[str, Any]) -> str:
