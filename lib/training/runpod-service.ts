@@ -441,6 +441,14 @@ export class RunPodService {
       model: {
         name: modelName,
         trust_remote_code: model.trust_remote_code || false,
+        torch_dtype: model.torch_dtype || 'float16',
+        device_map: model.device_map || 'auto',
+      },
+      tokenizer: {
+        name: trainingConfig.tokenizer?.name || modelName,
+        trust_remote_code: trainingConfig.tokenizer?.trust_remote_code || model.trust_remote_code || false,
+        padding_side: trainingConfig.tokenizer?.padding_side,
+        add_eos_token: trainingConfig.tokenizer?.add_eos_token,
       },
       training: {
         method: training.method || 'sft',
@@ -482,10 +490,19 @@ export class RunPodService {
       },
       data: {
         strategy: data?.strategy || 'standard',
+        generation_type: data?.generation_type || 'real',
+        max_samples: data?.max_samples,
+        train_split: data?.train_split || 0.8,
+        eval_split: data?.eval_split || 0.2,
+        dataset_format: data?.dataset_format,
       },
       dataset_path: datasetPath,
       output_dir: '/workspace/fine_tuned_model',
-      eval_split: data?.eval_split || 0.2,
+      ...(trainingConfig.evaluation && { evaluation: trainingConfig.evaluation }),
+      ...(trainingConfig.tensorboard && { tensorboard: trainingConfig.tensorboard }),
+      ...(trainingConfig.predictions && { predictions: trainingConfig.predictions }),
+      ...(trainingConfig.tools && { tools: trainingConfig.tools }),
+      ...(trainingConfig.seed !== undefined && { seed: trainingConfig.seed }),
     };
   }
 
