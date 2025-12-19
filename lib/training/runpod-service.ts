@@ -535,7 +535,7 @@ fi
 
 # Upgrade pip first to avoid version issues
 echo "[$(date)] Upgrading pip..."
-if python -m pip install --upgrade pip >/dev/null 2>&1; then
+if python -m pip install --root-user-action=ignore --upgrade pip >/dev/null 2>&1; then
   echo "[$(date)] ✓ Pip upgraded: $(python -m pip --version)"
 else
   echo "[$(date)] ✗ WARNING: Failed to upgrade pip, continuing with existing version"
@@ -551,8 +551,8 @@ python -m pip uninstall -y trl 2>/dev/null || true
 echo "[$(date)] Removing torchvision/torchaudio (not needed for text LLM training)..."
 python -m pip uninstall -y torchvision torchaudio 2>/dev/null || true
 
-if python -m pip install --no-cache-dir "trl==0.26.0" && \
-   python -m pip install --no-cache-dir --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
+if python -m pip install --root-user-action=ignore --no-cache-dir "trl==0.26.0" && \
+   python -m pip install --root-user-action=ignore --no-cache-dir --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
   echo "[$(date)] ✓ Dependencies installed successfully"
   echo "[$(date)] TRL version (after upgrade): $(python -m pip show trl | grep Version)"
   # Verify the import works
