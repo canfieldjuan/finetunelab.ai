@@ -547,7 +547,8 @@ export async function POST(request: NextRequest) {
     );
 
     // Construct URLs that will be passed to RunPod
-    const metricsApiUrl = `${appUrl}/api/training/local/${jobId}/metrics`;
+    // Note: job_id is passed in POST body, not URL path
+    const metricsApiUrl = `${appUrl}/api/training/local/metrics`;
     const alertApiUrl = `${appUrl}/api/alerts/trigger`;
 
     console.log('[RunPod API] DEBUG - Constructed METRICS_API_URL:', metricsApiUrl);
