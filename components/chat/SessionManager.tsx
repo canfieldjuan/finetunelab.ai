@@ -1,9 +1,8 @@
 "use client";
 
 import React from 'react';
-import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import { Tag, X } from 'lucide-react';
+import { Tag, Copy, Check } from 'lucide-react';
 
 interface SessionManagerProps {
   sessionId: string | null;
@@ -15,8 +14,8 @@ interface SessionManagerProps {
 
 /**
  * SessionManager Component
- * Allows users to tag conversations with session IDs and experiment names
- * for A/B testing and model comparison analytics
+ * Displays auto-generated session tags for conversation tracking and analytics
+ * Format: chat_model_{uuid}_{counter} (e.g., chat_model_abc123_015)
  */
 export function SessionManager({
   sessionId,
@@ -25,116 +24,58 @@ export function SessionManager({
   onClearSession,
   disabled = false
 }: SessionManagerProps) {
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [tempSessionId, setTempSessionId] = React.useState(sessionId || '');
-  const [tempExperimentName, setTempExperimentName] = React.useState(experimentName || '');
+  const [copied, setCopied] = React.useState(false);
 
-  const handleSave = () => {
-    if (tempSessionId.trim()) {
-      console.log('[SessionManager] Saving session:', tempSessionId, tempExperimentName);
-      onSessionChange(tempSessionId.trim(), tempExperimentName.trim());
-      setIsEditing(false);
+  const handleCopy = async () => {
+    if (!sessionId) return;
+    
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('[SessionManager] Failed to copy session tag:', error);
     }
   };
 
-  const handleClear = () => {
-    console.log('[SessionManager] Clearing session');
-    setTempSessionId('');
-    setTempExperimentName('');
-    onClearSession();
-    setIsEditing(false);
-  };
-
-  // Display mode - show badge if session exists
-  if (!isEditing && sessionId) {
+  // Display auto-generated session tag as badge
+  if (sessionId) {
     return (
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
-          <Tag className="w-3 h-3 text-blue-600" />
-          <span className="text-xs font-medium text-blue-700">{sessionId}</span>
+        <div 
+          onClick={handleCopy}
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+          title="Click to copy session tag"
+        >
+          <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+          <span className="text-xs font-mono font-medium text-blue-700 dark:text-blue-300">
+            {sessionId}
+          </span>
           {experimentName && (
-            <span className="text-xs text-blue-600">({experimentName})</span>
+            <span className="text-xs text-blue-600 dark:text-blue-400">
+              ({experimentName})
+            </span>
           )}
-          <button
-            onClick={handleClear}
-            disabled={disabled}
-            className="ml-1 hover:bg-blue-100 rounded p-0.5 disabled:opacity-50"
-            title="Clear session"
-          >
-            <X className="w-3 h-3 text-blue-600" />
-          </button>
+          {copied ? (
+            <Check className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+          ) : (
+            <Copy className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 opacity-60" />
+          )}
         </div>
+        <span className="text-[10px] text-muted-foreground">
+          Auto-generated
+        </span>
       </div>
     );
   }
 
-  // Display mode - show button to start tagging
-  if (!isEditing && !sessionId) {
-    return (
-      <Button
-        onClick={() => setIsEditing(true)}
-        disabled={disabled}
-        variant="outline"
-        size="sm"
-        className="h-8 text-xs"
-      >
-        <Tag className="w-3 h-3 mr-1" />
-        Tag Session
-      </Button>
-    );
-  }
-
-  // Edit mode - show input fields
+  // No session tag yet - show placeholder
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex gap-2 items-center px-2 py-1 bg-muted rounded-lg">
-        <Input
-          value={tempSessionId}
-          onChange={(e) => setTempSessionId(e.target.value)}
-          placeholder="Session ID (e.g., test-run-1)"
-          className="h-7 text-xs w-40"
-          disabled={disabled}
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSave();
-            } else if (e.key === 'Escape') {
-              setIsEditing(false);
-            }
-          }}
-        />
-        <Input
-          value={tempExperimentName}
-          onChange={(e) => setTempExperimentName(e.target.value)}
-          placeholder="Experiment name (optional)"
-          className="h-7 text-xs w-40"
-          disabled={disabled}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSave();
-            } else if (e.key === 'Escape') {
-              setIsEditing(false);
-            }
-          }}
-        />
-        <Button
-          onClick={handleSave}
-          disabled={disabled || !tempSessionId.trim()}
-          size="sm"
-          className="h-7 px-3 text-xs"
-        >
-          Save
-        </Button>
-        <Button
-          onClick={() => setIsEditing(false)}
-          disabled={disabled}
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-        >
-          Cancel
-        </Button>
-      </div>
+    <div className="flex items-center gap-2 px-3 py-1 border border-dashed border-muted-foreground/30 rounded-lg">
+      <Tag className="w-3 h-3 text-muted-foreground/50" />
+      <span className="text-xs text-muted-foreground/50">
+        Session tag will appear on first message
+      </span>
     </div>
   );
 }
