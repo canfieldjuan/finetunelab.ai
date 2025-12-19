@@ -18,6 +18,10 @@ import type {
 } from "@/lib/subscriptions/types";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { ScheduledEvaluationManager } from "@/components/evaluation/ScheduledEvaluationManager";
+import { UsageDashboard } from "@/components/billing/UsageDashboard";
+import { TierSelector } from "@/components/billing/TierSelector";
+import { UsageHistoryChart } from "@/components/billing/UsageHistoryChart";
+import { InvoiceHistoryTable } from "@/components/billing/InvoiceHistoryTable";
 import { safeJsonParse } from "@/lib/utils/safe-json";
 
 // Usage Card Component
@@ -95,6 +99,14 @@ export default function AccountPage() {
   // Subscription management state
   const [managingSubscription, setManagingSubscription] = useState(false);
 
+  // Usage-based pricing state
+  const [currentTier, setCurrentTier] = useState<string | undefined>(undefined);
+  const [showTierSelector, setShowTierSelector] = useState(false);
+  const [usageHistory, setUsageHistory] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [loadingInvoices, setLoadingInvoices] = useState(true);
+
   // Account management
   const [deleting, setDeleting] = useState(false);
 
@@ -161,6 +173,64 @@ export default function AccountPage() {
     };
 
     fetchUsage();
+  }, [user, session?.access_token]);
+
+  // Fetch usage history
+  useEffect(() => {
+    const fetchUsageHistory = async () => {
+      if (!user || !session?.access_token) {
+        setLoadingHistory(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/billing/usage-history', {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await safeJsonParse(response, { history: [] });
+          setUsageHistory(data.history);
+        }
+      } catch (error) {
+        console.error('[AccountPage] Error fetching usage history:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    fetchUsageHistory();
+  }, [user, session?.access_token]);
+
+  // Fetch invoices
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      if (!user || !session?.access_token) {
+        setLoadingInvoices(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/billing/invoices', {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await safeJsonParse(response, { invoices: [] });
+          setInvoices(data.invoices);
+        }
+      } catch (error) {
+        console.error('[AccountPage] Error fetching invoices:', error);
+      } finally {
+        setLoadingInvoices(false);
+      }
+    };
+
+    fetchInvoices();
   }, [user, session?.access_token]);
 
   // Handle manage subscription (Stripe portal)
@@ -264,6 +334,59 @@ export default function AccountPage() {
               </div>
             </div>
           </div>
+
+          {/* Usage-Based Pricing Dashboard */}
+          {session?.access_token && (
+            <div className="mb-8">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold text-foreground">Usage & Billing</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Real-time usage tracking and cost estimation
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowTierSelector(!showTierSelector)}
+                >
+                  {showTierSelector ? 'Hide Tiers' : 'Change Tier'}
+                </Button>
+              </div>
+              <UsageDashboard 
+                sessionToken={session.access_token}
+                onTierLoaded={(tier) => setCurrentTier(tier)}
+              />
+              
+              {showTierSelector && (
+                <div className="mt-8 pt-8 border-t border-border">
+                  <TierSelector
+                    currentTier={currentTier as any}
+                    sessionToken={session.access_token}
+                    onTierSelect={(tier) => {
+                      console.log('[AccountPage] Tier selected:', tier);
+                      setShowTierSelector(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Usage Analytics */}
+          {session?.access_token && (
+            <div className="mb-8">
+              <div className="mb-4">
+                <h2 className="text-2xl font-semibold text-foreground">Usage Analytics</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Historical trends and invoice history
+                </p>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <UsageHistoryChart data={usageHistory} loading={loadingHistory} />
+                <InvoiceHistoryTable invoices={invoices} loading={loadingInvoices} />
+              </div>
+            </div>
+          )}
 
           {/* Current Plan Summary */}
           {!loadingSubscription && plan && (
