@@ -10,7 +10,21 @@
 
 ### In Progress
 
-*No current training work*
+**RunPod Template Testing**
+- **Started:** 2025-12-19
+- **Work:** Systematic testing of all training methods on RunPod
+- **Tracking:** See `RUNPOD_TESTING.md`
+- **Templates to test:**
+  - ✅ SFT Standard (working)
+  - ⏳ DPO Standard
+  - ⏳ RLHF Standard (PPO)
+  - ⏳ ORPO Standard
+  - ⏳ CPT Standard
+- **Goals:**
+  1. Verify all templates work on RunPod
+  2. Run outside dev tests + collect metrics via API
+  3. Run batch tests programmatically
+  4. Document limitations and gaps
 
 ### Recently Completed
 
@@ -363,6 +377,7 @@ sleep 3600
 
 **Documentation:**
 - `.github/ai-coordination/API_COORDINATION.md` - API contracts
+- `.github/ai-coordination/RUNPOD_TESTING.md` - Template testing tracking
 - `LAUNCH_PLAN.md` - Overall training system architecture
 
 ---
