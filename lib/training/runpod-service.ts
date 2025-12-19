@@ -1482,6 +1482,12 @@ model = AutoModelForCausalLM.from_pretrained(
     trust_remote_code=trust_remote_code
 )
 
+# CRITICAL: Disable use_cache for training
+# When use_cache=True (default for inference), model returns past_key_values
+# but skips loss computation, causing "model did not return a loss" error
+model.config.use_cache = False
+print("[Model] Disabled use_cache for training (prevents loss computation errors)")
+
 # Load dataset
 dataset = load_dataset("json", data_files="/workspace/dataset.jsonl")
 full_dataset = dataset['train']
