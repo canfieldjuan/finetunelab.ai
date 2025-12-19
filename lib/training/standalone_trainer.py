@@ -3185,13 +3185,27 @@ def load_datasets(config: Dict[str, Any]) -> tuple[Dataset, Dataset]:
     dataset_path = config.get('dataset_path', 'sample_data.json')
     logger.info(f"[DataLoader] Loading dataset from: {dataset_path}")
     
-    # Load JSON or JSONL data
+    # Load JSON or JSONL data (with automatic gzip detection)
     try:
+        import gzip
         data = []
-        with open(dataset_path, 'r', encoding='utf-8') as f:
-            if dataset_path.endswith('.jsonl'):
+
+        # Try to detect if file is gzipped by checking magic bytes
+        is_gzipped = False
+        with open(dataset_path, 'rb') as f:
+            magic = f.read(2)
+            is_gzipped = (magic == b'\x1f\x8b')
+
+        if is_gzipped:
+            logger.info("[DataLoader] Detected gzipped file, decompressing...")
+            file_handle = gzip.open(dataset_path, 'rt', encoding='utf-8')
+        else:
+            file_handle = open(dataset_path, 'r', encoding='utf-8')
+
+        try:
+            if dataset_path.endswith('.jsonl') or dataset_path.endswith('.jsonl.gz'):
                 logger.info("[DataLoader] Detected JSONL format")
-                for line_num, line in enumerate(f, 1):
+                for line_num, line in enumerate(file_handle, 1):
                     line = line.strip()
                     if line:
                         try:
@@ -3201,7 +3215,10 @@ def load_datasets(config: Dict[str, Any]) -> tuple[Dataset, Dataset]:
                             raise
             else:
                 logger.info("[DataLoader] Detected JSON format")
-                data = json.load(f)
+                data = json.load(file_handle)
+        finally:
+            file_handle.close()
+
         logger.info(f"[DataLoader] Loaded {len(data)} examples")
     except Exception as e:
         logger.error(f"[DataLoader] Failed to load dataset: {e}")
