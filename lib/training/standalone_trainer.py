@@ -2069,22 +2069,27 @@ class ToolTrainer:
         if predictions_callback:
             callbacks.append(predictions_callback)
 
-        # Use custom collator to fix TRL bug where input_ids get cast to float
-        # https://github.com/huggingface/trl/issues/4103
-        data_collator = IntegerDtypeCollator(tokenizer=self.tokenizer)
-        logger.info("[SFT] Using IntegerDtypeCollator to fix TRL dtype bug")
+        # Custom collator only works when packing is disabled
+        # With packing (padding-free mode), TRL doesn't allow custom collators
+        trainer_kwargs = {
+            "model": self.model,
+            "train_dataset": self.train_dataset,
+            "eval_dataset": self.eval_dataset,
+            "args": training_args,
+            "processing_class": self.tokenizer,
+            "formatting_func": formatting_func,
+            "callbacks": callbacks
+        }
+
+        if not packing:
+            data_collator = IntegerDtypeCollator(tokenizer=self.tokenizer)
+            trainer_kwargs["data_collator"] = data_collator
+            logger.info("[SFT] Using IntegerDtypeCollator (packing disabled)")
+        else:
+            logger.info("[SFT] Using default collator (packing enabled)")
 
         logger.info("[SFT] Creating SFT trainer")
-        trainer = SFTTrainer(
-            model=self.model,
-            train_dataset=self.train_dataset,
-            eval_dataset=self.eval_dataset,
-            args=training_args,
-            processing_class=self.tokenizer,
-            formatting_func=formatting_func,
-            data_collator=data_collator,
-            callbacks=callbacks
-        )
+        trainer = SFTTrainer(**trainer_kwargs)
 
         logger.info("[SFT] Starting training loop")
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)
