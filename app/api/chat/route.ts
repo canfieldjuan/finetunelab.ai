@@ -817,14 +817,45 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           });
         }
 
+        // Generate session tag for regular chat if needed
+        let regularChatSessionTag: string | null = null;
+        if (!isWidgetMode && !isBatchTestMode && conversationId && userId && llmModelIdForDb) {
+          try {
+            const { data: conversation } = await supabase
+              .from('conversations')
+              .select('session_id')
+              .eq('id', conversationId)
+              .single();
+            
+            if (conversation && !conversation.session_id) {
+              const sessionTag = await generateSessionTag(userId, llmModelIdForDb);
+              if (sessionTag) {
+                await supabase
+                  .from('conversations')
+                  .update({
+                    session_id: sessionTag.session_id,
+                    experiment_name: sessionTag.experiment_name
+                  })
+                  .eq('id', conversationId);
+                regularChatSessionTag = sessionTag.session_id;
+                console.log('[API] Generated session tag for regular chat:', regularChatSessionTag);
+              }
+            } else if (conversation?.session_id) {
+              regularChatSessionTag = conversation.session_id;
+            }
+          } catch (error) {
+            console.error('[API] Failed to generate session tag for regular chat:', error);
+          }
+        }
+
         // Start trace for LLM operation
         traceContext = await traceService.startTrace({
           spanName: 'llm.completion',
           operationType: 'llm_call',
           modelName: selectedModelId,
           modelProvider: actualModelConfig?.provider || provider || undefined,
-          conversationId: widgetConversationId || undefined,
-          sessionTag: widgetSessionTag || undefined,
+          conversationId: widgetConversationId || conversationId || undefined,
+          sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
         });
 
         try {
@@ -1394,14 +1425,45 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         })
       };
 
+      // Generate session tag for regular chat if needed (streaming path)
+      let regularChatSessionTag: string | null = null;
+      if (!isWidgetMode && !isBatchTestMode && conversationId && userId && llmModelIdForDb) {
+        try {
+          const { data: conversation } = await supabase
+            .from('conversations')
+            .select('session_id')
+            .eq('id', conversationId)
+            .single();
+          
+          if (conversation && !conversation.session_id) {
+            const sessionTag = await generateSessionTag(userId, llmModelIdForDb);
+            if (sessionTag) {
+              await supabase
+                .from('conversations')
+                .update({
+                  session_id: sessionTag.session_id,
+                  experiment_name: sessionTag.experiment_name
+                })
+                .eq('id', conversationId);
+              regularChatSessionTag = sessionTag.session_id;
+              console.log('[API] Generated session tag for regular chat (streaming):', regularChatSessionTag);
+            }
+          } else if (conversation?.session_id) {
+            regularChatSessionTag = conversation.session_id;
+          }
+        } catch (error) {
+          console.error('[API] Failed to generate session tag for regular chat (streaming):', error);
+        }
+      }
+
       // Start trace for streaming LLM operation
       traceContext = await traceService.startTrace({
         spanName: 'llm.completion.stream',
         operationType: 'llm_call',
         modelName: selectedModelId || model || undefined,
         modelProvider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || undefined,
-        conversationId: widgetConversationId || undefined,
-        sessionTag: widgetSessionTag || undefined,
+        conversationId: widgetConversationId || conversationId || undefined,
+        sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
       });
 
       const stream = new ReadableStream({
