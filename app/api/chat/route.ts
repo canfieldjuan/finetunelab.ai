@@ -827,8 +827,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               .eq('id', conversationId)
               .single();
             
-            if (conversation && !conversation.session_id && conversation.llm_model_id) {
-              const sessionTag = await generateSessionTag(userId, conversation.llm_model_id);
+            // Update llm_model_id if missing (first message in conversation)
+            let modelIdToUse = conversation?.llm_model_id;
+            if (conversation && !conversation.llm_model_id && selectedModelId) {
+              console.log('[API] Setting llm_model_id on conversation:', selectedModelId);
+              await supabase
+                .from('conversations')
+                .update({ llm_model_id: selectedModelId })
+                .eq('id', conversationId);
+              modelIdToUse = selectedModelId;
+            }
+            
+            if (conversation && !conversation.session_id && modelIdToUse) {
+              const sessionTag = await generateSessionTag(userId, modelIdToUse);
               if (sessionTag) {
                 await supabase
                   .from('conversations')
@@ -1435,8 +1446,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             .eq('id', conversationId)
             .single();
           
-          if (conversation && !conversation.session_id && conversation.llm_model_id) {
-            const sessionTag = await generateSessionTag(userId, conversation.llm_model_id);
+          // Update llm_model_id if missing (first message in conversation)
+          let modelIdToUse = conversation?.llm_model_id;
+          if (conversation && !conversation.llm_model_id && selectedModelId) {
+            console.log('[API] Setting llm_model_id on conversation (streaming):', selectedModelId);
+            await supabase
+              .from('conversations')
+              .update({ llm_model_id: selectedModelId })
+              .eq('id', conversationId);
+            modelIdToUse = selectedModelId;
+          }
+          
+          if (conversation && !conversation.session_id && modelIdToUse) {
+            const sessionTag = await generateSessionTag(userId, modelIdToUse);
             if (sessionTag) {
               await supabase
                 .from('conversations')
