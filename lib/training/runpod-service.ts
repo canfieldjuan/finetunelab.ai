@@ -507,6 +507,22 @@ export class RunPodService {
 # Removed -e flag to prevent immediate exit on error and allow debugging
 set -uo pipefail
 
+# Prevent restart loops - check if script already ran
+LOCK_FILE="/workspace/.training_started"
+if [ -f "$LOCK_FILE" ]; then
+  echo "================================================"
+  echo "[$(date)] DETECTED CONTAINER RESTART"
+  echo "================================================"
+  echo "Training script already started at: $(cat $LOCK_FILE)"
+  echo "This is likely a container restart. Keeping container alive..."
+  echo "Check logs above for the actual error that caused restart."
+  echo ""
+  tail -f /dev/null
+fi
+
+# Mark that we've started (prevents restart loops)
+echo "$(date)" > "$LOCK_FILE"
+
 echo "================================================"
 echo "[$(date)] RunPod Training Script Started"
 echo "================================================"
