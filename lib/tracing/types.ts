@@ -63,6 +63,9 @@ export interface StartTraceParams {
   /** Message ID to link this trace to */
   messageId?: string;
 
+  /** Session tag for user-friendly trace search (format: chat_model_{uuid}_{counter}) */
+  sessionTag?: string;
+
   /** Parent trace context for nested operations */
   parentContext?: TraceContext;
 

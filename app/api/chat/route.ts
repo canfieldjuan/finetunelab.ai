@@ -27,6 +27,7 @@ import crypto from 'crypto';
 import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext } from '@/lib/tracing/types';
 import { recordUsageEvent } from '@/lib/usage/checker';
+import { generateSessionTag } from '@/lib/session-tagging/generator';
 
 // Use Node.js runtime instead of Edge for OpenAI SDK compatibility
 export const runtime = 'nodejs';
@@ -171,6 +172,7 @@ export async function POST(req: NextRequest) {
     // Widget mode: Has X-API-Key + widgetSessionId (takes precedence over batch test)
     isWidgetMode = !!(apiKey && widgetSessionId);
     widgetConversationId = null;
+    let widgetSessionTag: string | null = null;
 
     console.log('[API] Widget mode:', isWidgetMode, 'Batch test mode:', isBatchTestMode, 'API key present:', !!apiKey, 'Session ID:', widgetSessionId);
 
@@ -253,7 +255,7 @@ export async function POST(req: NextRequest) {
         // Check if conversation already exists for this widget session
         let { data: conversation, error: convError } = await supabaseAdmin!
           .from('conversations')
-          .select()
+          .select('id, session_id')
           .eq('widget_session_id', widgetSessionId)
           .maybeSingle();
 
@@ -308,8 +310,30 @@ export async function POST(req: NextRequest) {
         }
 
         widgetConversationId = conversation.id;
+        widgetSessionTag = conversation.session_id || null;
+        
+        // Generate session tag if missing (first message)
+        if (!widgetSessionTag && userId && llmModelIdForDb) {
+          try {
+            const sessionTag = await generateSessionTag(userId, llmModelIdForDb);
+            if (sessionTag) {
+              await supabaseAdmin!
+                .from('conversations')
+                .update({
+                  session_id: sessionTag.session_id,
+                  experiment_name: sessionTag.experiment_name
+                })
+                .eq('id', conversation.id);
+              widgetSessionTag = sessionTag.session_id;
+              console.log('[API] Generated session tag:', widgetSessionTag);
+            }
+          } catch (error) {
+            console.error('[API] Failed to generate session tag:', error);
+          }
+        }
+        
         conversationId = conversation.id; // Set conversationId for conversation history loading
-        console.log('[API] Widget mode: Conversation created:', widgetConversationId);
+        console.log('[API] Widget mode: Conversation created:', widgetConversationId, 'Session tag:', widgetSessionTag);
       } catch (error) {
         console.error('[API] Widget mode: Error creating conversation:', error);
         return new Response(JSON.stringify({ error: 'Conversation creation error' }), {
@@ -605,6 +629,26 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       // Use conversationId if available, else empty string
       const convId = conversationId || '';
 
+      // ========================================================================
+      // TRACE: Start tool call span
+      // ========================================================================
+      let toolTraceContext: TraceContext | undefined;
+      
+      // Only trace if we have a parent trace context (from LLM call)
+      if (traceContext) {
+        try {
+          toolTraceContext = await traceService.createChildSpan(
+            traceContext,
+            `tool.${toolName}`,
+            'tool_call'
+          );
+          console.log(`[Trace] Started tool call trace: ${toolName}`);
+        } catch (traceErr) {
+          // Log but don't block - tracing failures should never break functionality
+          console.error('[Trace] Failed to start tool trace:', traceErr);
+        }
+      }
+
       // Enforce deep research toggle server-side.
       // Without this, models can start deep research even when UI toggle is off.
       if (toolName === 'web_search' && !allowDeepResearch) {
@@ -638,6 +682,45 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       } catch (capErr) {
         console.log('[API] Could not capture web_search results for SSE:', capErr);
       }
+      
+      // ========================================================================
+      // TRACE: End tool call span
+      // ========================================================================
+      if (toolTraceContext) {
+        try {
+          if (result.error) {
+            // Tool call failed
+            await traceService.endTrace(toolTraceContext, {
+              endTime: new Date(),
+              status: 'failed',
+              errorMessage: String(result.error),
+              errorType: 'ToolExecutionError',
+              metadata: {
+                toolName,
+                args: JSON.stringify(args).slice(0, 1000), // Limit to 1000 chars
+              },
+            });
+            console.log(`[Trace] Ended tool call trace (failed): ${toolName}`);
+          } else {
+            // Tool call succeeded
+            await traceService.endTrace(toolTraceContext, {
+              endTime: new Date(),
+              status: 'success',
+              outputData: result.data,
+              metadata: {
+                toolName,
+                args: JSON.stringify(args).slice(0, 1000), // Limit to 1000 chars
+                resultType: typeof result.data,
+                hasResults: result.data !== null && result.data !== undefined,
+              },
+            });
+            console.log(`[Trace] Ended tool call trace (success): ${toolName}`);
+          }
+        } catch (traceErr) {
+          console.error('[Trace] Failed to end tool trace:', traceErr);
+        }
+      }
+      
       if (result.error) return { error: result.error };
       return result.data;
     };
@@ -664,11 +747,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     //   }
     // }
 
-    // Branch: Use non-streaming for tool-enabled requests, streaming for simple chats
-    if (tools.length > 0 || forceNonStreaming) {
+    // Branch: Use non-streaming for tool-enabled requests (except OpenAI which supports streaming + tools)
+    // OpenAI can stream with tools, Anthropic cannot yet
+    const requiresNonStreaming = forceNonStreaming || (tools.length > 0 && provider !== 'openai');
+    
+    if (requiresNonStreaming) {
       // NON-STREAMING PATH: Execute tools and get complete response
       console.log('[API] Using non-streaming tool-aware path');
-      console.log('[API] Route decision: tools=', tools.length > 0, 'forceNonStreaming=', !!forceNonStreaming);
+      console.log('[API] Route decision: tools=', tools.length > 0, 'forceNonStreaming=', !!forceNonStreaming, 'provider=', provider);
 
       // METRIC: Start latency tracking
       const startTime = Date.now();
@@ -738,6 +824,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           modelName: selectedModelId,
           modelProvider: actualModelConfig?.provider || provider || undefined,
           conversationId: widgetConversationId || undefined,
+          sessionTag: widgetSessionTag || undefined,
         });
 
         try {
@@ -901,9 +988,24 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       // Ensure we never stream an empty assistant message
       // Only show a deep research placeholder if a deep research job actually started.
       if (!finalResponse || finalResponse.trim().length === 0) {
-        finalResponse = lastDeepResearchJobId
-          ? `deep_research_started jobId: ${lastDeepResearchJobId}`
-          : 'No content was generated by the model.';
+        if (lastDeepResearchJobId) {
+          finalResponse = `deep_research_started jobId: ${lastDeepResearchJobId}`;
+        } else if (toolsCalled && toolsCalled.length > 0) {
+          // If tools were called but no content generated, create a helpful summary
+          const successCount = toolsCalled.filter(t => t.success).length;
+          const failureCount = toolsCalled.filter(t => !t.success).length;
+          const toolNames = toolsCalled.map(t => t.name).join(', ');
+          
+          finalResponse = `✓ Executed ${toolsCalled.length} tool(s): ${toolNames}\n\n`;
+          if (failureCount > 0) {
+            finalResponse += `⚠️ ${failureCount} tool(s) failed. Please check the results above.\n\n`;
+          }
+          finalResponse += `The operation completed. You can now proceed with your next request.`;
+          
+          console.log('[API] Generated tool execution summary:', finalResponse);
+        } else {
+          finalResponse = 'No content was generated by the model.';
+        }
       }
 
       // METRIC: Calculate latency
@@ -1299,6 +1401,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         modelName: selectedModelId || model || undefined,
         modelProvider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || undefined,
         conversationId: widgetConversationId || undefined,
+        sessionTag: widgetSessionTag || undefined,
       });
 
       const stream = new ReadableStream({
@@ -1337,8 +1440,42 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             // Stream LLM output (plain text chunks)
             // Accumulate response for widget mode message saving
             let accumulatedResponse = '';
+            const toolCallsTracking: Array<{name: string; success: boolean; error?: string}> = [];
 
-            // Use UnifiedLLMClient if model is selected from registry
+            // Check if we need tool-aware streaming (OpenAI only)
+            const needsToolStreaming = tools.length > 0 && provider === 'openai';
+
+            if (needsToolStreaming) {
+              // Use tool-aware streaming for OpenAI
+              console.log('[API] Using OpenAI tool-aware streaming');
+              const { streamOpenAIWithToolCalls } = await import('@/lib/llm/openai');
+              
+              for await (const event of streamOpenAIWithToolCalls(
+                enhancedMessages,
+                model,
+                temperature,
+                maxTokens,
+                activeTools,
+                toolCallHandler
+              )) {
+                if (event.type === 'content') {
+                  // Stream text content
+                  accumulatedResponse += event.data;
+                  const data = `data: ${JSON.stringify({ content: event.data })}\n\n`;
+                  controller.enqueue(encoder.encode(data));
+                } else if (event.type === 'tool_call_start') {
+                  // Notify tool execution start
+                  const data = `data: ${JSON.stringify({ type: 'tool_call_start', tool: event.data.name })}\n\n`;
+                  controller.enqueue(encoder.encode(data));
+                } else if (event.type === 'tool_call_end') {
+                  // Notify tool execution end
+                  const data = `data: ${JSON.stringify({ type: 'tool_call_end', tool: event.data.name })}\n\n`;
+                  controller.enqueue(encoder.encode(data));
+                }
+              }
+            } else {
+              // Regular streaming (no tools or non-OpenAI)
+              // Use UnifiedLLMClient if model is selected from registry
             if (useUnifiedClient && selectedModelId) {
               console.log('[API] Streaming with UnifiedLLMClient, model:', selectedModelId);
               try {
@@ -1403,6 +1540,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 controller.enqueue(encoder.encode(data));
               }
             }
+            } // End needsToolStreaming else block
 
             console.log('[API] [DEBUG] Streaming complete. Total accumulated response length:', accumulatedResponse.length);
             console.log('[API] [DEBUG] Response preview:', accumulatedResponse.substring(0, 200));
@@ -1492,7 +1630,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
             // If nothing was accumulated (unexpected), send a short placeholder to avoid blank UI
             if (!accumulatedResponse || accumulatedResponse.trim().length === 0) {
-              const placeholder = 'No content was generated by the model.';
+              const placeholder = 'No content was generated by the model. This usually means the model only called tools without providing a response. Check the tool execution results above.';
               const data = `data: ${JSON.stringify({ content: placeholder })}\n\n`;
               controller.enqueue(encoder.encode(data));
             }
