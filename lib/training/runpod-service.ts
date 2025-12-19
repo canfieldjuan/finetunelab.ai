@@ -567,8 +567,12 @@ python -m pip uninstall -y trl 2>/dev/null || true
 echo "[$(date)] Removing torchvision/torchaudio (not needed for text LLM training)..."
 python -m pip uninstall -y torchvision torchaudio 2>/dev/null || true
 
+# Pin PyTorch to 2.1.0 to match base image CUDA 11.8 (prevents 1.5GB CUDA 12 download)
+echo "[$(date)] Pinning PyTorch to 2.1.0 (matches CUDA 11.8 base image)..."
+python -m pip install --root-user-action=ignore --no-cache-dir "torch==2.1.0" 2>&1 | grep -v "Requirement already satisfied" || true
+
 if python -m pip install --root-user-action=ignore --no-cache-dir "trl==0.26.0" && \
-   python -m pip install --root-user-action=ignore --no-cache-dir --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
+   python -m pip install --root-user-action=ignore --no-cache-dir transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
   echo "[$(date)] ✓ Dependencies installed successfully"
   echo "[$(date)] TRL version (after upgrade): $(python -m pip show trl | grep Version)"
   # Verify the import works
