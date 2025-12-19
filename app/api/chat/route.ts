@@ -829,7 +829,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           });
           
           try {
-            const { data: conversation, error: convError } = await supabase
+            // Create authenticated Supabase client for server-side operations
+            const supabaseAuth = createRouteHandlerClient({ cookies });
+            
+            const { data: conversation, error: convError } = await supabaseAuth
               .from('conversations')
               .select('session_id, llm_model_id')
               .eq('id', conversationId)
@@ -846,7 +849,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             let modelIdToUse = conversation?.llm_model_id;
             if (conversation && !conversation.llm_model_id && selectedModelId) {
               console.log('[API] [SESSION_TAG] Setting llm_model_id on conversation:', selectedModelId);
-              const { error: updateError } = await supabase
+              const { error: updateError } = await supabaseAuth
                 .from('conversations')
                 .update({ llm_model_id: selectedModelId })
                 .eq('id', conversationId);
@@ -1493,7 +1496,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         });
         
         try {
-          const { data: conversation, error: convError } = await supabase
+          // Create authenticated Supabase client for server-side operations
+          const supabaseAuth = createRouteHandlerClient({ cookies });
+          
+          const { data: conversation, error: convError } = await supabaseAuth
             .from('conversations')
             .select('session_id, llm_model_id')
             .eq('id', conversationId)
@@ -1510,7 +1516,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           let modelIdToUse = conversation?.llm_model_id;
           if (conversation && !conversation.llm_model_id && selectedModelId) {
             console.log('[API] [SESSION_TAG] [STREAMING] Setting llm_model_id on conversation:', selectedModelId);
-            const { error: updateError } = await supabase
+            const { error: updateError } = await supabaseAuth
               .from('conversations')
               .update({ llm_model_id: selectedModelId })
               .eq('id', conversationId);
@@ -1529,7 +1535,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             console.log('[API] [SESSION_TAG] [STREAMING] Generated session tag:', sessionTag);
             
             if (sessionTag) {
-              const { error: tagError } = await supabase
+              const { error: tagError } = await supabaseAuth
                 .from('conversations')
                 .update({
                   session_id: sessionTag.session_id,
