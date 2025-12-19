@@ -1,0 +1,23 @@
+# robots.txt for finetunelab.ai
+# Allow all crawlers to index public pages
+
+User-agent: *
+Allow: /
+
+# Block admin/dashboard pages from search
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+Disallow: /_next/
+
+# Block auth pages from deep indexing (keep them discoverable for brand searches)
+Allow: /login$
+Allow: /signup$
+Disallow: /login/*
+Disallow: /signup/*
+
+# Sitemap location
+Sitemap: https://finetunelab.ai/sitemap.xml
+
+# Crawl rate (be nice to server)
+Crawl-delay: 1
