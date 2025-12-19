@@ -27,7 +27,7 @@ export interface SessionTag {
  * Generate a unique session tag for a conversation
  * 
  * @param userId - User ID who owns the conversation
- * @param modelId - Model ID from llm_models table (model_id field, not UUID id)
+ * @param modelId - Model UUID (id field from llm_models table)
  * @returns SessionTag object or null if model not tracked
  */
 export async function generateSessionTag(
@@ -42,11 +42,11 @@ export async function generateSessionTag(
     const { data: model, error: modelError } = await supabase
       .from('llm_models')
       .select('id, model_id, name')
-      .eq('model_id', modelId)
-      .eq('user_id', userId)
+      .eq('id', modelId)
       .single();
 
     if (modelError || !model) {
+      console.error('[Session Tag Generator] Model not found:', { modelId, error: modelError });
       return null;
     }
 
@@ -56,7 +56,7 @@ export async function generateSessionTag(
       .from('conversations')
       .select('session_id')
       .eq('user_id', userId)
-      .eq('llm_model_id', modelId)
+      .eq('llm_model_id', model.id)
       .not('session_id', 'is', null)
       .like('session_id', `chat_model_${shortUuid}_%`);
 
@@ -86,7 +86,7 @@ export async function generateSessionTag(
       session_id: sessionId,
       experiment_name: model.name,
       counter: nextCounter,
-      model_id: model.model_id,
+      model_id: model.id,
       model_name: model.name
     };
   } catch (error) {
