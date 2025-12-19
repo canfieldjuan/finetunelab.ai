@@ -517,9 +517,16 @@ export async function POST(request: NextRequest) {
 
     console.log('[RunPod API] Created job:', jobId);
 
-    // CRITICAL: In production, NEXT_PUBLIC_APP_URL must be set to your public domain
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    
+    // Auto-detect app URL from request if NEXT_PUBLIC_APP_URL not set
+    let appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!appUrl) {
+      const host = request.headers.get('host');
+      const protocol = request.headers.get('x-forwarded-proto') || 'https';
+      appUrl = `${protocol}://${host}`;
+      console.log('[RunPod API] Auto-detected app URL from request:', appUrl);
+    }
+
     if (appUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
       console.error('[RunPod API] ⚠️  WARNING: Using localhost URL in production!');
       console.error('[RunPod API] Metrics API will be unreachable from RunPod pods.');
