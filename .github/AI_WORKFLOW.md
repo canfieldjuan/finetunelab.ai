@@ -633,6 +633,221 @@ npm run dev
 
 ---
 
+## 🧪 Testing & Integration
+
+**CRITICAL: Never merge to main without testing integration first!**
+
+### The Problem
+
+Each branch is isolated:
+- `claude/backend` has the API but no UI
+- `copilot/frontend` has the UI but no API
+- Testing them separately doesn't prove they work **together**
+
+### The Solution: Integration Test Branch
+
+**Create a test branch to verify both models' work integrates correctly:**
+
+```bash
+# After both models finish their branches
+
+# 1. Create integration test branch
+git checkout main
+git checkout -b test/feature-integration
+
+# 2. Merge both feature branches
+git merge claude/backend-api
+git merge copilot/frontend-ui
+
+# 3. Test locally
+npm run dev          # Start dev server
+npm run build        # Verify build succeeds
+
+# 4. Manual testing
+# - Open browser to http://localhost:3000
+# - Test the feature end-to-end
+# - Check browser console for errors
+# - Test edge cases
+
+# 5a. If tests PASS:
+git checkout main
+git merge test/feature-integration
+git push origin main
+
+# Clean up
+git branch -D test/feature-integration
+git branch -D claude/backend-api
+git branch -D copilot/frontend-ui
+
+# 5b. If tests FAIL:
+# Don't merge to main!
+# Go back to original branches and fix
+
+git checkout claude/backend-api
+# Fix the issue
+git commit -m "fix: handle null user case"
+git push origin claude/backend-api
+
+# Retry integration
+git checkout test/feature-integration
+git merge claude/backend-api  # Get the fix
+npm run dev  # Test again
+```
+
+### Testing Checklist
+
+**Before merging to main:**
+
+- [ ] `npm run build` succeeds
+- [ ] No TypeScript errors
+- [ ] No console errors in browser
+- [ ] Feature works end-to-end
+- [ ] Edge cases handled (null, empty, error states)
+- [ ] Mobile/responsive works (if UI feature)
+- [ ] API returns expected data
+- [ ] Loading states work
+- [ ] Error states work
+
+### Testing Individual Branches
+
+**If you need to test a single branch:**
+
+```bash
+# Test backend API only
+git checkout claude/backend-api
+npm run dev
+
+# Test endpoint
+curl http://localhost:3000/api/endpoint
+# Or use Postman/Insomnia
+```
+
+```bash
+# Test frontend only (will show errors if API missing)
+git checkout copilot/frontend-ui
+npm run dev
+
+# Component will render but API calls will fail
+# This is expected - use test/integration branch for full test
+```
+
+### Staging Environment (Advanced)
+
+**For production-level testing:**
+
+```bash
+# Create staging branch
+git checkout -b staging
+git merge test/feature-integration
+
+# Push to staging environment
+git push origin staging  # Deploys to staging.finetunelab.ai
+
+# Test on real environment
+# - Check database interactions
+# - Verify API authentication
+# - Test with real data
+
+# If good, promote to production
+git checkout main
+git merge staging
+git push origin main
+
+# Clean up
+git branch -D staging
+```
+
+### Feature Flags (Hide Incomplete Work)
+
+**Ship to production but keep feature hidden:**
+
+```typescript
+// Backend
+export async function GET(request: NextRequest) {
+  if (process.env.ENABLE_NEW_FEATURE !== 'true') {
+    return NextResponse.json({ error: 'Not available' }, { status: 404 });
+  }
+  // ... feature code
+}
+
+// Frontend
+export function NewFeature() {
+  if (process.env.NEXT_PUBLIC_ENABLE_NEW_FEATURE !== 'true') {
+    return null;  // Hidden
+  }
+  // ... feature UI
+}
+```
+
+```bash
+# .env.production
+ENABLE_NEW_FEATURE=false
+NEXT_PUBLIC_ENABLE_NEW_FEATURE=false
+
+# Enable when ready
+ENABLE_NEW_FEATURE=true
+NEXT_PUBLIC_ENABLE_NEW_FEATURE=true
+```
+
+### Common Integration Issues
+
+**Issue 1: API endpoint path mismatch**
+```typescript
+// Backend: /api/training/stats
+// Frontend: /api/trainings/stats  ❌ (typo!)
+
+Fix: Check API_COORDINATION.md for endpoint contracts
+```
+
+**Issue 2: Missing authentication**
+```typescript
+// Backend requires auth
+// Frontend forgot to pass token
+
+Fix: Add Authorization header in frontend
+```
+
+**Issue 3: Type mismatches**
+```typescript
+// Backend returns: { total: number }
+// Frontend expects: { totalJobs: number }
+
+Fix: Align types in TYPES_COORDINATION.md
+```
+
+**Issue 4: CORS errors**
+```
+Access to fetch at 'http://localhost:3000/api/...'
+from origin 'http://localhost:3001' blocked by CORS
+
+Fix: Ensure frontend and backend on same port
+```
+
+### Integration Testing Workflow Summary
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  1. Both models create feature branches                 │
+│     claude/backend + copilot/frontend                   │
+├─────────────────────────────────────────────────────────┤
+│  2. Create test/integration branch                      │
+│     Merge both feature branches into it                 │
+├─────────────────────────────────────────────────────────┤
+│  3. Test locally                                        │
+│     npm run dev + manual testing                        │
+├─────────────────────────────────────────────────────────┤
+│  4a. PASS → Merge to main                               │
+│  4b. FAIL → Fix in original branches, retry             │
+├─────────────────────────────────────────────────────────┤
+│  5. Clean up test branch                                │
+│     Delete all temporary branches                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Never skip integration testing. It's the safety net that prevents breaking production.**
+
+---
+
 ## 📝 Quick Command Reference
 
 ### Start Multi-Model Work:
