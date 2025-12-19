@@ -176,6 +176,48 @@ CONSOLE_LOG_INTERVAL = int(os.getenv("CONSOLE_LOG_INTERVAL", "5"))  # Reduced to
 # Runtime parameter update check interval in seconds
 PARAM_UPDATE_CHECK_INTERVAL = int(os.getenv("PARAM_UPDATE_CHECK_INTERVAL", "10"))
 
+# Alert notification configuration
+ALERT_API_URL = os.getenv('ALERT_API_URL')
+INTERNAL_API_KEY = os.getenv('INTERNAL_API_KEY', '')
+JOB_ID = os.getenv('JOB_ID')
+USER_ID = os.getenv('USER_ID')
+MODEL_NAME = os.getenv('MODEL_NAME')
+
+def trigger_alert(alert_type, model_name=None, error_message=None, loss=None, current_step=None, total_steps=None):
+    """Send alert to the API when job status changes."""
+    if not ALERT_API_URL or not JOB_ID or not USER_ID:
+        logger.debug(f"[Alert] Skipping alert - missing config: API={bool(ALERT_API_URL)}, JOB={bool(JOB_ID)}, USER={bool(USER_ID)}")
+        return
+
+    try:
+        import requests
+
+        payload = {
+            'type': alert_type,
+            'job_id': JOB_ID,
+            'user_id': USER_ID,
+            'model_name': model_name or MODEL_NAME,
+            'status': alert_type.replace('job_', ''),
+            'error_message': error_message,
+            'loss': loss,
+            'current_step': current_step,
+            'total_steps': total_steps,
+            'progress': (current_step / total_steps * 100) if current_step and total_steps else None,
+        }
+
+        headers = {'Content-Type': 'application/json'}
+        if INTERNAL_API_KEY:
+            headers['X-API-Key'] = INTERNAL_API_KEY
+
+        response = requests.post(ALERT_API_URL, json=payload, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            logger.info(f"[Alert] Sent {alert_type} alert successfully")
+        else:
+            logger.warning(f"[Alert] Alert failed: {response.status_code} - {response.text[:200]}")
+    except Exception as e:
+        logger.warning(f"[Alert] Failed to send alert: {e}")
+
 # Training hyperparameter defaults
 DEFAULT_EVAL_SPLIT = float(os.getenv("DEFAULT_EVAL_SPLIT", "0.2"))
 DEFAULT_LORA_R = int(os.getenv("DEFAULT_LORA_R", "16"))
@@ -452,7 +494,10 @@ class TrainingMetricsCallback(TrainerCallback):
 
         logger.info("[MetricsCallback] Training started")
         logger.info(f"[MetricsCallback] Total steps: {state.max_steps}")
-        
+
+        # Send job_started alert
+        trigger_alert('job_started', total_steps=state.max_steps)
+
         self._write_progress(
             state=state,
             current_epoch=0,
@@ -3605,12 +3650,20 @@ def main():
         logger.info("=" * 60)
         logger.info("Training completed successfully!")
         logger.info("=" * 60)
+
+        # Send job_completed alert
+        trigger_alert('job_completed')
+
         sys.exit(0)
-        
+
     except Exception as e:
         logger.error(f"[Main] Training failed with error: {str(e)}")
         logger.exception("Full traceback:")
         sys.stderr.write(f"ERROR: Training failed: {str(e)}\n")
+
+        # Send job_failed alert
+        trigger_alert('job_failed', error_message=str(e))
+
         sys.exit(1)
 
 
