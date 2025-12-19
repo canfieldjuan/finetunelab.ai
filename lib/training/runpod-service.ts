@@ -455,6 +455,11 @@ echo "[$(date)] Current TRL version (before upgrade): $(python -m pip show trl 2
 # Uninstall old trl first, then install fresh to avoid caching issues
 python -m pip uninstall -y trl 2>/dev/null || true
 
+# Remove torchvision and torchaudio if present (not needed for LLM text training)
+# This prevents version conflicts when PyTorch gets upgraded
+echo "[$(date)] Removing torchvision/torchaudio (not needed for text LLM training)..."
+python -m pip uninstall -y torchvision torchaudio 2>/dev/null || true
+
 if python -m pip install --no-cache-dir "trl==0.26.0" && \
    python -m pip install --no-cache-dir --upgrade transformers datasets accelerate peft bitsandbytes supabase huggingface_hub requests; then
   echo "[$(date)] ✓ Dependencies installed successfully"
