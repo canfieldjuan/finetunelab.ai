@@ -1617,11 +1617,16 @@ if training_method == "sft":
         packing=${(training?.packing ?? false) ? 'True' : 'False'},
     )
 
-    # Always use IntegerDtypeCollator to fix TRL 0.26+ dtype bug
-    # This ensures input_ids/labels/attention_mask remain as integer tensors
+    # Only use data collator when packing is disabled
+    # When packing=True, TRL uses padding-free mode with internal collator
     # GitHub issue: https://github.com/huggingface/trl/issues/4103
-    data_collator = IntegerDtypeCollator(tokenizer=tokenizer)
-    logger.info("[SFT] Using IntegerDtypeCollator to fix TRL dtype bug")
+    data_collator = None
+    packing_enabled = ${(training?.packing ?? false) ? 'True' : 'False'}
+    if not packing_enabled:
+        data_collator = IntegerDtypeCollator(tokenizer=tokenizer)
+        logger.info("[SFT] Using IntegerDtypeCollator to fix TRL dtype bug (packing disabled)")
+    else:
+        logger.info("[SFT] Using padding-free mode (packing enabled, no custom collator)")
 
     trainer = SFTTrainer(
         model=model,
@@ -1742,9 +1747,15 @@ elif training_method == "cpt":
         packing=${(training?.packing ?? true) ? 'True' : 'False'},  # Packing enabled by default for CPT
     )
 
-    # Always use IntegerDtypeCollator to fix TRL 0.26+ dtype bug
-    data_collator = IntegerDtypeCollator(tokenizer=tokenizer)
-    logger.info("[CPT] Using IntegerDtypeCollator to fix TRL dtype bug")
+    # Only use data collator when packing is disabled
+    # When packing=True, TRL uses padding-free mode with internal collator
+    data_collator = None
+    packing_enabled = ${(training?.packing ?? true) ? 'True' : 'False'}
+    if not packing_enabled:
+        data_collator = IntegerDtypeCollator(tokenizer=tokenizer)
+        logger.info("[CPT] Using IntegerDtypeCollator (packing disabled)")
+    else:
+        logger.info("[CPT] Using padding-free mode (packing enabled, no custom collator)")
 
     def format_raw_text(example):
         return example["text"]

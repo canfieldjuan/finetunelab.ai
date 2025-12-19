@@ -19,6 +19,7 @@ export interface LambdaMetadata {
 
 export interface AWSMetadata {
   access_key_id: string;  // AWS Access Key ID
+  secret_access_key: string;  // AWS Secret Access Key (encrypted)
   s3_bucket: string;      // S3 bucket name for dataset storage
   region: string;         // AWS region (e.g., us-east-1)
   iam_role_arn?: string;  // Optional IAM role ARN for SageMaker

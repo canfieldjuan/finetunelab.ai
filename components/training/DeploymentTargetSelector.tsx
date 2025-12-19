@@ -1,9 +1,9 @@
 /**
  * Deployment Target Selector
  * Purpose: Choose deployment platform after package generation
- * Supports: Local vLLM, HuggingFace Spaces, RunPod, Lambda Labs, Kaggle
+ * Supports: Local vLLM, HuggingFace Spaces, RunPod, AWS SageMaker, Kaggle
  * Date: 2025-10-31
- * Updated: 2025-11-26 - Added Lambda Labs support
+ * Updated: 2025-12-18 - Replaced Lambda Labs with AWS SageMaker
  */
 
 'use client';
@@ -45,7 +45,7 @@ export type DeploymentTarget =
   | 'local-gpu'
   | 'huggingface-spaces'
   | 'runpod'
-  | 'lambda-labs'
+  | 'sagemaker'
   | 'kaggle'
   | 'google-colab';
 
@@ -90,10 +90,10 @@ export function DeploymentTargetSelector({
   const [colabGpuTier, setColabGpuTier] = useState<string>('t4');
   const [colabBudget, setColabBudget] = useState<string>('100');
 
-  // Lambda Labs configuration
-  const [lambdaGpu, setLambdaGpu] = useState<string>('gpu_1x_a10');
-  const [lambdaRegion, setLambdaRegion] = useState<string>('us-west-1');
-  const [lambdaBudget, setLambdaBudget] = useState<string>('5.00');
+  // SageMaker configuration
+  const [sagemakerInstance, setSagemakerInstance] = useState<string>('ml.g5.xlarge');
+  const [sagemakerUseSpot, setSagemakerUseSpot] = useState<boolean>(true);
+  const [sagemakerBudget, setSagemakerBudget] = useState<string>('5.00');
 
   /**
    * Available deployment options
@@ -131,11 +131,11 @@ export function DeploymentTargetSelector({
       available: true,
     },
     {
-      id: 'lambda-labs',
-      label: 'Lambda Labs',
-      description: 'Deploy to Lambda Labs cloud GPUs - 42% cheaper than RunPod',
+      id: 'sagemaker',
+      label: 'AWS SageMaker',
+      description: 'Deploy to AWS SageMaker with spot instances - 70% off',
       icon: <Cloud className="w-5 h-5" />,
-      badge: 'Best Value',
+      badge: 'Enterprise',
       available: true,
     },
     {
@@ -231,9 +231,9 @@ export function DeploymentTargetSelector({
         setDeploymentUrl(data.pod_url);
         setDeploymentId(data.pod_id);
 
-      } else if (target === 'lambda-labs') {
-        // Deploy to Lambda Labs
-        response = await fetch('/api/training/deploy/lambda', {
+      } else if (target === 'sagemaker') {
+        // Deploy to AWS SageMaker
+        response = await fetch('/api/training/deploy/sagemaker', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -241,20 +241,20 @@ export function DeploymentTargetSelector({
           },
           body: JSON.stringify({
             training_config_id: trainingConfigId,
-            instance_type: lambdaGpu,
-            region: lambdaRegion,
-            budget_limit: parseFloat(lambdaBudget),
+            instance_type: sagemakerInstance,
+            use_spot_instances: sagemakerUseSpot,
+            budget_limit: parseFloat(sagemakerBudget),
           }),
         });
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || 'Lambda Labs deployment failed');
+          throw new Error(errorData.error || 'SageMaker deployment failed');
         }
 
         data = await response.json();
-        setDeploymentUrl(`https://cloud.lambdalabs.com/instances/${data.instance_id}`);
-        setDeploymentId(data.instance_id);
+        setDeploymentUrl(data.url);
+        setDeploymentId(data.training_job_name);
 
       } else if (target === 'huggingface-spaces') {
         // Deploy to HuggingFace Spaces
@@ -412,63 +412,54 @@ export function DeploymentTargetSelector({
             </p>
           </div>
 
-          {/* Lambda Labs Configuration */}
+          {/* SageMaker Configuration */}
           <div className="space-y-2">
-            <Label htmlFor="lambda-gpu" className="text-sm font-medium">
-              Lambda Labs GPU Type
+            <Label htmlFor="sagemaker-instance" className="text-sm font-medium">
+              SageMaker Instance Type
             </Label>
-            <Select value={lambdaGpu} onValueChange={setLambdaGpu}>
-              <SelectTrigger id="lambda-gpu">
-                <SelectValue placeholder="Select GPU" />
+            <Select value={sagemakerInstance} onValueChange={setSagemakerInstance}>
+              <SelectTrigger id="sagemaker-instance">
+                <SelectValue placeholder="Select Instance" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gpu_1x_a10">NVIDIA A10 (24GB) - $0.60/hr</SelectItem>
-                <SelectItem value="gpu_1x_rtx6000">NVIDIA RTX 6000 (24GB) - $0.50/hr</SelectItem>
-                <SelectItem value="gpu_1x_a100">NVIDIA A100 (40GB) - $1.29/hr</SelectItem>
-                <SelectItem value="gpu_1x_a100_sxm4">NVIDIA A100 SXM4 (80GB) - $1.79/hr</SelectItem>
-                <SelectItem value="gpu_8x_a100">8x NVIDIA A100 (320GB) - $14.32/hr</SelectItem>
-                <SelectItem value="gpu_1x_h100_pcie">NVIDIA H100 PCIe (80GB) - $1.85/hr</SelectItem>
-                <SelectItem value="gpu_8x_h100_sxm5">8x NVIDIA H100 SXM5 (640GB) - $23.92/hr</SelectItem>
+                <SelectItem value="ml.g5.xlarge">A10G (24GB) - $1.01/hr ($0.40 spot)</SelectItem>
+                <SelectItem value="ml.g5.2xlarge">A10G (24GB) - $1.21/hr ($0.48 spot)</SelectItem>
+                <SelectItem value="ml.g5.12xlarge">4x A10G (96GB) - $5.67/hr ($2.00 spot)</SelectItem>
+                <SelectItem value="ml.p3.2xlarge">V100 (16GB) - $3.06/hr ($1.00 spot)</SelectItem>
+                <SelectItem value="ml.p4d.24xlarge">8x A100 (320GB) - $32.77/hr ($10.00 spot)</SelectItem>
+                <SelectItem value="ml.p5.48xlarge">8x H100 (640GB) - $98.32/hr ($30.00 spot)</SelectItem>
               </SelectContent>
             </Select>
-            <Label htmlFor="lambda-region" className="text-sm font-medium mt-2">
-              Region
-            </Label>
-            <Select value={lambdaRegion} onValueChange={setLambdaRegion}>
-              <SelectTrigger id="lambda-region">
-                <SelectValue placeholder="Select Region" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="us-west-1">US West 1</SelectItem>
-                <SelectItem value="us-west-2">US West 2</SelectItem>
-                <SelectItem value="us-east-1">US East 1</SelectItem>
-                <SelectItem value="us-south-1">US South 1</SelectItem>
-                <SelectItem value="us-midwest-1">US Midwest 1</SelectItem>
-                <SelectItem value="europe-central-1">Europe Central 1</SelectItem>
-                <SelectItem value="asia-south-1">Asia South 1</SelectItem>
-                <SelectItem value="asia-northeast-1">Asia Northeast 1</SelectItem>
-                <SelectItem value="asia-northeast-2">Asia Northeast 2</SelectItem>
-                <SelectItem value="me-west-1">Middle East West 1</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center space-x-2 mt-2">
+              <input
+                type="checkbox"
+                id="sagemaker-spot"
+                checked={sagemakerUseSpot}
+                onChange={(e) => setSagemakerUseSpot(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="sagemaker-spot" className="text-sm font-medium">
+                Use Spot Instances (70% cheaper)
+              </Label>
+            </div>
             <div className="flex items-center gap-2 mt-2">
               <DollarSign className="w-4 h-4 text-muted-foreground" />
-              <Label htmlFor="lambda-budget" className="text-sm font-medium">
+              <Label htmlFor="sagemaker-budget" className="text-sm font-medium">
                 Budget Limit (USD)
               </Label>
             </div>
             <Input
-              id="lambda-budget"
+              id="sagemaker-budget"
               type="number"
               step="0.01"
               min="0"
               placeholder="5.00"
-              value={lambdaBudget}
-              onChange={(e) => setLambdaBudget(e.target.value)}
+              value={sagemakerBudget}
+              onChange={(e) => setSagemakerBudget(e.target.value)}
               className="w-full"
             />
             <p className="text-xs text-muted-foreground">
-              Training will auto-stop when budget is reached. Lambda Labs is ~42% cheaper than RunPod for comparable GPUs.
+              Training will auto-stop when budget is reached. Spot instances provide 70% cost savings.
             </p>
           </div>
 
@@ -662,7 +653,7 @@ export function DeploymentTargetSelector({
         <Alert>
           <AlertCircle className="w-4 h-4" />
           <AlertDescription className="text-sm">
-            <strong>Cloud Deployment:</strong> Kaggle, RunPod, Lambda Labs, and HuggingFace Spaces are now available!
+            <strong>Cloud Deployment:</strong> Kaggle, RunPod, AWS SageMaker, and HuggingFace Spaces are now available!
             Make sure to add your API credentials in the <strong>Secrets Vault</strong> before deploying.
           </AlertDescription>
         </Alert>

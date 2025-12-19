@@ -44,7 +44,7 @@ import { estimateTrainingTime } from '@/lib/training/time-estimation';
 console.log('[CloudDeploymentWizard] Component loaded');
 
 // Platform types (subset of DeploymentTarget - cloud only)
-export type CloudPlatform = 'kaggle' | 'huggingface-spaces' | 'runpod' | 'lambda-labs';
+export type CloudPlatform = 'kaggle' | 'huggingface-spaces' | 'runpod' | 'sagemaker';
 
 interface CloudDeploymentWizardProps {
   configId: string;
@@ -103,10 +103,10 @@ export function CloudDeploymentWizard({
   const [runpodBudget, setRunpodBudget] = useState<string>('10.00');
   // HF repo name is now auto-generated from HF username + config name (stored in secrets)
 
-  // Lambda Labs configuration states
-  const [lambdaGpu, setLambdaGpu] = useState<string>('gpu_1x_a10');
-  const [lambdaRegion, setLambdaRegion] = useState<string>('us-west-1');
-  const [lambdaBudget, setLambdaBudget] = useState<string>('5.00');
+  // SageMaker configuration states
+  const [sagemakerInstance, setSagemakerInstance] = useState<string>('ml.g5.xlarge');
+  const [sagemakerUseSpot, setSagemakerUseSpot] = useState<boolean>(true);
+  const [sagemakerBudget, setSagemakerBudget] = useState<string>('5.00');
 
   // Confirmation dialog state
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -182,9 +182,9 @@ export function CloudDeploymentWizard({
       let response;
       let data;
 
-      if (selectedPlatform === 'lambda-labs') {
-        // Deploy to Lambda Labs
-        response = await fetch('/api/training/deploy/lambda', {
+      if (selectedPlatform === 'sagemaker') {
+        // Deploy to AWS SageMaker
+        response = await fetch('/api/training/deploy/sagemaker', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -192,35 +192,25 @@ export function CloudDeploymentWizard({
           },
           body: JSON.stringify({
             training_config_id: configId,
-            instance_type: lambdaGpu,
-            region: lambdaRegion,
-            budget_limit: parseFloat(lambdaBudget),
+            instance_type: sagemakerInstance,
+            use_spot_instances: sagemakerUseSpot,
+            budget_limit: parseFloat(sagemakerBudget),
           }),
         });
 
         if (!response.ok) {
           const errorData = await response.json();
-
-          // Check if this is a capacity error
-          if (errorData.error_type === 'capacity' && errorData.message && errorData.suggestions) {
-            setCapacityError({
-              message: errorData.message,
-              suggestions: errorData.suggestions,
-              alternatives: errorData.alternatives,
-            });
-          }
-
-          throw new Error(errorData.error || 'Lambda Labs deployment failed');
+          throw new Error(errorData.error || 'SageMaker deployment failed');
         }
 
         data = await response.json();
-        setDeploymentUrl(`https://cloud.lambdalabs.com/instances/${data.instance_id}`);
-        setDeploymentId(data.instance_id);
+        setDeploymentUrl(data.url);
+        setDeploymentId(data.training_job_name);
         setTrainingJobId(data.job_id);
 
-        console.log('[CloudDeploymentWizard] Lambda Labs deployment successful:', data);
+        console.log('[CloudDeploymentWizard] SageMaker deployment successful:', data);
         console.log('[CloudDeploymentWizard] Job ID for monitoring:', data.job_id);
-        console.log('[CloudDeploymentWizard] Lambda Instance ID:', data.instance_id);
+        console.log('[CloudDeploymentWizard] Training Job Name:', data.training_job_name);
       } else {
         // Deploy to RunPod (default)
         response = await fetch('/api/training/deploy/runpod', {
@@ -319,22 +309,22 @@ export function CloudDeploymentWizard({
               <p className="text-xs text-muted-foreground">Serverless GPUs</p>
             </button>
             <button
-              onClick={() => setSelectedPlatform('lambda-labs')}
+              onClick={() => setSelectedPlatform('sagemaker')}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
-                selectedPlatform === 'lambda-labs'
+                selectedPlatform === 'sagemaker'
                   ? 'border-primary bg-primary/5'
                   : 'border-border hover:border-primary/50'
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <Cloud className="h-4 w-4" />
-                <span className="font-medium">Lambda Labs</span>
+                <span className="font-medium">AWS SageMaker</span>
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                   <BadgePercent className="h-3 w-3 mr-0.5" />
-                  42% Cheaper
+                  Spot: 70% Off
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground">Cloud GPU instances</p>
+              <p className="text-xs text-muted-foreground">Managed ML training</p>
             </button>
           </div>
         </div>
@@ -364,40 +354,38 @@ export function CloudDeploymentWizard({
           </div>
         )}
 
-        {/* Lambda Labs Configuration */}
-        {selectedPlatform === 'lambda-labs' && (
+        {/* SageMaker Configuration */}
+        {selectedPlatform === 'sagemaker' && (
           <div className="space-y-3 pb-4 border-b">
-            <h4 className="text-sm font-medium">Lambda Labs Configuration</h4>
+            <h4 className="text-sm font-medium">AWS SageMaker Configuration</h4>
             <div className="space-y-3">
               <div>
-                <Label htmlFor="lambda-gpu" className="text-xs">GPU Type</Label>
-                <Select value={lambdaGpu} onValueChange={setLambdaGpu}>
-                  <SelectTrigger id="lambda-gpu" className="mt-1">
-                    <SelectValue placeholder="Select GPU" />
+                <Label htmlFor="sagemaker-instance" className="text-xs">Instance Type</Label>
+                <Select value={sagemakerInstance} onValueChange={setSagemakerInstance}>
+                  <SelectTrigger id="sagemaker-instance" className="mt-1">
+                    <SelectValue placeholder="Select Instance" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gpu_1x_a10">A10 (24GB) - $0.60/hr</SelectItem>
-                    <SelectItem value="gpu_1x_rtx6000">RTX 6000 (24GB) - $0.50/hr</SelectItem>
-                    <SelectItem value="gpu_1x_a100">A100 (40GB) - $1.29/hr</SelectItem>
-                    <SelectItem value="gpu_1x_a100_sxm4">A100 SXM4 (80GB) - $1.79/hr</SelectItem>
-                    <SelectItem value="gpu_1x_h100_pcie">H100 PCIe (80GB) - $1.85/hr</SelectItem>
+                    <SelectItem value="ml.g5.xlarge">A10G (24GB) - $1.01/hr ($0.40 spot)</SelectItem>
+                    <SelectItem value="ml.g5.2xlarge">A10G (24GB) - $1.21/hr ($0.48 spot)</SelectItem>
+                    <SelectItem value="ml.g5.12xlarge">4x A10G (96GB) - $5.67/hr ($2.00 spot)</SelectItem>
+                    <SelectItem value="ml.p3.2xlarge">V100 (16GB) - $3.06/hr ($1.00 spot)</SelectItem>
+                    <SelectItem value="ml.p4d.24xlarge">8x A100 (320GB) - $32.77/hr ($10.00 spot)</SelectItem>
+                    <SelectItem value="ml.p5.48xlarge">8x H100 (640GB) - $98.32/hr ($30.00 spot)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="lambda-region" className="text-xs">Region</Label>
-                <Select value={lambdaRegion} onValueChange={setLambdaRegion}>
-                  <SelectTrigger id="lambda-region" className="mt-1">
-                    <SelectValue placeholder="Select Region" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="us-west-1">US West 1</SelectItem>
-                    <SelectItem value="us-west-2">US West 2</SelectItem>
-                    <SelectItem value="us-east-1">US East 1</SelectItem>
-                    <SelectItem value="us-south-1">US South 1</SelectItem>
-                    <SelectItem value="europe-central-1">Europe Central 1</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="use-spot"
+                  checked={sagemakerUseSpot}
+                  onChange={(e) => setSagemakerUseSpot(e.target.checked)}
+                  className="rounded"
+                />
+                <Label htmlFor="use-spot" className="text-xs cursor-pointer">
+                  Use Spot Instances (70% cheaper, may be interrupted)
+                </Label>
               </div>
             </div>
           </div>
@@ -440,8 +428,8 @@ export function CloudDeploymentWizard({
     }
 
     // Determine which GPU is selected based on provider
-    const selectedGpuForEstimation = selectedPlatform === 'lambda-labs'
-      ? lambdaGpu
+    const selectedGpuForEstimation = selectedPlatform === 'sagemaker'
+      ? sagemakerInstance
       : runpodGpu;
 
     return (
@@ -466,7 +454,7 @@ export function CloudDeploymentWizard({
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Platform:</span>
               <span className="font-medium">
-                {selectedPlatform === 'lambda-labs' ? 'Lambda Labs' : 'RunPod'}
+                {selectedPlatform === 'sagemaker' ? 'AWS SageMaker' : 'RunPod'}
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -474,21 +462,21 @@ export function CloudDeploymentWizard({
               <span className="font-medium">{configName}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">GPU:</span>
+              <span className="text-muted-foreground">Instance:</span>
               <span className="font-medium">
-                {selectedPlatform === 'lambda-labs' ? lambdaGpu : runpodGpu}
+                {selectedPlatform === 'sagemaker' ? sagemakerInstance : runpodGpu}
               </span>
             </div>
-            {selectedPlatform === 'lambda-labs' && (
+            {selectedPlatform === 'sagemaker' && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Region:</span>
-                <span className="font-medium">{lambdaRegion}</span>
+                <span className="text-muted-foreground">Spot Instances:</span>
+                <span className="font-medium">{sagemakerUseSpot ? 'Enabled (70% off)' : 'Disabled'}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Budget Limit:</span>
               <span className="font-medium">
-                ${selectedPlatform === 'lambda-labs' ? lambdaBudget : runpodBudget}
+                ${selectedPlatform === 'sagemaker' ? sagemakerBudget : runpodBudget}
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -543,8 +531,8 @@ export function CloudDeploymentWizard({
       <div className="text-center space-y-2">
         <h3 className="text-lg font-semibold">Deployment Successful!</h3>
         <p className="text-sm text-muted-foreground">
-          {selectedPlatform === 'lambda-labs'
-            ? 'GPU instance is booting. Training will start automatically in 2-3 minutes.'
+          {selectedPlatform === 'sagemaker'
+            ? 'SageMaker training job is starting. Training will begin automatically.'
             : 'Your training job has been submitted to FineTune Lab Cloud'}
         </p>
       </div>
@@ -568,21 +556,21 @@ export function CloudDeploymentWizard({
 
       {deploymentId && (
         <p className="text-xs text-muted-foreground mt-1">
-          {selectedPlatform === 'lambda-labs'
-            ? `Lambda Instance ID: `
+          {selectedPlatform === 'sagemaker'
+            ? `Training Job Name: `
             : 'RunPod Pod ID: '}
           <code className="bg-muted px-2 py-1 rounded">{deploymentId}</code>
         </p>
       )}
 
-      {selectedPlatform === 'lambda-labs' && deploymentUrl && (
+      {selectedPlatform === 'sagemaker' && deploymentUrl && (
         <Button
           onClick={() => window.open(deploymentUrl, '_blank')}
           variant="outline"
           size="sm"
           className="mt-2"
         >
-          View in Lambda Cloud Console
+          View in SageMaker Console
         </Button>
       )}
 

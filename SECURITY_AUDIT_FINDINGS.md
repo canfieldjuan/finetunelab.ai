@@ -359,3 +359,52 @@ RATE_LIMIT_ENABLED=true
 **Files Scanned**: 4,483 TypeScript/Python files  
 **Critical Fixes**: 1 (XSS)  
 **Status**: Production-Ready with Follow-Up
+
+---
+
+## ADDENDUM – December 18, 2025 (NEW FINDINGS, ACTION REQUIRED)
+
+**Status Update**: During the December 18 review we identified additional high-severity access control gaps. These issues reopen the security audit and supersede the November "production ready" assessment until the fixes below ship.
+
+### 🔴 CRITICAL: Distributed Control Plane Has No Authentication
+
+- **Files**: `app/api/distributed/workers/register/route.ts:1-57`, `app/api/distributed/execute/route.ts:1-58`, `app/api/distributed/workers/[workerId]/heartbeat/route.ts:1-37`, `app/api/distributed/workers/[workerId]/route.ts:1-31`, `app/api/distributed/queue/pause/route.ts:1-25` (plus remaining queue/worker routes)
+- **Issue**: Every distributed-system route instantiates a worker manager or orchestrator with no authentication or network scoping. Anyone who can reach the API can:
+  - Register a fake worker and start reporting heartbeats
+  - Launch arbitrary DAG executions
+  - Pause/resume queues or deregister real workers
+- **Impact**: Remote attackers can hijack training workloads, exfiltrate datasets, or run unapproved code on GPU pods.
+- **Permanent Fix (Target)**:
+  1. Introduce a dedicated worker authentication module (e.g., `lib/auth/worker-auth.ts`) that validates either an HMAC-signed header (`x-worker-signature`) or a randomly rotated API key (`DISTRIBUTED_WORKER_API_KEY`).
+  2. Require this check as the first lines of every distributed route (before parsing the JSON body) and reject unauthorized callers with 401.
+  3. Add structured logging + rate limiting for repeated failures, then integration tests (`test-distributed-auth.ts`) that prove unauthorized requests fail.
+
+### 🔴 HIGH: DAG Template CRUD APIs Exposed with Service-Role Bypass
+
+- **Files**: `app/api/training/dag/templates/route.ts:11-134`, `app/api/training/dag/templates/[id]/route.ts:1-133`
+- **Issue**: Both endpoints use the Supabase service-role key directly, expose full template data, and allow inserts/deletes without ANY user authentication. Attackers can read or mutate all stored DAG blueprints, including ones referencing proprietary datasets or models.
+- **Impact**: Unauthorized users can steal pipeline IP, delete templates that production workflows depend on, or inject malicious jobs.
+- **Permanent Fix (Target)**:
+  1. Add user authentication at the start of each handler by creating an RLS-scoped Supabase client from the `Authorization` header. Service-role usage must be restricted to server-side enrichments after verifying the caller belongs to the workspace that owns the template.
+  2. Enforce ownership filters (`eq('user_id', user.id)` or workspace membership) before returning rows.
+  3. Add regression tests covering GET/POST/DELETE so anonymous calls fail with 401/403.
+
+### 🟠 HIGH: Web-Search Research & Telemetry Endpoints Leak Data
+
+- **Files**: `app/api/web-search/research/list/route.ts:1-39`, `app/api/web-search/research/[id]/report/route.ts:1-34`, `app/api/web-search/research/[id]/route.ts:1-109`, `app/api/web-search/research/[id]/steps/route.ts:1-20`, `app/api/telemetry/web-search/aggregate/route.ts:1-26`
+- **Issue**: Every endpoint calls `supabaseAdmin` (service role) without verifying the caller. Any unauthenticated user can list research jobs, download private reports, and query raw telemetry aggregates while bypassing RLS entirely.
+- **Impact**: Confidential research prompts, competitive intelligence, and system-performance metrics can be exfiltrated.
+- **Permanent Fix (Target)**:
+  1. Require either a valid Supabase session (bearer token) or a dedicated admin API key header before touching Supabase.
+  2. When a user session is provided, swap to an anon-key client so RLS restricts access by `user_id`.
+  3. Reserve service-role queries for background jobs only; in API routes, guard them behind explicit `X-Admin-Token` checks and environment-configured allow lists.
+  4. Add e2e tests that prove anonymous fetches fail and authenticated fetches are limited to owned jobs.
+
+### Next Steps
+
+1. 🚨 **Phase 1** – Lock down distributed routes with signed worker auth + integration tests.
+2. 🚨 **Phase 2** – Require workspace/user auth on DAG template CRUD endpoints and re-enable RLS.
+3. 🚨 **Phase 3** – Protect research/telemetry routes with proper auth modes and convert read paths to RLS clients when possible.
+4. 📋 Document rollout, rotate any compromised secrets, and re-run the security audit once all three phases ship.
+
+**Status**: OPEN – Pending remediation across all three phases.

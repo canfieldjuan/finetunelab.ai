@@ -222,15 +222,77 @@ export interface HFSpacesDeploymentStatus {
 }
 
 // ============================================================================
+// AWS SAGEMAKER DEPLOYMENT
+// ============================================================================
+
+export type SageMakerInstanceType =
+  | 'ml.p3.2xlarge'    // V100 16GB - $3.06/hr (spot: ~$1.00/hr)
+  | 'ml.p3.8xlarge'    // 4x V100 64GB - $12.24/hr (spot: ~$4.00/hr)
+  | 'ml.p3.16xlarge'   // 8x V100 128GB - $24.48/hr (spot: ~$8.00/hr)
+  | 'ml.g5.xlarge'     // A10G 24GB - $1.006/hr (spot: ~$0.40/hr)
+  | 'ml.g5.2xlarge'    // A10G 24GB - $1.212/hr (spot: ~$0.48/hr)
+  | 'ml.g5.12xlarge'   // 4x A10G 96GB - $5.672/hr (spot: ~$2.00/hr)
+  | 'ml.g5.48xlarge'   // 8x A10G 192GB - $16.288/hr (spot: ~$6.00/hr)
+  | 'ml.p4d.24xlarge'  // 8x A100 320GB - $32.77/hr (spot: ~$10.00/hr)
+  | 'ml.p5.48xlarge';  // 8x H100 640GB - $98.32/hr (spot: ~$30.00/hr)
+
+export interface SageMakerDeploymentRequest {
+  training_config_id: string;
+  instance_type: SageMakerInstanceType;
+  instance_count?: number; // Default: 1
+  volume_size_gb?: number; // Default: 30
+  max_runtime_seconds?: number; // Default: 86400 (24 hours)
+  use_spot_instances?: boolean; // Default: true (70% cheaper)
+  max_wait_seconds?: number; // Spot instance wait time, default: 3600
+  budget_limit?: number; // USD
+  checkpoint_s3_uri?: string; // Optional custom S3 path
+  enable_profiler?: boolean; // SageMaker Debugger profiling
+  enable_tensorboard?: boolean; // TensorBoard logs to S3
+  training_image_uri?: string; // Optional Docker image URI, uses env var or default if not provided
+}
+
+export interface SageMakerDeploymentResponse {
+  deployment_id: string;
+  training_job_name: string;
+  training_job_arn: string;
+  status: DeploymentStatus;
+  instance_type: SageMakerInstanceType;
+  instance_count: number;
+  use_spot_instances: boolean;
+  cost: DeploymentCost;
+  s3_output_path: string;
+  cloudwatch_log_group: string;
+  created_at: string;
+}
+
+export interface SageMakerDeploymentStatus {
+  deployment_id: string;
+  training_job_name: string;
+  status: DeploymentStatus;
+  training_job_arn: string;
+  logs?: string; // CloudWatch logs
+  metrics?: DeploymentMetrics;
+  cost: DeploymentCost;
+  s3_output_path: string;
+  error_message?: string;
+  started_at?: string;
+  completed_at?: string;
+  checkpoint_urls?: string[];
+  billable_seconds?: number;
+  training_time_seconds?: number;
+  secondary_status?: string; // SageMaker secondary status
+}
+
+// ============================================================================
 // UNIFIED DEPLOYMENT TYPES
 // ============================================================================
 
-export type DeploymentPlatform = 'kaggle' | 'runpod' | 'lambda' | 'huggingface-spaces' | 'local-vllm' | 'google-colab';
+export type DeploymentPlatform = 'kaggle' | 'runpod' | 'sagemaker' | 'huggingface-spaces' | 'local-vllm' | 'google-colab';
 
 export interface UnifiedDeploymentRequest {
   platform: DeploymentPlatform;
   training_config_id: string;
-  config: KaggleDeploymentRequest | RunPodDeploymentRequest | LambdaDeploymentRequest | HFSpacesDeploymentRequest;
+  config: KaggleDeploymentRequest | RunPodDeploymentRequest | LambdaDeploymentRequest | SageMakerDeploymentRequest | HFSpacesDeploymentRequest;
 }
 
 export interface UnifiedDeploymentResponse {
