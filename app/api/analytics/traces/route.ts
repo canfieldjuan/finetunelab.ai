@@ -172,6 +172,7 @@ interface TracePayload {
   status?: string | null;
   error_message?: string | null;
   error_type?: string | null;
+  session_tag?: string | null;
 }
 
 interface TraceRecord extends TracePayload {
@@ -276,7 +277,8 @@ export async function POST(req: NextRequest) {
       cost_usd,
       status,
       error_message,
-      error_type
+      error_type,
+      session_tag
     } = body;
 
     // Validate required fields
@@ -316,7 +318,8 @@ export async function POST(req: NextRequest) {
         cost_usd,
         status: status || 'pending',
         error_message,
-        error_type
+        error_type,
+        session_tag
       })
       .select()
       .single();

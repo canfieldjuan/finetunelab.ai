@@ -10,13 +10,16 @@
  * - Hierarchical parent-child relationships
  * - Batched writes for performance
  * - Graceful degradation (never blocks main flow)
+ * - Usage metering integration (tracks root traces for billing)
  *
  * Phase 1.1: Core Trace Service
  * Date: 2025-11-29
+ * Updated: 2025-12-18 - Added usage metering
  */
 
 import { supabase } from '@/lib/supabaseClient';
 import { tracingConfig, isTracingEnabled, traceDebugLog } from '@/lib/config/tracing.config';
+import { recordRootTraceUsage } from '@/lib/billing/usage-meter.service';
 import type {
   TraceContext,
   StartTraceParams,
@@ -104,6 +107,9 @@ export async function startTrace(params: StartTraceParams): Promise<TraceContext
       console.error('[Trace Service] Error starting trace:', error);
     });
 
+    // Log trace IDs for debugging (helpful for searching traces)
+    console.log(`[Trace] Started trace - Trace ID: ${traceId}, Conversation ID: ${params.conversationId || 'N/A'}`);
+
     traceDebugLog('startTrace complete', { traceId, spanId });
     return context;
 
@@ -174,6 +180,21 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
     sendTraceEnd(session.access_token, traceUpdate).catch(error => {
       console.error('[Trace Service] Error ending trace:', error);
     });
+
+    // USAGE METERING: Track root traces for billing
+    // Only meter root traces (no parent) to count top-level operations
+    if (!context.parentSpanId && result.status === 'success') {
+      recordRootTraceUsage({
+        userId: context.userId,
+        traceId: context.traceId,
+        inputData: result.inputData,
+        outputData: result.outputData,
+        metadata: result.metadata as Record<string, unknown> | undefined,
+      }).catch(error => {
+        // Log but don't throw - metering shouldn't break tracing
+        console.error('[Trace Service] Failed to meter usage:', error);
+      });
+    }
 
     traceDebugLog('endTrace complete', { durationMs, status: result.status });
 
@@ -252,6 +273,7 @@ async function sendTraceStart(
       model_provider: params.modelProvider || null,
       conversation_id: context.conversationId || null,
       message_id: context.messageId || null,
+      session_tag: params.sessionTag || null,
       status: 'running',
       metadata: params.metadata || null,
     }),
