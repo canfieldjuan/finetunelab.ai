@@ -389,6 +389,19 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     }
   }, [activeId, conversations, sessionId, experimentName, setSessionId, setExperimentName]);
 
+  // Refetch conversation after message completes to pick up session_id
+  const previousLoadingRef = useRef(loading);
+  useEffect(() => {
+    const wasLoading = previousLoadingRef.current;
+    previousLoadingRef.current = loading;
+    
+    // When loading transitions from true to false (message complete)
+    if (wasLoading && !loading && activeId && !isWidgetMode) {
+      log.debug('Chat', 'Message complete - refetching conversation to get session_id');
+      fetchConversations();
+    }
+  }, [loading, activeId, isWidgetMode, fetchConversations]);
+
   // Memoize speech recognition callbacks to prevent infinite re-renders
   const handleSpeechResult = useCallback((text: string, isFinal: boolean) => {
     if (isFinal) {
