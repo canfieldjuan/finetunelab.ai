@@ -603,16 +603,19 @@ else
   exit 1
 fi
 
-# Upload standalone_trainer.py from base64
-echo "[$(date)] Uploading standalone_trainer.py..."
-cat > /workspace/standalone_trainer.py.b64 << 'TRAINEREOF'
-${this.getStandaloneTrainerContent()}
-TRAINEREOF
-
-base64 -d /workspace/standalone_trainer.py.b64 > /workspace/standalone_trainer.py
-rm /workspace/standalone_trainer.py.b64
-chmod +x /workspace/standalone_trainer.py
-echo "[$(date)] ✓ standalone_trainer.py uploaded ($(wc -l < /workspace/standalone_trainer.py) lines)"
+# Download standalone_trainer.py from GitHub
+echo "[$(date)] Downloading standalone_trainer.py from GitHub..."
+TRAINER_URL="https://raw.githubusercontent.com/canfieldjuan/finetunelab.ai/main/lib/training/standalone_trainer.py"
+if curl -f -L -o /workspace/standalone_trainer.py "$TRAINER_URL"; then
+  chmod +x /workspace/standalone_trainer.py
+  echo "[$(date)] ✓ standalone_trainer.py downloaded ($(wc -l < /workspace/standalone_trainer.py) lines)"
+else
+  echo "[$(date)] ✗ ERROR: Failed to download standalone_trainer.py"
+  echo "[$(date)] URL was: $TRAINER_URL"
+  echo "[$(date)] Waiting 60s before exit for log inspection..."
+  sleep 60
+  exit 1
+fi
 
 # Create training configuration JSON
 echo "[$(date)] Creating training configuration..."
