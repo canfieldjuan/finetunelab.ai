@@ -819,16 +819,16 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
         // Generate session tag for regular chat if needed
         let regularChatSessionTag: string | null = null;
-        if (!isWidgetMode && !isBatchTestMode && conversationId && userId && llmModelIdForDb) {
+        if (!isWidgetMode && !isBatchTestMode && conversationId && userId) {
           try {
             const { data: conversation } = await supabase
               .from('conversations')
-              .select('session_id')
+              .select('session_id, llm_model_id')
               .eq('id', conversationId)
               .single();
             
-            if (conversation && !conversation.session_id) {
-              const sessionTag = await generateSessionTag(userId, llmModelIdForDb);
+            if (conversation && !conversation.session_id && conversation.llm_model_id) {
+              const sessionTag = await generateSessionTag(userId, conversation.llm_model_id);
               if (sessionTag) {
                 await supabase
                   .from('conversations')
@@ -1427,16 +1427,16 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
       // Generate session tag for regular chat if needed (streaming path)
       let regularChatSessionTag: string | null = null;
-      if (!isWidgetMode && !isBatchTestMode && conversationId && userId && llmModelIdForDb) {
+      if (!isWidgetMode && !isBatchTestMode && conversationId && userId) {
         try {
           const { data: conversation } = await supabase
             .from('conversations')
-            .select('session_id')
+            .select('session_id, llm_model_id')
             .eq('id', conversationId)
             .single();
           
-          if (conversation && !conversation.session_id) {
-            const sessionTag = await generateSessionTag(userId, llmModelIdForDb);
+          if (conversation && !conversation.session_id && conversation.llm_model_id) {
+            const sessionTag = await generateSessionTag(userId, conversation.llm_model_id);
             if (sessionTag) {
               await supabase
                 .from('conversations')
