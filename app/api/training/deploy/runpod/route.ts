@@ -518,6 +518,10 @@ export async function POST(request: NextRequest) {
     console.log('[RunPod API] Created job:', jobId);
 
     // Auto-detect app URL from request if NEXT_PUBLIC_APP_URL not set
+    console.log('[RunPod API] DEBUG - NEXT_PUBLIC_APP_URL env var:', process.env.NEXT_PUBLIC_APP_URL);
+    console.log('[RunPod API] DEBUG - Request host:', request.headers.get('host'));
+    console.log('[RunPod API] DEBUG - Request protocol:', request.headers.get('x-forwarded-proto'));
+
     let appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     if (!appUrl) {
@@ -525,7 +529,11 @@ export async function POST(request: NextRequest) {
       const protocol = request.headers.get('x-forwarded-proto') || 'https';
       appUrl = `${protocol}://${host}`;
       console.log('[RunPod API] Auto-detected app URL from request:', appUrl);
+    } else {
+      console.log('[RunPod API] Using NEXT_PUBLIC_APP_URL from environment:', appUrl);
     }
+
+    console.log('[RunPod API] DEBUG - Final appUrl value:', appUrl);
 
     if (appUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
       console.error('[RunPod API] ⚠️  WARNING: Using localhost URL in production!');
@@ -537,6 +545,13 @@ export async function POST(request: NextRequest) {
       datasetStoragePath,
       trainingConfig.config_json || {}
     );
+
+    // Construct URLs that will be passed to RunPod
+    const metricsApiUrl = `${appUrl}/api/training/local/${jobId}/metrics`;
+    const alertApiUrl = `${appUrl}/api/alerts/trigger`;
+
+    console.log('[RunPod API] DEBUG - Constructed METRICS_API_URL:', metricsApiUrl);
+    console.log('[RunPod API] DEBUG - Constructed ALERT_API_URL:', alertApiUrl);
 
     const deployment = await runPodService.createPod(
       {
@@ -558,9 +573,9 @@ export async function POST(request: NextRequest) {
           DATASET_URL: datasetDownloadUrl,
           MODEL_NAME: modelName,
           // Metrics API configuration for cloud training metrics reporting
-          METRICS_API_URL: `${appUrl}/api/training/local/${jobId}/metrics`,
+          METRICS_API_URL: metricsApiUrl,
           // Alert API configuration for job status notifications
-          ALERT_API_URL: `${appUrl}/api/alerts/trigger`,
+          ALERT_API_URL: alertApiUrl,
           INTERNAL_API_KEY: process.env.INTERNAL_API_KEY || '',
           ...(hfToken && hfRepoName && {
             HF_TOKEN: hfToken,
