@@ -44,10 +44,10 @@ CREATE TABLE IF NOT EXISTS public.usage_meters (
   CONSTRAINT uq_usage_meters_user_period UNIQUE (user_id, period_year, period_month)
 );
 
-CREATE INDEX idx_usage_meters_user_period
+CREATE INDEX IF NOT EXISTS idx_usage_meters_user_period
   ON public.usage_meters(user_id, period_year, period_month);
 
-CREATE INDEX idx_usage_meters_last_updated
+CREATE INDEX IF NOT EXISTS idx_usage_meters_last_updated
   ON public.usage_meters(last_updated_at DESC);
 
 COMMENT ON TABLE public.usage_meters IS 'Real-time usage tracking for two-meter pricing model';
@@ -97,10 +97,10 @@ CREATE TABLE IF NOT EXISTS public.usage_commitments (
   CONSTRAINT uq_usage_commitments_user_active UNIQUE (user_id, status)
 );
 
-CREATE INDEX idx_usage_commitments_user_status
+CREATE INDEX IF NOT EXISTS idx_usage_commitments_user_status
   ON public.usage_commitments(user_id, status);
 
-CREATE INDEX idx_usage_commitments_stripe_sub
+CREATE INDEX IF NOT EXISTS idx_usage_commitments_stripe_sub
   ON public.usage_commitments(stripe_subscription_id)
   WHERE stripe_subscription_id IS NOT NULL;
 
@@ -159,13 +159,13 @@ CREATE TABLE IF NOT EXISTS public.usage_invoices (
   CONSTRAINT uq_usage_invoices_user_period UNIQUE (user_id, period_year, period_month)
 );
 
-CREATE INDEX idx_usage_invoices_user_period
+CREATE INDEX IF NOT EXISTS idx_usage_invoices_user_period
   ON public.usage_invoices(user_id, period_year, period_month);
 
-CREATE INDEX idx_usage_invoices_status
+CREATE INDEX IF NOT EXISTS idx_usage_invoices_status
   ON public.usage_invoices(status);
 
-CREATE INDEX idx_usage_invoices_stripe_invoice
+CREATE INDEX IF NOT EXISTS idx_usage_invoices_stripe_invoice
   ON public.usage_invoices(stripe_invoice_id)
   WHERE stripe_invoice_id IS NOT NULL;
 
@@ -181,33 +181,39 @@ ALTER TABLE public.usage_commitments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_invoices ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies: usage_meters
+DROP POLICY IF EXISTS "Users can view their own usage meters" ON public.usage_meters;
 CREATE POLICY "Users can view their own usage meters"
   ON public.usage_meters
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Service role can manage all usage meters" ON public.usage_meters;
 CREATE POLICY "Service role can manage all usage meters"
   ON public.usage_meters
   FOR ALL
   USING (auth.role() = 'service_role');
 
 -- RLS Policies: usage_commitments
+DROP POLICY IF EXISTS "Users can view their own commitments" ON public.usage_commitments;
 CREATE POLICY "Users can view their own commitments"
   ON public.usage_commitments
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Service role can manage all commitments" ON public.usage_commitments;
 CREATE POLICY "Service role can manage all commitments"
   ON public.usage_commitments
   FOR ALL
   USING (auth.role() = 'service_role');
 
 -- RLS Policies: usage_invoices
+DROP POLICY IF EXISTS "Users can view their own invoices" ON public.usage_invoices;
 CREATE POLICY "Users can view their own invoices"
   ON public.usage_invoices
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Service role can manage all invoices" ON public.usage_invoices;
 CREATE POLICY "Service role can manage all invoices"
   ON public.usage_invoices
   FOR ALL
@@ -377,6 +383,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS usage_commitments_updated_at_trigger ON public.usage_commitments;
 CREATE TRIGGER usage_commitments_updated_at_trigger
   BEFORE UPDATE ON public.usage_commitments
   FOR EACH ROW
