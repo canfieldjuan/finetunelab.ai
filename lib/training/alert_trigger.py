@@ -12,9 +12,9 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-ALERT_API_URL = os.getenv('ALERT_API_URL', 'http://localhost:3000/api/alerts/trigger')
+ALERT_API_URL = os.getenv('ALERT_API_URL')
 INTERNAL_API_KEY = os.getenv('INTERNAL_API_KEY', os.getenv('ALERT_TRIGGER_API_KEY', ''))
-ALERTS_ENABLED = os.getenv('ALERTS_ENABLED', 'true').lower() == 'true'
+ALERTS_ENABLED = os.getenv('ALERTS_ENABLED', 'true').lower() == 'true' and bool(ALERT_API_URL)
 
 
 async def send_alert_async(
