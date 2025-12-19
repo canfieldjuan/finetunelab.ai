@@ -1484,43 +1484,88 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       // Generate session tag for regular chat if needed (streaming path)
       let regularChatSessionTag: string | null = null;
       if (!isWidgetMode && !isBatchTestMode && conversationId && userId) {
+        console.log('[API] [SESSION_TAG] [STREAMING] Checking session tag generation conditions:', {
+          isWidgetMode,
+          isBatchTestMode,
+          conversationId,
+          userId,
+          selectedModelId
+        });
+        
         try {
-          const { data: conversation } = await supabase
+          const { data: conversation, error: convError } = await supabase
             .from('conversations')
             .select('session_id, llm_model_id')
             .eq('id', conversationId)
             .single();
           
+          console.log('[API] [SESSION_TAG] [STREAMING] Fetched conversation:', {
+            conversation_id: conversationId,
+            session_id: conversation?.session_id,
+            llm_model_id: conversation?.llm_model_id,
+            error: convError?.message
+          });
+          
           // Update llm_model_id if missing (first message in conversation)
           let modelIdToUse = conversation?.llm_model_id;
           if (conversation && !conversation.llm_model_id && selectedModelId) {
-            console.log('[API] Setting llm_model_id on conversation (streaming):', selectedModelId);
-            await supabase
+            console.log('[API] [SESSION_TAG] [STREAMING] Setting llm_model_id on conversation:', selectedModelId);
+            const { error: updateError } = await supabase
               .from('conversations')
               .update({ llm_model_id: selectedModelId })
               .eq('id', conversationId);
-            modelIdToUse = selectedModelId;
+            
+            if (updateError) {
+              console.error('[API] [SESSION_TAG] [STREAMING] Failed to update llm_model_id:', updateError);
+            } else {
+              modelIdToUse = selectedModelId;
+              console.log('[API] [SESSION_TAG] [STREAMING] Successfully set llm_model_id');
+            }
           }
           
           if (conversation && !conversation.session_id && modelIdToUse) {
+            console.log('[API] [SESSION_TAG] [STREAMING] Generating session tag with:', { userId, modelIdToUse });
             const sessionTag = await generateSessionTag(userId, modelIdToUse);
+            console.log('[API] [SESSION_TAG] [STREAMING] Generated session tag:', sessionTag);
+            
             if (sessionTag) {
-              await supabase
+              const { error: tagError } = await supabase
                 .from('conversations')
                 .update({
                   session_id: sessionTag.session_id,
                   experiment_name: sessionTag.experiment_name
                 })
                 .eq('id', conversationId);
-              regularChatSessionTag = sessionTag.session_id;
-              console.log('[API] Generated session tag for regular chat (streaming):', regularChatSessionTag);
+              
+              if (tagError) {
+                console.error('[API] [SESSION_TAG] [STREAMING] Failed to update session tag:', tagError);
+              } else {
+                regularChatSessionTag = sessionTag.session_id;
+                console.log('[API] [SESSION_TAG] [STREAMING] Successfully set session tag:', regularChatSessionTag);
+              }
             }
-          } else if (conversation?.session_id) {
-            regularChatSessionTag = conversation.session_id;
+          } else {
+            console.log('[API] [SESSION_TAG] [STREAMING] Skipping generation:', {
+              hasConversation: !!conversation,
+              hasSessionId: !!conversation?.session_id,
+              hasModelId: !!modelIdToUse
+            });
+            
+            if (conversation?.session_id) {
+              regularChatSessionTag = conversation.session_id;
+              console.log('[API] [SESSION_TAG] [STREAMING] Using existing session tag:', regularChatSessionTag);
+            }
           }
         } catch (error) {
-          console.error('[API] Failed to generate session tag for regular chat (streaming):', error);
+          console.error('[API] [SESSION_TAG] [STREAMING] Error in session tag flow:', error);
         }
+      } else {
+        console.log('[API] [SESSION_TAG] [STREAMING] Conditions not met for session tag generation:', {
+          isWidgetMode,
+          isBatchTestMode,
+          hasConversationId: !!conversationId,
+          hasUserId: !!userId
+        });
       }
 
       // Start trace for streaming LLM operation
