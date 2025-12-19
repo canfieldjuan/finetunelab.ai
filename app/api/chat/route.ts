@@ -1636,32 +1636,22 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             const needsToolStreaming = tools.length > 0 && provider === 'openai';
 
             if (needsToolStreaming) {
-              // Use tool-aware streaming for OpenAI
-              console.log('[API] Using OpenAI tool-aware streaming');
-              const { streamOpenAIWithToolCalls } = await import('@/lib/llm/openai');
+              // Use tool-aware streaming for OpenAI  
+              // Note: streamOpenAIResponse handles tools but doesn't execute them during streaming
+              // Tools are executed in the non-streaming path only
+              console.log('[API] Using OpenAI streaming (tools will be executed in non-streaming mode)');
+              const { streamOpenAIResponse } = await import('@/lib/llm/openai');
               
-              for await (const event of streamOpenAIWithToolCalls(
+              for await (const chunk of streamOpenAIResponse(
                 enhancedMessages,
                 model,
                 temperature,
                 maxTokens,
-                activeTools,
-                toolCallHandler
+                activeTools
               )) {
-                if (event.type === 'content') {
-                  // Stream text content
-                  accumulatedResponse += event.data;
-                  const data = `data: ${JSON.stringify({ content: event.data })}\n\n`;
-                  controller.enqueue(encoder.encode(data));
-                } else if (event.type === 'tool_call_start') {
-                  // Notify tool execution start
-                  const data = `data: ${JSON.stringify({ type: 'tool_call_start', tool: event.data.name })}\n\n`;
-                  controller.enqueue(encoder.encode(data));
-                } else if (event.type === 'tool_call_end') {
-                  // Notify tool execution end
-                  const data = `data: ${JSON.stringify({ type: 'tool_call_end', tool: event.data.name })}\n\n`;
-                  controller.enqueue(encoder.encode(data));
-                }
+                accumulatedResponse += chunk;
+                const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
+                controller.enqueue(encoder.encode(data));
               }
             } else {
               // Regular streaming (no tools or non-OpenAI)
