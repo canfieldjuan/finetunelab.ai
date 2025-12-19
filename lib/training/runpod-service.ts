@@ -16,6 +16,8 @@ import type {
 
 import type { TrainingConfig, AdvancedTrainingConfig } from './training-config.types';
 import { estimateTrainingTime } from './time-estimation';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ============================================================================
 // TYPES
@@ -399,6 +401,95 @@ export class RunPodService {
   }
 
   /**
+   * Read and encode standalone_trainer.py for upload to RunPod
+   * Returns base64-encoded content for safe shell transfer
+   */
+  private getStandaloneTrainerContent(): string {
+    try {
+      const trainerPath = path.join(
+        process.cwd(),
+        'lib',
+        'training',
+        'standalone_trainer.py'
+      );
+
+      const content = fs.readFileSync(trainerPath, 'utf-8');
+      const base64Content = Buffer.from(content, 'utf-8').toString('base64');
+
+      return base64Content;
+    } catch (error) {
+      console.error('[RunPodService] Failed to read standalone_trainer.py:', error);
+      throw new Error('Failed to read standalone trainer script');
+    }
+  }
+
+  /**
+   * Generate config.json content for standalone_trainer.py
+   * Converts TrainingConfig TypeScript interface to Python config format
+   */
+  private generateTrainingConfig(
+    modelName: string,
+    datasetPath: string,
+    trainingConfig: TrainingConfig
+  ): any {
+    const training = trainingConfig.training as AdvancedTrainingConfig;
+    const data = trainingConfig.data;
+    const model = trainingConfig.model;
+    const loraConfig = training.lora_config;
+
+    return {
+      model: {
+        name: modelName,
+        trust_remote_code: model.trust_remote_code || false,
+      },
+      training: {
+        method: training.method || 'sft',
+        use_lora: training.use_lora !== false,
+        num_epochs: training.num_epochs || 3,
+        batch_size: training.batch_size || 4,
+        learning_rate: training.learning_rate || 0.0002,
+        lr_scheduler_type: training.lr_scheduler_type || 'cosine',
+        warmup_ratio: training.warmup_ratio,
+        warmup_steps: training.warmup_steps || 100,
+        save_steps: training.save_steps || 500,
+        save_total_limit: training.save_total_limit || 3,
+        evaluation_strategy: training.evaluation_strategy || 'steps',
+        eval_steps: training.eval_steps || 500,
+        eval_batch_size: training.eval_batch_size || training.batch_size || 4,
+        packing: training.packing || false,
+        gradient_accumulation_steps: training.gradient_accumulation_steps || 1,
+        logging_steps: training.logging_steps || 10,
+        bf16: training.bf16 !== false,
+        fp16: training.fp16 || false,
+        optim: training.optim || 'paged_adamw_8bit',
+        max_grad_norm: training.max_grad_norm || 1.0,
+        weight_decay: training.weight_decay || 0.01,
+        gradient_checkpointing: training.gradient_checkpointing !== false,
+        dataloader_num_workers: training.dataloader_num_workers || 4,
+        dataloader_prefetch_factor: training.dataloader_prefetch_factor || 2,
+        dataloader_pin_memory: training.dataloader_pin_memory !== false,
+        group_by_length: training.group_by_length || false,
+        max_length: training.max_length || 512,
+        quantization: training.quantization || {},
+      },
+      lora: {
+        r: loraConfig?.r || 16,
+        alpha: loraConfig?.lora_alpha || 32,
+        dropout: loraConfig?.lora_dropout || 0.05,
+        target_modules: loraConfig?.target_modules || null,
+        bias: loraConfig?.bias || 'none',
+        task_type: loraConfig?.task_type || 'CAUSAL_LM',
+      },
+      data: {
+        strategy: data?.strategy || 'standard',
+      },
+      dataset_path: datasetPath,
+      output_dir: '/workspace/fine_tuned_model',
+      eval_split: data?.eval_split || 0.2,
+    };
+  }
+
+  /**
    * Generate training script for RunPod
    */
   generateTrainingScript(
@@ -512,8 +603,30 @@ else
   exit 1
 fi
 
-# Create training script
-cat > train.py << 'EOF'
+# Upload standalone_trainer.py from base64
+echo "[$(date)] Uploading standalone_trainer.py..."
+cat > /workspace/standalone_trainer.py.b64 << 'TRAINEREOF'
+${this.getStandaloneTrainerContent()}
+TRAINEREOF
+
+base64 -d /workspace/standalone_trainer.py.b64 > /workspace/standalone_trainer.py
+rm /workspace/standalone_trainer.py.b64
+chmod +x /workspace/standalone_trainer.py
+echo "[$(date)] ✓ standalone_trainer.py uploaded ($(wc -l < /workspace/standalone_trainer.py) lines)"
+
+# Create training configuration JSON
+echo "[$(date)] Creating training configuration..."
+cat > /workspace/config.json << 'CONFIGEOF'
+${JSON.stringify(this.generateTrainingConfig(modelName, '/workspace/dataset.jsonl', trainingConfig), null, 2)}
+CONFIGEOF
+echo "[$(date)] ✓ config.json created"
+echo "[$(date)] Config preview:"
+head -20 /workspace/config.json
+
+# DEPRECATED: Old embedded train.py approach replaced with standalone_trainer.py upload
+# This comment marks where the ~1500 line embedded Python script used to be (lines 607-2114)
+# Now using the battle-tested standalone_trainer.py that works locally
+cat > /dev/null << 'EOF'
 import os
 import time
 import torch
@@ -2022,12 +2135,26 @@ except Exception as e:
     raise  # Re-raise to propagate the error
 EOF
 
+# Set environment variables for cloud training mode
+echo "[$(date)] Setting environment variables for cloud training..."
+export JOB_ID="${'${JOB_ID}'}"
+export JOB_TOKEN="${'${JOB_TOKEN}'}"
+export USER_ID="${'${USER_ID}'}"
+export METRICS_API_URL="${'${METRICS_API_URL}'}"
+export NEXT_PUBLIC_SUPABASE_URL="${'${SUPABASE_URL}'}"
+export SUPABASE_SERVICE_ROLE_KEY="${'${SUPABASE_SERVICE_KEY}'}"
+export ALERT_API_URL="${'${ALERT_API_URL}'}"
+export INTERNAL_API_KEY="${'${INTERNAL_API_KEY}'}"
+echo "[$(date)] ✓ Environment variables set"
+echo "[$(date)] JOB_ID: ${'${JOB_ID}'}"
+echo "[$(date)] METRICS_API_URL: ${'${METRICS_API_URL}'}"
+
 # PHASE 2 FIX: Run training with error handling and early termination
 echo "[$(date)] =========================================="
-echo "[$(date)] Starting training with train.py..."
+echo "[$(date)] Starting training with standalone_trainer.py..."
 echo "[$(date)] =========================================="
 
-if python train.py 2>&1 | tee training_output.log; then
+if python /workspace/standalone_trainer.py --config /workspace/config.json --execution-id ${'${JOB_ID}'} 2>&1 | tee training_output.log; then
   EXIT_CODE=\${PIPESTATUS[0]}
   echo "[$(date)] =========================================="
   echo "[$(date)] ✓ Training completed successfully! (exit code: \$EXIT_CODE)"
