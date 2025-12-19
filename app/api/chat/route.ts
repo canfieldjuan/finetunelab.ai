@@ -829,13 +829,16 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           });
           
           try {
-            // Create authenticated Supabase client for server-side operations
-            const supabaseAuth = createRouteHandlerClient({ cookies });
+            // Create service role client but filter by user_id for security
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+            const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+            const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey);
             
             const { data: conversation, error: convError } = await supabaseAuth
               .from('conversations')
               .select('session_id, llm_model_id')
               .eq('id', conversationId)
+              .eq('user_id', userId)  // Security: Ensure user owns this conversation
               .single();
             
             console.log('[API] [SESSION_TAG] Fetched conversation:', {
@@ -852,7 +855,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               const { error: updateError } = await supabaseAuth
                 .from('conversations')
                 .update({ llm_model_id: selectedModelId })
-                .eq('id', conversationId);
+                .eq('id', conversationId)
+                .eq('user_id', userId);  // Security: Ensure user owns this conversation
               
               if (updateError) {
                 console.error('[API] [SESSION_TAG] Failed to update llm_model_id:', updateError);
@@ -868,13 +872,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               console.log('[API] [SESSION_TAG] Generated session tag:', sessionTag);
               
               if (sessionTag) {
-                const { error: tagError } = await supabase
+                const { error: tagError } = await supabaseAuth
                   .from('conversations')
                   .update({
                     session_id: sessionTag.session_id,
                     experiment_name: sessionTag.experiment_name
                   })
-                  .eq('id', conversationId);
+                  .eq('id', conversationId)
+                  .eq('user_id', userId);  // Security: Ensure user owns this conversation
                 
                 if (tagError) {
                   console.error('[API] [SESSION_TAG] Failed to update session tag:', tagError);
@@ -1496,13 +1501,16 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         });
         
         try {
-          // Create authenticated Supabase client for server-side operations
-          const supabaseAuth = createRouteHandlerClient({ cookies });
+          // Create service role client but filter by user_id for security
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+          const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+          const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey);
           
           const { data: conversation, error: convError } = await supabaseAuth
             .from('conversations')
             .select('session_id, llm_model_id')
             .eq('id', conversationId)
+            .eq('user_id', userId)  // Security: Ensure user owns this conversation
             .single();
           
           console.log('[API] [SESSION_TAG] [STREAMING] Fetched conversation:', {
@@ -1519,7 +1527,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             const { error: updateError } = await supabaseAuth
               .from('conversations')
               .update({ llm_model_id: selectedModelId })
-              .eq('id', conversationId);
+              .eq('id', conversationId)
+              .eq('user_id', userId);  // Security: Ensure user owns this conversation
             
             if (updateError) {
               console.error('[API] [SESSION_TAG] [STREAMING] Failed to update llm_model_id:', updateError);
@@ -1541,7 +1550,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                   session_id: sessionTag.session_id,
                   experiment_name: sessionTag.experiment_name
                 })
-                .eq('id', conversationId);
+                .eq('id', conversationId)
+                .eq('user_id', userId);  // Security: Ensure user owns this conversation
               
               if (tagError) {
                 console.error('[API] [SESSION_TAG] [STREAMING] Failed to update session tag:', tagError);

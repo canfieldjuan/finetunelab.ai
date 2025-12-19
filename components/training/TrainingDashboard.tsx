@@ -588,7 +588,9 @@ export function TrainingDashboard({
               <div className="text-lg font-semibold text-gray-900">
                 {displayEvalLoss !== null && displayEvalLoss !== undefined
                   ? formatNumber(displayEvalLoss, 4)
-                  : <span className="text-sm text-gray-500">Pending...</span>
+                  : <span className="text-sm text-gray-500" title="Evaluation runs periodically (typically every 100-500 steps)">
+                      Awaiting eval...
+                    </span>
                 }
               </div>
             </div>

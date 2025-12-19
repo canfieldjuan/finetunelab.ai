@@ -67,6 +67,44 @@ export async function POST(request: NextRequest) {
 
     await sendTrainingJobAlert(body.type as AlertType, jobData);
 
+    // Update job status in database for completed/failed jobs
+    if (body.type === 'job_completed' || body.type === 'job_failed') {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (supabaseUrl && supabaseServiceKey) {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        const updates: Record<string, unknown> = {
+          updated_at: new Date().toISOString(),
+        };
+
+        if (body.type === 'job_completed') {
+          updates.status = 'completed';
+          updates.completed_at = new Date().toISOString();
+          console.log('[AlertTrigger] Updating job status to completed');
+        } else if (body.type === 'job_failed') {
+          updates.status = 'failed';
+          updates.error = body.error_message || 'Training failed';
+          updates.failed_at = new Date().toISOString();
+          console.log('[AlertTrigger] Updating job status to failed');
+        }
+
+        const { error: updateError } = await supabase
+          .from('local_training_jobs')
+          .update(updates)
+          .eq('id', body.job_id);
+
+        if (updateError) {
+          console.error('[AlertTrigger] Failed to update job status:', updateError);
+          // Don't fail the alert - notification already sent
+        } else {
+          console.log('[AlertTrigger] Job status updated successfully');
+        }
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[AlertTrigger] Error:', err);
