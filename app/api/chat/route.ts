@@ -280,8 +280,8 @@ export async function POST(req: NextRequest) {
               title: title,
               widget_session_id: widgetSessionId,
               is_widget_session: true,
-              // Only store UUIDs; ignore human-readable model names for this column
-              llm_model_id: llmModelIdForDb,
+              // Store modelId (UUID or name) for session tag generation
+              llm_model_id: modelId || llmModelIdForDb,
               run_id: runId || null,
             })
             .select()
