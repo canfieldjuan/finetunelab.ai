@@ -572,9 +572,41 @@ class TrainingMetricsCallback(TrainerCallback):
             logger.warning(f"[MetricsCallback] Perplexity calculation failed for loss={loss}: {e}")
             return None
 
+    def _calculate_checkpoint_score(self, checkpoint_data: dict) -> float:
+        """
+        Calculate multi-metric score for checkpoint selection (inlined).
+        Returns score where LOWER is better (consistent with loss metrics).
+        """
+        import math
+
+        eval_loss = checkpoint_data.get('eval_loss')
+        train_loss = checkpoint_data.get('train_loss')
+
+        if eval_loss is None:
+            logger.warning("[CheckpointScorer] Cannot score checkpoint without eval_loss")
+            return float('inf')
+
+        eval_loss_score = eval_loss * 0.5
+
+        if train_loss is not None:
+            loss_gap = abs(train_loss - eval_loss)
+            relative_gap = loss_gap / max(eval_loss, 0.001)
+            gap_penalty = relative_gap * 0.3
+        else:
+            gap_penalty = 0.0
+
+        perplexity = math.exp(eval_loss)
+        perplexity_normalized = min(perplexity / 20.0, 1.0)
+        perplexity_penalty = perplexity_normalized * 0.1
+
+        epochs_without_improvement = checkpoint_data.get('epochs_without_improvement', 1)
+        improvement_bonus = -0.1 if epochs_without_improvement == 0 else 0.0
+
+        total_score = eval_loss_score + gap_penalty + perplexity_penalty + improvement_bonus
+        return total_score
+
     def _update_best_model(self, eval_loss: float, current_epoch: int, current_step: int, train_loss: Optional[float] = None):
         """Track best model using multi-metric scoring."""
-        from lib.training.checkpoint_scorer import calculate_checkpoint_score
 
         # Calculate multi-metric score for current checkpoint
         current_checkpoint_data = {
@@ -582,7 +614,7 @@ class TrainingMetricsCallback(TrainerCallback):
             'train_loss': train_loss,
             'epochs_without_improvement': self.epochs_without_improvement
         }
-        current_score = calculate_checkpoint_score(current_checkpoint_data)
+        current_score = self._calculate_checkpoint_score(current_checkpoint_data)
 
         # Calculate score for previous best (for comparison)
         if self.best_eval_loss != float('inf'):
@@ -591,7 +623,7 @@ class TrainingMetricsCallback(TrainerCallback):
                 'train_loss': None,  # Don't have historical train_loss
                 'epochs_without_improvement': 1  # Assume previous best has no recent improvement
             }
-            previous_best_score = calculate_checkpoint_score(previous_best_data)
+            previous_best_score = self._calculate_checkpoint_score(previous_best_data)
         else:
             previous_best_score = float('inf')  # First checkpoint
 
