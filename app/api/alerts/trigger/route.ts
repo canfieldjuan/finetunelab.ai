@@ -86,9 +86,9 @@ export async function POST(request: NextRequest) {
         if (cloudDeployment && cloudDeployment.platform === 'runpod') {
           console.log('[AlertTrigger] Auto-terminating RunPod pod:', cloudDeployment.deployment_id);
 
-          const runpodApiKey = await secretsManager.getSecret(body.user_id, 'runpod_api_key');
-          if (runpodApiKey?.value) {
-            await runpodService.stopPod(cloudDeployment.deployment_id, runpodApiKey.value);
+          const secret = await secretsManager.getSecret(body.user_id, 'runpod', supabase);
+          if (secret?.value) {
+            await runpodService.stopPod(cloudDeployment.deployment_id, secret.value);
 
             await supabase
               .from('cloud_deployments')

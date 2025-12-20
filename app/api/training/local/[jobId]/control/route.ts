@@ -133,15 +133,15 @@ export async function POST(
       console.log('[TrainingControl] Cancelling RunPod pod:', cloudDeployment.deployment_id);
 
       try {
-        const runpodApiKey = await secretsManager.getSecret(user.id, 'runpod_api_key');
-        if (!runpodApiKey?.value) {
+        const secret = await secretsManager.getSecret(user.id, 'runpod', supabase);
+        if (!secret?.value) {
           return NextResponse.json(
             { success: false, error: 'RunPod API key not configured' },
             { status: 400 }
           );
         }
 
-        await runpodService.stopPod(cloudDeployment.deployment_id, runpodApiKey.value);
+        await runpodService.stopPod(cloudDeployment.deployment_id, secret.value);
 
         await supabase
           .from('cloud_deployments')
