@@ -578,10 +578,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
 
         // Auto-generate session tag if missing (first message in regular chat)
-        if (conversation && !conversation.session_id && modelId) {
+        if (conversation && !conversation.session_id && selectedModelId) {
           try {
             console.log('[API] Regular chat: Generating session tag for first message');
-            const sessionTag = await generateSessionTag(userId, modelId);
+            const sessionTag = await generateSessionTag(userId, selectedModelId);
             if (sessionTag) {
               await supabase
                 .from('conversations')

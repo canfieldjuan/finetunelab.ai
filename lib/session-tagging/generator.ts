@@ -13,7 +13,7 @@
  * Date: 2025-12-19
  */
 
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, supabaseAdmin } from '@/lib/supabaseClient';
 
 export interface SessionTag {
   session_id: string;
@@ -43,7 +43,10 @@ export async function generateSessionTag(
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const isUuid = uuidRegex.test(modelId);
 
-    let query = supabase
+    // Use service role client if available to bypass RLS, otherwise fall back to anon
+    const client = supabaseAdmin || supabase;
+
+    let query = client
       .from('llm_models')
       .select('id, model_id, name')
       .eq('user_id', userId);
@@ -63,7 +66,7 @@ export async function generateSessionTag(
 
     const shortUuid = model.id.substring(0, 6);
 
-    const { data: conversations, error: counterError } = await supabase
+    const { data: conversations, error: counterError } = await client
       .from('conversations')
       .select('session_id')
       .eq('user_id', userId)
