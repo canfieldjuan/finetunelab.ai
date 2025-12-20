@@ -225,6 +225,11 @@ export async function POST(req: NextRequest) {
       console.log('[API] Normal mode: Getting user from request body');
       userId = requestUserId || memory?.userId || null;
       console.log('[API] Normal mode: userId:', userId || 'not provided');
+      
+      // Create service role client for DB operations (bypasses RLS)
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     }
 
     if (!messages || !Array.isArray(messages)) {
@@ -565,7 +570,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // Option 2: Get model from conversation (if exists)
     else if (conversationId && userId) {
       try {
-        const { data: conversation } = await supabase
+        const { data: conversation } = await (supabaseAdmin || supabase)
           .from('conversations')
           .select('llm_model_id, session_id')
           .eq('id', conversationId)
@@ -583,7 +588,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             console.log('[API] Regular chat: Generating session tag for first message');
             const sessionTag = await generateSessionTag(userId, selectedModelId);
             if (sessionTag) {
-              await supabase
+              await (supabaseAdmin || supabase)
                 .from('conversations')
                 .update({
                   session_id: sessionTag.session_id,
