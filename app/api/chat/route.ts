@@ -148,7 +148,37 @@ export async function POST(req: NextRequest) {
 
     // Normalize model UUID for DB writes (allow human-readable names for routing logic)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const llmModelIdForDb: string | null = modelId && uuidRegex.test(modelId) ? modelId : null;
+    let llmModelIdForDb: string | null = null;
+
+    // Resolve model name to UUID if needed
+    if (modelId) {
+      if (uuidRegex.test(modelId)) {
+        // Already a UUID
+        llmModelIdForDb = modelId;
+      } else {
+        // Try to resolve model name to UUID
+        try {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+          const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+          const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+          const { data: modelRecord } = await supabaseAdmin
+            .from('llm_models')
+            .select('id')
+            .eq('model_id', modelId)
+            .single();
+
+          if (modelRecord) {
+            llmModelIdForDb = modelRecord.id;
+            console.log('[API] Resolved model name to UUID:', modelId, '->', llmModelIdForDb);
+          } else {
+            console.warn('[API] Model not found in llm_models:', modelId);
+          }
+        } catch (error) {
+          console.error('[API] Error resolving model UUID:', error);
+        }
+      }
+    }
 
     let tools = Array.isArray(rawTools) ? rawTools.filter(isToolDefinition) : [];
 
