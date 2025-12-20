@@ -13,6 +13,9 @@ export interface FireworksDeploymentRequest {
   hf_token?: string;
   model_id: string; // HuggingFace model ID for reference, e.g., "meta-llama/Llama-2-7b-chat-hf"
   base_model?: string; // The base model used for fine-tuning
+  acceleratorType?: string;
+  region?: string;
+  precision?: string;
 }
 
 export interface FireworksDeploymentResponse {
@@ -45,7 +48,7 @@ export class FireworksDeploymentService {
   private restApiBaseUrl = 'https://api.fireworks.ai/v1';
   // TODO: Determine how to get the actual ACCOUNT_ID. For now, hardcode or extract from context.
   // Assuming 'my-account' is a placeholder or can be derived from the API key's scope.
-  private accountId: string = 'fireworks'; // Default for now, often 'accounts/fireworks' or similar is the prefix in model_id
+  private accountId: string = 'canfieldjuan24-wel7l';
 
   constructor() {}
 
@@ -187,26 +190,27 @@ export class FireworksDeploymentService {
             console.log(`[FireworksService] Model ${fireworksModelId} upload validated successfully.`);
       
             // 5. Create Deployment
-            console.log(`[FireworksService] Step 5: Creating deployment for model ${fireworksModelId}...`);
-            const createDeploymentEndpoint = `/accounts/${this.accountId}/deployments`;
-            const createDeploymentPayload = {
-              baseModel: `accounts/${this.accountId}/models/${fireworksModelId}`, // Reference the uploaded model
-              displayName: request.deployment_name,
-              description: `Deployment for fine-tuned model: ${request.model_id}`,
-              minReplicaCount: 0,
-              maxReplicaCount: 1,
-              acceleratorCount: 1,
-              acceleratorType: "NVIDIA_A100_80GB", // TODO: Make configurable
-              precision: "FP16", // TODO: Make configurable
-              deploymentShape: "performance-optimized" // TODO: Make configurable
-            };
-      
-            const deploymentCreationResponse = await this._fireworksRestRequest<{ id: string; model: string; status: string; endpoint: { url: string } }>(
-              createDeploymentEndpoint,
-              'POST',
-              apiKey,
-              createDeploymentPayload
-            );
+      console.log(`[FireworksService] Step 5: Creating deployment for model ${fireworksModelId}...`);
+      const createDeploymentEndpoint = `/accounts/${this.accountId}/deployments`;
+      const createDeploymentPayload = {
+        baseModel: `accounts/${this.accountId}/models/${fireworksModelId}`, // Reference the uploaded model
+        displayName: request.deployment_name,
+        description: `Deployment for fine-tuned model: ${request.model_id}`,
+        minReplicaCount: 0, 
+        maxReplicaCount: 1, 
+        acceleratorCount: 1,
+        acceleratorType: request.acceleratorType || "NVIDIA_A100_80GB",
+        precision: request.precision || "FP16",
+        region: request.region || "US_IOWA_1",
+        deploymentShape: "performance-optimized"
+      };
+
+      const deploymentCreationResponse = await this._fireworksRestRequest<{ id: string; model: string; status: string; endpoint: { url: string } }>(
+        createDeploymentEndpoint,
+        'POST',
+        apiKey,
+        createDeploymentPayload
+      );
             const fireworksDeploymentId = deploymentCreationResponse.id;
             console.log(`[FireworksService] Deployment created with ID: ${fireworksDeploymentId}`);
       

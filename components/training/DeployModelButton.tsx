@@ -149,6 +149,11 @@ export function DeployModelButton({
   const [useNetworkVolume, setUseNetworkVolume] = useState<boolean>(true);
   const [volumeSizeGb, setVolumeSizeGb] = useState<number>(50);
 
+  // Fireworks.ai configuration
+  const [fireworksGpu, setFireworksGpu] = useState<string>('NVIDIA_A100_80GB');
+  const [fireworksRegion, setFireworksRegion] = useState<string>('US_IOWA_1');
+  const [fireworksPrecision, setFireworksPrecision] = useState<string>('FP16');
+
   // vLLM configuration
   const [maxModelLen, setMaxModelLen] = useState<number>(8192);
   const [gpuMemoryUtil, setGpuMemoryUtil] = useState<number>(0.7); // Default 70% - safe for dev environments
@@ -164,6 +169,10 @@ export function DeployModelButton({
 
   // Checkpoint selection state
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<TrainingCheckpoint | null>(null);
+
+  const FIREWORKS_GPUS = ["NVIDIA_A100_80GB", "NVIDIA_H100_80GB", "AMD_MI300X_192GB", "NVIDIA_A10G_24GB", "NVIDIA_A100_40GB", "NVIDIA_L4_24GB", "NVIDIA_H200_141GB", "NVIDIA_B200_180GB", "AMD_MI325X_256GB"];
+  const FIREWORKS_REGIONS = ["US_IOWA_1", "US_TEXAS_2", "US_ARIZONA_1", "US_CALIFORNIA_1", "US_GEORGIA_2", "US_ILLINOIS_1", "US_ILLINOIS_2", "US_UTAH_1", "US_VIRGINIA_1", "US_WASHINGTON_1", "US_WASHINGTON_2", "US_WASHINGTON_3", "EU_FRANKFURT_1", "EU_ICELAND_1", "EU_ICELAND_2", "AP_TOKYO_1", "AP_TOKYO_2"];
+  const FIREWORKS_PRECISIONS = ["FP16", "FP8", "BF16", "INT8"];
 
   // Set recommended GPU when dialog opens
   useEffect(() => {
@@ -284,8 +293,9 @@ export function DeployModelButton({
               max_workers: maxWorkers,
             }),
             ...(serverType === 'fireworks' && {
-              // Add Fireworks-specific config here if needed, for now it's simple
-              // e.g., gpu_type, budget_limit
+              acceleratorType: fireworksGpu,
+              region: fireworksRegion,
+              precision: fireworksPrecision,
             }),
           },
         }),
@@ -752,14 +762,44 @@ export function DeployModelButton({
                   <Image src="/logos/fireworks-logomark.svg" alt="Fireworks.ai" width={16} height={16} />
                   Fireworks.ai Configuration
                 </h4>
-                <p className="text-sm text-muted-foreground">
-                  Your fine-tuned model will be deployed to Fireworks.ai. This is a serverless deployment, so you only pay for what you use.
-                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="fireworks-gpu">GPU Type</Label>
+                  <Select value={fireworksGpu} onValueChange={setFireworksGpu}>
+                    <SelectTrigger id="fireworks-gpu">
+                      <SelectValue placeholder="Select GPU" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIREWORKS_GPUS.map(gpu => <SelectItem key={gpu} value={gpu}>{gpu}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fireworks-region">Region</Label>
+                  <Select value={fireworksRegion} onValueChange={setFireworksRegion}>
+                    <SelectTrigger id="fireworks-region">
+                      <SelectValue placeholder="Select Region" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIREWORKS_REGIONS.map(region => <SelectItem key={region} value={region}>{region}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fireworks-precision">Precision</Label>
+                  <Select value={fireworksPrecision} onValueChange={setFireworksPrecision}>
+                    <SelectTrigger id="fireworks-precision">
+                      <SelectValue placeholder="Select Precision" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIREWORKS_PRECISIONS.map(precision => <SelectItem key={precision} value={precision}>{precision}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
 
             {/* Local deployment configuration */}
-            {serverType !== STATUS.RUNPOD && (
+            {serverType !== STATUS.RUNPOD && serverType !== 'fireworks' && (
               <div className="rounded-lg border p-4 bg-muted/50 space-y-4">
                 <h4 className="text-sm font-medium">Configuration</h4>
 

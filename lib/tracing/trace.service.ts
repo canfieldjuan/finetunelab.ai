@@ -76,10 +76,16 @@ export async function startTrace(params: StartTraceParams): Promise<TraceContext
   }
 
   try {
-    // Get user ID from session
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) {
-      traceDebugLog('startTrace', 'No user session, returning no-op context');
+    // Get user ID from params (server-side) or session (client-side)
+    let userId = params.userId;
+
+    if (!userId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id;
+    }
+
+    if (!userId) {
+      traceDebugLog('startTrace', 'No userId provided and no user session, returning no-op context');
       return createNoOpContext(params);
     }
 
@@ -93,7 +99,7 @@ export async function startTrace(params: StartTraceParams): Promise<TraceContext
       traceId,
       spanId,
       parentSpanId,
-      userId: session.user.id,
+      userId,
       conversationId: params.conversationId,
       messageId: params.messageId,
       startTime: new Date(),
@@ -135,10 +141,10 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
   }
 
   try {
-    // Get session for auth
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      traceDebugLog('endTrace', 'No session, skipping');
+    // Get service role key for auth
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceKey) {
+      traceDebugLog('endTrace', 'No service key, skipping');
       return;
     }
 
@@ -150,6 +156,29 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       result.inputTokens !== undefined && result.outputTokens !== undefined
         ? result.inputTokens + result.outputTokens
         : undefined;
+
+    // Auto-calculate cost if not provided but tokens available
+    let costUsd = result.costUsd;
+    if (!costUsd && result.inputTokens && result.outputTokens) {
+      const modelName = result.metadata?.modelName as string | undefined;
+      if (modelName) {
+        try {
+          const { calculateCost, matchModelToPricing } = await import('./pricing-config');
+          const pricingKey = matchModelToPricing(modelName);
+          costUsd = calculateCost(pricingKey, result.inputTokens, result.outputTokens);
+          traceDebugLog('Auto-calculated cost', { modelName, costUsd });
+        } catch (err) {
+          traceDebugLog('Failed to auto-calculate cost', err);
+        }
+      }
+    }
+
+    // Auto-calculate token throughput if not provided
+    let tokensPerSecond = result.tokensPerSecond;
+    if (!tokensPerSecond && result.outputTokens && durationMs > 0) {
+      tokensPerSecond = (result.outputTokens / durationMs) * 1000;
+      traceDebugLog('Auto-calculated throughput', { tokensPerSecond });
+    }
 
     // Create trace update payload
     const traceUpdate = {
@@ -168,7 +197,9 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       input_tokens: result.inputTokens || null,
       output_tokens: result.outputTokens || null,
       total_tokens: totalTokens || null,
-      cost_usd: result.costUsd || null,
+      cost_usd: costUsd || null,
+      ttft_ms: result.ttftMs || null,
+      tokens_per_second: tokensPerSecond || null,
       error_message: result.errorMessage || null,
       error_type: result.errorType || null,
       input_data: result.inputData || null,
@@ -177,7 +208,7 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
     };
 
     // Send trace end to API (non-blocking)
-    sendTraceEnd(session.access_token, traceUpdate).catch(error => {
+    sendTraceEnd(serviceKey, traceUpdate).catch(error => {
       console.error('[Trace Service] Error ending trace:', error);
     });
 
@@ -242,6 +273,7 @@ export async function createChildSpan(
     parentContext: parent,
     conversationId: parent.conversationId,
     messageId: parent.messageId,
+    userId: parent.userId,
   });
 }
 
@@ -253,13 +285,15 @@ async function sendTraceStart(
   context: TraceContext,
   params: StartTraceParams
 ): Promise<void> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) return;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) return;
 
-  await fetch('/api/analytics/traces', {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+
+  await fetch(`${baseUrl}/api/analytics/traces`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${serviceKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -267,6 +301,7 @@ async function sendTraceStart(
       span_id: context.spanId,
       parent_trace_id: context.parentSpanId || null,
       span_name: params.spanName,
+      user_id: context.userId,
       start_time: context.startTime.toISOString(),
       operation_type: params.operationType,
       model_name: params.modelName || null,
@@ -321,11 +356,13 @@ async function flushTraceBatch(accessToken: string): Promise<void> {
 
   traceDebugLog('flushTraceBatch', { count: batch.length });
 
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+
   // Send each trace in the batch
   // In a production system, you might want to support bulk inserts
   for (const trace of batch) {
     try {
-      await fetch('/api/analytics/traces', {
+      await fetch(`${baseUrl}/api/analytics/traces`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

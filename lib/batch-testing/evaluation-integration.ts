@@ -13,6 +13,7 @@ export interface EvaluationContext {
   modelId: string;
   provider: string;
   benchmarkId?: string;  // Optional: Link judgment to benchmark
+  traceId?: string;  // Optional: Link judgment to trace
 }
 
 /**
@@ -39,6 +40,7 @@ export async function saveBasicJudgment(context: EvaluationContext) {
     score: score,
     passed: passed,
     benchmark_id: context.benchmarkId || null,
+    trace_id: context.traceId || null,
     evidence_json: {
       response_length: context.response.length,
       has_code_block: context.response.includes('```'),

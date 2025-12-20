@@ -73,7 +73,6 @@ export class SearchService {
     if (retrievalContext) {
       try {
         const { truncateString, truncateRAGChunks } = await import('@/lib/tracing/trace-utils');
-        const { RAGOutputData } = await import('@/lib/tracing/types');
 
         const inputData = {
           query: truncateString(query, 500),
@@ -81,7 +80,7 @@ export class SearchService {
           topK: graphragConfig.search.topK,
         };
 
-        const outputData: RAGOutputData = {
+        const outputData = {
           topChunks: truncateRAGChunks(
             graphitiResult.edges.map(edge => ({
               fact: edge.fact,

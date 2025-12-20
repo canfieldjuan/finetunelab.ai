@@ -796,11 +796,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       if (toolTraceContext) {
         try {
           const { truncateObject } = await import('@/lib/tracing/trace-utils');
-          const { ToolCallInputData, ToolCallOutputData } = await import('@/lib/tracing/types');
 
           const toolDef = tools?.find(t => t.function.name === toolName);
 
-          const inputData: ToolCallInputData = {
+          const inputData = {
             toolName,
             arguments: truncateObject(args, 5) as Record<string, unknown>,
             toolDescription: toolDef?.function.description,
@@ -819,7 +818,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             });
             console.log(`[Trace] Tool call failed: ${toolName} (${toolExecutionTime}ms)`);
           } else {
-            const outputData: ToolCallOutputData = {
+            const outputData = {
               result: truncateObject(result.data, 10),
               executionStatus: 'success',
               executionTimeMs: toolExecutionTime,
@@ -946,6 +945,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           modelProvider: actualModelConfig?.provider || provider || undefined,
           conversationId: widgetConversationId || conversationId || undefined,
           sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
+          userId: userId || undefined,
         });
 
         try {
@@ -1210,13 +1210,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             // End trace with comprehensive data and cost
             if (traceContext && assistantMsgData?.id) {
               const { truncateString } = await import('@/lib/tracing/trace-utils');
-              const { LLMInputData, LLMOutputData } = await import('@/lib/tracing/types');
               const { calculateCost, matchModelToPricing } = await import('@/lib/tracing/pricing-config');
 
               const systemPrompt = enhancedMessages.find(m => m.role === 'system')?.content;
               const lastUserMessage = enhancedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content;
 
-              const llmInputData: LLMInputData = {
+              const llmInputData = {
                 systemPrompt: systemPrompt ? truncateString(String(systemPrompt), 5000) : undefined,
                 userMessage: lastUserMessage ? truncateString(String(lastUserMessage), 5000) : undefined,
                 conversationHistory: enhancedMessages
@@ -1236,7 +1235,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 })),
               };
 
-              const llmOutputData: LLMOutputData = {
+              const llmOutputData = {
                 content: truncateString(finalResponse, 10000),
                 reasoning: reasoning ? truncateString(reasoning, 10000) : undefined,
                 stopReason: 'stop',
@@ -1353,7 +1352,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 response: finalResponse,
                 modelId: selectedModelId || 'unknown',
                 provider: provider || 'unknown',
-                benchmarkId: benchmarkId || undefined  // Link to benchmark if provided
+                benchmarkId: benchmarkId || undefined,  // Link to benchmark if provided
+                traceId: traceContext?.traceId,  // Link to trace if available
               }).catch(err => {
                 console.error('[API] Evaluation error (non-blocking):', err);
               });
@@ -1375,6 +1375,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                   prompt: userPrompt,
                   response: finalResponse,
                   modelId: selectedModelId || 'unknown',
+                  traceId: traceContext?.traceId,
                 }).catch(err => {
                   console.error('[API] LLM Judge error (non-blocking):', err);
                 });
@@ -1576,6 +1577,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         modelProvider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || undefined,
         conversationId: widgetConversationId || conversationId || undefined,
         sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
+        userId: userId || undefined,
       });
 
       const stream = new ReadableStream({
@@ -1615,6 +1617,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             // Accumulate response for widget mode message saving
             let accumulatedResponse = '';
             const toolCallsTracking: Array<{name: string; success: boolean; error?: string}> = [];
+            let ttftMs: number | undefined;
+            let firstChunkReceived = false;
 
             // Check if we need tool-aware streaming (OpenAI only)
             const needsToolStreaming = tools.length > 0 && provider === 'openai';
@@ -1623,7 +1627,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               // Use tool-aware streaming for OpenAI
               console.log('[API] Using OpenAI tool-aware streaming');
               const { streamOpenAIResponse } = await import('@/lib/llm/openai');
-              
+
               for await (const chunk of streamOpenAIResponse(
                 enhancedMessages,
                 model,
@@ -1631,6 +1635,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 maxTokens,
                 activeTools
               )) {
+                if (!firstChunkReceived && chunk.length > 0) {
+                  ttftMs = Date.now() - streamStartTime;
+                  firstChunkReceived = true;
+                  console.log(`[API] TTFT: ${ttftMs}ms`);
+                }
                 // Stream text content
                 accumulatedResponse += chunk;
                 const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
@@ -1651,6 +1660,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     userId: userId || undefined,
                   }
                 )) {
+                  if (!firstChunkReceived && chunk.length > 0) {
+                    ttftMs = Date.now() - streamStartTime;
+                    firstChunkReceived = true;
+                    console.log(`[API] TTFT: ${ttftMs}ms`);
+                  }
                   console.log('[API] [DEBUG] Streaming chunk, length:', chunk.length);
                   accumulatedResponse += chunk;
                   const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
@@ -1670,6 +1684,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                       maxTokens,
                       activeTools
                     )) {
+                      if (!firstChunkReceived && chunk.length > 0) {
+                        ttftMs = Date.now() - streamStartTime;
+                        firstChunkReceived = true;
+                        console.log(`[API] TTFT: ${ttftMs}ms`);
+                      }
                       accumulatedResponse += chunk;
                       const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
                       controller.enqueue(encoder.encode(data));
@@ -1697,6 +1716,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 maxTokens,
                 activeTools
               )) {
+                if (!firstChunkReceived && chunk.length > 0) {
+                  ttftMs = Date.now() - streamStartTime;
+                  firstChunkReceived = true;
+                  console.log(`[API] TTFT: ${ttftMs}ms`);
+                }
                 console.log('[API] [DEBUG] Streaming chunk (legacy), length:', chunk.length);
                 accumulatedResponse += chunk;
                 const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
@@ -1778,12 +1802,64 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
                 // End trace with streaming metrics
                 if (traceContext && streamMsgData?.id) {
-                  await traceService.endTrace(traceContext, {
-                    endTime: new Date(),
-                    status: 'completed',
-                    inputTokens: estimatedInputTokens,
-                    outputTokens: estimatedOutputTokens,
-                  });
+                  try {
+                    const { truncateString } = await import('@/lib/tracing/trace-utils');
+                    const { calculateCost, matchModelToPricing } = await import('@/lib/tracing/pricing-config');
+
+                    const systemPrompt = enhancedMessages.find(m => m.role === 'system')?.content;
+                    const lastUserMessage = enhancedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content;
+
+                    const llmInputData = {
+                      systemPrompt: systemPrompt ? truncateString(String(systemPrompt), 5000) : undefined,
+                      userMessage: lastUserMessage ? truncateString(String(lastUserMessage), 5000) : undefined,
+                      conversationHistory: enhancedMessages
+                        .filter(m => m.role !== 'system')
+                        .slice(-5)
+                        .map(m => ({
+                          role: m.role,
+                          content: truncateString(String(m.content || ''), 500),
+                        })),
+                      parameters: { temperature, maxTokens },
+                      toolDefinitions: tools?.map(t => ({
+                        name: t.function.name,
+                        description: t.function.description,
+                      })),
+                    };
+
+                    const llmOutputData = {
+                      content: truncateString(accumulatedResponse, 10000),
+                      stopReason: 'stop',
+                      toolCallsMade: toolCallsTracking.length > 0
+                        ? toolCallsTracking.map(t => ({ name: t.name, success: t.success }))
+                        : undefined,
+                    };
+
+                    let costUsd: number | undefined;
+                    if (estimatedInputTokens && estimatedOutputTokens && selectedModelId) {
+                      const pricingKey = matchModelToPricing(selectedModelId);
+                      costUsd = calculateCost(pricingKey, estimatedInputTokens, estimatedOutputTokens);
+                      console.log(`[Trace] Streaming cost: ${costUsd.toFixed(6)} USD`);
+                    }
+
+                    let tokensPerSecond: number | undefined;
+                    if (estimatedOutputTokens && streamLatencyMs > 0) {
+                      tokensPerSecond = (estimatedOutputTokens / streamLatencyMs) * 1000;
+                    }
+
+                    await traceService.endTrace(traceContext, {
+                      endTime: new Date(),
+                      status: 'completed',
+                      inputTokens: estimatedInputTokens,
+                      outputTokens: estimatedOutputTokens,
+                      costUsd,
+                      ttftMs,
+                      tokensPerSecond,
+                      inputData: llmInputData,
+                      outputData: llmOutputData,
+                    });
+                  } catch (traceErr) {
+                    console.error('[Trace] Failed to end streaming trace:', traceErr);
+                  }
                 }
               } catch (error) {
                 console.error('[API] Widget mode (streaming): Error saving messages:', error);

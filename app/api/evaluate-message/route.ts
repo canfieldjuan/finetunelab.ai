@@ -110,9 +110,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Save judgments (async, don't block)
+    // 5. Get trace_id for this message (if exists)
+    let traceId: string | undefined;
+    const { data: trace } = await supabase
+      .from('llm_traces')
+      .select('trace_id')
+      .eq('message_id', messageId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (trace) {
+      traceId = trace.trace_id;
+    }
+
+    // 6. Save judgments (async, don't block)
     if (validationResults.length > 0) {
-      judgmentsService.saveRuleJudgments(messageId, validationResults).catch(err => {
+      judgmentsService.saveRuleJudgments(messageId, validationResults, traceId).catch(err => {
         console.error('[EvaluateMessage] Error saving judgments:', err);
       });
     }

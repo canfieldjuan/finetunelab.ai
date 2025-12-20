@@ -24,6 +24,7 @@ export interface LLMJudgeContext {
   prompt: string;
   response: string;
   modelId: string;
+  traceId?: string;
 }
 
 /**
@@ -106,6 +107,7 @@ ${context.prompt}${groundTruthContext}`;
       criterion: result.criterion,
       score: result.score / 10, // Normalize 1-10 scale to 0-1 for consistency
       passed: result.passed,
+      trace_id: context.traceId || null,
       evidence_json: {
         reasoning: result.reasoning,
         confidence: result.confidence,

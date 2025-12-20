@@ -35,6 +35,19 @@ export async function POST(req: NextRequest) {
 
     console.log('[Evaluate] Inserting evaluation for message:', messageId, 'user:', user.id);
 
+    // Get trace_id for this message (if exists)
+    let traceId: string | undefined;
+    const { data: trace } = await supabase
+      .from('llm_traces')
+      .select('trace_id')
+      .eq('message_id', messageId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (trace) {
+      traceId = trace.trace_id;
+    }
+
     // Insert or update evaluation
     const { data, error } = await supabase
       .from('message_evaluations')
@@ -47,6 +60,7 @@ export async function POST(req: NextRequest) {
         notes,
         expected_behavior: expectedBehavior,
         actual_behavior: actualBehavior,
+        trace_id: traceId,
         updated_at: new Date().toISOString(),
       })
       .select()

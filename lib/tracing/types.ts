@@ -66,6 +66,9 @@ export interface StartTraceParams {
   /** Session tag for user-friendly trace search (format: chat_model_{uuid}_{counter}) */
   sessionTag?: string;
 
+  /** User ID for server-side operations (bypasses session requirement) */
+  userId?: string;
+
   /** Parent trace context for nested operations */
   parentContext?: TraceContext;
 

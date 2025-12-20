@@ -29,10 +29,23 @@ export interface Trace {
   output_tokens?: number;
   total_tokens?: number;
   cost_usd?: number;
+  ttft_ms?: number;
+  tokens_per_second?: number;
   children?: Trace[];
   input_data?: unknown;
   output_data?: unknown;
   metadata?: Record<string, unknown>;
+  judgments?: Array<{
+    id: string;
+    criterion: string;
+    score: number;
+    passed: boolean;
+    judge_type: string;
+    judge_name?: string;
+    notes?: string;
+  }>;
+  user_rating?: number;
+  user_notes?: string;
 }
 
 interface TraceViewProps {
@@ -256,6 +269,48 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
               <p className="text-gray-600">Duration:</p>
               <p>{selectedTrace.duration_ms}ms</p>
             </div>
+
+            {/* Token metrics */}
+            {selectedTrace.input_tokens !== undefined && (
+              <div>
+                <p className="text-gray-600">Input Tokens:</p>
+                <p className="font-mono">{selectedTrace.input_tokens.toLocaleString()}</p>
+              </div>
+            )}
+            {selectedTrace.output_tokens !== undefined && (
+              <div>
+                <p className="text-gray-600">Output Tokens:</p>
+                <p className="font-mono">{selectedTrace.output_tokens.toLocaleString()}</p>
+              </div>
+            )}
+            {selectedTrace.total_tokens !== undefined && (
+              <div>
+                <p className="text-gray-600">Total Tokens:</p>
+                <p className="font-mono font-semibold">{selectedTrace.total_tokens.toLocaleString()}</p>
+              </div>
+            )}
+
+            {/* Cost */}
+            {selectedTrace.cost_usd !== undefined && selectedTrace.cost_usd > 0 && (
+              <div>
+                <p className="text-gray-600">Cost:</p>
+                <p className="font-semibold text-green-600">${selectedTrace.cost_usd.toFixed(6)}</p>
+              </div>
+            )}
+
+            {/* Performance metrics */}
+            {selectedTrace.tokens_per_second !== undefined && selectedTrace.tokens_per_second > 0 && (
+              <div>
+                <p className="text-gray-600">Throughput:</p>
+                <p className="text-blue-600">{selectedTrace.tokens_per_second.toFixed(1)} tok/s</p>
+              </div>
+            )}
+            {selectedTrace.ttft_ms !== undefined && selectedTrace.ttft_ms > 0 && (
+              <div>
+                <p className="text-gray-600">TTFT:</p>
+                <p className="text-purple-600">{selectedTrace.ttft_ms}ms</p>
+              </div>
+            )}
           </div>
 
           {/* Error message if failed */}
@@ -297,6 +352,52 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                   </pre>
                 </details>
               ) : null}
+            </div>
+          ) : null}
+
+          {/* Quality Evaluation Section */}
+          {(selectedTrace.judgments && selectedTrace.judgments.length > 0) || selectedTrace.user_rating ? (
+            <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+              <h4 className="font-semibold mb-3 text-purple-900">Quality Evaluation</h4>
+
+              {selectedTrace.judgments && selectedTrace.judgments.length > 0 && (
+                <div className="space-y-2">
+                  {selectedTrace.judgments.map((judgment) => (
+                    <div key={judgment.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{judgment.criterion}</span>
+                          <span className="text-xs text-gray-500">({judgment.judge_type})</span>
+                        </div>
+                        {judgment.notes && (
+                          <p className="text-xs text-gray-600 mt-1">{judgment.notes}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-mono">{(judgment.score * 100).toFixed(0)}%</span>
+                        {judgment.passed ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedTrace.user_rating && (
+                <div className="mt-3 p-3 bg-yellow-50 rounded border border-yellow-200">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">User Rating:</span>
+                    <span className="text-lg">{'⭐'.repeat(selectedTrace.user_rating)}</span>
+                    <span className="text-sm text-gray-600">({selectedTrace.user_rating}/5)</span>
+                  </div>
+                  {selectedTrace.user_notes && (
+                    <p className="text-sm text-gray-700 mt-2">{selectedTrace.user_notes}</p>
+                  )}
+                </div>
+              )}
             </div>
           ) : null}
         </div>

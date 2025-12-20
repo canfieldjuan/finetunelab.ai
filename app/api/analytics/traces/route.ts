@@ -149,6 +149,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const API_KEY_PREFIX = 'wak_';
 
 interface TracePayload {
+  user_id?: string | null;
   conversation_id?: string | null;
   message_id?: string | null;
   trace_id: string;
@@ -169,6 +170,8 @@ interface TracePayload {
   output_tokens?: number | null;
   total_tokens?: number | null;
   cost_usd?: number | null;
+  ttft_ms?: number | null;
+  tokens_per_second?: number | null;
   status?: string | null;
   error_message?: string | null;
   error_type?: string | null;
@@ -201,6 +204,7 @@ export async function POST(req: NextRequest) {
     // Block 1: Authentication (session token OR API key)
     let userId: string | null = null;
     let supabase = null as unknown as ReturnType<typeof createClient>;
+    let isServiceRoleAuth = false;
 
     const headerApiKey = req.headers.get('x-api-key') || req.headers.get('x-workspace-api-key');
     const authHeader = req.headers.get('authorization');
@@ -235,6 +239,10 @@ export async function POST(req: NextRequest) {
         }
         userId = validation.userId;
         supabase = createClient(supabaseUrl, supabaseServiceKey);
+      } else if (supabaseServiceKey && bearerValue === supabaseServiceKey) {
+        debugLog('POST', 'Service role key detected - internal service call');
+        isServiceRoleAuth = true;
+        supabase = createClient(supabaseUrl, supabaseServiceKey);
       } else {
         supabase = createClient(supabaseUrl, supabaseAnonKey, {
           global: { headers: { Authorization: authHeader } },
@@ -250,10 +258,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    debugLog('POST', `User authenticated: ${userId}`);
-
     // Block 2: Parse and validate request body
     const body = (await req.json()) as TracePayload;
+
+    // For service role auth, get userId from payload
+    if (isServiceRoleAuth) {
+      userId = body.user_id || null;
+      if (!userId) {
+        return NextResponse.json({ error: 'Missing user_id in trace payload' }, { status: 400 });
+      }
+    }
+
+    debugLog('POST', `User authenticated: ${userId}`);
     const {
       conversation_id,
       message_id,
@@ -275,6 +291,8 @@ export async function POST(req: NextRequest) {
       output_tokens,
       total_tokens,
       cost_usd,
+      ttft_ms,
+      tokens_per_second,
       status,
       error_message,
       error_type,
@@ -316,6 +334,8 @@ export async function POST(req: NextRequest) {
         output_tokens,
         total_tokens,
         cost_usd,
+        ttft_ms,
+        tokens_per_second,
         status: status || 'pending',
         error_message,
         error_type,
@@ -470,9 +490,13 @@ export async function GET(req: NextRequest) {
 
     // Build trace hierarchy if trace_id is provided
     const typedTraces: TraceRecord[] = (traces ?? []) as TraceRecord[];
-    let result: TraceRecord[] | TraceHierarchyEntry[] = typedTraces;
-    if (trace_id && typedTraces.length > 0) {
-      result = buildTraceHierarchy(typedTraces);
+
+    // Enrich with quality data
+    const enrichedTraces = await enrichTracesWithQualityData(supabase, typedTraces);
+
+    let result: TraceRecord[] | TraceHierarchyEntry[] = enrichedTraces;
+    if (trace_id && enrichedTraces.length > 0) {
+      result = buildTraceHierarchy(enrichedTraces);
     }
 
     debugLog('GET', `Retrieved ${typedTraces.length} traces`);
@@ -494,6 +518,63 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Enrich traces with quality data (judgments and user ratings)
+ */
+async function enrichTracesWithQualityData(supabase: any, traces: TraceRecord[]): Promise<TraceRecord[]> {
+  if (!traces || traces.length === 0) return traces;
+
+  const traceIds = traces.map(t => t.trace_id).filter(Boolean);
+  if (traceIds.length === 0) return traces;
+
+  // Fetch judgments for these traces
+  const { data: judgments } = await supabase
+    .from('judgments')
+    .select('id, trace_id, criterion, score, passed, judge_type, judge_name, notes')
+    .in('trace_id', traceIds);
+
+  // Fetch user evaluations for these traces
+  const { data: evaluations } = await supabase
+    .from('message_evaluations')
+    .select('trace_id, rating, notes')
+    .in('trace_id', traceIds);
+
+  // Map quality data to traces
+  const judgmentsByTraceId = new Map();
+  if (judgments) {
+    for (const j of judgments) {
+      if (!judgmentsByTraceId.has(j.trace_id)) {
+        judgmentsByTraceId.set(j.trace_id, []);
+      }
+      judgmentsByTraceId.get(j.trace_id).push(j);
+    }
+  }
+
+  const evaluationsByTraceId = new Map();
+  if (evaluations) {
+    for (const e of evaluations) {
+      evaluationsByTraceId.set(e.trace_id, e);
+    }
+  }
+
+  return traces.map(trace => {
+    const enriched: any = { ...trace };
+    const traceJudgments = judgmentsByTraceId.get(trace.trace_id);
+    const traceEval = evaluationsByTraceId.get(trace.trace_id);
+
+    if (traceJudgments) {
+      enriched.judgments = traceJudgments;
+    }
+
+    if (traceEval) {
+      enriched.user_rating = traceEval.rating;
+      enriched.user_notes = traceEval.notes;
+    }
+
+    return enriched;
+  });
 }
 
 /**
