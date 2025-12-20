@@ -547,14 +547,24 @@ export async function POST(request: NextRequest) {
     console.log('[RunPod API] Created job:', jobId);
 
     // Determine app URL with priority: APP_BASE_URL > non-localhost NEXT_PUBLIC > auto-detect
+    console.log('[RunPod API] === URL DETECTION DEBUG ===');
+    console.log('[RunPod API] APP_BASE_URL:', process.env.APP_BASE_URL || 'NOT SET');
+    console.log('[RunPod API] ALERT_APP_BASE_URL:', process.env.ALERT_APP_BASE_URL || 'NOT SET');
+    console.log('[RunPod API] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL || 'NOT SET');
+    console.log('[RunPod API] Request host:', request.headers.get('host'));
+    console.log('[RunPod API] Request protocol:', request.headers.get('x-forwarded-proto'));
+    console.log('[RunPod API] NODE_ENV:', process.env.NODE_ENV);
+
     let appUrl = process.env.APP_BASE_URL || process.env.ALERT_APP_BASE_URL;
 
     if (!appUrl || appUrl.includes('localhost')) {
       const buildTimeUrl = process.env.NEXT_PUBLIC_APP_URL;
       if (buildTimeUrl && !buildTimeUrl.includes('localhost')) {
         appUrl = buildTimeUrl;
-        console.log('[RunPod API] Using NEXT_PUBLIC_APP_URL:', appUrl);
+        console.log('[RunPod API] ✓ Using NEXT_PUBLIC_APP_URL:', appUrl);
       }
+    } else {
+      console.log('[RunPod API] ✓ Using APP_BASE_URL:', appUrl);
     }
 
     if (!appUrl || appUrl.includes('localhost')) {
@@ -562,21 +572,24 @@ export async function POST(request: NextRequest) {
       const protocol = request.headers.get('x-forwarded-proto') || 'https';
       if (host) {
         appUrl = `${protocol}://${host}`;
-        console.log('[RunPod API] Auto-detected app URL from request:', appUrl);
+        console.log('[RunPod API] ✓ Auto-detected app URL from request:', appUrl);
       }
     }
 
     if (!appUrl) {
-      console.error('[RunPod API] ERROR: Could not determine app URL!');
+      console.error('[RunPod API] ❌ ERROR: Could not determine app URL!');
       return NextResponse.json(
         { error: 'Server configuration error: APP_BASE_URL not set' },
         { status: 500 }
       );
     }
 
+    console.log('[RunPod API] === FINAL URL: ' + appUrl + ' ===');
+
     if (appUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
       console.error('[RunPod API] ⚠️  WARNING: Using localhost URL in production!');
-      console.error('[RunPod API] Set APP_BASE_URL environment variable to fix this.');
+      console.error('[RunPod API] This will cause connection failures from RunPod pods!');
+      console.error('[RunPod API] Set APP_BASE_URL=https://finetunelab.ai on Render to fix this.');
     }
 
     const trainingScript = runPodService.generateTrainingScript(
