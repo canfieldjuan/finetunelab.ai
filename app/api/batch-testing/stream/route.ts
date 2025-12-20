@@ -377,7 +377,12 @@ export async function POST(req: NextRequest) {
         });
 
         // Process each prompt
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        // Auto-detect base URL from request headers (fixes production deployment issues)
+        const protocol = req.headers.get('x-forwarded-proto') || 'https';
+        const host = req.headers.get('host');
+        const baseUrl = host
+          ? `${protocol}://${host}`
+          : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
 
         for (let i = 0; i < extractionResult.prompts.length; i++) {
           const prompt = extractionResult.prompts[i];
