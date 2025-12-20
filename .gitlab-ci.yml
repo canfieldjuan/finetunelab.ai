@@ -1,0 +1,139 @@
+# GitLab CI/CD Pipeline for FineTune Lab
+# Next.js + Python ML Training Platform
+
+stages:
+  - install
+  - test
+  - build
+  - deploy
+
+# Cache node_modules for faster builds
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+    - .next/cache/
+
+# Variables
+variables:
+  NODE_VERSION: "18"
+  PYTHON_VERSION: "3.11"
+
+# Install dependencies
+install:
+  stage: install
+  image: node:${NODE_VERSION}
+  script:
+    - npm ci
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# TypeScript type checking
+type-check:
+  stage: test
+  image: node:${NODE_VERSION}
+  dependencies:
+    - install
+  script:
+    - npm run type-check || echo "Type check failed - review errors"
+  allow_failure: true
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# Lint check
+lint:
+  stage: test
+  image: node:${NODE_VERSION}
+  dependencies:
+    - install
+  script:
+    - npm run lint || echo "Linting issues found"
+  allow_failure: true
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# Python linting (if you have Python scripts)
+python-lint:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install flake8 pylint
+    - flake8 lib/training/*.py --max-line-length=120 || echo "Python linting issues found"
+  allow_failure: true
+  only:
+    changes:
+      - lib/training/**/*.py
+      - python-package/**/*.py
+
+# Build Next.js application
+build:
+  stage: build
+  image: node:${NODE_VERSION}
+  dependencies:
+    - install
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - .next/
+      - out/
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+
+# Deploy to production (customize based on your deployment target)
+deploy-production:
+  stage: deploy
+  image: node:${NODE_VERSION}
+  dependencies:
+    - build
+  script:
+    - echo "Deploying to production..."
+    - echo "Add your deployment commands here (Vercel, Render, etc.)"
+    # Example: npm run deploy
+  environment:
+    name: production
+    url: https://finetunelab.ai
+  only:
+    - main
+  when: manual  # Requires manual trigger for safety
+
+# Deploy to staging
+deploy-staging:
+  stage: deploy
+  image: node:${NODE_VERSION}
+  dependencies:
+    - build
+  script:
+    - echo "Deploying to staging..."
+    - echo "Add your staging deployment commands here"
+  environment:
+    name: staging
+    url: https://staging.finetunelab.ai
+  only:
+    - develop
+  when: manual
+
+# Security scanning (optional but recommended)
+security-scan:
+  stage: test
+  image: node:${NODE_VERSION}
+  script:
+    - npm audit --audit-level=high || echo "Security vulnerabilities found"
+  allow_failure: true
+  only:
+    - main
+    - merge_requests
