@@ -14,6 +14,7 @@
  */
 
 import { supabase, supabaseAdmin } from '@/lib/supabaseClient';
+import crypto from 'crypto';
 
 export interface SessionTag {
   session_id: string;
@@ -42,6 +43,7 @@ export async function generateSessionTag(
     // Check if input is UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const isUuid = uuidRegex.test(modelId);
+    const normalizedModelId = modelId.trim();
 
     // Use service role client if available to bypass RLS, otherwise fall back to anon
     const client = supabaseAdmin || supabase;
@@ -51,25 +53,31 @@ export async function generateSessionTag(
       .select('id, model_id, name');
 
     if (isUuid) {
-      query = query.eq('id', modelId);
+      query = query.eq('id', normalizedModelId);
     } else {
-      query = query.eq('model_id', modelId);
+      query = query.eq('model_id', normalizedModelId);
     }
 
     const { data: model, error: modelError } = await query.single();
-
-    if (modelError || !model) {
-      console.log('[Session Tag Generator] Model not found:', modelId, modelError);
-      return null;
+    if (modelError && modelError.code !== 'PGRST116') {
+      console.warn('[Session Tag Generator] Error fetching model metadata:', modelError);
     }
-
-    const shortUuid = model.id.substring(0, 6);
+    const fallbackId = crypto.createHash('sha256').update(`${userId}:${normalizedModelId}`).digest('hex');
+    const shortUuidSource = model?.id || fallbackId;
+    const shortUuid = shortUuidSource.replace(/-/g, '').slice(0, 6) || fallbackId.slice(0, 6);
+    const resolvedModelId = model?.model_id || normalizedModelId;
+    const resolvedModelName = model?.name || normalizedModelId;
+    const modelIdOptions = Array.from(
+      new Set(
+        [normalizedModelId, model?.id, model?.model_id].filter(Boolean) as string[]
+      )
+    );
 
     const { data: conversations, error: counterError } = await client
       .from('conversations')
       .select('session_id')
       .eq('user_id', userId)
-      .eq('llm_model_id', model.id) // Always use UUID for conversation lookup
+      .in('llm_model_id', modelIdOptions)
       .not('session_id', 'is', null)
       .like('session_id', `chat_model_${shortUuid}_%`);
 
@@ -97,10 +105,10 @@ export async function generateSessionTag(
 
     return {
       session_id: sessionId,
-      experiment_name: model.name,
+      experiment_name: resolvedModelName,
       counter: nextCounter,
-      model_id: model.model_id,
-      model_name: model.name
+      model_id: resolvedModelId,
+      model_name: resolvedModelName
     };
   } catch (error) {
     console.error('[Session Tag Generator] Unexpected error:', error);
