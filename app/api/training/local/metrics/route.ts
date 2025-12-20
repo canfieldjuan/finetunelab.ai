@@ -40,6 +40,11 @@ interface MetricPoint {
   train_perplexity?: number | null;
   samples_per_second?: number | null;
   tokens_per_second?: number | null;
+  loss_trend?: string | null;
+  best_eval_loss?: number | null;
+  best_epoch?: number | null;
+  best_step?: number | null;
+  epochs_without_improvement?: number | null;
   timestamp?: string;
 }
 
@@ -184,6 +189,11 @@ export async function POST(request: NextRequest) {
       train_perplexity: m.train_perplexity ?? null,
       samples_per_second: m.samples_per_second ?? null,
       tokens_per_second: m.tokens_per_second ?? null,
+      loss_trend: m.loss_trend ?? null,
+      best_eval_loss: m.best_eval_loss ?? null,
+      best_epoch: m.best_epoch ?? null,
+      best_step: m.best_step ?? null,
+      epochs_without_improvement: m.epochs_without_improvement ?? null,
       timestamp: m.timestamp ?? new Date().toISOString()
     }));
 
@@ -223,6 +233,9 @@ export async function POST(request: NextRequest) {
       gpu_utilization_percent: latest.gpu_utilization_percent ?? null,
       perplexity: latest.perplexity ?? null,
       train_perplexity: latest.train_perplexity ?? null,
+      loss_trend: latest.loss_trend ?? null,
+      best_eval_loss: latest.best_eval_loss ?? null,
+      epochs_without_improvement: latest.epochs_without_improvement ?? null,
     };
 
     // Keep job status consistent: first metrics implies the job is running.
