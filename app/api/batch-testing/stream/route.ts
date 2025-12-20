@@ -378,8 +378,14 @@ export async function POST(req: NextRequest) {
 
         // Process each prompt
         // Auto-detect base URL from request headers (fixes production deployment issues)
-        const protocol = req.headers.get('x-forwarded-proto') || 'https';
         const host = req.headers.get('host');
+        let protocol = req.headers.get('x-forwarded-proto');
+
+        // If no x-forwarded-proto header, detect based on host
+        if (!protocol) {
+          protocol = host?.includes('localhost') ? 'http' : 'https';
+        }
+
         const baseUrl = host
           ? `${protocol}://${host}`
           : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
