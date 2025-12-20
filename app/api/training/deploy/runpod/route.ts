@@ -494,21 +494,15 @@ export async function POST(request: NextRequest) {
     console.log('[RunPod API] Model name has slash:', modelName.includes('/'));
     console.log('[RunPod API] Model name characters:', modelName.split('').map((c: string) => `${c}(${c.charCodeAt(0)})`).join(' '));
 
-    // Get dataset metadata for sample count
-    const { data: dataset } = await supabase
-      .from('training_datasets')
-      .select('sample_count, train_samples, val_samples')
-      .eq('storage_path', datasetStoragePath)
-      .single();
-
-    console.log('[RunPod API] Dataset metadata:', dataset);
+    // Extract dataset metadata (already loaded from junction table)
+    const sampleCount = dataset?.sample_count || 0;
+    console.log('[RunPod API] Dataset sample count:', sampleCount);
 
     // Calculate total_steps from config
     const config = trainingConfig.config_json;
     const batchSize = config?.training?.batch_size || 4;
     const gradAccum = config?.training?.gradient_accumulation_steps || 8;
     const numEpochs = config?.training?.num_epochs || 3;
-    const sampleCount = dataset?.sample_count || 0;
 
     let totalSteps = null;
     if (sampleCount > 0) {
@@ -535,7 +529,6 @@ export async function POST(request: NextRequest) {
         val_samples: dataset?.val_samples || null,
         // Add calculated total_steps
         total_steps: totalSteps,
-        expected_total_steps: totalSteps,
       });
 
     if (jobError) {
