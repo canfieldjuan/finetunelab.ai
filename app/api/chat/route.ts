@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
   let isWidgetMode = false;
   let isBatchTestMode = false;
   let widgetConversationId: string | null = null;
+  let regularChatSessionTag: string | null = null;
   let supabaseAdmin: SupabaseClient | null = null;
   let selectedModelId: string | null = null;
   let provider: string | null = null;
@@ -316,29 +317,54 @@ export async function POST(req: NextRequest) {
 
         widgetConversationId = conversation.id;
         widgetSessionTag = conversation.session_id || null;
-        
+
         // Generate session tag if missing (first message)
         // Use modelId which contains the actual model identifier (UUID or name)
+        console.log('[API] ========== AUTO SESSION TAGGING CHECK (WIDGET/BATCH MODE) ==========');
+        console.log('[API] Widget session:', {
+          conversationId: conversation.id,
+          hasSessionId: !!widgetSessionTag,
+          currentSessionId: widgetSessionTag,
+          userId,
+          modelId
+        });
+
         if (!widgetSessionTag && userId && modelId) {
           try {
+            console.log('[API] ✅ Conditions met - generating session tag for widget');
+            console.log('[API] Params:', { userId, modelId });
             const sessionTag = await generateSessionTag(userId, modelId);
+            console.log('[API] generateSessionTag returned:', sessionTag);
+
             if (sessionTag) {
-              await supabaseAdmin!
+              const { error: updateError } = await supabaseAdmin!
                 .from('conversations')
                 .update({
                   session_id: sessionTag.session_id,
                   experiment_name: sessionTag.experiment_name
                 })
                 .eq('id', conversation.id);
-              widgetSessionTag = sessionTag.session_id;
-              console.log('[API] Generated session tag:', widgetSessionTag);
+
+              if (updateError) {
+                console.error('[API] ❌ Failed to update widget conversation:', updateError);
+              } else {
+                widgetSessionTag = sessionTag.session_id;
+                console.log('[API] ✅ Widget session tag saved:', widgetSessionTag);
+              }
             } else {
-              console.log('[API] Session tag generation returned null (model may not be tracked)');
+              console.log('[API] ⚠️ Session tag generation returned null (model may not be tracked)');
             }
           } catch (error) {
-            console.error('[API] Failed to generate session tag:', error);
+            console.error('[API] ❌ Widget mode: Failed to generate session tag:', error);
           }
+        } else {
+          console.log('[API] ⚠️ Conditions NOT met for widget session tag:', {
+            hasSessionTag: !!widgetSessionTag,
+            hasUserId: !!userId,
+            hasModelId: !!modelId
+          });
         }
+        console.log('[API] ========== END AUTO SESSION TAGGING CHECK ==========');
         
         conversationId = conversation.id; // Set conversationId for conversation history loading
         console.log('[API] Widget mode: Conversation created:', widgetConversationId, 'Session tag:', widgetSessionTag);
@@ -520,7 +546,6 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             {
               minConfidence: graphragConfig.search.threshold,
               embedderConfig,
-              traceContext: traceContext || undefined, // Pass trace context for retrieval tracing
             }
           );
 
@@ -582,8 +607,21 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           selectedModelId = conversation.llm_model_id;
           useUnifiedClient = true;
         }
+      } catch (error) {
+        console.log('[API] Could not load conversation model:', error);
+      }
+    }
 
-        // Auto-generate session tag if missing (first message in regular chat)
+    // Auto-generate session tag if missing (first message in regular chat)
+    // This runs AFTER model selection, regardless of whether model came from request or conversation
+    if (conversationId && userId && !isWidgetMode) {
+      try {
+        const { data: conversation } = await (supabaseAdmin || supabase)
+          .from('conversations')
+          .select('llm_model_id, session_id')
+          .eq('id', conversationId)
+          .single();
+
         console.log('[API] ========== AUTO SESSION TAGGING CHECK (REGULAR CHAT) ==========');
         console.log('[API] Conversation:', {
           id: conversation?.id,
@@ -606,14 +644,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 experiment_name: sessionTag.experiment_name
               };
               if (!conversation.llm_model_id) {
-                console.log('[API] Also setting llm_model_id:', selectedModelId);
                 updateData.llm_model_id = selectedModelId;
               }
-
-              console.log('[API] Updating conversation:', {
-                conversationId,
-                updateData
-              });
 
               const { error: updateError } = await (supabaseAdmin || supabase)
                 .from('conversations')
@@ -624,6 +656,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 console.error('[API] ❌ Failed to update conversation:', updateError);
               } else {
                 console.log('[API] ✅ Session tag saved successfully:', sessionTag.session_id);
+                regularChatSessionTag = sessionTag.session_id;
               }
             } else {
               console.log('[API] ⚠️ Session tag generation returned null (model may not be tracked)');
@@ -632,7 +665,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             console.error('[API] ❌ Regular chat: Failed to generate session tag:', error);
           }
         } else {
-          console.log('[API] ❌ Skipping session tag generation:', {
+          console.log('[API] ⚠️ Conditions NOT met for session tag generation:', {
             hasConversation: !!conversation,
             hasSessionId: !!conversation?.session_id,
             hasSelectedModelId: !!selectedModelId
@@ -640,7 +673,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
         console.log('[API] ========== END AUTO SESSION TAGGING CHECK ==========');
       } catch (error) {
-        console.log('[API] Could not load conversation model:', error);
+        console.log('[API] Could not load conversation for session tagging:', error);
       }
     }
 
@@ -776,7 +809,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             // Tool call succeeded
             await traceService.endTrace(toolTraceContext, {
               endTime: new Date(),
-              status: 'completed',
+              status: 'success',
               outputData: result.data,
               metadata: {
                 toolName,
@@ -894,8 +927,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           operationType: 'llm_call',
           modelName: selectedModelId,
           modelProvider: actualModelConfig?.provider || provider || undefined,
-          conversationId: widgetConversationId || undefined,
-          sessionTag: widgetSessionTag || undefined,
+          conversationId: widgetConversationId || conversationId || undefined,
+          sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
         });
 
         try {
@@ -1471,8 +1504,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         operationType: 'llm_call',
         modelName: selectedModelId || model || undefined,
         modelProvider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || undefined,
-        conversationId: widgetConversationId || undefined,
-        sessionTag: widgetSessionTag || undefined,
+        conversationId: widgetConversationId || conversationId || undefined,
+        sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
       });
 
       const stream = new ReadableStream({

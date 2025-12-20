@@ -1350,6 +1350,8 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
           isWidgetMode={isWidgetMode}
           activeId={activeId}
           loading={loading}
+          sessionId={conversations.find(c => c.id === activeId)?.session_id}
+          experimentName={conversations.find(c => c.id === activeId)?.experiment_name}
           onExport={() => setOpenModal('export-dialog')}
           modelSelector={
             <ModelSelector

@@ -10,21 +10,28 @@ export interface RootTraceUsageParams {
 }
 
 export interface UsageStats {
-  current_usage_bytes: number;
-  billing_limit_bytes: number;
-  usage_percentage: number;
-  period_start: string;
-  period_end: string;
+  periodMonth: number;
+  periodYear: number;
+  rootTraces: number;
+  payloadGb: number;
+  compressedPayloadGb: number;
+  retentionDays: number;
+  lastUpdated: Date;
 }
 
 export interface CostEstimate {
-  estimated_cost_usd: number;
-  currency: string;
+  baseMinimum: number;
+  traceOverage: number;
+  payloadOverage: number;
+  retentionMultiplier: number;
+  estimatedTotal: number;
 }
 
 export interface UsageWarning {
-  warning_level: 'none' | 'warning' | 'critical';
-  message?: string;
+  traceWarning: boolean;
+  payloadWarning: boolean;
+  traceUsagePercent: number;
+  payloadUsagePercent: number;
 }
 
 /**
@@ -71,11 +78,10 @@ export async function recordRootTraceUsage(params: RootTraceUsageParams): Promis
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { error } = await supabase.rpc('record_trace_usage', {
+    const { error } = await supabase.rpc('increment_root_trace_count', {
       p_user_id: userId,
-      p_trace_id: traceId,
-      p_size_bytes: billingSize,
-      p_is_compressed: isCompressed
+      p_payload_bytes: billingSize,
+      p_compressed_bytes: isCompressed ? billingSize : 0
     });
 
     if (error) {
@@ -111,7 +117,20 @@ export async function getCurrentUsage(userId: string): Promise<UsageStats | null
       return null;
     }
 
-    return data as UsageStats;
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    const record = data[0];
+    return {
+      periodMonth: record.period_month,
+      periodYear: record.period_year,
+      rootTraces: record.root_traces,
+      payloadGb: parseFloat(record.payload_gb),
+      compressedPayloadGb: parseFloat(record.compressed_payload_gb),
+      retentionDays: record.retention_days,
+      lastUpdated: new Date(record.last_updated),
+    };
   } catch (error) {
     console.error('[UsageMeter] Error in getCurrentUsage:', error);
     return null;
@@ -130,7 +149,7 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const { data, error } = await supabase.rpc('get_estimated_cost', {
+    const { data, error } = await supabase.rpc('calculate_estimated_cost', {
       p_user_id: userId
     });
 
@@ -139,7 +158,18 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
       return null;
     }
 
-    return data as CostEstimate;
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    const record = data[0];
+    return {
+      baseMinimum: parseFloat(record.base_minimum),
+      traceOverage: parseFloat(record.trace_overage),
+      payloadOverage: parseFloat(record.payload_overage),
+      retentionMultiplier: parseFloat(record.retention_multiplier),
+      estimatedTotal: parseFloat(record.estimated_total),
+    };
   } catch (error) {
     console.error('[UsageMeter] Error in getEstimatedCost:', error);
     return null;
@@ -149,26 +179,58 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
 /**
  * Check for usage warnings
  */
-export async function checkUsageWarnings(userId: string): Promise<UsageWarning> {
+export async function checkUsageWarnings(userId: string): Promise<UsageWarning | null> {
   try {
-    const usage = await getCurrentUsage(userId);
-    if (!usage) return { warning_level: 'none' };
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseServiceKey) return null;
 
-    if (usage.usage_percentage >= 90) {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get current usage
+    const usage = await getCurrentUsage(userId);
+    if (!usage) {
       return {
-        warning_level: 'critical',
-        message: `You have used ${usage.usage_percentage.toFixed(1)}% of your included storage.`
-      };
-    } else if (usage.usage_percentage >= 75) {
-      return {
-        warning_level: 'warning',
-        message: `You have used ${usage.usage_percentage.toFixed(1)}% of your included storage.`
+        traceWarning: false,
+        payloadWarning: false,
+        traceUsagePercent: 0,
+        payloadUsagePercent: 0,
       };
     }
 
-    return { warning_level: 'none' };
+    // Get commitment to calculate percentages
+    const { data: commitment } = await supabase
+      .from('usage_commitments')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .single();
+
+    if (!commitment) {
+      return {
+        traceWarning: false,
+        payloadWarning: false,
+        traceUsagePercent: 0,
+        payloadUsagePercent: 0,
+      };
+    }
+
+    // Calculate usage percentages
+    const traceUsagePercent = (usage.rootTraces / commitment.included_traces) * 100;
+    const includedPayloadGb = (usage.rootTraces * commitment.included_kb_per_trace) / 1_048_576;
+    const payloadUsagePercent = includedPayloadGb > 0 
+      ? (usage.compressedPayloadGb / includedPayloadGb) * 100 
+      : 0;
+
+    return {
+      traceWarning: traceUsagePercent >= 90,
+      payloadWarning: payloadUsagePercent >= 90,
+      traceUsagePercent: Math.round(traceUsagePercent),
+      payloadUsagePercent: Math.round(payloadUsagePercent),
+    };
   } catch (error) {
     console.error('[UsageMeter] Error in checkUsageWarnings:', error);
-    return { warning_level: 'none' };
+    return null;
   }
 }
