@@ -134,7 +134,14 @@ export function TraceExplorer() {
       if (!response.ok) throw new Error('Failed to fetch trace details');
 
       const data = await response.json();
-      setDetailedTrace(data.traces || []);
+      console.log('[TraceExplorer] Trace details response:', {
+        success: data.success,
+        dataType: Array.isArray(data.data) ? 'array' : typeof data.data,
+        dataLength: data.data?.length,
+        firstTrace: data.data?.[0],
+        fullData: data
+      });
+      setDetailedTrace(data.data || []);
     } catch (err) {
       console.error('[TraceExplorer] Error fetching trace details:', err);
       setDetailedTrace(null);
