@@ -48,8 +48,7 @@ export async function generateSessionTag(
 
     let query = client
       .from('llm_models')
-      .select('id, model_id, name')
-      .eq('user_id', userId);
+      .select('id, model_id, name');
 
     if (isUuid) {
       query = query.eq('id', modelId);
@@ -60,7 +59,7 @@ export async function generateSessionTag(
     const { data: model, error: modelError } = await query.single();
 
     if (modelError || !model) {
-      console.log('[Session Tag Generator] Model not found:', modelId);
+      console.log('[Session Tag Generator] Model not found:', modelId, modelError);
       return null;
     }
 
