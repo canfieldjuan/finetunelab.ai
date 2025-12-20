@@ -99,7 +99,6 @@ import {
   useResearchState,
   useSelectionState,
   useVoiceState,
-  useSessionState,
   useFeedbackState,
   useModelSelection,
   useSettings,
