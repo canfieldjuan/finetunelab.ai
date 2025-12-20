@@ -35,7 +35,11 @@ export async function generateSessionTag(
   userId: string,
   modelId: string | null | undefined
 ): Promise<SessionTag | null> {
+  console.log('[SessionTagGenerator] ========== START ==========');
+  console.log('[SessionTagGenerator] Input:', { userId, modelId });
+
   if (!userId || !modelId) {
+    console.log('[SessionTagGenerator] ❌ Missing userId or modelId - returning null');
     return null;
   }
 
@@ -44,23 +48,38 @@ export async function generateSessionTag(
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const isUuid = uuidRegex.test(modelId);
     const normalizedModelId = modelId.trim();
+    console.log('[SessionTagGenerator] Model ID analysis:', {
+      isUuid,
+      normalizedModelId,
+      originalLength: modelId.length,
+      trimmedLength: normalizedModelId.length
+    });
 
     // Use service role client if available to bypass RLS, otherwise fall back to anon
     const client = supabaseAdmin || supabase;
+    console.log('[SessionTagGenerator] Using client:', supabaseAdmin ? 'supabaseAdmin' : 'supabase (anon)');
 
     let query = client
       .from('llm_models')
       .select('id, model_id, name');
 
     if (isUuid) {
+      console.log('[SessionTagGenerator] Querying by UUID id:', normalizedModelId);
       query = query.eq('id', normalizedModelId);
     } else {
+      console.log('[SessionTagGenerator] Querying by model_id:', normalizedModelId);
       query = query.eq('model_id', normalizedModelId);
     }
 
     const { data: model, error: modelError } = await query.single();
+    console.log('[SessionTagGenerator] Model query result:', {
+      found: !!model,
+      error: modelError,
+      modelData: model
+    });
+
     if (modelError && modelError.code !== 'PGRST116') {
-      console.warn('[Session Tag Generator] Error fetching model metadata:', modelError);
+      console.warn('[SessionTagGenerator] ⚠️ Error fetching model metadata:', modelError);
     }
     const fallbackId = crypto.createHash('sha256').update(`${userId}:${normalizedModelId}`).digest('hex');
     const shortUuidSource = model?.id || fallbackId;
@@ -73,6 +92,20 @@ export async function generateSessionTag(
       )
     );
 
+    console.log('[SessionTagGenerator] Resolved values:', {
+      shortUuid,
+      resolvedModelId,
+      resolvedModelName,
+      modelIdOptions,
+      usingFallback: !model
+    });
+
+    console.log('[SessionTagGenerator] Querying conversations for counter...', {
+      userId,
+      modelIdOptions,
+      pattern: `chat_model_${shortUuid}_%`
+    });
+
     const { data: conversations, error: counterError } = await client
       .from('conversations')
       .select('session_id')
@@ -81,8 +114,14 @@ export async function generateSessionTag(
       .not('session_id', 'is', null)
       .like('session_id', `chat_model_${shortUuid}_%`);
 
+    console.log('[SessionTagGenerator] Conversation query result:', {
+      found: conversations?.length || 0,
+      error: counterError,
+      conversations: conversations?.map(c => c.session_id)
+    });
+
     if (counterError) {
-      console.error('[Session Tag Generator] Error fetching counter:', counterError);
+      console.error('[SessionTagGenerator] ❌ Error fetching counter:', counterError);
       return null;
     }
 
@@ -103,15 +142,20 @@ export async function generateSessionTag(
     const paddedCounter = nextCounter.toString().padStart(3, '0');
     const sessionId = `chat_model_${shortUuid}_${paddedCounter}`;
 
-    return {
+    const result = {
       session_id: sessionId,
       experiment_name: resolvedModelName,
       counter: nextCounter,
       model_id: resolvedModelId,
       model_name: resolvedModelName
     };
+
+    console.log('[SessionTagGenerator] ✅ Generated session tag:', result);
+    console.log('[SessionTagGenerator] ========== END ==========');
+    return result;
   } catch (error) {
-    console.error('[Session Tag Generator] Unexpected error:', error);
+    console.error('[SessionTagGenerator] ❌ Unexpected error:', error);
+    console.log('[SessionTagGenerator] ========== END (ERROR) ==========');
     return null;
   }
 }

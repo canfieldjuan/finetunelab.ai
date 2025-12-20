@@ -316,29 +316,54 @@ export async function POST(req: NextRequest) {
 
         widgetConversationId = conversation.id;
         widgetSessionTag = conversation.session_id || null;
-        
+
         // Generate session tag if missing (first message)
         // Use modelId which contains the actual model identifier (UUID or name)
+        console.log('[API] ========== AUTO SESSION TAGGING CHECK (WIDGET/BATCH MODE) ==========');
+        console.log('[API] Widget session:', {
+          conversationId: conversation.id,
+          hasSessionId: !!widgetSessionTag,
+          currentSessionId: widgetSessionTag,
+          userId,
+          modelId
+        });
+
         if (!widgetSessionTag && userId && modelId) {
           try {
+            console.log('[API] ✅ Conditions met - generating session tag for widget');
+            console.log('[API] Params:', { userId, modelId });
             const sessionTag = await generateSessionTag(userId, modelId);
+            console.log('[API] generateSessionTag returned:', sessionTag);
+
             if (sessionTag) {
-              await supabaseAdmin!
+              const { error: updateError } = await supabaseAdmin!
                 .from('conversations')
                 .update({
                   session_id: sessionTag.session_id,
                   experiment_name: sessionTag.experiment_name
                 })
                 .eq('id', conversation.id);
-              widgetSessionTag = sessionTag.session_id;
-              console.log('[API] Generated session tag:', widgetSessionTag);
+
+              if (updateError) {
+                console.error('[API] ❌ Failed to update widget conversation:', updateError);
+              } else {
+                widgetSessionTag = sessionTag.session_id;
+                console.log('[API] ✅ Widget session tag saved:', widgetSessionTag);
+              }
             } else {
-              console.log('[API] Session tag generation returned null (model may not be tracked)');
+              console.log('[API] ⚠️ Session tag generation returned null (model may not be tracked)');
             }
           } catch (error) {
-            console.error('[API] Failed to generate session tag:', error);
+            console.error('[API] ❌ Widget mode: Failed to generate session tag:', error);
           }
+        } else {
+          console.log('[API] ⚠️ Conditions NOT met for widget session tag:', {
+            hasSessionTag: !!widgetSessionTag,
+            hasUserId: !!userId,
+            hasModelId: !!modelId
+          });
         }
+        console.log('[API] ========== END AUTO SESSION TAGGING CHECK ==========');
         
         conversationId = conversation.id; // Set conversationId for conversation history loading
         console.log('[API] Widget mode: Conversation created:', widgetConversationId, 'Session tag:', widgetSessionTag);
@@ -583,10 +608,22 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
 
         // Auto-generate session tag if missing (first message in regular chat)
+        console.log('[API] ========== AUTO SESSION TAGGING CHECK (REGULAR CHAT) ==========');
+        console.log('[API] Conversation:', {
+          id: conversation?.id,
+          hasSessionId: !!conversation?.session_id,
+          currentSessionId: conversation?.session_id,
+          llmModelId: conversation?.llm_model_id,
+          selectedModelId
+        });
+
         if (conversation && !conversation.session_id && selectedModelId) {
           try {
-            console.log('[API] Regular chat: Generating session tag for first message');
+            console.log('[API] ✅ Conditions met - generating session tag');
+            console.log('[API] Params:', { userId, selectedModelId });
             const sessionTag = await generateSessionTag(userId, selectedModelId);
+            console.log('[API] generateSessionTag returned:', sessionTag);
+
             if (sessionTag) {
               const updateData: Record<string, any> = {
                 session_id: sessionTag.session_id,
@@ -596,18 +633,30 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 updateData.llm_model_id = selectedModelId;
               }
 
-              await (supabaseAdmin || supabase)
+              const { error: updateError } = await (supabaseAdmin || supabase)
                 .from('conversations')
                 .update(updateData)
                 .eq('id', conversationId);
-              console.log('[API] Regular chat: Generated session tag:', sessionTag.session_id);
+
+              if (updateError) {
+                console.error('[API] ❌ Failed to update conversation:', updateError);
+              } else {
+                console.log('[API] ✅ Session tag saved successfully:', sessionTag.session_id);
+              }
             } else {
-              console.log('[API] Regular chat: Session tag generation returned null (model may not be tracked)');
+              console.log('[API] ⚠️ Session tag generation returned null (model may not be tracked)');
             }
           } catch (error) {
-            console.error('[API] Regular chat: Failed to generate session tag:', error);
+            console.error('[API] ❌ Regular chat: Failed to generate session tag:', error);
           }
+        } else {
+          console.log('[API] ⚠️ Conditions NOT met for session tag generation:', {
+            hasConversation: !!conversation,
+            hasSessionId: !!conversation?.session_id,
+            hasSelectedModelId: !!selectedModelId
+          });
         }
+        console.log('[API] ========== END AUTO SESSION TAGGING CHECK ==========');
       } catch (error) {
         console.log('[API] Could not load conversation model:', error);
       }

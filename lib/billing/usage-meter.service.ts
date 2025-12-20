@@ -10,21 +10,28 @@ export interface RootTraceUsageParams {
 }
 
 export interface UsageStats {
-  current_usage_bytes: number;
-  billing_limit_bytes: number;
-  usage_percentage: number;
-  period_start: string;
-  period_end: string;
+  periodMonth: number;
+  periodYear: number;
+  rootTraces: number;
+  payloadGb: number;
+  compressedPayloadGb: number;
+  retentionDays: number;
+  lastUpdated: Date;
 }
 
 export interface CostEstimate {
-  estimated_cost_usd: number;
-  currency: string;
+  baseMinimum: number;
+  traceOverage: number;
+  payloadOverage: number;
+  retentionMultiplier: number;
+  estimatedTotal: number;
 }
 
 export interface UsageWarning {
-  warning_level: 'none' | 'warning' | 'critical';
-  message?: string;
+  traceWarning: boolean;
+  payloadWarning: boolean;
+  traceUsagePercent: number;
+  payloadUsagePercent: number;
 }
 
 /**
@@ -111,7 +118,20 @@ export async function getCurrentUsage(userId: string): Promise<UsageStats | null
       return null;
     }
 
-    return data as UsageStats;
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    const record = data[0];
+    return {
+      periodMonth: record.period_month,
+      periodYear: record.period_year,
+      rootTraces: record.root_traces,
+      payloadGb: parseFloat(record.payload_gb),
+      compressedPayloadGb: parseFloat(record.compressed_payload_gb),
+      retentionDays: record.retention_days,
+      lastUpdated: new Date(record.last_updated),
+    };
   } catch (error) {
     console.error('[UsageMeter] Error in getCurrentUsage:', error);
     return null;
@@ -130,7 +150,7 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const { data, error } = await supabase.rpc('get_estimated_cost', {
+    const { data, error } = await supabase.rpc('calculate_estimated_cost', {
       p_user_id: userId
     });
 
@@ -139,7 +159,18 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
       return null;
     }
 
-    return data as CostEstimate;
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    const record = data[0];
+    return {
+      baseMinimum: parseFloat(record.base_minimum),
+      traceOverage: parseFloat(record.trace_overage),
+      payloadOverage: parseFloat(record.payload_overage),
+      retentionMultiplier: parseFloat(record.retention_multiplier),
+      estimatedTotal: parseFloat(record.estimated_total),
+    };
   } catch (error) {
     console.error('[UsageMeter] Error in getEstimatedCost:', error);
     return null;
