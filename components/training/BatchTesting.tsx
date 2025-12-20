@@ -627,6 +627,7 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
               if (event.type === 'started') {
                 log.debug('BatchTesting', 'Batch test started', { testRunId: event.test_run_id });
                 fetchTestRuns(); // Refresh to show the new run
+                setStarting(false); // Re-enable button to allow concurrent tests
               } else if (event.type === 'progress' || event.type === 'result') {
                 // Refresh runs periodically during progress
                 fetchTestRuns();
@@ -640,6 +641,7 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
               } else if (event.type === 'error') {
                 log.error('BatchTesting', 'Batch test error', { error: event.error });
                 setError(event.error || 'Batch test failed');
+                setStarting(false); // Re-enable button on error
               }
             } catch {
               // Ignore parse errors for incomplete chunks
