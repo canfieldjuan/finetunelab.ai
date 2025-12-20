@@ -169,34 +169,6 @@ export function useConversationActions(
     return { successCount, errorCount, deletedIds };
   };
 
-  const handleSessionChange = async (sessionId: string, experimentName: string) => {
-    if (!activeId || !userId) {
-      return;
-    }
-
-    try {
-      await supabase.from('conversations').update({ session_id: sessionId, experiment_name: experimentName }).eq('id', activeId);
-      await fetchConversations();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      log.error('useConversationActions', 'Error changing session', { error: errorMessage });
-    }
-  };
-
-  const handleClearSession = async () => {
-    if (!activeId || !userId) {
-      return;
-    }
-
-    try {
-      await supabase.from('conversations').update({ session_id: null, experiment_name: null }).eq('id', activeId);
-      await fetchConversations();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      log.error('useConversationActions', 'Error clearing session', { error: errorMessage });
-    }
-  };
-
   return {
     handleNewConversation,
     handlePromoteConversation,
@@ -204,7 +176,5 @@ export function useConversationActions(
     handleDeleteConversation,
     handleBulkArchive,
     handleBulkDelete,
-    handleSessionChange,
-    handleClearSession,
   };
 }

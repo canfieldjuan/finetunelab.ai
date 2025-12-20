@@ -20,6 +20,5 @@ export * from './useSearchState';
 export * from './useResearchState';
 export * from './useSelectionState';
 export * from './useVoiceState';
-export * from './useSessionState';
 export * from './useFeedbackState';
 export * from './useAutoScroll';
