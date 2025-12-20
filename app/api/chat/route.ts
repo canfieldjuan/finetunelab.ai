@@ -225,6 +225,11 @@ export async function POST(req: NextRequest) {
       console.log('[API] Normal mode: Getting user from request body');
       userId = requestUserId || memory?.userId || null;
       console.log('[API] Normal mode: userId:', userId || 'not provided');
+      
+      // Create service role client for DB operations (bypasses RLS)
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     }
 
     if (!messages || !Array.isArray(messages)) {
@@ -313,9 +318,10 @@ export async function POST(req: NextRequest) {
         widgetSessionTag = conversation.session_id || null;
         
         // Generate session tag if missing (first message)
-        if (!widgetSessionTag && userId && llmModelIdForDb) {
+        // Use modelId which contains the actual model identifier (UUID or name)
+        if (!widgetSessionTag && userId && modelId) {
           try {
-            const sessionTag = await generateSessionTag(userId, llmModelIdForDb);
+            const sessionTag = await generateSessionTag(userId, modelId);
             if (sessionTag) {
               await supabaseAdmin!
                 .from('conversations')
@@ -326,6 +332,8 @@ export async function POST(req: NextRequest) {
                 .eq('id', conversation.id);
               widgetSessionTag = sessionTag.session_id;
               console.log('[API] Generated session tag:', widgetSessionTag);
+            } else {
+              console.log('[API] Session tag generation returned null (model may not be tracked)');
             }
           } catch (error) {
             console.error('[API] Failed to generate session tag:', error);
@@ -562,9 +570,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // Option 2: Get model from conversation (if exists)
     else if (conversationId && userId) {
       try {
-        const { data: conversation } = await supabase
+        const { data: conversation } = await (supabaseAdmin || supabase)
           .from('conversations')
-          .select('llm_model_id')
+          .select('llm_model_id, session_id')
           .eq('id', conversationId)
           .single();
 
@@ -572,6 +580,28 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           console.log('[API] Using model from conversation:', conversation.llm_model_id);
           selectedModelId = conversation.llm_model_id;
           useUnifiedClient = true;
+        }
+
+        // Auto-generate session tag if missing (first message in regular chat)
+        if (conversation && !conversation.session_id && selectedModelId) {
+          try {
+            console.log('[API] Regular chat: Generating session tag for first message');
+            const sessionTag = await generateSessionTag(userId, selectedModelId);
+            if (sessionTag) {
+              await (supabaseAdmin || supabase)
+                .from('conversations')
+                .update({
+                  session_id: sessionTag.session_id,
+                  experiment_name: sessionTag.experiment_name
+                })
+                .eq('id', conversationId);
+              console.log('[API] Regular chat: Generated session tag:', sessionTag.session_id);
+            } else {
+              console.log('[API] Regular chat: Session tag generation returned null (model may not be tracked)');
+            }
+          } catch (error) {
+            console.error('[API] Regular chat: Failed to generate session tag:', error);
+          }
         }
       } catch (error) {
         console.log('[API] Could not load conversation model:', error);
@@ -705,7 +735,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             // Tool call succeeded
             await traceService.endTrace(toolTraceContext, {
               endTime: new Date(),
-              status: 'completed',
+              status: 'success',
               outputData: result.data,
               metadata: {
                 toolName,
@@ -817,109 +847,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           });
         }
 
-        // Generate session tag for regular chat if needed
-        let regularChatSessionTag: string | null = null;
-        if (!isWidgetMode && !isBatchTestMode && conversationId && userId) {
-          console.log('[API] [SESSION_TAG] Checking session tag generation conditions:', {
-            isWidgetMode,
-            isBatchTestMode,
-            conversationId,
-            userId,
-            selectedModelId
-          });
-          
-          try {
-            // Create service role client but filter by user_id for security
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-            const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-            const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey);
-            
-            const { data: conversation, error: convError } = await supabaseAuth
-              .from('conversations')
-              .select('session_id, llm_model_id')
-              .eq('id', conversationId)
-              .eq('user_id', userId)  // Security: Ensure user owns this conversation
-              .single();
-            
-            console.log('[API] [SESSION_TAG] Fetched conversation:', {
-              conversation_id: conversationId,
-              session_id: conversation?.session_id,
-              llm_model_id: conversation?.llm_model_id,
-              error: convError?.message
-            });
-            
-            // Update llm_model_id if missing (first message in conversation)
-            let modelIdToUse = conversation?.llm_model_id;
-            if (conversation && !conversation.llm_model_id && selectedModelId) {
-              console.log('[API] [SESSION_TAG] Setting llm_model_id on conversation:', selectedModelId);
-              const { error: updateError } = await supabaseAuth
-                .from('conversations')
-                .update({ llm_model_id: selectedModelId })
-                .eq('id', conversationId)
-                .eq('user_id', userId);  // Security: Ensure user owns this conversation
-              
-              if (updateError) {
-                console.error('[API] [SESSION_TAG] Failed to update llm_model_id:', updateError);
-              } else {
-                modelIdToUse = selectedModelId;
-                console.log('[API] [SESSION_TAG] Successfully set llm_model_id');
-              }
-            }
-            
-            if (conversation && !conversation.session_id && modelIdToUse) {
-              console.log('[API] [SESSION_TAG] Generating session tag with:', { userId, modelIdToUse });
-              const sessionTag = await generateSessionTag(userId, modelIdToUse);
-              console.log('[API] [SESSION_TAG] Generated session tag:', sessionTag);
-              
-              if (sessionTag) {
-                const { error: tagError } = await supabaseAuth
-                  .from('conversations')
-                  .update({
-                    session_id: sessionTag.session_id,
-                    experiment_name: sessionTag.experiment_name
-                  })
-                  .eq('id', conversationId)
-                  .eq('user_id', userId);  // Security: Ensure user owns this conversation
-                
-                if (tagError) {
-                  console.error('[API] [SESSION_TAG] Failed to update session tag:', tagError);
-                } else {
-                  regularChatSessionTag = sessionTag.session_id;
-                  console.log('[API] [SESSION_TAG] Successfully set session tag:', regularChatSessionTag);
-                }
-              }
-            } else {
-              console.log('[API] [SESSION_TAG] Skipping generation:', {
-                hasConversation: !!conversation,
-                hasSessionId: !!conversation?.session_id,
-                hasModelId: !!modelIdToUse
-              });
-              
-              if (conversation?.session_id) {
-                regularChatSessionTag = conversation.session_id;
-                console.log('[API] [SESSION_TAG] Using existing session tag:', regularChatSessionTag);
-              }
-            }
-          } catch (error) {
-            console.error('[API] [SESSION_TAG] Error in session tag flow:', error);
-          }
-        } else {
-          console.log('[API] [SESSION_TAG] Conditions not met for session tag generation:', {
-            isWidgetMode,
-            isBatchTestMode,
-            hasConversationId: !!conversationId,
-            hasUserId: !!userId
-          });
-        }
-
         // Start trace for LLM operation
         traceContext = await traceService.startTrace({
           spanName: 'llm.completion',
           operationType: 'llm_call',
           modelName: selectedModelId,
           modelProvider: actualModelConfig?.provider || provider || undefined,
-          conversationId: widgetConversationId || conversationId || undefined,
-          sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
+          conversationId: widgetConversationId || undefined,
+          sessionTag: widgetSessionTag || undefined,
         });
 
         try {
@@ -1489,109 +1424,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         })
       };
 
-      // Generate session tag for regular chat if needed (streaming path)
-      let regularChatSessionTag: string | null = null;
-      if (!isWidgetMode && !isBatchTestMode && conversationId && userId) {
-        console.log('[API] [SESSION_TAG] [STREAMING] Checking session tag generation conditions:', {
-          isWidgetMode,
-          isBatchTestMode,
-          conversationId,
-          userId,
-          selectedModelId
-        });
-        
-        try {
-          // Create service role client but filter by user_id for security
-          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-          const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-          const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey);
-          
-          const { data: conversation, error: convError } = await supabaseAuth
-            .from('conversations')
-            .select('session_id, llm_model_id')
-            .eq('id', conversationId)
-            .eq('user_id', userId)  // Security: Ensure user owns this conversation
-            .single();
-          
-          console.log('[API] [SESSION_TAG] [STREAMING] Fetched conversation:', {
-            conversation_id: conversationId,
-            session_id: conversation?.session_id,
-            llm_model_id: conversation?.llm_model_id,
-            error: convError?.message
-          });
-          
-          // Update llm_model_id if missing (first message in conversation)
-          let modelIdToUse = conversation?.llm_model_id;
-          if (conversation && !conversation.llm_model_id && selectedModelId) {
-            console.log('[API] [SESSION_TAG] [STREAMING] Setting llm_model_id on conversation:', selectedModelId);
-            const { error: updateError } = await supabaseAuth
-              .from('conversations')
-              .update({ llm_model_id: selectedModelId })
-              .eq('id', conversationId)
-              .eq('user_id', userId);  // Security: Ensure user owns this conversation
-            
-            if (updateError) {
-              console.error('[API] [SESSION_TAG] [STREAMING] Failed to update llm_model_id:', updateError);
-            } else {
-              modelIdToUse = selectedModelId;
-              console.log('[API] [SESSION_TAG] [STREAMING] Successfully set llm_model_id');
-            }
-          }
-          
-          if (conversation && !conversation.session_id && modelIdToUse) {
-            console.log('[API] [SESSION_TAG] [STREAMING] Generating session tag with:', { userId, modelIdToUse });
-            const sessionTag = await generateSessionTag(userId, modelIdToUse);
-            console.log('[API] [SESSION_TAG] [STREAMING] Generated session tag:', sessionTag);
-            
-            if (sessionTag) {
-              const { error: tagError } = await supabaseAuth
-                .from('conversations')
-                .update({
-                  session_id: sessionTag.session_id,
-                  experiment_name: sessionTag.experiment_name
-                })
-                .eq('id', conversationId)
-                .eq('user_id', userId);  // Security: Ensure user owns this conversation
-              
-              if (tagError) {
-                console.error('[API] [SESSION_TAG] [STREAMING] Failed to update session tag:', tagError);
-              } else {
-                regularChatSessionTag = sessionTag.session_id;
-                console.log('[API] [SESSION_TAG] [STREAMING] Successfully set session tag:', regularChatSessionTag);
-              }
-            }
-          } else {
-            console.log('[API] [SESSION_TAG] [STREAMING] Skipping generation:', {
-              hasConversation: !!conversation,
-              hasSessionId: !!conversation?.session_id,
-              hasModelId: !!modelIdToUse
-            });
-            
-            if (conversation?.session_id) {
-              regularChatSessionTag = conversation.session_id;
-              console.log('[API] [SESSION_TAG] [STREAMING] Using existing session tag:', regularChatSessionTag);
-            }
-          }
-        } catch (error) {
-          console.error('[API] [SESSION_TAG] [STREAMING] Error in session tag flow:', error);
-        }
-      } else {
-        console.log('[API] [SESSION_TAG] [STREAMING] Conditions not met for session tag generation:', {
-          isWidgetMode,
-          isBatchTestMode,
-          hasConversationId: !!conversationId,
-          hasUserId: !!userId
-        });
-      }
-
       // Start trace for streaming LLM operation
       traceContext = await traceService.startTrace({
         spanName: 'llm.completion.stream',
         operationType: 'llm_call',
         modelName: selectedModelId || model || undefined,
         modelProvider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || undefined,
-        conversationId: widgetConversationId || conversationId || undefined,
-        sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
+        conversationId: widgetConversationId || undefined,
+        sessionTag: widgetSessionTag || undefined,
       });
 
       const stream = new ReadableStream({
@@ -1636,10 +1476,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             const needsToolStreaming = tools.length > 0 && provider === 'openai';
 
             if (needsToolStreaming) {
-              // Use tool-aware streaming for OpenAI  
-              // Note: streamOpenAIResponse handles tools but doesn't execute them during streaming
-              // Tools are executed in the non-streaming path only
-              console.log('[API] Using OpenAI streaming (tools will be executed in non-streaming mode)');
+              // Use tool-aware streaming for OpenAI
+              console.log('[API] Using OpenAI tool-aware streaming');
               const { streamOpenAIResponse } = await import('@/lib/llm/openai');
               
               for await (const chunk of streamOpenAIResponse(
@@ -1649,6 +1487,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 maxTokens,
                 activeTools
               )) {
+                // Stream text content
                 accumulatedResponse += chunk;
                 const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
                 controller.enqueue(encoder.encode(data));

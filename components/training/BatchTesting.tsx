@@ -80,12 +80,6 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
   const [delayMs, setDelayMs] = useState(1000);
   const [testRunName, setTestRunName] = useState('');
 
-  // Session tagging state
-  const [useSessionTag, setUseSessionTag] = useState(false);
-  const [autoGenerateTag, setAutoGenerateTag] = useState(true);
-  const [sessionId, setSessionId] = useState('');
-  const [experimentName, setExperimentName] = useState('');
-
   // Assistant judge state
   const [useAssistantJudge, setUseAssistantJudge] = useState(false);
   const [judgeModel, setJudgeModel] = useState<'gpt-4.1' | 'claude-sonnet-4-5-20250929' | 'claude-haiku-4-5-20251001'>('gpt-4.1');
@@ -116,24 +110,6 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
   const batchTestRunsHook = useBatchTestRuns();
 
   log.trace('BatchTesting', 'Component mounted');
-
-  // Helper function to generate session tag
-  function generateSessionTag(modelId: string): { sessionId: string; experimentName: string } {
-    const timestamp = new Date().toISOString()
-      .replace(/[-:]/g, '')
-      .replace(/\.\d{3}Z$/, '')
-      .slice(0, 15); // YYYYMMDDTHHmmss
-
-    const modelShort = modelId
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .slice(0, 20);
-
-    return {
-      sessionId: `batch-${modelShort}-${timestamp}`,
-      experimentName: `batch-testing-${modelShort}`
-    };
-  }
 
   // Helper function to get judge cost estimate
   function getJudgeCostEstimate(): number {
@@ -530,23 +506,6 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
     setError(null);
 
     try {
-      // Prepare session tag if enabled
-      let sessionTag = null;
-      if (useSessionTag) {
-        if (autoGenerateTag) {
-          const generated = generateSessionTag(selectedModelId);
-          sessionTag = {
-            session_id: generated.sessionId,
-            experiment_name: generated.experimentName
-          };
-        } else if (sessionId.trim()) {
-          sessionTag = {
-            session_id: sessionId.trim(),
-            experiment_name: experimentName.trim() || undefined
-          };
-        }
-      }
-
       // Prepare judge config if enabled
       let judgeConfig = null;
       if (useAssistantJudge && judgeCriteria.length > 0) {
@@ -560,7 +519,6 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
       log.debug('BatchTesting', 'Starting batch test with config', {
         modelId: selectedModelId,
         testSuiteId: selectedTestSuiteId,
-        sessionTag,
         judgeConfig
       });
 
@@ -580,7 +538,6 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
             delay_ms: delayMs,
             benchmark_id: selectedBenchmarkId || undefined,
             test_run_name: testRunName.trim() || undefined,
-            session_tag: sessionTag,
             judge_config: judgeConfig
           }
         })
@@ -627,6 +584,7 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
               if (event.type === 'started') {
                 log.debug('BatchTesting', 'Batch test started', { testRunId: event.test_run_id });
                 fetchTestRuns(); // Refresh to show the new run
+                setStarting(false); // Re-enable button to allow concurrent tests
               } else if (event.type === 'progress' || event.type === 'result') {
                 // Refresh runs periodically during progress
                 fetchTestRuns();
@@ -640,6 +598,7 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
               } else if (event.type === 'error') {
                 log.error('BatchTesting', 'Batch test error', { error: event.error });
                 setError(event.error || 'Batch test failed');
+                setStarting(false); // Re-enable button on error
               }
             } catch {
               // Ignore parse errors for incomplete chunks
@@ -854,86 +813,6 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
             <p className="text-xs text-muted-foreground">
               Give this test run a custom name. If empty, a name will be auto-generated from model and test suite.
             </p>
-          </div>
-
-          {/* Session Tagging Section */}
-          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="use-session-tag"
-                checked={useSessionTag}
-                onChange={(e) => setUseSessionTag(e.target.checked)}
-                disabled={starting}
-                className="rounded border-input"
-              />
-              <Label htmlFor="use-session-tag" className="font-medium cursor-pointer">
-                Session Tagging for Analytics
-              </Label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Tag this batch test with a session ID to track it in analytics and compare with other test runs
-            </p>
-
-            {useSessionTag && (
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="auto-generate-tag"
-                    checked={autoGenerateTag}
-                    onChange={(e) => setAutoGenerateTag(e.target.checked)}
-                    disabled={starting}
-                    className="rounded border-input"
-                  />
-                  <Label htmlFor="auto-generate-tag" className="text-sm cursor-pointer">
-                    Auto-generate session tag
-                  </Label>
-                </div>
-
-                {!autoGenerateTag ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="session-id" className="text-sm">Session ID</Label>
-                      <Input
-                        id="session-id"
-                        type="text"
-                        value={sessionId}
-                        onChange={(e) => setSessionId(e.target.value)}
-                        placeholder="e.g., baseline-gpt4-test"
-                        disabled={starting}
-                        className="text-sm"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="experiment-name" className="text-sm">Experiment Name (Optional)</Label>
-                      <Input
-                        id="experiment-name"
-                        type="text"
-                        value={experimentName}
-                        onChange={(e) => setExperimentName(e.target.value)}
-                        placeholder="e.g., model-comparison"
-                        disabled={starting}
-                        className="text-sm"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  selectedModelId && (
-                    <div className="p-2 bg-background rounded border text-xs">
-                      <p className="font-medium mb-1 text-muted-foreground">Preview (auto-generated):</p>
-                      <p className="font-mono text-xs">
-                        <strong>Session:</strong> {generateSessionTag(selectedModelId).sessionId}
-                      </p>
-                      <p className="font-mono text-xs">
-                        <strong>Experiment:</strong> {generateSessionTag(selectedModelId).experimentName}
-                      </p>
-                    </div>
-                  )
-                )}
-              </div>
-            )}
           </div>
 
           {/* Assistant Judge Section */}

@@ -584,13 +584,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[RunPod API] === FINAL URL: ' + appUrl + ' ===');
-
-    if (appUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
-      console.error('[RunPod API] ⚠️  WARNING: Using localhost URL in production!');
-      console.error('[RunPod API] This will cause connection failures from RunPod pods!');
-      console.error('[RunPod API] Set APP_BASE_URL=https://finetunelab.ai on Render to fix this.');
+    if (appUrl.includes('localhost')) {
+      console.warn('[RunPod API] Detected localhost URL - RunPod pods cannot reach localhost');
+      console.warn('[RunPod API] Using production URL instead: https://finetunelab.ai');
+      appUrl = 'https://finetunelab.ai';
     }
+
+    console.log('[RunPod API] === FINAL URL: ' + appUrl + ' ===');
 
     const trainingScript = runPodService.generateTrainingScript(
       modelName,
