@@ -183,7 +183,7 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
 
     // USAGE METERING: Track root traces for billing
     // Only meter root traces (no parent) to count top-level operations
-    if (!context.parentSpanId && result.status === 'success') {
+    if (!context.parentSpanId && result.status === 'completed') {
       recordRootTraceUsage({
         userId: context.userId,
         traceId: context.traceId,
