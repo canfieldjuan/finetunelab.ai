@@ -546,27 +546,37 @@ export async function POST(request: NextRequest) {
 
     console.log('[RunPod API] Created job:', jobId);
 
-    // Auto-detect app URL from request if NEXT_PUBLIC_APP_URL not set
-    console.log('[RunPod API] DEBUG - NEXT_PUBLIC_APP_URL env var:', process.env.NEXT_PUBLIC_APP_URL);
-    console.log('[RunPod API] DEBUG - Request host:', request.headers.get('host'));
-    console.log('[RunPod API] DEBUG - Request protocol:', request.headers.get('x-forwarded-proto'));
+    // Determine app URL with priority: APP_BASE_URL > non-localhost NEXT_PUBLIC > auto-detect
+    let appUrl = process.env.APP_BASE_URL || process.env.ALERT_APP_BASE_URL;
 
-    let appUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-    if (!appUrl) {
-      const host = request.headers.get('host');
-      const protocol = request.headers.get('x-forwarded-proto') || 'https';
-      appUrl = `${protocol}://${host}`;
-      console.log('[RunPod API] Auto-detected app URL from request:', appUrl);
-    } else {
-      console.log('[RunPod API] Using NEXT_PUBLIC_APP_URL from environment:', appUrl);
+    if (!appUrl || appUrl.includes('localhost')) {
+      const buildTimeUrl = process.env.NEXT_PUBLIC_APP_URL;
+      if (buildTimeUrl && !buildTimeUrl.includes('localhost')) {
+        appUrl = buildTimeUrl;
+        console.log('[RunPod API] Using NEXT_PUBLIC_APP_URL:', appUrl);
+      }
     }
 
-    console.log('[RunPod API] DEBUG - Final appUrl value:', appUrl);
+    if (!appUrl || appUrl.includes('localhost')) {
+      const host = request.headers.get('host');
+      const protocol = request.headers.get('x-forwarded-proto') || 'https';
+      if (host) {
+        appUrl = `${protocol}://${host}`;
+        console.log('[RunPod API] Auto-detected app URL from request:', appUrl);
+      }
+    }
+
+    if (!appUrl) {
+      console.error('[RunPod API] ERROR: Could not determine app URL!');
+      return NextResponse.json(
+        { error: 'Server configuration error: APP_BASE_URL not set' },
+        { status: 500 }
+      );
+    }
 
     if (appUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
       console.error('[RunPod API] ⚠️  WARNING: Using localhost URL in production!');
-      console.error('[RunPod API] Metrics API will be unreachable from RunPod pods.');
+      console.error('[RunPod API] Set APP_BASE_URL environment variable to fix this.');
     }
 
     const trainingScript = runPodService.generateTrainingScript(
