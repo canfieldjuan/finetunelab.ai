@@ -588,12 +588,17 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             console.log('[API] Regular chat: Generating session tag for first message');
             const sessionTag = await generateSessionTag(userId, selectedModelId);
             if (sessionTag) {
+              const updateData: Record<string, any> = {
+                session_id: sessionTag.session_id,
+                experiment_name: sessionTag.experiment_name
+              };
+              if (!conversation.llm_model_id) {
+                updateData.llm_model_id = selectedModelId;
+              }
+
               await (supabaseAdmin || supabase)
                 .from('conversations')
-                .update({
-                  session_id: sessionTag.session_id,
-                  experiment_name: sessionTag.experiment_name
-                })
+                .update(updateData)
                 .eq('id', conversationId);
               console.log('[API] Regular chat: Generated session tag:', sessionTag.session_id);
             } else {
@@ -651,6 +656,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       runLLMWithToolCalls = runOpenAIWithToolCalls;
       temperature = llmConfig.openai?.temperature ?? 0.7;
       maxTokens = llmConfig.openai?.max_tokens ?? parseInt(process.env.OPENAI_MAX_TOKENS || '2000', 10);
+    }
+
+    // Ensure selectedModelId captures the actual model we will run
+    if (!selectedModelId) {
+      selectedModelId = model;
     }
 
     // Tool-call aware chat completion (provider-aware)
