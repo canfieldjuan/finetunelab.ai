@@ -934,23 +934,34 @@ class TrainingMetricsCallback(TrainerCallback):
         """POST metrics to API endpoint for cloud training."""
         try:
             import requests
+            import math
 
             # API expects: POST /api/training/local/metrics with body { job_id, metrics: [] }
             api_url = self.metrics_api_url
 
+            # Helper function to sanitize float values for JSON
+            def sanitize_float(value):
+                """Convert infinity/NaN to None for JSON compatibility."""
+                if value is None:
+                    return None
+                if isinstance(value, (int, float)):
+                    if math.isinf(value) or math.isnan(value):
+                        return None
+                return value
+
             metric_point = {
                 "step": progress_data.get("current_step"),
                 "epoch": progress_data.get("current_epoch"),
-                "train_loss": progress_data.get("train_loss"),
-                "eval_loss": progress_data.get("eval_loss"),
-                "learning_rate": progress_data.get("learning_rate"),
-                "grad_norm": progress_data.get("grad_norm"),
-                "samples_per_second": progress_data.get("samples_per_second"),
-                "gpu_memory_allocated_gb": progress_data.get("gpu_memory_allocated_gb"),
-                "gpu_memory_reserved_gb": progress_data.get("gpu_memory_reserved_gb"),
-                "gpu_utilization_percent": progress_data.get("gpu_utilization_percent"),
-                "perplexity": progress_data.get("perplexity"),
-                "train_perplexity": progress_data.get("train_perplexity"),
+                "train_loss": sanitize_float(progress_data.get("train_loss")),
+                "eval_loss": sanitize_float(progress_data.get("eval_loss")),
+                "learning_rate": sanitize_float(progress_data.get("learning_rate")),
+                "grad_norm": sanitize_float(progress_data.get("grad_norm")),
+                "samples_per_second": sanitize_float(progress_data.get("samples_per_second")),
+                "gpu_memory_allocated_gb": sanitize_float(progress_data.get("gpu_memory_allocated_gb")),
+                "gpu_memory_reserved_gb": sanitize_float(progress_data.get("gpu_memory_reserved_gb")),
+                "gpu_utilization_percent": sanitize_float(progress_data.get("gpu_utilization_percent")),
+                "perplexity": sanitize_float(progress_data.get("perplexity")),
+                "train_perplexity": sanitize_float(progress_data.get("train_perplexity")),
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
 
