@@ -151,13 +151,13 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
     }
 
     // Training Configuration
-    if (jobData.learningRate !== null) {
+    if (jobData.learningRate !== null && jobData.learningRate !== undefined) {
       trainingConfig.push({ label: 'Learning Rate', value: formatNumber(jobData.learningRate, 6) });
     }
-    if (jobData.batchSize !== null) {
+    if (jobData.batchSize !== null && jobData.batchSize !== undefined) {
       trainingConfig.push({ label: 'Batch Size', value: String(jobData.batchSize) });
     }
-    if (jobData.numEpochs !== null) {
+    if (jobData.numEpochs !== null && jobData.numEpochs !== undefined) {
       trainingConfig.push({ label: 'Epochs', value: String(jobData.numEpochs) });
     }
     if (jobData.currentStep !== null && jobData.totalSteps !== null) {
@@ -168,7 +168,7 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
     if (jobData.datasetName) {
       datasetInfo.push({ label: 'Dataset', value: escapeHtml(jobData.datasetName) });
     }
-    if (jobData.datasetSamples !== null) {
+    if (jobData.datasetSamples !== null && jobData.datasetSamples !== undefined) {
       datasetInfo.push({ label: 'Samples', value: String(jobData.datasetSamples) });
     }
 
@@ -176,10 +176,10 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
     if (jobData.loss !== null) {
       performance.push({ label: 'Train Loss', value: formatNumber(jobData.loss) });
     }
-    if (jobData.evalLoss !== null) {
+    if (jobData.evalLoss !== null && jobData.evalLoss !== undefined) {
       performance.push({ label: 'Eval Loss', value: formatNumber(jobData.evalLoss) });
     }
-    if (jobData.perplexity !== null) {
+    if (jobData.perplexity !== null && jobData.perplexity !== undefined) {
       performance.push({ label: 'Perplexity', value: formatNumber(jobData.perplexity, 2) });
     }
 
@@ -187,7 +187,7 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
     if (jobData.gpuType) {
       resources.push({ label: 'GPU', value: escapeHtml(jobData.gpuType) });
     }
-    if (jobData.gpuMemoryUsed !== null) {
+    if (jobData.gpuMemoryUsed !== null && jobData.gpuMemoryUsed !== undefined) {
       resources.push({ label: 'GPU Memory', value: `${formatNumber(jobData.gpuMemoryUsed, 2)} GB` });
     }
 
