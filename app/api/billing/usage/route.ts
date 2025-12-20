@@ -66,13 +66,12 @@ export async function GET(req: NextRequest) {
           status: 'active',
           minimum_monthly_usd: '250.00',
           included_traces: 100000,
-          overage_per_1k_traces: '0.50',
-          included_payload_gb: 1,  // 100K traces * 10KB = ~1GB
-          overage_per_gb_payload: '0.25',
+          price_per_thousand_traces: '0.50',
+          included_kb_per_trace: 10,  // 10KB per trace included
+          overage_price_per_gb: '0.25',
           base_retention_days: 14,
-          retention_multiplier: 1.0,
-          period_start: periodStart.toISOString(),
-          period_end: periodEnd.toISOString(),
+          starts_at: periodStart.toISOString(),
+          ends_at: periodEnd.toISOString(),
         })
         .select()
         .single();
