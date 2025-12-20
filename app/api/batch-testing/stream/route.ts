@@ -397,7 +397,20 @@ export async function POST(req: NextRequest) {
         });
 
         // Process each prompt
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        // Auto-detect base URL from request headers (fixes production deployment issues)
+        const host = req.headers.get('host');
+        let protocol = req.headers.get('x-forwarded-proto');
+
+        // If no x-forwarded-proto header, detect based on host
+        if (!protocol) {
+          protocol = host?.includes('localhost') ? 'http' : 'https';
+        }
+
+        const baseUrl = host
+          ? `${protocol}://${host}`
+          : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
+
+        console.log('[BatchTest/Stream] Using baseUrl:', baseUrl, { host, protocol, forwardedProto: req.headers.get('x-forwarded-proto') });
 
         for (let i = 0; i < extractionResult.prompts.length; i++) {
           const prompt = extractionResult.prompts[i];
@@ -492,6 +505,7 @@ export async function POST(req: NextRequest) {
             }
           } catch (err) {
             failed++;
+            console.error(`[BatchTest/Stream] Prompt ${i + 1} failed:`, err instanceof Error ? err.message : String(err), { baseUrl, endpoint: `${baseUrl}/api/chat` });
             const { category, severity } = categorizeError(err);
             try {
               await supabaseAdmin.from('errors').insert({
