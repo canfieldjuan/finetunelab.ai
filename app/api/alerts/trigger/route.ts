@@ -7,10 +7,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { sendTrainingJobAlert, AlertType, TrainingJobAlertData } from '@/lib/alerts';
+import { createClient } from '@supabase/supabase-js';
+import { runpodService } from '@/lib/training/runpod-service';
+import { secretsManager } from '@/lib/secrets/secrets-manager.service';
 
 export const runtime = 'nodejs';
 
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || process.env.ALERT_TRIGGER_API_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');
@@ -66,6 +71,43 @@ export async function POST(request: NextRequest) {
     console.log('[AlertTrigger] Processing:', body.type, 'for job:', body.job_id);
 
     await sendTrainingJobAlert(body.type as AlertType, jobData);
+
+    // Auto-terminate RunPod pods on completion or failure
+    if ((body.type === 'job_completed' || body.type === 'job_failed') && supabaseUrl && supabaseServiceKey) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        const { data: cloudDeployment } = await supabase
+          .from('cloud_deployments')
+          .select('deployment_id, platform')
+          .eq('config->>job_id', body.job_id)
+          .maybeSingle();
+
+        if (cloudDeployment && cloudDeployment.platform === 'runpod') {
+          console.log('[AlertTrigger] Auto-terminating RunPod pod:', cloudDeployment.deployment_id);
+
+          const runpodApiKey = await secretsManager.getSecret(body.user_id, 'runpod_api_key');
+          if (runpodApiKey?.value) {
+            await runpodService.stopPod(cloudDeployment.deployment_id, runpodApiKey.value);
+
+            await supabase
+              .from('cloud_deployments')
+              .update({
+                status: 'stopped',
+                completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('deployment_id', cloudDeployment.deployment_id);
+
+            console.log('[AlertTrigger] RunPod pod terminated successfully');
+          } else {
+            console.warn('[AlertTrigger] RunPod API key not found, cannot terminate pod');
+          }
+        }
+      } catch (error) {
+        console.error('[AlertTrigger] Error auto-terminating RunPod pod:', error);
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {
