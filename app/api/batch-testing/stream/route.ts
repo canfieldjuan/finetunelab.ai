@@ -12,7 +12,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { extractPrompts } from '@/lib/tools/prompt-extractor/prompt-extractor.service';
 import { extractPromptsFromDataset } from '@/lib/batch-testing/dataset-prompt-extractor';
-import type { BatchTestConfig, SessionTag, JudgeConfig } from '@/lib/batch-testing/types';
+import type { BatchTestConfig, JudgeConfig } from '@/lib/batch-testing/types';
 import { categorizeError } from '@/lib/batch-testing/error-categorizer';
 import { STATUS } from '@/lib/constants';
 import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
@@ -205,7 +205,6 @@ export async function POST(req: NextRequest) {
     delay_ms: (config.delay_ms as number) || parseInt(process.env.BATCH_TESTING_DEFAULT_DELAY_MS || '1000', 10),
     source_path: (config.source_path as string) || '',
     benchmark_id: config.benchmark_id as string | undefined,
-    session_tag: config.session_tag as SessionTag | undefined,
     judge_config: config.judge_config as JudgeConfig | undefined
   };
 
@@ -345,9 +344,7 @@ export async function POST(req: NextRequest) {
             is_widget_session: true,
             llm_model_id: batchConfig.model_name,
             run_id: runId,
-            batch_test_run_id: testRunId,
-            session_id: batchConfig.session_tag?.session_id || null,
-            experiment_name: batchConfig.session_tag?.experiment_name || null
+            batch_test_run_id: testRunId
           })
           .select()
           .single();
@@ -368,6 +365,29 @@ export async function POST(req: NextRequest) {
         }
 
         conversationId = conversation.id;
+
+        // Auto-generate session tag for batch test
+        if (batchConfig.model_name) {
+          try {
+            console.log('[BatchTest] Generating session tag');
+            const { generateSessionTag } = await import('@/lib/session-tagging/generator');
+            const sessionTag = await generateSessionTag(auth.userId, batchConfig.model_name);
+            if (sessionTag) {
+              await supabaseAdmin
+                .from('conversations')
+                .update({
+                  session_id: sessionTag.session_id,
+                  experiment_name: sessionTag.experiment_name
+                })
+                .eq('id', conversation.id);
+              console.log('[BatchTest] Generated session tag:', sessionTag.session_id);
+            } else {
+              console.log('[BatchTest] Session tag generation returned null (model may not be tracked)');
+            }
+          } catch (error) {
+            console.error('[BatchTest] Failed to generate session tag:', error);
+          }
+        }
 
         // Send started event
         sendSSE(controller, encoder, {

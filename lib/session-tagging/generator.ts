@@ -39,14 +39,25 @@ export async function generateSessionTag(
   }
 
   try {
-    const { data: model, error: modelError } = await supabase
+    // Check if input is UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isUuid = uuidRegex.test(modelId);
+
+    let query = supabase
       .from('llm_models')
       .select('id, model_id, name')
-      .eq('model_id', modelId)
-      .eq('user_id', userId)
-      .single();
+      .eq('user_id', userId);
+
+    if (isUuid) {
+      query = query.eq('id', modelId);
+    } else {
+      query = query.eq('model_id', modelId);
+    }
+
+    const { data: model, error: modelError } = await query.single();
 
     if (modelError || !model) {
+      console.log('[Session Tag Generator] Model not found:', modelId);
       return null;
     }
 
@@ -56,7 +67,7 @@ export async function generateSessionTag(
       .from('conversations')
       .select('session_id')
       .eq('user_id', userId)
-      .eq('llm_model_id', modelId)
+      .eq('llm_model_id', model.id) // Always use UUID for conversation lookup
       .not('session_id', 'is', null)
       .like('session_id', `chat_model_${shortUuid}_%`);
 

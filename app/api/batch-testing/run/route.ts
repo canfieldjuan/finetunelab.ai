@@ -342,7 +342,6 @@ export async function POST(req: NextRequest) {
       delay_ms: config.delay_ms || parseInt(process.env.BATCH_TESTING_DEFAULT_DELAY_MS || '1000', 10),
       source_path: config.source_path,
       benchmark_id: config.benchmark_id,  // Pass benchmark_id for validator execution
-      session_tag: config.session_tag,  // Session tagging for analytics
       judge_config: config.judge_config  // LLM judge configuration
     };
 
@@ -620,10 +619,7 @@ async function processBackgroundBatch(
       is_widget_session: true,
       llm_model_id: config.model_name,
       run_id: runId,
-      batch_test_run_id: testRunId,
-      // Add session tagging if provided
-      session_id: config.session_tag?.session_id || null,
-      experiment_name: config.session_tag?.experiment_name || null
+      batch_test_run_id: testRunId
     })
     .select()
     .single();
@@ -654,6 +650,29 @@ async function processBackgroundBatch(
   }
 
   console.log('[Background Batch] Created conversation:', conversation.id);
+
+  // Auto-generate session tag for batch test
+  if (config.model_name) {
+    try {
+      console.log('[Background Batch] Generating session tag');
+      const { generateSessionTag } = await import('@/lib/session-tagging/generator');
+      const sessionTag = await generateSessionTag(userId, config.model_name);
+      if (sessionTag) {
+        await supabaseAdmin
+          .from('conversations')
+          .update({
+            session_id: sessionTag.session_id,
+            experiment_name: sessionTag.experiment_name
+          })
+          .eq('id', conversation.id);
+        console.log('[Background Batch] Generated session tag:', sessionTag.session_id);
+      } else {
+        console.log('[Background Batch] Session tag generation returned null (model may not be tracked)');
+      }
+    } catch (error) {
+      console.error('[Background Batch] Failed to generate session tag:', error);
+    }
+  }
 
   let completed = 0;
   let failed = 0;

@@ -72,7 +72,12 @@ export function MessageJudgments({ messageId, judgments: initialJudgments, onFet
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json();
+      const text = await response.text();
+      if (!text) {
+        throw new Error('Empty response from server');
+      }
+
+      const data = JSON.parse(text);
       setJudgments(data.judgments || []);
 
       if (onFetch) {

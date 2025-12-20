@@ -313,9 +313,10 @@ export async function POST(req: NextRequest) {
         widgetSessionTag = conversation.session_id || null;
         
         // Generate session tag if missing (first message)
-        if (!widgetSessionTag && userId && llmModelIdForDb) {
+        // Use modelId which contains the actual model identifier (UUID or name)
+        if (!widgetSessionTag && userId && modelId) {
           try {
-            const sessionTag = await generateSessionTag(userId, llmModelIdForDb);
+            const sessionTag = await generateSessionTag(userId, modelId);
             if (sessionTag) {
               await supabaseAdmin!
                 .from('conversations')
@@ -326,6 +327,8 @@ export async function POST(req: NextRequest) {
                 .eq('id', conversation.id);
               widgetSessionTag = sessionTag.session_id;
               console.log('[API] Generated session tag:', widgetSessionTag);
+            } else {
+              console.log('[API] Session tag generation returned null (model may not be tracked)');
             }
           } catch (error) {
             console.error('[API] Failed to generate session tag:', error);
@@ -564,7 +567,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       try {
         const { data: conversation } = await supabase
           .from('conversations')
-          .select('llm_model_id')
+          .select('llm_model_id, session_id')
           .eq('id', conversationId)
           .single();
 
@@ -572,6 +575,28 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           console.log('[API] Using model from conversation:', conversation.llm_model_id);
           selectedModelId = conversation.llm_model_id;
           useUnifiedClient = true;
+        }
+
+        // Auto-generate session tag if missing (first message in regular chat)
+        if (conversation && !conversation.session_id && modelId) {
+          try {
+            console.log('[API] Regular chat: Generating session tag for first message');
+            const sessionTag = await generateSessionTag(userId, modelId);
+            if (sessionTag) {
+              await supabase
+                .from('conversations')
+                .update({
+                  session_id: sessionTag.session_id,
+                  experiment_name: sessionTag.experiment_name
+                })
+                .eq('id', conversationId);
+              console.log('[API] Regular chat: Generated session tag:', sessionTag.session_id);
+            } else {
+              console.log('[API] Regular chat: Session tag generation returned null (model may not be tracked)');
+            }
+          } catch (error) {
+            console.error('[API] Regular chat: Failed to generate session tag:', error);
+          }
         }
       } catch (error) {
         console.log('[API] Could not load conversation model:', error);
@@ -1448,30 +1473,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             if (needsToolStreaming) {
               // Use tool-aware streaming for OpenAI
               console.log('[API] Using OpenAI tool-aware streaming');
-              const { streamOpenAIWithToolCalls } = await import('@/lib/llm/openai');
+              const { streamOpenAIResponse } = await import('@/lib/llm/openai');
               
-              for await (const event of streamOpenAIWithToolCalls(
+              for await (const chunk of streamOpenAIResponse(
                 enhancedMessages,
                 model,
                 temperature,
                 maxTokens,
-                activeTools,
-                toolCallHandler
+                activeTools
               )) {
-                if (event.type === 'content') {
-                  // Stream text content
-                  accumulatedResponse += event.data;
-                  const data = `data: ${JSON.stringify({ content: event.data })}\n\n`;
-                  controller.enqueue(encoder.encode(data));
-                } else if (event.type === 'tool_call_start') {
-                  // Notify tool execution start
-                  const data = `data: ${JSON.stringify({ type: 'tool_call_start', tool: event.data.name })}\n\n`;
-                  controller.enqueue(encoder.encode(data));
-                } else if (event.type === 'tool_call_end') {
-                  // Notify tool execution end
-                  const data = `data: ${JSON.stringify({ type: 'tool_call_end', tool: event.data.name })}\n\n`;
-                  controller.enqueue(encoder.encode(data));
-                }
+                // Stream text content
+                accumulatedResponse += chunk;
+                const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
+                controller.enqueue(encoder.encode(data));
               }
             } else {
               // Regular streaming (no tools or non-OpenAI)

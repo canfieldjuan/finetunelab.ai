@@ -35,14 +35,6 @@ export interface BatchTestRun {
 }
 
 /**
- * Session tag configuration for analytics tracking
- */
-export interface SessionTag {
-  session_id: string;
-  experiment_name?: string;
-}
-
-/**
  * LLM Judge configuration for quality evaluation
  */
 export interface JudgeConfig {
@@ -65,7 +57,6 @@ export interface BatchTestConfig {
   test_run_name?: string;  // Optional: Custom name for the test run
   test_suite_name?: string;  // Automatically populated from test suite
   custom_name?: string;  // Generated or custom name stored in database
-  session_tag?: SessionTag;  // Optional: Session tagging for analytics
   judge_config?: JudgeConfig;  // Optional: LLM judge for quality evaluation
 }
 
