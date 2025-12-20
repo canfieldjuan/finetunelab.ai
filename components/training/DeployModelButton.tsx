@@ -43,6 +43,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CheckpointSelector } from './CheckpointSelector';
 import type { TrainingCheckpoint } from '@/lib/training/checkpoint.types';
 import { STATUS, Status } from '@/lib/constants';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface DeployModelButtonProps {
   jobId: string;
@@ -139,10 +140,14 @@ export function DeployModelButton({
   const [customName, setCustomName] = useState('');
   const [deploymentStatus, setDeploymentStatus] = useState<DeploymentStatus>(STATUS.IDLE);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [pollingMessage, setPollingMessage] = useState<string>('');
+  const [deploymentId, setDeploymentId] = useState<string | null>(null);
 
   // RunPod configuration
   const [runpodGpu, setRunpodGpu] = useState<string>('NVIDIA RTX A4000');
   const [runpodBudget, setRunpodBudget] = useState<string>('5.00');
+  const [useNetworkVolume, setUseNetworkVolume] = useState<boolean>(true);
+  const [volumeSizeGb, setVolumeSizeGb] = useState<number>(50);
 
   // vLLM configuration
   const [maxModelLen, setMaxModelLen] = useState<number>(8192);
@@ -196,6 +201,47 @@ export function DeployModelButton({
     checkVLLMAvailability();
   }, []);
 
+  // Main polling effect
+  useEffect(() => {
+    if (deploymentId && deploymentStatus === STATUS.DEPLOYING) {
+      const interval = setInterval(async () => {
+        try {
+          if (!session?.access_token) return;
+
+          setPollingMessage('Checking deployment status...');
+          const res = await fetch(`/api/training/deploy?server_id=${deploymentId}`, {
+            headers: { 'Authorization': `Bearer ${session.access_token}` },
+          });
+
+          if (!res.ok) {
+            // Stop polling on server error, but don't assume deployment failed
+            setPollingMessage('Could not retrieve deployment status.');
+            return;
+          }
+
+          const statusData = await res.json();
+          setPollingMessage(`Deployment status: ${statusData.status || 'unknown'}`);
+
+          if (statusData.status === STATUS.RUNNING || statusData.status === 'active') {
+            setDeploymentStatus(STATUS.SUCCESS);
+            toast.success('Deployment Active!', { description: 'Your model is now ready to use.' });
+            clearInterval(interval);
+            setTimeout(() => router.push(`/models?modelId=${statusData.model_id || ''}`), 1500);
+          } else if (statusData.status === STATUS.ERROR || statusData.status === 'failed') {
+            setDeploymentStatus(STATUS.ERROR);
+            setErrorMessage(statusData.errorMessage || 'Deployment failed with an unknown error.');
+            clearInterval(interval);
+          }
+        } catch (e) {
+          console.error('Polling error:', e);
+          setPollingMessage('Error checking status.');
+        }
+      }, 5000); // Poll every 5 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [deploymentId, deploymentStatus, session, router]);
+
   // Only show button when training is complete
   if (status !== STATUS.COMPLETED) {
     return null;
@@ -204,41 +250,33 @@ export function DeployModelButton({
   const handleDeploy = async () => {
     setDeploymentStatus(STATUS.DEPLOYING);
     setErrorMessage('');
+    setPollingMessage('Submitting deployment request...');
 
     try {
-      // Check if user is authenticated
-      if (!session?.access_token) {
-        throw new Error('You must be logged in to deploy models. Please sign in and try again.');
-      }
+      if (!session?.access_token) throw new Error('You must be logged in to deploy models.');
 
-      console.log('[DeployButton] Starting deployment:', {
-        jobId,
-        serverType,
-        name: customName || modelName,
-        hasSession: !!session,
-        hasAccessToken: !!session?.access_token,
-      });
+      console.log('[DeployButton] Starting deployment:', { jobId, serverType });
 
       const response = await fetch('/api/training/deploy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           job_id: jobId,
           server_type: serverType,
-          checkpoint_path: selectedCheckpoint?.path, // Include selected checkpoint
+          checkpoint_path: selectedCheckpoint?.path,
           name: customName || modelName || `trained-model-${Date.now()}`,
           config: {
             gpu_memory_utilization: serverType === STATUS.RUNPOD_SERVERLESS ? gpuMemoryUtilization : gpuMemoryUtil,
             max_model_len: maxModelLen,
-            // RunPod Pod-specific config
             ...(serverType === STATUS.RUNPOD && {
               gpu_type: runpodGpu,
               budget_limit: parseFloat(runpodBudget),
+              use_network_volume: useNetworkVolume,
+              volume_size_gb: volumeSizeGb,
             }),
-            // RunPod Serverless-specific config
             ...(serverType === STATUS.RUNPOD_SERVERLESS && {
               gpu_type: runpodGpu,
               budget_limit: parseFloat(runpodBudget),
@@ -251,63 +289,28 @@ export function DeployModelButton({
 
       const data = await response.json();
       
-      console.log('[DeployButton] API Response:', {
-        status: response.status,
-        ok: response.ok,
-        data: data,
-      });
-
       if (!response.ok) {
         const errorDetails = data.details || data.error || 'Deployment failed';
-        const errorStack = data.stack ? `\n\nStack trace:\n${data.stack}` : '';
-        
-        console.error('[DeployButton] Deployment failed:', {
-          status: response.status,
-          error: data.error,
-          details: data.details,
-          stack: data.stack,
-          fullResponse: data,
-        });
-        
-        // Show detailed error in toast for development
-        toast.error('Deployment Failed', {
-          description: `${errorDetails}${errorStack}`,
-          duration: 10000,
-        });
-        
+        toast.error('Deployment Failed', { description: errorDetails, duration: 10000 });
         throw new Error(errorDetails);
       }
 
-      console.log('[DeployButton] Deployment response:', data);
+      console.log('[DeployButton] Initial deployment response:', data);
 
       if (data.success) {
-        setDeploymentStatus(STATUS.SUCCESS);
-        toast.success('Model deployed successfully!', {
-          description: data.message,
-        });
-
-        // Wait a moment for user to see success message
-        setTimeout(() => {
-          // Redirect to models page
-          if (data.model_id) {
-            router.push(`/models?modelId=${data.model_id}`);
-          } else {
-            router.push('/models');
-          }
-        }, 1500);
+        toast.info('Deployment initiated!', { description: data.message });
+        setDeploymentId(data.pod_id || data.server_id || data.endpoint_id);
+        setPollingMessage('Deployment initiated, waiting for status updates...');
+        // The useEffect for polling will now take over.
       } else {
         throw new Error(data.error || 'Unknown deployment error');
       }
     } catch (error) {
       console.error('[DeployButton] Deployment error:', error);
-
       const errorMsg = error instanceof Error ? error.message : String(error);
       setDeploymentStatus(STATUS.ERROR);
       setErrorMessage(errorMsg);
-
-      toast.error('Deployment failed', {
-        description: errorMsg,
-      });
+      toast.error('Deployment failed', { description: errorMsg });
     }
   };
 
@@ -527,6 +530,40 @@ export function DeployModelButton({
                     </SelectContent>
                   </Select>
                 </div>
+                
+                <div className="pt-4 border-t border-purple-200 dark:border-purple-800 space-y-3">
+                  <div className="items-center flex space-x-2">
+                    <Checkbox id="use-network-volume" checked={useNetworkVolume} onCheckedChange={(checked) => setUseNetworkVolume(Boolean(checked))} />
+                    <label
+                        htmlFor="use-network-volume"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                        Use Persistent Storage
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground pl-1">
+                      Caches the model on a Network Volume for significantly faster startups on subsequent deployments. A small monthly storage fee applies.
+                  </p>
+
+                  {useNetworkVolume && (
+                      <div className="space-y-2 pl-1 pt-2">
+                          <Label htmlFor="volume-size">Volume Size (GB)</Label>
+                          <Input
+                              id="volume-size"
+                              type="number"
+                              step="10"
+                              min="10"
+                              placeholder="50"
+                              value={volumeSizeGb}
+                              onChange={(e) => setVolumeSizeGb(parseInt(e.target.value))}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                              Allocate enough space for the model. 15GB for a 7B model is a safe bet.
+                          </p>
+                      </div>
+                  )}
+                </div>
+
 
                 <div className="space-y-2">
                   <Label htmlFor="runpod-budget">Budget Limit (USD)</Label>
@@ -771,33 +808,12 @@ export function DeployModelButton({
           <div className="py-8 flex flex-col items-center justify-center space-y-4">
             <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-medium">
-                {serverType === STATUS.VLLM
-                  ? 'Deploying Model...'
-                  : serverType === STATUS.RUNPOD
-                  ? 'Deploying to RunPod...'
-                  : serverType === STATUS.RUNPOD_SERVERLESS
-                  ? 'Deploying to RunPod Serverless...'
-                  : 'Converting & Deploying...'}
-              </h3>
+              <h3 className="text-lg font-medium">Deployment in Progress...</h3>
               <p className="text-sm text-muted-foreground">
-                {serverType === STATUS.VLLM
-                  ? 'Starting vLLM server and loading model'
-                  : serverType === STATUS.RUNPOD
-                  ? 'Creating vLLM pod on RunPod cloud GPU'
-                  : serverType === STATUS.RUNPOD_SERVERLESS
-                  ? 'Creating serverless endpoint and downloading model from HuggingFace'
-                  : 'Converting to GGUF format and creating Ollama model'
-                }
+                {pollingMessage || 'Initializing deployment...'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {serverType === STATUS.VLLM
-                  ? 'This may take 1-2 minutes'
-                  : serverType === STATUS.RUNPOD
-                  ? 'This may take 2-5 minutes'
-                  : serverType === STATUS.RUNPOD_SERVERLESS
-                  ? 'First deployment may take 5-10 minutes for model download'
-                  : 'This may take 3-5 minutes for conversion'}
+                This may take several minutes, especially for the first deployment.
               </p>
             </div>
           </div>
@@ -854,18 +870,10 @@ export function DeployModelButton({
 
         </div>{/* End scrollable content wrapper */}
 
-        {deploymentStatus === STATUS.ERROR && (
+        {(deploymentStatus === STATUS.SUCCESS || deploymentStatus === STATUS.ERROR) && (
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
               Close
-            </Button>
-            <Button
-              onClick={() => {
-                setDeploymentStatus(STATUS.IDLE);
-                setErrorMessage('');
-              }}
-            >
-              Try Again
             </Button>
           </DialogFooter>
         )}

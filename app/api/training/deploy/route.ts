@@ -339,6 +339,8 @@ export async function POST(req: NextRequest) {
           hf_token: hfToken,
           budget_limit: config?.budget_limit || 5,
           volume_size_gb: config?.volume_size_gb || 50,
+          use_network_volume: config?.use_network_volume,
+          data_center_id: config?.data_center_id, // Will use default in service if not provided
         },
         runpodApiKey!
       );
@@ -374,6 +376,7 @@ export async function POST(req: NextRequest) {
           training_job_id: job_id,
           runpod_pod_id: runpodResponse.endpoint_id,
           runpod_endpoint_url: runpodResponse.endpoint_url,
+          network_volume_id: runpodResponse.network_volume_id, // Add this
           deployed_at: new Date().toISOString(),
           gpu_type: config?.gpu_type || 'NVIDIA RTX A4000',
           budget_limit: config?.budget_limit || 5,
@@ -437,6 +440,7 @@ export async function POST(req: NextRequest) {
           deployment_id: runpodResponse.endpoint_id,
           endpoint_url: runpodResponse.endpoint_url,
           status: runpodResponse.status,
+          network_volume_id: runpodResponse.network_volume_id, // Add this
           config: {
             gpu_type: config?.gpu_type || 'NVIDIA RTX A4000',
             gpu_count: config?.gpu_count || 1,
