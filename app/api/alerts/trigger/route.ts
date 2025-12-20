@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
       errorType: body.error_type || null,
     };
 
-    // Enhance with database details for completed/failed jobs
-    if (supabaseUrl && supabaseServiceKey && (body.type === 'job_completed' || body.type === 'job_failed')) {
+    // Enhance with database details for all job alerts
+    if (supabaseUrl && supabaseServiceKey && (body.type === 'job_started' || body.type === 'job_completed' || body.type === 'job_failed')) {
       try {
         const { createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -116,19 +116,21 @@ export async function POST(request: NextRequest) {
             enhancedJobData.errorMessage = job.error;
           }
 
-          // Fetch latest metrics for completed jobs (or last metrics before failure for failed jobs)
-          const { data: metrics } = await supabase
-            .from('local_training_metrics')
-            .select('eval_loss, perplexity, gpu_memory_allocated_gb')
-            .eq('job_id', body.job_id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+          // Fetch latest metrics for completed/failed jobs (job_started won't have metrics yet)
+          if (body.type === 'job_completed' || body.type === 'job_failed') {
+            const { data: metrics } = await supabase
+              .from('local_training_metrics')
+              .select('eval_loss, perplexity, gpu_memory_allocated_gb')
+              .eq('job_id', body.job_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
-          if (metrics) {
-            enhancedJobData.evalLoss = metrics.eval_loss ?? null;
-            enhancedJobData.perplexity = metrics.perplexity ?? null;
-            enhancedJobData.gpuMemoryUsed = metrics.gpu_memory_allocated_gb ?? null;
+            if (metrics) {
+              enhancedJobData.evalLoss = metrics.eval_loss ?? null;
+              enhancedJobData.perplexity = metrics.perplexity ?? null;
+              enhancedJobData.gpuMemoryUsed = metrics.gpu_memory_allocated_gb ?? null;
+            }
           }
 
           console.log('[AlertTrigger] Enhanced job data with database details');
