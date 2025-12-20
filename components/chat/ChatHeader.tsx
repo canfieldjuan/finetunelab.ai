@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { MoreVertical, Download, Share2, Tag } from 'lucide-react';
+import React, { useState } from 'react';
+import { MoreVertical, Download, Share2, Tag, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -29,6 +29,20 @@ export function ChatHeader({
   onExport,
   modelSelector
 }: ChatHeaderProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopySessionId = async () => {
+    if (!sessionId) return;
+
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy session ID:', err);
+    }
+  };
+
   if (isWidgetMode) {
     return null;
   }
@@ -41,22 +55,32 @@ export function ChatHeader({
           {modelSelector}
         </div>
 
-        {/* Center: Title and Session Tag */}
-        <div className="flex flex-col items-center gap-1">
-          <h2 className="text-lg font-semibold text-card-foreground text-center">
-            Model Training and Assessment Portal
-          </h2>
+        {/* Center: Title */}
+        <h2 className="text-lg font-semibold text-card-foreground text-center">
+          Model Training and Assessment Portal
+        </h2>
+
+        {/* Right side: Session Tag + More Menu */}
+        <div className="flex items-center justify-end gap-2 mr-2">
+          {/* Session Tag Badge - clickable to copy */}
           {sessionId && (
-            <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+            <Badge
+              variant="secondary"
+              className="flex items-center gap-1 text-xs cursor-pointer hover:bg-secondary/80 transition-colors"
+              onClick={handleCopySessionId}
+              title="Click to copy session ID"
+            >
               <Tag className="h-3 w-3" />
               <span>{sessionId}</span>
               {experimentName && <span className="text-muted-foreground">• {experimentName}</span>}
+              {copied ? (
+                <Check className="h-3 w-3 ml-1 text-green-600" />
+              ) : (
+                <Copy className="h-3 w-3 ml-1 opacity-60" />
+              )}
             </Badge>
           )}
-        </div>
 
-        {/* Right side: More Menu */}
-        <div className="flex items-center justify-end gap-2 mr-2">
           {/* 3-dot menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
