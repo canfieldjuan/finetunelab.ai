@@ -649,9 +649,9 @@ else
   exit 1
 fi
 
-# Download standalone_trainer.py from GitHub
-echo "[$(date)] Downloading standalone_trainer.py from GitHub..."
-TRAINER_URL="https://raw.githubusercontent.com/canfieldjuan/finetunelab.ai/main/lib/training/standalone_trainer.py"
+# Download standalone_trainer.py from GitLab
+echo "[$(date)] Downloading standalone_trainer.py from GitLab..."
+TRAINER_URL="https://gitlab.com/canfieldjuan/finetunelab.ai/-/raw/main/lib/training/standalone_trainer.py"
 if curl -f -L -o /workspace/standalone_trainer.py "$TRAINER_URL"; then
   chmod +x /workspace/standalone_trainer.py
   echo "[$(date)] ✓ standalone_trainer.py downloaded ($(wc -l < /workspace/standalone_trainer.py) lines)"
