@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
   let isWidgetMode = false;
   let isBatchTestMode = false;
   let widgetConversationId: string | null = null;
+  let regularChatSessionTag: string | null = null;
   let supabaseAdmin: SupabaseClient | null = null;
   let selectedModelId: string | null = null;
   let provider: string | null = null;
@@ -655,6 +656,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 console.error('[API] ❌ Failed to update conversation:', updateError);
               } else {
                 console.log('[API] ✅ Session tag saved successfully:', sessionTag.session_id);
+                regularChatSessionTag = sessionTag.session_id;
               }
             } else {
               console.log('[API] ⚠️ Session tag generation returned null (model may not be tracked)');
@@ -925,8 +927,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           operationType: 'llm_call',
           modelName: selectedModelId,
           modelProvider: actualModelConfig?.provider || provider || undefined,
-          conversationId: widgetConversationId || undefined,
-          sessionTag: widgetSessionTag || undefined,
+          conversationId: widgetConversationId || conversationId || undefined,
+          sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
         });
 
         try {
@@ -1502,8 +1504,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         operationType: 'llm_call',
         modelName: selectedModelId || model || undefined,
         modelProvider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || undefined,
-        conversationId: widgetConversationId || undefined,
-        sessionTag: widgetSessionTag || undefined,
+        conversationId: widgetConversationId || conversationId || undefined,
+        sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
       });
 
       const stream = new ReadableStream({

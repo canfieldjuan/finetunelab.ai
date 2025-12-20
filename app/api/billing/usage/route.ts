@@ -52,15 +52,16 @@ export async function GET(req: NextRequest) {
 
     // If no active commitment exists, create a default "starter" tier
     if (commitmentError || !commitment) {
-      console.log('[Usage API] No active subscription found, creating default starter tier for user:', user.id);
+      console.log('[Usage API] No active subscription found, attempting to create default starter tier for user:', user.id);
       
       const now = new Date();
       const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
+      // Use upsert to handle potential race conditions or existing records
       const { data: newCommitment, error: createError } = await supabase
         .from('usage_commitments')
-        .insert({
+        .upsert({
           user_id: user.id,
           tier: 'starter',
           status: 'active',
@@ -72,20 +73,37 @@ export async function GET(req: NextRequest) {
           base_retention_days: 14,
           starts_at: periodStart.toISOString(),
           ends_at: periodEnd.toISOString(),
+        }, {
+          onConflict: 'user_id,status',
+          ignoreDuplicates: false, // Update if exists
         })
         .select()
         .single();
 
-      if (createError || !newCommitment) {
-        console.error('[Usage API] Failed to create default subscription:', createError);
-        return NextResponse.json(
-          { error: 'Failed to initialize subscription' },
-          { status: 500 }
-        );
+      if (createError) {
+        console.error('[Usage API] Failed to create/update default subscription:', createError);
+        
+        // Try one more time to fetch existing commitment
+        const { data: existingCommitment } = await supabase
+          .from('usage_commitments')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .single();
+        
+        if (existingCommitment) {
+          console.log('[Usage API] Found existing commitment after upsert failure');
+          commitment = existingCommitment;
+        } else {
+          return NextResponse.json(
+            { error: 'Failed to initialize subscription' },
+            { status: 500 }
+          );
+        }
+      } else {
+        commitment = newCommitment;
+        console.log('[Usage API] Created/updated default starter subscription for user:', user.id);
       }
-
-      commitment = newCommitment;
-      console.log('[Usage API] Created default starter subscription for user:', user.id);
     }
 
     // 3. Get current usage

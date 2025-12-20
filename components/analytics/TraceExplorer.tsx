@@ -29,6 +29,7 @@ interface TraceListItem {
   model_provider?: string;
   conversation_id?: string;
   message_id?: string;
+  session_tag?: string;
   error_message?: string;
 }
 
@@ -102,6 +103,11 @@ export function TraceExplorer() {
       }
 
       const data = await response.json();
+      console.log('[TraceExplorer] Received data:', {
+        tracesCount: data.traces?.length || 0,
+        total: data.total,
+        sampleTrace: data.traces?.[0]
+      });
       setTraces(data.traces || []);
       setTotalCount(data.total || 0);
     } catch (err) {
@@ -220,7 +226,7 @@ export function TraceExplorer() {
             <div className="lg:col-span-2">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Search by trace ID, conversation ID..."
+                  placeholder="Search by session tag, trace ID, model..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -336,7 +342,12 @@ export function TraceExplorer() {
                             )}
                           </div>
                           <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                            <span className="font-mono">{trace.trace_id.slice(0, 12)}...</span>
+                            {trace.session_tag && (
+                              <span className="font-mono font-semibold text-primary">
+                                📋 {trace.session_tag}
+                              </span>
+                            )}
+                            <span className="font-mono text-xs">{trace.trace_id.slice(0, 12)}...</span>
                             <span>{formatTimestamp(trace.start_time)}</span>
                             <span>{formatDuration(trace.duration_ms)}</span>
                           </div>
