@@ -606,8 +606,21 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           selectedModelId = conversation.llm_model_id;
           useUnifiedClient = true;
         }
+      } catch (error) {
+        console.log('[API] Could not load conversation model:', error);
+      }
+    }
 
-        // Auto-generate session tag if missing (first message in regular chat)
+    // Auto-generate session tag if missing (first message in regular chat)
+    // This runs AFTER model selection, regardless of whether model came from request or conversation
+    if (conversationId && userId && !isWidgetMode) {
+      try {
+        const { data: conversation } = await (supabaseAdmin || supabase)
+          .from('conversations')
+          .select('llm_model_id, session_id')
+          .eq('id', conversationId)
+          .single();
+
         console.log('[API] ========== AUTO SESSION TAGGING CHECK (REGULAR CHAT) ==========');
         console.log('[API] Conversation:', {
           id: conversation?.id,
@@ -658,7 +671,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
         console.log('[API] ========== END AUTO SESSION TAGGING CHECK ==========');
       } catch (error) {
-        console.log('[API] Could not load conversation model:', error);
+        console.log('[API] Could not load conversation for session tagging:', error);
       }
     }
 
