@@ -499,30 +499,11 @@ export async function POST(request: NextRequest) {
     console.log('[RunPod API] Model name characters:', modelName.split('').map((c: string) => `${c}(${c.charCodeAt(0)})`).join(' '));
 
     // Extract dataset metadata (already loaded from junction table)
-    let sampleCount = dataset?.sample_count || 0;
-    let trainSamples = dataset?.train_samples || null;
-    let valSamples = dataset?.val_samples || null;
+    // NOTE: The field is 'total_examples', not 'sample_count'!
+    let sampleCount = dataset?.total_examples || 0;
 
-    console.log('[RunPod API] Dataset sample count from junction:', sampleCount);
-
-    // Fallback: Query database if sample_count is missing
-    if (!sampleCount && datasetStoragePath) {
-      console.log('[RunPod API] Sample count missing, querying database...');
-      const { data: dbDataset, error: datasetError } = await supabase
-        .from('training_datasets')
-        .select('sample_count, train_samples, val_samples')
-        .eq('storage_path', datasetStoragePath)
-        .single();
-
-      if (dbDataset) {
-        sampleCount = dbDataset.sample_count || 0;
-        trainSamples = dbDataset.train_samples;
-        valSamples = dbDataset.val_samples;
-        console.log('[RunPod API] Found sample_count from database:', sampleCount);
-      } else {
-        console.error('[RunPod API] Database query failed:', datasetError);
-      }
-    }
+    console.log('[RunPod API] Dataset total_examples from junction:', sampleCount);
+    console.log('[RunPod API] Dataset object:', JSON.stringify(dataset));
 
     // Calculate total_steps from config
     const config = trainingConfig.config_json;
@@ -551,8 +532,6 @@ export async function POST(request: NextRequest) {
         started_at: new Date().toISOString(),
         // Add dataset metadata
         total_samples: sampleCount || null,
-        train_samples: trainSamples,
-        val_samples: valSamples,
         // Add calculated total_steps
         total_steps: totalSteps,
       });
