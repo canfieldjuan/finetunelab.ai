@@ -1207,13 +1207,66 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               tool_success: toolsCalled?.every(t => t.success)
             });
 
-            // End trace with success metrics
+            // End trace with comprehensive data and cost
             if (traceContext && assistantMsgData?.id) {
+              const { truncateString } = await import('@/lib/tracing/trace-utils');
+              const { LLMInputData, LLMOutputData } = await import('@/lib/tracing/types');
+              const { calculateCost, matchModelToPricing } = await import('@/lib/tracing/pricing-config');
+
+              const systemPrompt = enhancedMessages.find(m => m.role === 'system')?.content;
+              const lastUserMessage = enhancedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content;
+
+              const llmInputData: LLMInputData = {
+                systemPrompt: systemPrompt ? truncateString(String(systemPrompt), 5000) : undefined,
+                userMessage: lastUserMessage ? truncateString(String(lastUserMessage), 5000) : undefined,
+                conversationHistory: enhancedMessages
+                  .filter(m => m.role !== 'system')
+                  .slice(-5)
+                  .map(m => ({
+                    role: m.role,
+                    content: truncateString(String(m.content || ''), 500),
+                  })),
+                parameters: {
+                  temperature,
+                  maxTokens,
+                },
+                toolDefinitions: tools?.map(t => ({
+                  name: t.function.name,
+                  description: t.function.description,
+                })),
+              };
+
+              const llmOutputData: LLMOutputData = {
+                content: truncateString(finalResponse, 10000),
+                reasoning: reasoning ? truncateString(reasoning, 10000) : undefined,
+                stopReason: 'stop',
+                toolCallsMade: toolsCalled?.map(t => ({
+                  name: t.name,
+                  success: t.success,
+                })),
+              };
+
+              let costUsd: number | undefined;
+              if (tokenUsage && selectedModelId) {
+                const pricingKey = matchModelToPricing(selectedModelId);
+                costUsd = calculateCost(pricingKey, tokenUsage.input_tokens, tokenUsage.output_tokens);
+                console.log(`[Trace] Calculated cost: $${costUsd.toFixed(6)} for ${tokenUsage.input_tokens} + ${tokenUsage.output_tokens} tokens`);
+              }
+
+              let tokensPerSecond: number | undefined;
+              if (tokenUsage?.output_tokens && latency_ms > 0) {
+                tokensPerSecond = (tokenUsage.output_tokens / latency_ms) * 1000;
+              }
+
               await traceService.endTrace(traceContext, {
                 endTime: new Date(),
                 status: 'completed',
                 inputTokens: tokenUsage?.input_tokens,
                 outputTokens: tokenUsage?.output_tokens,
+                costUsd,
+                tokensPerSecond,
+                inputData: llmInputData,
+                outputData: llmOutputData,
               });
             }
 
