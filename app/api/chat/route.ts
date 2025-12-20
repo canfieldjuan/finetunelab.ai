@@ -766,7 +766,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
       }
 
+      const toolStartTime = Date.now();
       const result = await executeTool(toolName, args, convId, undefined, userId || undefined);
+      const toolExecutionTime = Date.now() - toolStartTime;
+
       // Capture web_search results for SSE previews (standard search path only)
       try {
         if (toolName === 'web_search' && isWebSearchToolPayload(result.data)) {
@@ -786,39 +789,53 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       } catch (capErr) {
         console.log('[API] Could not capture web_search results for SSE:', capErr);
       }
-      
+
       // ========================================================================
-      // TRACE: End tool call span
+      // TRACE: End tool call span with structured data
       // ========================================================================
       if (toolTraceContext) {
         try {
+          const { truncateObject } = await import('@/lib/tracing/trace-utils');
+          const { ToolCallInputData, ToolCallOutputData } = await import('@/lib/tracing/types');
+
+          const toolDef = tools?.find(t => t.function.name === toolName);
+
+          const inputData: ToolCallInputData = {
+            toolName,
+            arguments: truncateObject(args, 5) as Record<string, unknown>,
+            toolDescription: toolDef?.function.description,
+          };
+
           if (result.error) {
-            // Tool call failed
             await traceService.endTrace(toolTraceContext, {
               endTime: new Date(),
               status: 'failed',
+              inputData,
               errorMessage: String(result.error),
               errorType: 'ToolExecutionError',
               metadata: {
-                toolName,
-                args: JSON.stringify(args).slice(0, 1000), // Limit to 1000 chars
+                executionTimeMs: toolExecutionTime,
               },
             });
-            console.log(`[Trace] Ended tool call trace (failed): ${toolName}`);
+            console.log(`[Trace] Tool call failed: ${toolName} (${toolExecutionTime}ms)`);
           } else {
-            // Tool call succeeded
+            const outputData: ToolCallOutputData = {
+              result: truncateObject(result.data, 10),
+              executionStatus: 'success',
+              executionTimeMs: toolExecutionTime,
+            };
+
             await traceService.endTrace(toolTraceContext, {
               endTime: new Date(),
-              status: 'success',
-              outputData: result.data,
+              status: 'completed',
+              inputData,
+              outputData,
               metadata: {
-                toolName,
-                args: JSON.stringify(args).slice(0, 1000), // Limit to 1000 chars
                 resultType: typeof result.data,
                 hasResults: result.data !== null && result.data !== undefined,
               },
             });
-            console.log(`[Trace] Ended tool call trace (success): ${toolName}`);
+            console.log(`[Trace] Tool call completed: ${toolName} (${toolExecutionTime}ms)`);
           }
         } catch (traceErr) {
           console.error('[Trace] Failed to end tool trace:', traceErr);
