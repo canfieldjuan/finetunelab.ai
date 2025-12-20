@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { MoreVertical, Download, Share2 } from 'lucide-react';
+import { MoreVertical, Download, Share2, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -8,11 +8,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 
 interface ChatHeaderProps {
   isWidgetMode: boolean;
   activeId: string | null;
   loading: boolean;
+  sessionId?: string | null;
+  experimentName?: string | null;
   onExport?: () => void;
   modelSelector?: React.ReactNode;
 }
@@ -21,6 +24,8 @@ export function ChatHeader({
   isWidgetMode,
   activeId,
   loading,
+  sessionId,
+  experimentName,
   onExport,
   modelSelector
 }: ChatHeaderProps) {
@@ -36,10 +41,19 @@ export function ChatHeader({
           {modelSelector}
         </div>
 
-        {/* Center: Title - absolutely centered */}
-        <h2 className="text-lg font-semibold text-card-foreground text-center">
-          Model Training and Assessment Portal
-        </h2>
+        {/* Center: Title and Session Tag */}
+        <div className="flex flex-col items-center gap-1">
+          <h2 className="text-lg font-semibold text-card-foreground text-center">
+            Model Training and Assessment Portal
+          </h2>
+          {sessionId && (
+            <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+              <Tag className="h-3 w-3" />
+              <span>{sessionId}</span>
+              {experimentName && <span className="text-muted-foreground">• {experimentName}</span>}
+            </Badge>
+          )}
+        </div>
 
         {/* Right side: More Menu */}
         <div className="flex items-center justify-end gap-2 mr-2">
