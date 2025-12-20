@@ -533,12 +533,13 @@ export async function POST(request: NextRequest) {
       console.log('[RunPod API] Using NEXT_PUBLIC_APP_URL from environment:', appUrl);
     }
 
-    console.log('[RunPod API] DEBUG - Final appUrl value:', appUrl);
-
-    if (appUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
-      console.error('[RunPod API] ⚠️  WARNING: Using localhost URL in production!');
-      console.error('[RunPod API] Metrics API will be unreachable from RunPod pods.');
+    if (appUrl.includes('localhost')) {
+      console.warn('[RunPod API] Detected localhost URL - RunPod pods cannot reach localhost');
+      console.warn('[RunPod API] Using production URL instead: https://finetunelab.ai');
+      appUrl = 'https://finetunelab.ai';
     }
+
+    console.log('[RunPod API] DEBUG - Final appUrl value:', appUrl);
 
     const trainingScript = runPodService.generateTrainingScript(
       modelName,
