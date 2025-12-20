@@ -1,0 +1,36 @@
+# GitGuardian Secret Scanning Configuration
+# Prevents committing sensitive data
+
+version: 2
+
+paths-ignore:
+  - "**/*.md"
+  - "**/node_modules/**"
+  - "**/.next/**"
+  - "**/dist/**"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+
+# Custom patterns to detect
+detectors:
+  - name: "Supabase Keys"
+    regex: 'eyJ[A-Za-z0-9_-]{30,}'
+    
+  - name: "OpenAI API Keys"
+    regex: 'sk-[A-Za-z0-9]{48}'
+    
+  - name: "Stripe Keys"
+    regex: 'sk_live_[0-9a-zA-Z]{24,}'
+    
+  - name: "AWS Access Keys"
+    regex: 'AKIA[0-9A-Z]{16}'
+
+  - name: "Generic API Keys"
+    regex: 'api[_-]?key["\']?\s*[:=]\s*["\']?[A-Za-z0-9_-]{20,}'
+
+# Allowed patterns (false positives)
+allow:
+  - "NEXT_PUBLIC_*"  # Public env vars are OK
+  - "example-api-key"
+  - "test-secret-key"
+  - "dummy-password"
