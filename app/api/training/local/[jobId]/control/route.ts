@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { runpodService } from '@/lib/training/runpod-service';
+import { secretsManager } from '@/lib/secrets/secrets-manager.service';
 
 export const runtime = 'nodejs';
 
@@ -117,6 +119,63 @@ export async function POST(
       { error: 'Training job not found or access denied' },
       { status: statusCode }
     );
+  }
+
+  // Check if this is a cloud deployment (RunPod, etc.)
+  if (action === 'cancel') {
+    const { data: cloudDeployment } = await supabase
+      .from('cloud_deployments')
+      .select('deployment_id, platform')
+      .eq('config->>job_id', jobId)
+      .maybeSingle();
+
+    if (cloudDeployment && cloudDeployment.platform === 'runpod') {
+      console.log('[TrainingControl] Cancelling RunPod pod:', cloudDeployment.deployment_id);
+
+      try {
+        const runpodApiKey = await secretsManager.getSecret(user.id, 'runpod_api_key');
+        if (!runpodApiKey?.value) {
+          return NextResponse.json(
+            { success: false, error: 'RunPod API key not configured' },
+            { status: 400 }
+          );
+        }
+
+        await runpodService.stopPod(cloudDeployment.deployment_id, runpodApiKey.value);
+
+        await supabase
+          .from('cloud_deployments')
+          .update({
+            status: 'stopped',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('deployment_id', cloudDeployment.deployment_id);
+
+        await supabase
+          .from('local_training_jobs')
+          .update({
+            status: 'cancelled',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+
+        console.log('[TrainingControl] RunPod pod terminated successfully');
+
+        return NextResponse.json({
+          success: true,
+          action: 'cancel',
+          job_id: jobId,
+          message: 'RunPod pod terminated successfully'
+        });
+      } catch (error) {
+        console.error('[TrainingControl] Error terminating RunPod pod:', error);
+        return NextResponse.json(
+          { success: false, error: 'Failed to terminate RunPod pod' },
+          { status: 500 }
+        );
+      }
+    }
   }
 
   try {
