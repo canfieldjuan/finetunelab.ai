@@ -69,20 +69,41 @@ export class SearchService {
 
     const queryTime = Date.now() - startTime;
 
-    // End retrieval trace
+    // End retrieval trace with structured data
     if (retrievalContext) {
       try {
+        const { truncateString, truncateRAGChunks } = await import('@/lib/tracing/trace-utils');
+        const { RAGOutputData } = await import('@/lib/tracing/types');
+
+        const inputData = {
+          query: truncateString(query, 500),
+          searchMethod: graphragConfig.search.searchMethod,
+          topK: graphragConfig.search.topK,
+        };
+
+        const outputData: RAGOutputData = {
+          topChunks: truncateRAGChunks(
+            graphitiResult.edges.map(edge => ({
+              fact: edge.fact,
+              score: edge.score || 0,
+              sourceDescription: edge.source_description,
+              entityName: edge.source_node?.name,
+            })),
+            5
+          ),
+          totalCandidates: graphitiResult.edges.length,
+          avgConfidence: avgRelevance,
+        };
+
         await traceService.endTrace(retrievalContext, {
           endTime: new Date(),
           status: 'completed',
+          inputData,
+          outputData,
           metadata: {
-            query: query.slice(0, 200),
             userId,
-            searchMethod: graphragConfig.search.searchMethod,
-            resultsCount: graphitiResult.edges.length,
-            sourcesCount: sources.length,
-            avgRelevance,
             queryTimeMs: queryTime,
+            sourcesCount: sources.length,
           },
         });
         console.log('[SearchService] Ended GraphRAG retrieval trace (success)');
