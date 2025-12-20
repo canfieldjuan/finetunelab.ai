@@ -73,26 +73,17 @@ export async function POST(request: NextRequest) {
         const { createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-        // Fetch job with config and dataset details
+        // Fetch job details (config is stored directly in the job)
         const { data: job } = await supabase
           .from('local_training_jobs')
-          .select(`
-            *,
-            training_config:training_configs(
-              config_json,
-              datasets:training_config_datasets(
-                dataset:training_datasets(name, total_examples)
-              )
-            )
-          `)
+          .select('config, dataset_path, error, total_samples, total_steps')
           .eq('id', body.job_id)
           .single();
 
         if (job) {
           const config = job.config;
-          const dataset = job.training_config?.datasets?.[0]?.dataset;
 
-          // Extract training configuration details
+          // Extract training configuration details from job.config
           if (config) {
             enhancedJobData.trainingMethod = config.training?.method || null;
             enhancedJobData.learningRate = config.training?.learning_rate || null;
@@ -101,27 +92,43 @@ export async function POST(request: NextRequest) {
             enhancedJobData.baseModel = enhancedJobData.baseModel || config.model?.name || null;
           }
 
-          // Extract dataset information
-          if (dataset) {
-            enhancedJobData.datasetName = dataset.name || null;
-            enhancedJobData.datasetSamples = dataset.total_examples || null;
+          // Use total_samples and total_steps from job if not provided in request
+          if (!enhancedJobData.totalSteps && job.total_steps) {
+            enhancedJobData.totalSteps = job.total_steps;
           }
 
-          // Fetch latest metrics for completed jobs
-          if (body.type === 'job_completed') {
-            const { data: metrics } = await supabase
-              .from('local_training_metrics')
-              .select('eval_loss, perplexity, gpu_memory_allocated_gb')
-              .eq('job_id', body.job_id)
-              .order('created_at', { ascending: false })
-              .limit(1)
+          // Fetch dataset information by storage path
+          if (job.dataset_path) {
+            const { data: dataset } = await supabase
+              .from('training_datasets')
+              .select('name, total_examples')
+              .eq('storage_path', job.dataset_path)
               .single();
 
-            if (metrics) {
-              enhancedJobData.evalLoss = metrics.eval_loss ?? null;
-              enhancedJobData.perplexity = metrics.perplexity ?? null;
-              enhancedJobData.gpuMemoryUsed = metrics.gpu_memory_allocated_gb ?? null;
+            if (dataset) {
+              enhancedJobData.datasetName = dataset.name || null;
+              enhancedJobData.datasetSamples = dataset.total_examples || job.total_samples || null;
             }
+          }
+
+          // For failed jobs, use error from database if not provided in request
+          if (body.type === 'job_failed' && !enhancedJobData.errorMessage && job.error) {
+            enhancedJobData.errorMessage = job.error;
+          }
+
+          // Fetch latest metrics for completed jobs (or last metrics before failure for failed jobs)
+          const { data: metrics } = await supabase
+            .from('local_training_metrics')
+            .select('eval_loss, perplexity, gpu_memory_allocated_gb')
+            .eq('job_id', body.job_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (metrics) {
+            enhancedJobData.evalLoss = metrics.eval_loss ?? null;
+            enhancedJobData.perplexity = metrics.perplexity ?? null;
+            enhancedJobData.gpuMemoryUsed = metrics.gpu_memory_allocated_gb ?? null;
           }
 
           console.log('[AlertTrigger] Enhanced job data with database details');

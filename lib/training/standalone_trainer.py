@@ -3668,12 +3668,19 @@ def main():
         sys.exit(0)
 
     except Exception as e:
-        logger.error(f"[Main] Training failed with error: {str(e)}")
-        logger.exception("Full traceback:")
-        sys.stderr.write(f"ERROR: Training failed: {str(e)}\n")
+        import traceback
 
-        # Send job_failed alert
-        trigger_alert('job_failed', error_message=str(e))
+        error_msg = str(e)
+        full_traceback = traceback.format_exc()
+
+        logger.error(f"[Main] Training failed with error: {error_msg}")
+        logger.exception("Full traceback:")
+        sys.stderr.write(f"ERROR: Training failed: {error_msg}\n")
+
+        # Send job_failed alert with full traceback
+        # Include both short error message and full traceback for debugging
+        detailed_error = f"{error_msg}\n\nTraceback:\n{full_traceback}"
+        trigger_alert('job_failed', error_message=detailed_error)
 
         sys.exit(1)
 
