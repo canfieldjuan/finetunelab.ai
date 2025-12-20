@@ -34,7 +34,8 @@ import {
   TestTube2,
   Database,
   TrendingUp,
-  FlaskConical
+  FlaskConical,
+  Network
 } from 'lucide-react';
 import type { NavItem } from './CollapsibleNavGroup';
 import { CollapsibleNavGroup } from './CollapsibleNavGroup';
@@ -112,7 +113,7 @@ export function AppSidebar({
     }
 
     // Evaluation group pages
-    if (['testing', 'analytics'].includes(currentPage)) {
+    if (['testing', 'analytics', 'traces'].includes(currentPage)) {
       newExpanded.add('evaluation');
     }
 
@@ -166,6 +167,7 @@ export function AppSidebar({
   const evaluationItems: NavItem[] = [
     { id: 'testing', href: '/testing', icon: TestTube2, label: 'Model Testing' },
     { id: 'analytics', href: '/analytics', icon: BarChart3, label: 'Observability' },
+    { id: 'traces', href: '/analytics/traces', icon: Network, label: 'Traces' },
   ];
 
   const docsItems: NavItem[] = [
