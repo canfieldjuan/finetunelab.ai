@@ -53,7 +53,7 @@ interface DeployModelButtonProps {
 
 type DeploymentStatus = typeof STATUS.IDLE | typeof STATUS.DEPLOYING | typeof STATUS.SUCCESS | typeof STATUS.ERROR;
 type VLLMStatus = typeof STATUS.CHECKING | typeof STATUS.AVAILABLE | typeof STATUS.UNAVAILABLE | typeof STATUS.ERROR;
-type ServerType = typeof STATUS.VLLM | typeof STATUS.OLLAMA | typeof STATUS.RUNPOD | typeof STATUS.RUNPOD_SERVERLESS;
+type ServerType = typeof STATUS.VLLM | typeof STATUS.OLLAMA | typeof STATUS.RUNPOD | typeof STATUS.RUNPOD_SERVERLESS | 'fireworks';
 
 /**
  * Recommend GPU based on model size
@@ -283,6 +283,10 @@ export function DeployModelButton({
               min_workers: minWorkers,
               max_workers: maxWorkers,
             }),
+            ...(serverType === 'fireworks' && {
+              // Add Fireworks-specific config here if needed, for now it's simple
+              // e.g., gpu_type, budget_limit
+            }),
           },
         }),
       });
@@ -473,6 +477,9 @@ export function DeployModelButton({
                   <SelectItem value={STATUS.RUNPOD_SERVERLESS}>
                     RunPod Serverless (Auto-scaling)
                   </SelectItem>
+                  <SelectItem value="fireworks">
+                    Fireworks.ai (Serverless)
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground">
@@ -482,6 +489,8 @@ export function DeployModelButton({
                   ? 'Ollama runs on port 11434 and supports multiple models simultaneously'
                   : serverType === STATUS.RUNPOD
                   ? 'Deploy to RunPod cloud GPU pod with vLLM - pay per hour, instant availability'
+                  : serverType === 'fireworks'
+                  ? 'Deploy to Fireworks.ai - pay per token, fast cold starts'
                   : 'Deploy serverless to RunPod - auto-scales workers, pay per request'}
               </p>
             </div>
@@ -733,6 +742,19 @@ export function DeployModelButton({
                     Max workers are limited by your RunPod quota (typically 5 total across all endpoints).
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* Fireworks.ai Pod configuration */}
+            {serverType === 'fireworks' && (
+              <div className="space-y-4 p-4 border rounded-lg bg-blue-50/50 dark:bg-blue-900/10">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Image src="/logos/fireworks-logomark.svg" alt="Fireworks.ai" width={16} height={16} />
+                  Fireworks.ai Configuration
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Your fine-tuned model will be deployed to Fireworks.ai. This is a serverless deployment, so you only pay for what you use.
+                </p>
               </div>
             )}
 
