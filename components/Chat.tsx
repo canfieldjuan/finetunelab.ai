@@ -217,8 +217,6 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     handlePromoteConversation: handlePromoteConversationHook,
     handleDeleteConversation: handleDeleteConversationHook,
     handleBulkDelete: handleBulkDeleteHook,
-    handleSessionChange: handleSessionChangeHook,
-    handleClearSession: handleClearSessionHook,
   } = conversationActions;
 
   // Search state management - using useSearchState hook
@@ -346,48 +344,6 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Settings state - using useSettings hook
   const { userSettings, setUserSettings } = useSettings(user?.id || null, session);
 
-  // Session state management - using useSessionState hook
-  const {
-    sessionId,
-    setSessionId,
-    experimentName,
-    setExperimentName,
-  } = useSessionState();
-
-  // Sync session state from active conversation
-  // FIX: Tags are per-conversation, not global - update UI when switching chats
-  useEffect(() => {
-    if (!activeId || !conversations.length) {
-      // No active conversation - clear session state
-      if (sessionId !== null) setSessionId(null);
-      if (experimentName !== null) setExperimentName(null);
-      return;
-    }
-
-    // Find active conversation
-    const activeConversation = conversations.find(c => c.id === activeId);
-
-    if (!activeConversation) {
-      // Active conversation not found - clear session state
-      if (sessionId !== null) setSessionId(null);
-      if (experimentName !== null) setExperimentName(null);
-      return;
-    }
-
-    // Sync UI state from conversation data
-    const dbSessionId = activeConversation.session_id || null;
-    const dbExperimentName = activeConversation.experiment_name || null;
-
-    // Only update if different to avoid unnecessary re-renders
-    if (sessionId !== dbSessionId) {
-      setSessionId(dbSessionId);
-      log.debug('Chat', 'Synced sessionId from conversation', { sessionId: dbSessionId });
-    }
-    if (experimentName !== dbExperimentName) {
-      setExperimentName(dbExperimentName);
-      log.debug('Chat', 'Synced experimentName from conversation', { experimentName: dbExperimentName });
-    }
-  }, [activeId, conversations, sessionId, experimentName, setSessionId, setExperimentName]);
 
   // Refetch conversation after message completes to pick up session_id
   const previousLoadingRef = useRef(loading);
@@ -448,30 +404,6 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     error: sttError
   } = useSpeechRecognition(speechRecognitionOptions);
 
-  // Session tagging handlers
-  // Wrapper for handleSessionChange with UI state updates
-  const handleSessionChange = useCallback(async (newSessionId: string, newExperimentName: string) => {
-    log.info('Chat', 'Session tagged', { sessionId: newSessionId, experimentName: newExperimentName });
-
-    // Update UI state
-    setSessionId(newSessionId);
-    setExperimentName(newExperimentName);
-
-    // Persist to database via hook
-    await handleSessionChangeHook(newSessionId, newExperimentName);
-  }, [setSessionId, setExperimentName, handleSessionChangeHook]);
-
-  // Wrapper for handleClearSession with UI state updates
-  const handleClearSession = useCallback(async () => {
-    log.info('Chat', 'Session cleared');
-
-    // Update UI state
-    setSessionId(null);
-    setExperimentName(null);
-
-    // Persist to database via hook
-    await handleClearSessionHook();
-  }, [setSessionId, setExperimentName, handleClearSessionHook]);
 
   // messagesEndRef and messagesContainerRef now provided by useChat hook
   const speakRef = useRef(speak);
@@ -1418,11 +1350,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
         <ChatHeader
           isWidgetMode={isWidgetMode}
           activeId={activeId}
-          sessionId={sessionId}
-          experimentName={experimentName}
           loading={loading}
-          onSessionChange={handleSessionChange}
-          onClearSession={handleClearSession}
           onExport={() => setOpenModal('export-dialog')}
           modelSelector={
             <ModelSelector

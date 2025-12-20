@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { SessionManager } from './SessionManager';
 import { MoreVertical, Download, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,11 +12,7 @@ import {
 interface ChatHeaderProps {
   isWidgetMode: boolean;
   activeId: string | null;
-  sessionId: string | null;
-  experimentName: string | null;
   loading: boolean;
-  onSessionChange: (sessionId: string, experimentName: string) => void;
-  onClearSession: () => void;
   onExport?: () => void;
   modelSelector?: React.ReactNode;
 }
@@ -25,11 +20,7 @@ interface ChatHeaderProps {
 export function ChatHeader({
   isWidgetMode,
   activeId,
-  sessionId,
-  experimentName,
   loading,
-  onSessionChange,
-  onClearSession,
   onExport,
   modelSelector
 }: ChatHeaderProps) {
@@ -50,18 +41,8 @@ export function ChatHeader({
           Model Training and Assessment Portal
         </h2>
 
-        {/* Right side: Session Manager + More Menu */}
+        {/* Right side: More Menu */}
         <div className="flex items-center justify-end gap-2 mr-2">
-          {activeId && (
-            <SessionManager
-              sessionId={sessionId}
-              experimentName={experimentName}
-              onSessionChange={onSessionChange}
-              onClearSession={onClearSession}
-              disabled={loading}
-            />
-          )}
-
           {/* 3-dot menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
