@@ -86,31 +86,34 @@ export async function generateSessionTag(
     const shortUuid = shortUuidSource.replace(/-/g, '').slice(0, 6) || fallbackId.slice(0, 6);
     const resolvedModelId = model?.model_id || normalizedModelId;
     const resolvedModelName = model?.name || normalizedModelId;
-    const modelIdOptions = Array.from(
-      new Set(
-        [normalizedModelId, model?.id, model?.model_id].filter(Boolean) as string[]
-      )
-    );
+
+    // Build list of all possible model identifiers
+    const allModelIds = [normalizedModelId, model?.id, model?.model_id].filter(Boolean) as string[];
+
+    // Filter to only UUIDs for querying llm_model_id column (which is UUID type)
+    const uuidModelIds = allModelIds.filter(id => uuidRegex.test(id));
 
     console.log('[SessionTagGenerator] Resolved values:', {
       shortUuid,
       resolvedModelId,
       resolvedModelName,
-      modelIdOptions,
+      allModelIds,
+      uuidModelIds,
       usingFallback: !model
     });
 
     console.log('[SessionTagGenerator] Querying conversations for counter...', {
       userId,
-      modelIdOptions,
+      uuidModelIds,
       pattern: `chat_model_${shortUuid}_%`
     });
 
+    // Query using only UUID values for llm_model_id column
     const { data: conversations, error: counterError } = await client
       .from('conversations')
       .select('session_id')
       .eq('user_id', userId)
-      .in('llm_model_id', modelIdOptions)
+      .in('llm_model_id', uuidModelIds.length > 0 ? uuidModelIds : ['00000000-0000-0000-0000-000000000000'])
       .not('session_id', 'is', null)
       .like('session_id', `chat_model_${shortUuid}_%`);
 
