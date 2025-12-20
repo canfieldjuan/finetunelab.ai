@@ -122,7 +122,18 @@ export interface TrainingJobAlertData {
   duration: number | null;
   errorMessage: string | null;
   errorType: string | null;
-  [key: string]: string | number | null;
+  // Enhanced details
+  trainingMethod?: string | null; // SFT, DPO, ORPO, CPT, RLHF
+  datasetName?: string | null;
+  datasetSamples?: number | null;
+  learningRate?: number | null;
+  batchSize?: number | null;
+  numEpochs?: number | null;
+  evalLoss?: number | null;
+  perplexity?: number | null;
+  gpuType?: string | null;
+  gpuMemoryUsed?: number | null; // in GB
+  [key: string]: string | number | null | undefined;
 }
 
 export interface BatchTestAlertData {

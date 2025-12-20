@@ -48,7 +48,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const jobData: TrainingJobAlertData = {
+    // Fetch additional job details from database to enhance email
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    let enhancedJobData: TrainingJobAlertData = {
       jobId: body.job_id,
       userId: body.user_id,
       modelName: body.model_name || null,
@@ -63,16 +67,78 @@ export async function POST(request: NextRequest) {
       errorType: body.error_type || null,
     };
 
+    // Enhance with database details for completed/failed jobs
+    if (supabaseUrl && supabaseServiceKey && (body.type === 'job_completed' || body.type === 'job_failed')) {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        // Fetch job with config and dataset details
+        const { data: job } = await supabase
+          .from('local_training_jobs')
+          .select(`
+            *,
+            training_config:training_configs(
+              config_json,
+              datasets:training_config_datasets(
+                dataset:training_datasets(name, total_examples)
+              )
+            )
+          `)
+          .eq('id', body.job_id)
+          .single();
+
+        if (job) {
+          const config = job.config;
+          const dataset = job.training_config?.datasets?.[0]?.dataset;
+
+          // Extract training configuration details
+          if (config) {
+            enhancedJobData.trainingMethod = config.training?.method || null;
+            enhancedJobData.learningRate = config.training?.learning_rate || null;
+            enhancedJobData.batchSize = config.training?.batch_size || null;
+            enhancedJobData.numEpochs = config.training?.num_epochs || null;
+            enhancedJobData.baseModel = enhancedJobData.baseModel || config.model?.name || null;
+          }
+
+          // Extract dataset information
+          if (dataset) {
+            enhancedJobData.datasetName = dataset.name || null;
+            enhancedJobData.datasetSamples = dataset.total_examples || null;
+          }
+
+          // Fetch latest metrics for completed jobs
+          if (body.type === 'job_completed') {
+            const { data: metrics } = await supabase
+              .from('local_training_metrics')
+              .select('eval_loss, perplexity, gpu_memory_allocated_gb')
+              .eq('job_id', body.job_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            if (metrics) {
+              enhancedJobData.evalLoss = metrics.eval_loss ?? null;
+              enhancedJobData.perplexity = metrics.perplexity ?? null;
+              enhancedJobData.gpuMemoryUsed = metrics.gpu_memory_allocated_gb ?? null;
+            }
+          }
+
+          console.log('[AlertTrigger] Enhanced job data with database details');
+        }
+      } catch (enhanceError) {
+        console.warn('[AlertTrigger] Failed to enhance job data:', enhanceError);
+        // Continue with basic data - don't fail the alert
+      }
+    }
+
     console.log('[AlertTrigger] Processing:', body.type, 'for job:', body.job_id);
 
-    await sendTrainingJobAlert(body.type as AlertType, jobData);
+    await sendTrainingJobAlert(body.type as AlertType, enhancedJobData);
 
-    // Update job status in database for completed/failed jobs
-    if (body.type === 'job_completed' || body.type === 'job_failed') {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-      if (supabaseUrl && supabaseServiceKey) {
+    // Update job status in database for completed/failed jobs (reuse Supabase client from above)
+    if (supabaseUrl && supabaseServiceKey && (body.type === 'job_completed' || body.type === 'job_failed')) {
+      try {
         const { createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -102,6 +168,8 @@ export async function POST(request: NextRequest) {
         } else {
           console.log('[AlertTrigger] Job status updated successfully');
         }
+      } catch (updateErr) {
+        console.error('[AlertTrigger] Error updating job status:', updateErr);
       }
     }
 

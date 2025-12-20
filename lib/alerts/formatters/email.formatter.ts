@@ -129,39 +129,148 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
   }
 
   if (jobData) {
-    const metrics: { label: string; value: string }[] = [];
+    // Organize metrics into sections
+    const basicInfo: { label: string; value: string }[] = [];
+    const trainingConfig: { label: string; value: string }[] = [];
+    const datasetInfo: { label: string; value: string }[] = [];
+    const performance: { label: string; value: string }[] = [];
+    const resources: { label: string; value: string }[] = [];
 
+    // Basic Information
     if (jobData.modelName) {
-      metrics.push({ label: 'Model', value: escapeHtml(jobData.modelName) });
+      basicInfo.push({ label: 'Model', value: escapeHtml(jobData.modelName) });
     }
     if (jobData.baseModel) {
-      metrics.push({ label: 'Base Model', value: escapeHtml(jobData.baseModel) });
+      basicInfo.push({ label: 'Base Model', value: escapeHtml(jobData.baseModel) });
+    }
+    if (jobData.trainingMethod) {
+      basicInfo.push({ label: 'Training Method', value: escapeHtml(jobData.trainingMethod.toUpperCase()) });
     }
     if (jobData.duration !== null) {
-      metrics.push({ label: 'Duration', value: formatDuration(jobData.duration) });
-    }
-    if (jobData.loss !== null) {
-      metrics.push({ label: 'Final Loss', value: formatNumber(jobData.loss) });
-    }
-    if (jobData.currentStep !== null && jobData.totalSteps !== null) {
-      metrics.push({ label: 'Progress', value: `${jobData.currentStep}/${jobData.totalSteps}` });
-    }
-    if (jobData.errorType) {
-      metrics.push({ label: 'Error Type', value: escapeHtml(jobData.errorType) });
+      basicInfo.push({ label: 'Duration', value: formatDuration(jobData.duration) });
     }
 
-    if (metrics.length > 0) {
-      metricsHtml = `
-        <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-          ${metrics.map(m => `
+    // Training Configuration
+    if (jobData.learningRate !== null) {
+      trainingConfig.push({ label: 'Learning Rate', value: formatNumber(jobData.learningRate, 6) });
+    }
+    if (jobData.batchSize !== null) {
+      trainingConfig.push({ label: 'Batch Size', value: String(jobData.batchSize) });
+    }
+    if (jobData.numEpochs !== null) {
+      trainingConfig.push({ label: 'Epochs', value: String(jobData.numEpochs) });
+    }
+    if (jobData.currentStep !== null && jobData.totalSteps !== null) {
+      trainingConfig.push({ label: 'Steps', value: `${jobData.currentStep} / ${jobData.totalSteps}` });
+    }
+
+    // Dataset Information
+    if (jobData.datasetName) {
+      datasetInfo.push({ label: 'Dataset', value: escapeHtml(jobData.datasetName) });
+    }
+    if (jobData.datasetSamples !== null) {
+      datasetInfo.push({ label: 'Samples', value: String(jobData.datasetSamples) });
+    }
+
+    // Performance Metrics
+    if (jobData.loss !== null) {
+      performance.push({ label: 'Train Loss', value: formatNumber(jobData.loss) });
+    }
+    if (jobData.evalLoss !== null) {
+      performance.push({ label: 'Eval Loss', value: formatNumber(jobData.evalLoss) });
+    }
+    if (jobData.perplexity !== null) {
+      performance.push({ label: 'Perplexity', value: formatNumber(jobData.perplexity, 2) });
+    }
+
+    // Resource Usage
+    if (jobData.gpuType) {
+      resources.push({ label: 'GPU', value: escapeHtml(jobData.gpuType) });
+    }
+    if (jobData.gpuMemoryUsed !== null) {
+      resources.push({ label: 'GPU Memory', value: `${formatNumber(jobData.gpuMemoryUsed, 2)} GB` });
+    }
+
+    // Error Information
+    if (jobData.errorType) {
+      basicInfo.push({ label: 'Error Type', value: escapeHtml(jobData.errorType) });
+    }
+
+    // Build sections HTML
+    const sections: string[] = [];
+
+    if (basicInfo.length > 0) {
+      sections.push(`
+        <h3 style="color: #333; font-size: 14px; font-weight: 600; margin: 20px 0 10px 0;">Overview</h3>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          ${basicInfo.map(m => `
             <tr>
-              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #666; width: 120px;">${m.label}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #666; width: 140px;">${m.label}</td>
               <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #333; font-weight: 500;">${m.value}</td>
             </tr>
           `).join('')}
         </table>
-      `;
+      `);
     }
+
+    if (trainingConfig.length > 0) {
+      sections.push(`
+        <h3 style="color: #333; font-size: 14px; font-weight: 600; margin: 20px 0 10px 0;">Training Configuration</h3>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          ${trainingConfig.map(m => `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #666; width: 140px;">${m.label}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #333; font-weight: 500;">${m.value}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `);
+    }
+
+    if (datasetInfo.length > 0) {
+      sections.push(`
+        <h3 style="color: #333; font-size: 14px; font-weight: 600; margin: 20px 0 10px 0;">Dataset</h3>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          ${datasetInfo.map(m => `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #666; width: 140px;">${m.label}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #333; font-weight: 500;">${m.value}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `);
+    }
+
+    if (performance.length > 0) {
+      sections.push(`
+        <h3 style="color: #333; font-size: 14px; font-weight: 600; margin: 20px 0 10px 0;">Performance Metrics</h3>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          ${performance.map(m => `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #666; width: 140px;">${m.label}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #333; font-weight: 500;">${m.value}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `);
+    }
+
+    if (resources.length > 0) {
+      sections.push(`
+        <h3 style="color: #333; font-size: 14px; font-weight: 600; margin: 20px 0 10px 0;">Resource Usage</h3>
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          ${resources.map(m => `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #666; width: 140px;">${m.label}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #333; font-weight: 500;">${m.value}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `);
+    }
+
+    metricsHtml = sections.join('');
+  }
 
     if (jobData.errorMessage) {
       const truncated = jobData.errorMessage.length > 1000
