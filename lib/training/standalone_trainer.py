@@ -962,6 +962,11 @@ class TrainingMetricsCallback(TrainerCallback):
                 "gpu_utilization_percent": sanitize_float(progress_data.get("gpu_utilization_percent")),
                 "perplexity": sanitize_float(progress_data.get("perplexity")),
                 "train_perplexity": sanitize_float(progress_data.get("train_perplexity")),
+                "loss_trend": progress_data.get("loss_trend"),
+                "best_eval_loss": sanitize_float(progress_data.get("best_eval_loss")),
+                "best_epoch": progress_data.get("best_epoch"),
+                "best_step": progress_data.get("best_step"),
+                "epochs_without_improvement": progress_data.get("epochs_without_improvement"),
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
 
