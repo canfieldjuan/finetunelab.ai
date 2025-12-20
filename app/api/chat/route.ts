@@ -705,7 +705,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             // Tool call succeeded
             await traceService.endTrace(toolTraceContext, {
               endTime: new Date(),
-              status: 'success',
+              status: 'completed',
               outputData: result.data,
               metadata: {
                 toolName,
