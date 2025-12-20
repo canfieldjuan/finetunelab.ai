@@ -22,6 +22,7 @@ export { SLABreachChart } from './SLABreachChart';
 export { JudgmentsBreakdown } from './JudgmentsBreakdown';
 export { JudgmentsTable } from './JudgmentsTable';
 export { default as TraceView } from './TraceView';
+export { TraceExplorer } from './TraceExplorer';
 export { default as ExperimentManager } from './ExperimentManager';
 export { default as AnomalyFeed } from './AnomalyFeed';
 export { default as QualityForecastChart } from './QualityForecastChart';
