@@ -520,6 +520,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             {
               minConfidence: graphragConfig.search.threshold,
               embedderConfig,
+              traceContext: traceContext || undefined, // Pass trace context for retrieval tracing
             }
           );
 
@@ -775,7 +776,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             // Tool call succeeded
             await traceService.endTrace(toolTraceContext, {
               endTime: new Date(),
-              status: 'success',
+              status: 'completed',
               outputData: result.data,
               metadata: {
                 toolName,

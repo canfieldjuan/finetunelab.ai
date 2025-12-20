@@ -6,6 +6,8 @@
 import { getGraphitiClient, type GraphitiSearchParams, type GraphitiSearchResult } from './client';
 import { graphragConfig } from '../config';
 import type { SearchResult, SearchSource, GraphRAGRetrievalMetadata } from '../types';
+import { traceService } from '@/lib/tracing/trace.service';
+import type { TraceContext } from '@/lib/tracing/types';
 
 // ============================================================================
 // Search Service
@@ -17,8 +19,23 @@ export class SearchService {
   /**
    * Search knowledge graph with hybrid search
    */
-  async search(query: string, userId: string): Promise<SearchResult> {
+  async search(query: string, userId: string, parentContext?: TraceContext): Promise<SearchResult> {
     const startTime = Date.now();
+    let retrievalContext: TraceContext | undefined;
+
+    // Start trace for GraphRAG retrieval if parent context provided
+    if (parentContext) {
+      try {
+        retrievalContext = await traceService.createChildSpan(
+          parentContext,
+          'graphrag.retrieve',
+          'retrieval'
+        );
+        console.log('[SearchService] Started GraphRAG retrieval trace');
+      } catch (traceErr) {
+        console.error('[SearchService] Failed to start retrieval trace:', traceErr);
+      }
+    }
 
     const params: GraphitiSearchParams = {
       query,
@@ -51,6 +68,28 @@ export class SearchService {
       : 0;
 
     const queryTime = Date.now() - startTime;
+
+    // End retrieval trace
+    if (retrievalContext) {
+      try {
+        await traceService.endTrace(retrievalContext, {
+          endTime: new Date(),
+          status: 'completed',
+          metadata: {
+            query: query.slice(0, 200),
+            userId,
+            searchMethod: graphragConfig.search.searchMethod,
+            resultsCount: graphitiResult.edges.length,
+            sourcesCount: sources.length,
+            avgRelevance,
+            queryTimeMs: queryTime,
+          },
+        });
+        console.log('[SearchService] Ended GraphRAG retrieval trace (success)');
+      } catch (traceErr) {
+        console.error('[SearchService] Failed to end retrieval trace:', traceErr);
+      }
+    }
 
     return {
       context,
