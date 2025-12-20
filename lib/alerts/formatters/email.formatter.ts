@@ -270,7 +270,6 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
     }
 
     metricsHtml = sections.join('');
-  }
 
     if (jobData.errorMessage) {
       const truncated = jobData.errorMessage.length > 1000
