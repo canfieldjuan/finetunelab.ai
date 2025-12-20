@@ -46,7 +46,7 @@ export function TraceExplorer() {
   const [operationFilter, setOperationFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [providerFilter, setProviderFilter] = useState<string>('all');
-  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
+  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('7d'); // Changed default from 24h to 7d
 
   // Pagination
   const [page, setPage] = useState(1);
