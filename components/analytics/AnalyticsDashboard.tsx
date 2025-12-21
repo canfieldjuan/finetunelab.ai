@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAnalytics, type AnalyticsFilters, type AnalyticsSettings } from '@/hooks/useAnalytics';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { ArrowLeft, MessageSquare, Download, Smile, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import type { BenchmarkAnalysis } from '@/lib/tools/evaluation-metrics/types';
@@ -40,6 +41,9 @@ const ProviderTelemetryPanel = lazy(() => import('./ProviderTelemetryPanel').the
 const ResearchJobsPanel = lazy(() => import('./ResearchJobsPanel').then(m => ({ default: m.ResearchJobsPanel })));
 const ProviderComparisonView = lazy(() => import('./ProviderComparisonView').then(m => ({ default: m.ProviderComparisonView })));
 const ErrorPatternsView = lazy(() => import('./ErrorPatternsView').then(m => ({ default: m.ErrorPatternsView })));
+const ModelCostBreakdown = lazy(() => import('./ModelCostBreakdown').then(m => ({ default: m.ModelCostBreakdown })));
+const CacheSavingsCard = lazy(() => import('./CacheSavingsCard').then(m => ({ default: m.CacheSavingsCard })));
+const OperationCostChart = lazy(() => import('./OperationCostChart').then(m => ({ default: m.OperationCostChart })));
 
 // Keep FilterPanel, ActiveFiltersBar, and ExportModal as regular imports (lightweight UI components)
 import { FilterPanel, ActiveFiltersBar, ExportModal } from './index';
@@ -72,7 +76,7 @@ interface CollapsibleSectionProps {
 function CollapsibleSection({ title, icon, collapsed, onToggle, children }: CollapsibleSectionProps) {
   if (collapsed) {
     return (
-      <Card 
+      <Card
         className="shadow-none border border-gray-300 dark:border-gray-600 cursor-pointer hover:bg-muted/50 transition-colors"
         onClick={onToggle}
       >
@@ -89,7 +93,7 @@ function CollapsibleSection({ title, icon, collapsed, onToggle, children }: Coll
 
   return (
     <div>
-      <div 
+      <div
         className="flex items-center justify-between mb-3 pl-4 cursor-pointer hover:opacity-70 transition-opacity"
         onClick={onToggle}
       >
@@ -872,6 +876,21 @@ export function AnalyticsDashboard() {
               <CostTrackingChart data={data.costTracking} />
             </Suspense>
           )}
+
+          {/* Cost Analytics - Category 4 Economics */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Suspense fallback={<ChartLoader />}>
+              <ModelCostBreakdown />
+            </Suspense>
+            <Suspense fallback={<ChartLoader />}>
+              <OperationCostChart />
+            </Suspense>
+          </div>
+
+          {/* Cache Savings - Category 4 Economics */}
+          <Suspense fallback={<ChartLoader />}>
+            <CacheSavingsCard />
+          </Suspense>
         </CollapsibleSection>
 
         {/* Section 5: Operations & Monitoring */}
