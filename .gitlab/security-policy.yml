@@ -1,0 +1,52 @@
+# Security Policy Configuration
+# Defines security scanning rules and thresholds
+
+security:
+  npm_audit:
+    # Fail pipeline on these severity levels
+    fail_on:
+      - critical
+      - high
+    # Warn but allow on these levels
+    warn_on:
+      - moderate
+    # Ignore these levels
+    ignore:
+      - low
+      - info
+
+  secrets:
+    # Block any exposed secrets
+    block_on_detection: true
+    # Patterns to scan for
+    patterns:
+      - api_key
+      - secret_key
+      - password
+      - token
+      - private_key
+      - aws_access_key
+      - stripe_key
+      - supabase_key
+
+  licenses:
+    # Allowed license types
+    allowed:
+      - MIT
+      - Apache-2.0
+      - BSD-3-Clause
+      - ISC
+    # Blocked license types
+    blocked:
+      - GPL-3.0  # Copyleft license
+      - AGPL-3.0
+
+  code_quality:
+    # Minimum code quality threshold
+    min_score: 70
+    # Block on these issues
+    block_on:
+      - security_vulnerability
+      - sql_injection
+      - xss_vulnerability
+      - hardcoded_credentials

@@ -31,6 +31,17 @@ interface TraceListItem {
   message_id?: string;
   session_tag?: string;
   error_message?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  cost_usd?: number;
+  ttft_ms?: number;
+  tokens_per_second?: number;
+  quality_score?: number;
+  user_rating?: number;
+  passed_validations?: number;
+  total_validations?: number;
+  has_user_feedback?: boolean;
 }
 
 export function TraceExplorer() {
@@ -357,6 +368,36 @@ export function TraceExplorer() {
                             <span className="font-mono text-xs">{trace.trace_id.slice(0, 12)}...</span>
                             <span>{formatTimestamp(trace.start_time)}</span>
                             <span>{formatDuration(trace.duration_ms)}</span>
+                            {trace.input_tokens != null && trace.output_tokens != null && (
+                              <span className="font-mono">
+                                {trace.input_tokens.toLocaleString()} → {trace.output_tokens.toLocaleString()} tokens
+                              </span>
+                            )}
+                            {trace.cost_usd != null && trace.cost_usd > 0 && (
+                              <span className="font-semibold text-green-600">
+                                ${trace.cost_usd.toFixed(6)}
+                              </span>
+                            )}
+                            {trace.tokens_per_second != null && trace.tokens_per_second > 0 && (
+                              <span className="text-blue-600">
+                                {trace.tokens_per_second.toFixed(1)} tok/s
+                              </span>
+                            )}
+                            {trace.quality_score != null && (
+                              <span className="text-purple-600 font-medium">
+                                Quality: {(trace.quality_score * 100).toFixed(0)}%
+                              </span>
+                            )}
+                            {trace.user_rating != null && (
+                              <span className="text-yellow-600 font-medium">
+                                ⭐ {trace.user_rating}/5
+                              </span>
+                            )}
+                            {trace.total_validations != null && trace.total_validations > 0 && (
+                              <span className={trace.passed_validations === trace.total_validations ? 'text-green-600' : 'text-orange-600'}>
+                                {trace.passed_validations}/{trace.total_validations} passed
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

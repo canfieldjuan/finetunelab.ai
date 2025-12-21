@@ -141,6 +141,7 @@ export interface RunPodServerlessDeploymentResponse {
   endpoint_id: string;          // RunPod endpoint ID
   endpoint_url: string;         // Inference API URL
   status: InferenceStatus;
+  network_volume_id?: string;   // ID of the attached network volume
 
   // Configuration
   gpu_type: RunPodServerlessGPU;

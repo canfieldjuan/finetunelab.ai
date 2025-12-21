@@ -147,6 +147,10 @@ export interface VLLMPodDeploymentRequest {
   tensor_parallel_size?: number; // For multi-GPU
   budget_limit?: number;
   volume_size_gb?: number;
+  // Network volume support
+  use_network_volume?: boolean;
+  data_center_id?: string;       // e.g., 'US-EAST-1', required if use_network_volume is true
+  network_volume_id?: string;  // To attach an existing volume
 }
 
 // ============================================================================
@@ -200,6 +204,120 @@ export class RunPodServerlessService {
     return result.data;
   }
 
+  private restUrl_v1 = 'https://rest.runpod.io/v1';
+
+  /**
+   * Execute REST API request
+   */
+  private async _restRequest<T>(
+    endpoint: string,
+    method: 'GET' | 'POST' | 'DELETE' | 'PATCH',
+    apiKey: string,
+    body?: Record<string, unknown>
+  ): Promise<T> {
+    console.log(`[RunPodServerlessService] REST request: ${method} ${this.restUrl_v1}${endpoint}`);
+
+    const response = await fetch(`${this.restUrl_v1}${endpoint}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      ...(body && { body: JSON.stringify(body) }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`RunPod REST API error: ${response.status} - ${errorText}`);
+    }
+
+    if (response.status === 204) {
+      return null as T;
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  /**
+   * Find a network volume by its name.
+   */
+  async getNetworkVolumeByName(
+    name: string,
+    apiKey: string
+  ): Promise<{ id: string; name: string; size: number } | null> {
+    console.log(`[RunPodServerlessService] Searching for network volume with name: ${name}`);
+    try {
+      const volumes = await this._restRequest<Array<{ id: string; name: string; size: number }>>(
+        '/networkvolumes',
+        'GET',
+        apiKey
+      );
+
+      const volume = volumes.find(v => v.name === name);
+
+      if (volume) {
+        console.log(`[RunPodServerlessService] Found network volume:`, volume);
+        return volume;
+      } else {
+        console.log(`[RunPodServerlessService] No network volume found with name: ${name}`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`[RunPodServerlessService] Error getting network volumes:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Create a new network volume.
+   */
+  async createNetworkVolume(
+    name: string,
+    size: number,
+    dataCenterId: string,
+    apiKey: string
+  ): Promise<{ id: string; name: string; size: number }> {
+    console.log(`[RunPodServerlessService] Creating network volume: ${name} (${size}GB) in ${dataCenterId}`);
+    try {
+      const newVolume = await this._restRequest<{ id: string; name: string; size: number }>(
+        '/networkvolumes',
+        'POST',
+        apiKey,
+        {
+          name,
+          size,
+          dataCenterId,
+        }
+      );
+      console.log(`[RunPodServerlessService] Network volume created successfully:`, newVolume);
+      return newVolume;
+    } catch (error) {
+      console.error(`[RunPodServerlessService] Error creating network volume:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a network volume by its ID.
+   */
+  async deleteNetworkVolume(
+    volumeId: string,
+    apiKey: string
+  ): Promise<void> {
+    console.log(`[RunPodServerlessService] Deleting network volume: ${volumeId}`);
+    try {
+      await this._restRequest<null>(
+        `/networkvolumes/${volumeId}`,
+        'DELETE',
+        apiKey
+      );
+      console.log(`[RunPodServerlessService] Network volume ${volumeId} deleted successfully.`);
+    } catch (error) {
+      console.error(`[RunPodServerlessService] Error deleting network volume ${volumeId}:`, error);
+      throw error;
+    }
+  }
+
   // ============================================================================
   // vLLM POD DEPLOYMENT (Recommended for inference)
   // ============================================================================
@@ -228,26 +346,13 @@ export class RunPodServerlessService {
       const gpuTypeId = this.mapGPUTypeForPod(request.gpu_type);
       const gpuCount = request.gpu_count || 1;
 
-      // Build vLLM serve command arguments (using modern vllm serve syntax)
-      const vllmArgs: string[] = [
-        '--host', '0.0.0.0',
-        '--port', '8000',
-      ];
-
-      // Set max_model_len with safe default to prevent OOM errors
+      // Build vLLM serve command arguments
+      const vllmArgs: string[] = ['--host', '0.0.0.0', '--port', '8000'];
       const maxModelLen = request.max_model_len || 32768;
       vllmArgs.push('--max-model-len', maxModelLen.toString());
-
-      // Enable tool calling support
-      // --enable-auto-tool-choice enables autonomous tool calling
-      // --tool-call-parser selects the parsing strategy (hermes for Qwen3 models)
       vllmArgs.push('--enable-auto-tool-choice');
       vllmArgs.push('--tool-call-parser', 'hermes');
-
-      if (request.quantization) {
-        vllmArgs.push('--quantization', request.quantization);
-      }
-
+      if (request.quantization) vllmArgs.push('--quantization', request.quantization);
       if (request.tensor_parallel_size && request.tensor_parallel_size > 1) {
         vllmArgs.push('--tensor-parallel-size', request.tensor_parallel_size.toString());
       } else if (gpuCount > 1) {
@@ -256,7 +361,6 @@ export class RunPodServerlessService {
 
       // Environment variables
       const envVars: Array<{ key: string; value: string }> = [];
-
       if (request.hf_token) {
         envVars.push({ key: 'HF_TOKEN', value: request.hf_token });
         envVars.push({ key: 'HUGGING_FACE_HUB_TOKEN', value: request.hf_token });
@@ -264,20 +368,50 @@ export class RunPodServerlessService {
 
       const mutation = `
         mutation CreatePod($input: PodFindAndDeployOnDemandInput!) {
-          podFindAndDeployOnDemand(input: $input) {
-            id
-            name
-            imageName
-            desiredStatus
-            machine {
-              gpuTypeId
-              costPerHr
-            }
-          }
+          podFindAndDeployOnDemand(input: $input) { id name imageName desiredStatus machine { gpuTypeId costPerHr } }
         }
       `;
 
       const podName = `vllm-${request.deployment_name}-${Date.now().toString(36)}`;
+      const volumeMountPath = '/models';
+      let networkVolumeIdToAttach: string | undefined = undefined;
+      
+      if (request.use_network_volume) {
+        console.log('[RunPodServerlessService] Network volume deployment requested.');
+        const volumeName = `vol-${request.model_id.replace(/\//g, '--')}`;
+        const existingVolume = await this.getNetworkVolumeByName(volumeName, apiKey);
+
+        if (existingVolume) {
+          console.log(`[RunPodServerlessService] Found existing network volume: ${existingVolume.id}. Attaching it.`);
+          networkVolumeIdToAttach = existingVolume.id;
+        } else {
+          console.log(`[RunPodServerlessService] Network volume not found, starting one-time setup process.`);
+          const dataCenterId = request.data_center_id || 'US-CA-2';
+          const volumeSize = request.volume_size_gb || 50;
+          
+          // 1. Create Volume
+          const newVolume = await this.createNetworkVolume(volumeName, volumeSize, dataCenterId, apiKey);
+
+          try {
+            // 2. Launch Downloader Pod
+            const downloaderPod = await this._launchDownloaderPod(newVolume.id, request.model_id, request.hf_token, apiKey);
+
+            // 3. Wait for downloader to finish
+            await this._pollUntilPodTerminated(downloaderPod.id, apiKey);
+            
+            // 4. Terminate downloader pod
+            await this.terminatePod(downloaderPod.id, apiKey);
+            
+            console.log(`[RunPodServerlessService] Volume ${newVolume.id} is populated with model ${request.model_id}.`);
+            networkVolumeIdToAttach = newVolume.id;
+
+          } catch (downloadError) {
+            console.error(`[RunPodServerlessService] Downloader pod process failed. Cleaning up volume ${newVolume.id}.`, downloadError);
+            await this.deleteNetworkVolume(newVolume.id, apiKey);
+            throw new Error(`Failed to download model to network volume: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`);
+          }
+        }
+      }
 
       const variables = {
         input: {
@@ -285,39 +419,47 @@ export class RunPodServerlessService {
           gpuTypeId,
           gpuCount,
           name: podName,
-          // Official vLLM OpenAI-compatible image
           imageName: 'vllm/vllm-openai:latest',
           volumeInGb: request.volume_size_gb || 50,
           containerDiskInGb: 20,
           env: envVars,
-          // dockerArgs completely overrides CMD - must include full vllm serve command
-          dockerArgs: `vllm serve --model ${request.model_id} ${vllmArgs.join(' ')}`,
           ports: '8000/http',
+          dockerArgs: `vllm serve --model ${request.model_id} ${vllmArgs.join(' ')}`,
           volumeMountPath: '/root/.cache',
         },
       };
 
+      if (networkVolumeIdToAttach) {
+        console.log(`[RunPodServerlessService] Attaching volume ${networkVolumeIdToAttach} to the pod.`);
+        variables.input.networkVolumeId = networkVolumeIdToAttach;
+        variables.input.volumeMountPath = volumeMountPath;
+        const modelFolderName = request.model_id.split('/').pop();
+        variables.input.dockerArgs = `vllm serve --model ${volumeMountPath}/${modelFolderName} ${vllmArgs.join(' ')}`;
+      }
+      
       console.log('[RunPodServerlessService] Creating vLLM pod:', {
         name: podName,
         model: request.model_id,
         gpu: `${gpuCount}x ${gpuTypeId}`,
-        quantization: request.quantization || 'none',
         dockerArgs: variables.input.dockerArgs,
+        volumeAttached: !!networkVolumeIdToAttach,
       });
 
-      const data = await this.graphql<PodDeployResponse>(
-        mutation,
-        variables,
-        apiKey
-      );
+      const startTime = Date.now();
+      const data = await this.graphql<PodDeployResponse>(mutation, variables, apiKey);
+      const duration = Date.now() - startTime;
+      console.log(`[RunPodServerlessService] GraphQL mutation for vLLM pod creation took ${duration}ms`);
 
       const pod = data.podFindAndDeployOnDemand;
       console.log('[RunPodServerlessService] vLLM pod created:', pod.id);
 
-      const costPerHour = pod.machine?.costPerHr || 0;
+      this.pollUntilActive(pod.id, apiKey, true).catch(err => {
+        console.error(`[RunPodServerlessService] Background polling failed for pod ${pod.id}:`, err);
+      });
 
+      const costPerHour = pod.machine?.costPerHr || 0;
       const cost: InferenceCost = {
-        cost_per_request: 0, // Pod-based = pay per hour, not per request
+        cost_per_request: 0,
         budget_limit: request.budget_limit || 0,
         current_spend: 0,
         request_count: 0,
@@ -327,9 +469,9 @@ export class RunPodServerlessService {
       return {
         deployment_id: pod.id,
         endpoint_id: pod.id,
-        // Pod URL - actual endpoint will be available once pod is running
         endpoint_url: `https://${pod.id}-8000.proxy.runpod.net/v1`,
         status: 'deploying',
+        network_volume_id: networkVolumeIdToAttach,
         gpu_type: request.gpu_type || 'NVIDIA RTX A4000',
         model_type: 'merged-model',
         base_model: request.model_id,
@@ -437,13 +579,13 @@ export class RunPodServerlessService {
   }
 
   /**
-   * Stop/terminate a vLLM pod
+   * Terminate a pod.
    */
-  async stopVLLMPod(
+  async terminatePod(
     podId: string,
     apiKey: string
   ): Promise<void> {
-    console.log('[RunPodServerlessService] Stopping vLLM pod:', podId);
+    console.log('[RunPodServerlessService] Terminating pod:', podId);
 
     try {
       const mutation = `
@@ -458,11 +600,139 @@ export class RunPodServerlessService {
         apiKey
       );
 
-      console.log('[RunPodServerlessService] vLLM pod terminated');
+      console.log('[RunPodServerlessService] Pod terminated:', podId);
     } catch (error) {
-      console.error('[RunPodServerlessService] Stop vLLM pod failed:', error);
+      console.error(`[RunPodServerlessService] Failed to terminate pod ${podId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Poll for active status of a pod or endpoint and log the time taken.
+   */
+  async pollUntilActive(
+    deploymentId: string,
+    apiKey: string,
+    isPod: boolean
+  ): Promise<void> {
+    const startTime = Date.now();
+    const pollInterval = 5000; // 5 seconds
+    const maxWaitTime = 15 * 60 * 1000; // 15 minutes
+
+    console.log(`[RunPodServerlessService] Polling for active status of ${isPod ? 'pod' : 'endpoint'}: ${deploymentId}`);
+
+    while (Date.now() - startTime < maxWaitTime) {
+      try {
+        const status = isPod
+          ? await this.getVLLMPodStatus(deploymentId, apiKey)
+          : await this.getEndpointStatus(deploymentId, apiKey);
+
+        if (status.status === 'active') {
+          const duration = Date.now() - startTime;
+          console.log(`[RunPodServerlessService] ${isPod ? 'Pod' : 'Endpoint'} ${deploymentId} is active after ${duration}ms.`);
+          return;
+        } else {
+            console.log(`[RunPodServerlessService] Current status for ${deploymentId}: ${status.status}. Waiting...`);
+        }
+      } catch (error) {
+        console.error(`[RunPodServerlessService] Error polling status for ${deploymentId}:`, error);
+        // Continue polling even if one check fails
+      }
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    const duration = Date.now() - startTime;
+    console.error(`[RunPodServerlessService] TIMEOUT: ${isPod ? 'Pod' : 'Endpoint'} ${deploymentId} did not become active within ${maxWaitTime}ms. Last status check after ${duration}ms.`);
+  }
+
+  /**
+   * Launch a temporary pod to download a model to a network volume.
+   */
+  private async _launchDownloaderPod(
+    volumeId: string,
+    modelId: string,
+    hfToken: string | undefined,
+    apiKey: string,
+  ): Promise<PodDeployResponse['podFindAndDeployOnDemand']> {
+    console.log(`[RunPodServerlessService] Launching downloader pod for model ${modelId} on volume ${volumeId}`);
+
+    const modelFolderName = modelId.split('/').pop();
+    const volumeMountPath = '/models';
+    
+    // Command to install huggingface_hub and download the model.
+    // --local-dir-use-symlinks False is important to ensure the actual files are on the volume.
+    const downloadCommand = `
+        pip install huggingface-hub && \
+        huggingface-cli login --token ${hfToken || ''} && \
+        huggingface-cli download ${modelId} --local-dir ${volumeMountPath}/${modelFolderName} --local-dir-use-symlinks False
+    `.trim().replace(/\s+/g, ' ');
+
+    const mutation = `
+        mutation CreatePod($input: PodFindAndDeployOnDemandInput!) {
+          podFindAndDeployOnDemand(input: $input) { id name imageName desiredStatus }
+        }
+      `;
+
+    const variables = {
+        input: {
+            cloudType: 'SECURE',
+            gpuCount: 0,
+            vcpuCount: 2,
+            memoryInGb: 4,
+            name: `downloader-${modelId.replace(/\//g, '--')}-${Date.now().toString(36)}`,
+            imageName: 'python:3.10-slim',
+            networkVolumeId: volumeId,
+            volumeMountPath: volumeMountPath,
+            // The pod will execute this command and then exit.
+            dockerArgs: `bash -c "${downloadCommand}"`,
+        },
+    };
+
+    console.log('[RunPodServerlessService] Downloader pod variables:', {
+      ...variables.input,
+      dockerArgs: downloadCommand, // Log clean command
+    });
+
+    const data = await this.graphql<PodDeployResponse>(mutation, variables, apiKey);
+    console.log('[RunPodServerlessService] Downloader pod created:', data.podFindAndDeployOnDemand.id);
+    return data.podFindAndDeployOnDemand;
+  }
+
+  /**
+   * Poll a pod's status until it is terminated/exited.
+   */
+  private async _pollUntilPodTerminated(
+    podId: string,
+    apiKey: string,
+  ): Promise<void> {
+    const startTime = Date.now();
+    const pollInterval = 10000; // 10 seconds
+    const maxWaitTime = 30 * 60 * 1000; // 30 minutes for large models
+
+    console.log(`[RunPodServerlessService] Polling for termination of pod: ${podId}`);
+
+    while (Date.now() - startTime < maxWaitTime) {
+        try {
+            const podState = await this.getVLLMPodStatus(podId, apiKey);
+            // getVLLMPodStatus maps EXITED and TERMINATED to 'stopped'
+            if (podState.status === 'stopped') {
+                const duration = Date.now() - startTime;
+                console.log(`[RunPodServerlessService] Pod ${podId} terminated after ${duration}ms.`);
+                return;
+            } else {
+                console.log(`[RunPodServerlessService] Pod ${podId} status: ${podState.status}. Waiting for termination...`);
+            }
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('pod not found')) {
+                 console.log(`[RunPodServerlessService] Pod ${podId} not found, assuming terminated.`);
+                 return;
+            }
+            console.error(`[RunPodServerlessService] Error polling status for pod ${podId}:`, error);
+        }
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error(`Pod ${podId} did not terminate within ${maxWaitTime / 1000}s.`);
   }
 
   /**
@@ -670,16 +940,24 @@ export class RunPodServerlessService {
         workers: `${variables.input.workersMin}-${variables.input.workersMax}`,
       });
 
+      const startTime = Date.now();
       const data = await this.graphql<SaveEndpointResponse>(
         mutation,
         variables,
         apiKey
       );
+      const duration = Date.now() - startTime;
+      console.log(`[RunPodServerlessService] GraphQL mutation for endpoint creation took ${duration}ms`);
 
       const endpoint = data.saveEndpoint;
       console.log('[RunPodServerlessService] Endpoint created successfully');
       console.log('[RunPodServerlessService] Endpoint ID:', endpoint.id);
       console.log('[RunPodServerlessService] Endpoint Name:', endpoint.name);
+
+      // Start polling for active status without blocking the response
+      this.pollUntilActive(endpoint.id, apiKey, false).catch(err => {
+        console.error(`[RunPodServerlessService] Background polling failed for endpoint ${endpoint.id}:`, err);
+      });
 
       // Calculate cost structure
       const costPerRequest = this.estimateCostPerRequest(request.gpu_type);

@@ -26,6 +26,7 @@ export interface JudgmentRecord {
   evidence_json?: JsonValue;
   judge_name?: string;
   notes?: string;
+  trace_id?: string;
 }
 
 /**
@@ -45,7 +46,8 @@ export class JudgmentsService {
     messageId: string,
     validatorName: string,
     criterion: string,
-    result: ValidatorResult
+    result: ValidatorResult,
+    traceId?: string
   ): Promise<void> {
     const judgment: JudgmentRecord = {
       message_id: messageId,
@@ -56,6 +58,7 @@ export class JudgmentsService {
       passed: result.passed,
       evidence_json: result.evidence,
       notes: result.message,
+      trace_id: traceId,
     };
 
     const { error } = await supabase
@@ -83,7 +86,8 @@ export class JudgmentsService {
       validator: string;
       criterion: string;
       result: ValidatorResult
-    }>
+    }>,
+    traceId?: string
   ): Promise<void> {
     const judgments = validationResults.map(vr => ({
       message_id: messageId,
@@ -94,6 +98,7 @@ export class JudgmentsService {
       passed: vr.result.passed,
       evidence_json: vr.result.evidence,
       notes: vr.result.message,
+      trace_id: traceId,
     }));
 
     const { error } = await supabase
@@ -123,7 +128,8 @@ export class JudgmentsService {
     criterion: string,
     score: number,
     passed: boolean,
-    notes?: string
+    notes?: string,
+    traceId?: string
   ): Promise<void> {
     const judgment: JudgmentRecord = {
       message_id: messageId,
@@ -132,6 +138,7 @@ export class JudgmentsService {
       score,
       passed,
       notes,
+      trace_id: traceId,
     };
 
     const { error } = await supabase

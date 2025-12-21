@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { inferenceServerManager, type OllamaConfig, sanitizeOllamaModelName } from '@/lib/services/inference-server-manager';
 import { runpodServerlessService } from '@/lib/inference/runpod-serverless-service';
+import { fireworksDeploymentService } from '@/lib/inference/fireworks-deployment-service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
 import { decrypt } from '@/lib/models/encryption';
 import { createClient } from '@supabase/supabase-js';
@@ -55,9 +56,9 @@ export async function POST(req: NextRequest) {
     });
 
     // Validate required fields
-    if (!server_type || ![STATUS.VLLM, STATUS.OLLAMA, STATUS.RUNPOD, STATUS.RUNPOD_SERVERLESS].includes(server_type)) {
+    if (!server_type || ![STATUS.VLLM, STATUS.OLLAMA, STATUS.RUNPOD, STATUS.RUNPOD_SERVERLESS, 'fireworks'].includes(server_type)) {
       return NextResponse.json(
-        { error: 'Invalid server_type. Must be "vllm", "ollama", "runpod", or "runpod-serverless"' },
+        { error: 'Invalid server_type. Must be "vllm", "ollama", "runpod", "runpod-serverless", or "fireworks"' },
         { status: 400 }
       );
     }
@@ -339,6 +340,8 @@ export async function POST(req: NextRequest) {
           hf_token: hfToken,
           budget_limit: config?.budget_limit || 5,
           volume_size_gb: config?.volume_size_gb || 50,
+          use_network_volume: config?.use_network_volume,
+          data_center_id: config?.data_center_id, // Will use default in service if not provided
         },
         runpodApiKey!
       );
@@ -374,6 +377,7 @@ export async function POST(req: NextRequest) {
           training_job_id: job_id,
           runpod_pod_id: runpodResponse.endpoint_id,
           runpod_endpoint_url: runpodResponse.endpoint_url,
+          network_volume_id: runpodResponse.network_volume_id, // Add this
           deployed_at: new Date().toISOString(),
           gpu_type: config?.gpu_type || 'NVIDIA RTX A4000',
           budget_limit: config?.budget_limit || 5,
@@ -437,6 +441,7 @@ export async function POST(req: NextRequest) {
           deployment_id: runpodResponse.endpoint_id,
           endpoint_url: runpodResponse.endpoint_url,
           status: runpodResponse.status,
+          network_volume_id: runpodResponse.network_volume_id, // Add this
           config: {
             gpu_type: config?.gpu_type || 'NVIDIA RTX A4000',
             gpu_count: config?.gpu_count || 1,
@@ -662,6 +667,197 @@ export async function POST(req: NextRequest) {
         deployment_name: deploymentName!,
         message: successMessage,
       });
+    } else if (server_type === 'fireworks') {
+      // ========================================================================
+      // FIREWORKS.AI DEPLOYMENT
+      // ========================================================================
+      console.log('[DeployAPI] Deploying to Fireworks.ai...');
+
+      // Get Fireworks API key from secrets vault
+      const fireworksSecret = await secretsManager.getSecret(userId, 'fireworks', supabase);
+      if (!fireworksSecret) {
+        return NextResponse.json(
+          { error: 'Fireworks.ai API key not configured. Please add it in Settings > Secrets.' },
+          { status: 400 }
+        );
+      }
+      const fireworksApiKey = decrypt(fireworksSecret.api_key_encrypted);
+
+      const deploymentName = name || (job ? `${job.model_name.replace('/', '-')}-finetuned` : `model-${Date.now()}`);
+
+      // Note: modelPath is the local path to the trained model files
+      const fireworksResponse = await fireworksDeploymentService.deployModel(
+        {
+          deployment_name: deploymentName,
+          model_path: modelPath,
+          hf_token: hfToken,
+        },
+        fireworksApiKey
+      );
+
+    } else if (server_type === 'fireworks') {
+      // ========================================================================
+      // FIREWORKS.AI DEPLOYMENT
+      // ========================================================================
+      console.log('[DeployAPI] Deploying to Fireworks.ai...');
+
+      // Get Fireworks API key from secrets vault
+      const fireworksSecret = await secretsManager.getSecret(userId, 'fireworks', supabase);
+      if (!fireworksSecret) {
+        return NextResponse.json(
+          { error: 'Fireworks.ai API key not configured. Please add it in Settings > Secrets.' },
+          { status: 400 }
+        );
+      }
+      const fireworksApiKey = decrypt(fireworksSecret.api_key_encrypted);
+
+      const deploymentName = name || (job ? `${job.model_name.replace('/', '-')}-finetuned` : `model-${Date.now()}`);
+      
+      // Get HuggingFace token for gated models (optional) - required for Fireworks model upload
+      try {
+        const hfSecret = await secretsManager.getSecret(userId, 'huggingface', supabase);
+        if (hfSecret?.api_key_encrypted) {
+          hfToken = decrypt(hfSecret.api_key_encrypted);
+        }
+      } catch (error) {
+        console.warn('[DeployAPI] HuggingFace token not available (optional for gated models on Fireworks)');
+      }
+
+      // Note: modelPath is the local path to the trained model files
+      const fireworksResponse = await fireworksDeploymentService.deployModel(
+        {
+          deployment_name: deploymentName,
+          model_path: modelPath, // Local path to the fine-tuned model
+          hf_token: hfToken,
+          model_id: hfModelId!, // HuggingFace model ID for reference
+          base_model: job?.model_name || hfModelId!, // Base model for Fireworks.ai
+        },
+        fireworksApiKey
+      );
+
+      console.log('[DeployAPI] Fireworks.ai deployment initiated:', fireworksResponse);
+      
+      const fireworksModelName = deploymentName;
+
+      // --- Save to llm_models table ---
+      // Check if model with same name already exists for this user
+      const { data: existingFireworksModel } = await supabase
+        .from('llm_models')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('name', fireworksModelName)
+        .single();
+
+      const llmModelData = {
+        user_id: userId,
+        provider: 'fireworks', // Provider is now 'fireworks'
+        name: fireworksModelName,
+        model_id: fireworksResponse.model_id, // Use Fireworks-specific model_id
+        served_model_name: fireworksResponse.model_id.split('/').pop(), // e.g., 'model-xxxx'
+        base_url: fireworksResponse.endpoint_url,
+        is_global: false,
+        enabled: true,
+        training_method: job?.config?.training_method || (job?.config?.use_lora ? 'lora' : 'full'),
+        base_model: job?.model_name || hfModelId!,
+        training_dataset: job?.dataset_path || null,
+        training_date: job?.completed_at || new Date().toISOString(),
+        auth_type: 'bearer', // Fireworks uses bearer token
+        metadata: {
+          training_job_id: job_id,
+          fireworks_deployment_id: fireworksResponse.deployment_id,
+          fireworks_model_id: fireworksResponse.model_id,
+          deployed_at: new Date().toISOString(),
+          // Add any other relevant Fireworks.ai specific metadata here
+        },
+      };
+
+      let modelEntry;
+      let modelError;
+
+      if (existingFireworksModel) {
+        console.log('[DeployAPI] Updating existing Fireworks model entry:', existingFireworksModel.id);
+        const result = await supabase
+          .from('llm_models')
+          .update(llmModelData)
+          .eq('id', existingFireworksModel.id)
+          .select()
+          .single();
+        modelEntry = result.data;
+        modelError = result.error;
+      } else {
+        console.log('[DeployAPI] Creating new Fireworks model entry');
+        const result = await supabase
+          .from('llm_models')
+          .insert(llmModelData)
+          .select()
+          .single();
+        modelEntry = result.data;
+        modelError = result.error;
+      }
+
+      if (modelError) {
+        console.error('[DeployAPI] Failed to save Fireworks model entry:', modelError);
+        return NextResponse.json(
+          {
+            success: true,
+            deployment_id: fireworksResponse.deployment_id,
+            status: fireworksResponse.status,
+            model_id: null,
+            warning: 'Fireworks deployment initiated but failed to save model entry',
+            error: modelError.message,
+          },
+          { status: 200 }
+        );
+      }
+      console.log('[DeployAPI] Fireworks model entry saved:', modelEntry.id);
+
+      // --- Save to inference_deployments table ---
+      const { data: inferenceDeployment, error: inferenceError } = await supabase
+        .from('inference_deployments')
+        .insert({
+          user_id: userId,
+          training_config_id: job?.config_id || null,
+          training_job_id: job_id || null,
+          provider: 'fireworks',
+          deployment_name: fireworksModelName,
+          deployment_id: fireworksResponse.deployment_id,
+          endpoint_url: fireworksResponse.endpoint_url,
+          status: fireworksResponse.status,
+          fireworks_model_id: fireworksResponse.model_id, // Add this
+          fireworks_deployment_id: fireworksResponse.deployment_id, // Add this
+          config: {
+            deployment_type: 'fireworks',
+            // Add any other relevant config from request
+          },
+          model_type: 'merged-model', // Assuming it's a merged model
+          base_model: job?.model_name || hfModelId!,
+          model_storage_url: hfModelId!, // Or the Fireworks.ai internal ID
+          cost_per_request: 0, // Need to get this from Fireworks.ai pricing
+          budget_limit: config?.budget_limit || 10,
+          current_spend: 0,
+          request_count: 0,
+        })
+        .select()
+        .single();
+
+      if (inferenceError) {
+        console.warn('[DeployAPI] Failed to create inference_deployments entry for Fireworks (non-fatal):', inferenceError.message);
+      } else {
+        console.log('[DeployAPI] Inference deployment entry saved for Fireworks:', inferenceDeployment?.id);
+      }
+
+      return NextResponse.json({
+        success: true,
+        server_id: fireworksResponse.deployment_id, // For frontend polling
+        pod_id: fireworksResponse.deployment_id, // For frontend polling
+        status: fireworksResponse.status,
+        base_url: fireworksResponse.endpoint_url,
+        model_id: modelEntry.id,
+        inference_deployment_id: inferenceDeployment?.id,
+        model_name: fireworksModelName,
+        message: 'Model deployed to Fireworks.ai successfully! It is now being provisioned.',
+      });
+
     } else {
       return NextResponse.json(
         { error: 'Unsupported server type' },
@@ -970,24 +1166,85 @@ export async function GET(req: NextRequest) {
 
     const userId = user.id;
 
-    // Get server status
-    const status = await inferenceServerManager.getServerStatus(serverId, userId, supabase);
+    // Check if it's a Fireworks.ai deployment
+    const { data: deploymentRecord, error: deploymentError } = await supabase
+      .from('inference_deployments')
+      .select('provider, fireworks_deployment_id, fireworks_model_id')
+      .eq('deployment_id', serverId)
+      .single();
 
-    if (!status) {
+    if (deploymentError && deploymentError.code !== 'PGRST116') { // PGRST116 means no rows found
+      console.error('[DeployAPI GET] Error fetching deployment record:', deploymentError);
       return NextResponse.json(
-        { error: 'Server not found' },
-        { status: 404 }
+        { error: 'Failed to retrieve deployment record', details: deploymentError.message },
+        { status: 500 }
       );
     }
 
-    return NextResponse.json(status);
+    if (deploymentRecord?.provider === 'fireworks') {
+      console.log(`[DeployAPI GET] Checking Fireworks.ai deployment status for: ${serverId}`);
+      try {
+        const fireworksSecret = await secretsManager.getSecret(userId, 'fireworks', supabase);
+        if (!fireworksSecret) {
+          throw new Error('Fireworks.ai API key not configured.');
+        }
+        const fireworksApiKey = decrypt(fireworksSecret.api_key_encrypted);
+
+        const fireworksStatus = await fireworksDeploymentService.getDeploymentStatus(
+            deploymentRecord.fireworks_deployment_id,
+            fireworksApiKey
+        );
+
+        let mappedStatus: STATUS.RUNNING | STATUS.STARTING | STATUS.ERROR;
+        if (fireworksStatus.state === 'READY') {
+          mappedStatus = STATUS.RUNNING; // Maps to active
+        } else if (fireworksStatus.state === 'FAILED' || fireworksStatus.state === 'TERMINATED') {
+          mappedStatus = STATUS.ERROR; // Maps to failed
+        } else {
+          mappedStatus = STATUS.STARTING; // Maps to deploying/pending
+        }
+
+        return NextResponse.json({
+          success: true,
+          server_id: serverId,
+          status: mappedStatus,
+          message: fireworksStatus.status.message || `Fireworks deployment is ${fireworksStatus.state.toLowerCase()}`,
+          model_id: deploymentRecord.fireworks_model_id, // The full model ID
+          endpoint_url: fireworksStatus.endpoint.url,
+          // Add other relevant info like endpoint_url if needed for polling
+        });
+
+      } catch (error) {
+        console.error('[DeployAPI GET] Error checking Fireworks.ai deployment status:', error);
+        return NextResponse.json(
+          {
+            error: 'Failed to get Fireworks.ai deployment status',
+            details: error instanceof Error ? error.message : String(error),
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Existing logic for local servers (vLLM, Ollama) or Runpod deployments (handled by inferenceServerManager)
+      const status = await inferenceServerManager.getServerStatus(serverId, userId, supabase);
+
+      if (!status) {
+        return NextResponse.json(
+          { error: 'Server not found' },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json(status);
+    }
   } catch (error) {
     console.error('[DeployAPI] Status check error:', error);
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     return NextResponse.json(
       {
         error: 'Failed to get server status',
-        details: error instanceof Error ? error.message : String(error),
+        details: errorMessage,
       },
       { status: 500 }
     );

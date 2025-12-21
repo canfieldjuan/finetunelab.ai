@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     // 3. Build query
     let query = supabase
       .from('llm_traces')
-      .select('id, trace_id, span_name, operation_type, status, start_time, duration_ms, model_name, model_provider, conversation_id, message_id, session_tag, error_message', { count: 'exact' })
+      .select('id, trace_id, span_name, operation_type, status, start_time, duration_ms, model_name, model_provider, conversation_id, message_id, session_tag, error_message, input_tokens, output_tokens, total_tokens, cost_usd, ttft_ms, tokens_per_second', { count: 'exact' })
       .eq('user_id', user.id)
       .is('parent_trace_id', null) // Only root traces for list view
       .order('start_time', { ascending: false });
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
     if (tracesError) {
       console.error('[Traces List API] Error fetching traces:', tracesError);
       return NextResponse.json(
-        { 
+        {
           error: 'Failed to fetch traces',
           details: tracesError.message || 'Unknown database error',
           hint: tracesError.hint || null
@@ -109,8 +109,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // 5. Enrich traces with quality metrics
+    const enrichedTraces = await enrichTracesWithQuality(supabase, traces || [], user.id);
+
     return NextResponse.json({
-      traces: traces || [],
+      traces: enrichedTraces,
       total: count || 0,
       limit,
       offset,
@@ -123,4 +126,80 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function enrichTracesWithQuality(supabase: any, traces: any[], userId: string) {
+  if (!traces || traces.length === 0) return traces;
+
+  const traceIds = traces.map(t => t.trace_id);
+
+  // Fetch quality metrics from judgments
+  const { data: judgments } = await supabase
+    .from('judgments')
+    .select('trace_id, score, passed')
+    .in('trace_id', traceIds);
+
+  // Fetch user ratings from message_evaluations
+  const { data: evaluations } = await supabase
+    .from('message_evaluations')
+    .select('trace_id, rating, success')
+    .in('trace_id', traceIds)
+    .eq('user_id', userId);
+
+  // Aggregate quality metrics by trace_id
+  const qualityMap = new Map();
+
+  // Process judgments
+  if (judgments) {
+    for (const j of judgments) {
+      if (!j.trace_id) continue;
+      if (!qualityMap.has(j.trace_id)) {
+        qualityMap.set(j.trace_id, {
+          scores: [],
+          passed: 0,
+          total: 0,
+        });
+      }
+      const metrics = qualityMap.get(j.trace_id);
+      metrics.scores.push(j.score || 0);
+      metrics.total++;
+      if (j.passed) metrics.passed++;
+    }
+  }
+
+  // Process evaluations
+  const evaluationMap = new Map();
+  if (evaluations) {
+    for (const e of evaluations) {
+      if (!e.trace_id) continue;
+      evaluationMap.set(e.trace_id, {
+        user_rating: e.rating,
+        has_user_feedback: true,
+      });
+    }
+  }
+
+  // Merge quality data into traces
+  return traces.map(trace => {
+    const quality = qualityMap.get(trace.trace_id);
+    const evaluation = evaluationMap.get(trace.trace_id);
+
+    const enriched: any = { ...trace };
+
+    if (quality) {
+      const avgScore = quality.scores.length > 0
+        ? quality.scores.reduce((a, b) => a + b, 0) / quality.scores.length
+        : undefined;
+      enriched.quality_score = avgScore;
+      enriched.passed_validations = quality.passed;
+      enriched.total_validations = quality.total;
+    }
+
+    if (evaluation) {
+      enriched.user_rating = evaluation.user_rating;
+      enriched.has_user_feedback = evaluation.has_user_feedback;
+    }
+
+    return enriched;
+  });
 }
