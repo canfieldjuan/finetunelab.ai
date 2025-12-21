@@ -387,12 +387,30 @@ function prepareCriteria(
  * Save judgments to database
  */
 async function saveJudgmentsToDatabase(supabase: SupabaseClient, judgments: LLMJudgmentResult[]) {
+  const uniqueMessageIds = Array.from(new Set(judgments.map(j => j.message_id)));
+
+  const { data: traces } = await supabase
+    .from('llm_traces')
+    .select('message_id, trace_id')
+    .in('message_id', uniqueMessageIds)
+    .order('created_at', { ascending: false });
+
+  const messageToTraceMap = new Map<string, string>();
+  if (traces) {
+    for (const trace of traces) {
+      if (trace.message_id && !messageToTraceMap.has(trace.message_id)) {
+        messageToTraceMap.set(trace.message_id, trace.trace_id);
+      }
+    }
+  }
+
   const records = judgments.map((judgment) => ({
     message_id: judgment.message_id,
+    trace_id: messageToTraceMap.get(judgment.message_id) || null,
     judge_type: 'llm',
     judge_name: judgment.judge_model,
     criterion: judgment.criterion,
-    score: judgment.score / 10, // Normalize 1-10 scale to 0-1 for consistency with rule validators
+    score: judgment.score / 10,
     passed: judgment.passed,
     evidence_json: {
       reasoning: judgment.reasoning,
@@ -400,7 +418,7 @@ async function saveJudgmentsToDatabase(supabase: SupabaseClient, judgments: LLMJ
       positive_aspects: judgment.evidence.positive_aspects,
       negative_aspects: judgment.evidence.negative_aspects,
       improvement_suggestions: judgment.evidence.improvement_suggestions,
-      original_score: judgment.score, // Store original 1-10 score for reference
+      original_score: judgment.score,
     },
     notes: `AI evaluation: ${judgment.score}/10 (${(judgment.confidence * 100).toFixed(0)}% confidence)`,
   }));

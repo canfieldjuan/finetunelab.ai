@@ -124,13 +124,26 @@ export async function POST(request: NextRequest) {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Insert feedback into database
+    let traceId: string | null = null;
+    if (body.message_id) {
+      const { data: traceData } = await supabase
+        .from('llm_traces')
+        .select('trace_id')
+        .eq('message_id', body.message_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      traceId = traceData?.trace_id || null;
+    }
+
     const { data: feedback, error: insertError } = await supabase
       .from('widget_feedback')
       .insert({
         user_id: validation.userId,
         api_key_hash: validation.keyHash,
         message_id: body.message_id || null,
+        trace_id: traceId,
         rating: body.rating || null,
         thumbs: thumbs,
         comment: body.comment || null,
