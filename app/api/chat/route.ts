@@ -631,7 +631,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
         console.log('[API] ========== AUTO SESSION TAGGING CHECK (REGULAR CHAT) ==========');
         console.log('[API] Conversation:', {
-          id: conversation?.id,
+          id: conversationId,
           hasSessionId: !!conversation?.session_id,
           currentSessionId: conversation?.session_id,
           llmModelId: conversation?.llm_model_id,
