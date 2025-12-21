@@ -11,7 +11,7 @@ import { useAnalytics, type AnalyticsFilters, type AnalyticsSettings } from '@/h
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
-import { ArrowLeft, MessageSquare, Download, Smile, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Download, Smile, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import type { BenchmarkAnalysis } from '@/lib/tools/evaluation-metrics/types';
 
@@ -47,7 +47,6 @@ const OperationCostChart = lazy(() => import('./OperationCostChart').then(m => (
 
 // Keep FilterPanel, ActiveFiltersBar, and ExportModal as regular imports (lightweight UI components)
 import { FilterPanel, ActiveFiltersBar, ExportModal } from './index';
-import { Card, CardContent } from '../ui/card';
 
 // Workspace collaboration components
 import { ActivityFeed } from '@/components/workspace/ActivityFeed';
@@ -59,54 +58,6 @@ function ChartLoader() {
       <div className="text-center">
         <Loader2 className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-2" />
         <p className="text-sm text-gray-500">Loading chart...</p>
-      </div>
-    </div>
-  );
-}
-
-// Collapsible Section Component
-interface CollapsibleSectionProps {
-  title: string;
-  icon?: React.ReactNode;
-  collapsed: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}
-
-function CollapsibleSection({ title, icon, collapsed, onToggle, children }: CollapsibleSectionProps) {
-  if (collapsed) {
-    return (
-      <Card
-        className="shadow-none border border-gray-300 dark:border-gray-600 cursor-pointer hover:bg-muted/50 transition-colors"
-        onClick={onToggle}
-      >
-        <CardContent className="flex items-center justify-between py-4">
-          <div className="flex items-center gap-2">
-            {icon && <span className="text-xl">{icon}</span>}
-            <h2 className="text-xl font-semibold">{title}</h2>
-          </div>
-          <ChevronRight className="h-5 w-5" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <div>
-      <div
-        className="flex items-center justify-between mb-3 pl-4 cursor-pointer hover:opacity-70 transition-opacity"
-        onClick={onToggle}
-      >
-        <div className="flex items-center gap-2">
-          {icon && <span className="text-xl">{icon}</span>}
-          <h2 className="text-xl font-semibold">{title}</h2>
-        </div>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-          <ChevronDown className="h-5 w-5" />
-        </Button>
-      </div>
-      <div className="space-y-6">
-        {children}
       </div>
     </div>
   );
@@ -142,14 +93,6 @@ export function AnalyticsDashboard() {
   // Collapse state
   const [showFilters, setShowFilters] = useState(false);
   const [showMetricConfig, setShowMetricConfig] = useState(false);
-
-  // Section collapse states
-  const [modelTrainingCollapsed, setModelTrainingCollapsed] = useState(false);
-  const [qualityCollapsed, setQualityCollapsed] = useState(false);
-  const [performanceCollapsed, setPerformanceCollapsed] = useState(true);
-  const [costCollapsed, setCostCollapsed] = useState(true);
-  const [operationsCollapsed, setOperationsCollapsed] = useState(true);
-  const [workspaceActivityCollapsed, setWorkspaceActivityCollapsed] = useState(false);
 
   // Export modal state
   const [showExportModal, setShowExportModal] = useState(false);
@@ -713,249 +656,227 @@ export function AnalyticsDashboard() {
           </div>
         </div>
 
-        {/* Overview Cards - Phase 4.1: Lazy loaded */}
-        <Suspense fallback={<ChartLoader />}>
-          <MetricsOverview
-            totalMessages={data.overview.totalMessages}
-            totalConversations={data.overview.totalConversations}
-            totalEvaluations={data.overview.totalEvaluations}
-            avgRating={data.overview.avgRating}
-            successRate={data.overview.successRate}
-            totalCost={data.overview.totalCost}
-            costPerMessage={data.overview.costPerMessage}
-          />
-        </Suspense>
+        {/* Tabs Interface */}
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="performance">Performance</TabsTrigger>
+            <TabsTrigger value="quality">Quality</TabsTrigger>
+            <TabsTrigger value="usage">Usage</TabsTrigger>
+            <TabsTrigger value="errors">Errors</TabsTrigger>
+            <TabsTrigger value="research">Research</TabsTrigger>
+          </TabsList>
 
-        {/* Section 1: Model & Training Performance */}
-        <CollapsibleSection
-          title="Model & Training Performance"
-          icon="🎯"
-          collapsed={modelTrainingCollapsed}
-          onToggle={() => setModelTrainingCollapsed(!modelTrainingCollapsed)}
-        >
-          {/* Model Performance Table - Phase 4.1: Lazy loaded */}
-          {data.modelPerformance && data.modelPerformance.length > 0 && (
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6 mt-6">
             <Suspense fallback={<ChartLoader />}>
-              <ModelPerformanceTable
-                data={data.modelPerformance}
-                selectedModelId={selectedModelId}
-                onModelSelect={setSelectedModelId}
+              <MetricsOverview
+                totalMessages={data.overview.totalMessages}
+                totalConversations={data.overview.totalConversations}
+                totalEvaluations={data.overview.totalEvaluations}
+                avgRating={data.overview.avgRating}
+                successRate={data.overview.successRate}
+                totalCost={data.overview.totalCost}
+                costPerMessage={data.overview.costPerMessage}
               />
             </Suspense>
-          )}
-
-          {/* Session Comparison Table - Phase 4.1: Lazy loaded */}
-          <Suspense fallback={<ChartLoader />}>
-            <SessionComparisonTable
-              data={data.sessionMetrics}
-              selectedSessionId={selectedSessionId}
-              onSessionSelect={setSelectedSessionId}
-            />
-          </Suspense>
-
-          {/* Training Effectiveness Chart - Phase 4.1: Lazy loaded */}
-          {data.trainingEffectiveness && data.trainingEffectiveness.length > 0 && (
-            <Suspense fallback={<ChartLoader />}>
-              <TrainingEffectivenessChart data={data.trainingEffectiveness} />
-            </Suspense>
-          )}
-
-          {/* Benchmark Analysis Chart - Phase 4.1: Lazy loaded */}
-          {benchmarkLoading ? (
-            <div className="bg-card border rounded-lg p-4 text-sm text-muted-foreground">
-              Loading benchmark analysis...
-            </div>
-          ) : benchmarkError ? (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-              Failed to load benchmark analysis: {benchmarkError}
-            </div>
-          ) : (
-            <Suspense fallback={<ChartLoader />}>
-              <BenchmarkAnalysisChart data={benchmarkData} />
-            </Suspense>
-          )}
-        </CollapsibleSection>
-
-        {/* Section 2: Quality & Evaluation Metrics */}
-        <CollapsibleSection
-          title="Quality & Evaluation Metrics"
-          icon="⭐"
-          collapsed={qualityCollapsed}
-          onToggle={() => setQualityCollapsed(!qualityCollapsed)}
-        >
-          {/* Evaluation Charts - Phase 4.1: Lazy loaded */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Suspense fallback={<ChartLoader />}>
-              <RatingDistribution data={data.ratingDistribution} />
-            </Suspense>
-            <Suspense fallback={<ChartLoader />}>
-              <SuccessRateChart data={data.successFailure} />
-            </Suspense>
-          </div>
-
-          {/* Judgments Breakdown - Phase 4.1: Lazy loaded */}
-          {data.failureTags.length > 0 && (
-            <>
+            
+            {/* AI Insights Panel */}
+            {user?.id && (
               <Suspense fallback={<ChartLoader />}>
-                <JudgmentsBreakdown data={data.failureTags} />
-              </Suspense>
-              <Suspense fallback={<ChartLoader />}>
-                <JudgmentsTable data={data.failureTags} timeRange={timeRange} />
-              </Suspense>
-            </>
-          )}
-
-          {/* Sentiment Analysis - Phase 4.1: Lazy loaded */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Suspense fallback={<ChartLoader />}>
-              <SentimentAnalyzer lookbackDays={timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365} />
-            </Suspense>
-            <Suspense fallback={<ChartLoader />}>
-              <SentimentTrendChart
-                startDate={sentimentDateRange.startDate}
-                endDate={sentimentDateRange.endDate}
-              />
-            </Suspense>
-          </div>
-        </CollapsibleSection>
-
-        {/* Section 3: Performance & SLA Metrics */}
-        <CollapsibleSection
-          title="Performance & SLA Metrics"
-          icon="⚡"
-          collapsed={performanceCollapsed}
-          onToggle={() => setPerformanceCollapsed(!performanceCollapsed)}
-        >
-          {/* Performance Metrics - Phase 4.1: Lazy loaded */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {data.conversationLengths.some(c => c.count > 0) && (
-              <Suspense fallback={<ChartLoader />}>
-                <ConversationLengthChart data={data.conversationLengths} />
+                <InsightsPanel userId={user.id} timeRange={timeRange} />
               </Suspense>
             )}
+
+            {/* Workspace Activity */}
+            <div className="bg-card border rounded-lg p-4">
+              <h3 className="text-lg font-semibold mb-4">Workspace Activity</h3>
+              <ActivityFeed limit={50} height="600px" showLoadMore={true} />
+            </div>
+          </TabsContent>
+
+          {/* Performance Tab */}
+          <TabsContent value="performance" className="space-y-6 mt-6">
+            {/* Model Performance Table */}
+            {data.modelPerformance && data.modelPerformance.length > 0 && (
+              <Suspense fallback={<ChartLoader />}>
+                <ModelPerformanceTable
+                  data={data.modelPerformance}
+                  selectedModelId={selectedModelId}
+                  onModelSelect={setSelectedModelId}
+                />
+              </Suspense>
+            )}
+
+            {/* Session Comparison Table */}
             <Suspense fallback={<ChartLoader />}>
-              <ResponseTimeChart data={data.responseTimeTrends} />
+              <SessionComparisonTable
+                data={data.sessionMetrics}
+                selectedSessionId={selectedSessionId}
+                onSessionSelect={setSelectedSessionId}
+              />
             </Suspense>
-          </div>
 
-          {/* SLA Breach Rate - Phase 4.1: Lazy loaded */}
-          {data.responseTimeTrends.length > 0 && (
+            {/* Training Effectiveness Chart */}
+            {data.trainingEffectiveness && data.trainingEffectiveness.length > 0 && (
+              <Suspense fallback={<ChartLoader />}>
+                <TrainingEffectivenessChart data={data.trainingEffectiveness} />
+              </Suspense>
+            )}
+
+            {/* Benchmark Analysis Chart */}
+            {benchmarkLoading ? (
+              <div className="bg-card border rounded-lg p-4 text-sm text-muted-foreground">
+                Loading benchmark analysis...
+              </div>
+            ) : benchmarkError ? (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+                Failed to load benchmark analysis: {benchmarkError}
+              </div>
+            ) : (
+              <Suspense fallback={<ChartLoader />}>
+                <BenchmarkAnalysisChart data={benchmarkData} />
+              </Suspense>
+            )}
+
+            {/* Provider Comparison */}
             <Suspense fallback={<ChartLoader />}>
-              <SLABreachChart data={data.responseTimeTrends.map(d => ({ date: d.date, slaBreachRate: d.slaBreachRate, sampleSize: d.sampleSize }))} />
+              <ProviderComparisonView />
             </Suspense>
-          )}
 
-          {/* Provider Comparison - Phase 3-5: Advanced Performance Analytics */}
-          <Suspense fallback={<ChartLoader />}>
-            <ProviderComparisonView />
-          </Suspense>
-
-          {/* Error Patterns - Phase 3-5: Advanced Performance Analytics */}
-          <Suspense fallback={<ChartLoader />}>
-            <ErrorPatternsView />
-          </Suspense>
-        </CollapsibleSection>
-
-        {/* Section 4: Cost & Resource Analysis */}
-        <CollapsibleSection
-          title="Cost & Resource Analysis"
-          icon="💰"
-          collapsed={costCollapsed}
-          onToggle={() => setCostCollapsed(!costCollapsed)}
-        >
-          {/* Token Usage - Phase 4.1: Lazy loaded */}
-          {data.tokenUsage.length > 0 && (
+            {/* Error Patterns */}
             <Suspense fallback={<ChartLoader />}>
-              <TokenUsageChart data={data.tokenUsage} />
+              <ErrorPatternsView />
             </Suspense>
-          )}
+          </TabsContent>
 
-          {/* Cost Tracking - Phase 4.1: Lazy loaded */}
-          {data.costTracking.length > 0 && (
-            <Suspense fallback={<ChartLoader />}>
-              <CostTrackingChart data={data.costTracking} />
-            </Suspense>
-          )}
+          {/* Quality Tab */}
+          <TabsContent value="quality" className="space-y-6 mt-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Suspense fallback={<ChartLoader />}>
+                <RatingDistribution data={data.ratingDistribution} />
+              </Suspense>
+              <Suspense fallback={<ChartLoader />}>
+                <SuccessRateChart data={data.successFailure} />
+              </Suspense>
+            </div>
 
-          {/* Cost Analytics - Category 4 Economics */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Suspense fallback={<ChartLoader />}>
-              <ModelCostBreakdown />
-            </Suspense>
+            {/* Judgments Breakdown */}
+            {data.failureTags.length > 0 && (
+              <>
+                <Suspense fallback={<ChartLoader />}>
+                  <JudgmentsBreakdown data={data.failureTags} />
+                </Suspense>
+                <Suspense fallback={<ChartLoader />}>
+                  <JudgmentsTable data={data.failureTags} timeRange={timeRange} />
+                </Suspense>
+              </>
+            )}
+
+            {/* Sentiment Analysis */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Suspense fallback={<ChartLoader />}>
+                <SentimentAnalyzer lookbackDays={timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365} />
+              </Suspense>
+              <Suspense fallback={<ChartLoader />}>
+                <SentimentTrendChart
+                  startDate={sentimentDateRange.startDate}
+                  endDate={sentimentDateRange.endDate}
+                />
+              </Suspense>
+            </div>
+          </TabsContent>
+
+          {/* Usage Tab */}
+          <TabsContent value="usage" className="space-y-6 mt-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {data.conversationLengths.some(c => c.count > 0) && (
+                <Suspense fallback={<ChartLoader />}>
+                  <ConversationLengthChart data={data.conversationLengths} />
+                </Suspense>
+              )}
+              <Suspense fallback={<ChartLoader />}>
+                <ResponseTimeChart data={data.responseTimeTrends} />
+              </Suspense>
+            </div>
+
+            {/* SLA Breach Rate */}
+            {data.responseTimeTrends.length > 0 && (
+              <Suspense fallback={<ChartLoader />}>
+                <SLABreachChart data={data.responseTimeTrends.map(d => ({ date: d.date, slaBreachRate: d.slaBreachRate, sampleSize: d.sampleSize }))} />
+              </Suspense>
+            )}
+
+            {/* Token Usage */}
+            {data.tokenUsage.length > 0 && (
+              <Suspense fallback={<ChartLoader />}>
+                <TokenUsageChart data={data.tokenUsage} />
+              </Suspense>
+            )}
+
+            {/* Cost Tracking */}
+            {data.costTracking.length > 0 && (
+              <Suspense fallback={<ChartLoader />}>
+                <CostTrackingChart data={data.costTracking} />
+              </Suspense>
+            )}
+            
+            {/* New Cost Components */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Suspense fallback={<ChartLoader />}>
+                <ModelCostBreakdown />
+              </Suspense>
+              <Suspense fallback={<ChartLoader />}>
+                <CacheSavingsCard />
+              </Suspense>
+            </div>
             <Suspense fallback={<ChartLoader />}>
               <OperationCostChart />
             </Suspense>
-          </div>
+          </TabsContent>
 
-          {/* Cache Savings - Category 4 Economics */}
-          <Suspense fallback={<ChartLoader />}>
-            <CacheSavingsCard />
-          </Suspense>
-        </CollapsibleSection>
-
-        {/* Section 5: Operations & Monitoring */}
-        <CollapsibleSection
-          title="Operations & Monitoring"
-          icon="🛠️"
-          collapsed={operationsCollapsed}
-          onToggle={() => setOperationsCollapsed(!operationsCollapsed)}
-        >
-          {/* Proactive Monitoring & Predictive Intelligence - Phase 4.1: Lazy loaded */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Suspense fallback={<ChartLoader />}>
-              <AnomalyFeed maxItems={10} autoRefresh={true} refreshInterval={30000} />
-            </Suspense>
-            <Suspense fallback={<ChartLoader />}>
-              <QualityForecastChart
-                metricName="Success Rate"
-                metricType="success_rate"
-                timeRange={timeRange === 'all' ? '90d' : timeRange}
-                forecastDays={7}
-              />
-            </Suspense>
-          </div>
-
-          {/* Tool & Error Analytics - Phase 4.1: Lazy loaded */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {data.toolPerformance.length > 0 && (
+          {/* Errors Tab */}
+          <TabsContent value="errors" className="space-y-6 mt-6">
+            <div className="grid gap-6 md:grid-cols-2">
               <Suspense fallback={<ChartLoader />}>
-                <ToolPerformanceChart data={data.toolPerformance} />
+                <AnomalyFeed maxItems={10} autoRefresh={true} refreshInterval={30000} />
               </Suspense>
-            )}
-            {data.errorBreakdown.length > 0 && (
+              {data.errorBreakdown.length > 0 && (
+                <Suspense fallback={<ChartLoader />}>
+                  <ErrorBreakdownChart data={data.errorBreakdown} />
+                </Suspense>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Research Tab */}
+          <TabsContent value="research" className="space-y-6 mt-6">
+            <div className="grid gap-6 md:grid-cols-2">
               <Suspense fallback={<ChartLoader />}>
-                <ErrorBreakdownChart data={data.errorBreakdown} />
+                <QualityForecastChart
+                  metricName="Success Rate"
+                  metricType="success_rate"
+                  timeRange={timeRange === 'all' ? '90d' : timeRange}
+                  forecastDays={7}
+                />
               </Suspense>
-            )}
-          </div>
+              {data.toolPerformance.length > 0 && (
+                <Suspense fallback={<ChartLoader />}>
+                  <ToolPerformanceChart data={data.toolPerformance} />
+                </Suspense>
+              )}
+            </div>
 
-          {/* AI Insights Panel - Phase 4.1: Lazy loaded */}
-          {user?.id && (
-            <Suspense fallback={<ChartLoader />}>
-              <InsightsPanel userId={user.id} timeRange={timeRange} />
-            </Suspense>
-          )}
-
-          {/* Operations Panels */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Suspense fallback={<ChartLoader />}>
-              <ProviderTelemetryPanel hours={24} />
-            </Suspense>
-            <Suspense fallback={<ChartLoader />}>
-              <ResearchJobsPanel limit={20} />
-            </Suspense>
-          </div>
-        </CollapsibleSection>
-
-        {/* Section 6: Workspace Activity */}
-        <CollapsibleSection
-          title="Workspace Activity"
-          icon={<MessageSquare className="w-5 h-5" />}
-          collapsed={workspaceActivityCollapsed}
-          onToggle={() => setWorkspaceActivityCollapsed(!workspaceActivityCollapsed)}
-        >
-          <ActivityFeed limit={50} height="600px" showLoadMore={true} />
-        </CollapsibleSection>
+            <div className="grid gap-6 md:grid-cols-2">
+              <Suspense fallback={<ChartLoader />}>
+                <ProviderTelemetryPanel hours={24} />
+              </Suspense>
+              <Suspense fallback={<ChartLoader />}>
+                <ResearchJobsPanel limit={20} />
+              </Suspense>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         {/* Additional Info */}
         {data.overview.totalEvaluations === 0 && (
