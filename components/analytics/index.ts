@@ -39,3 +39,5 @@ export { default as RecommendationCard } from './RecommendationCard';
 export { default as ContributingFactorsList } from './ContributingFactorsList';
 export { ProviderTelemetryPanel } from './ProviderTelemetryPanel';
 export { ResearchJobsPanel } from './ResearchJobsPanel';
+export { ProviderComparisonView } from './ProviderComparisonView';
+export { ErrorPatternsView } from './ErrorPatternsView';
