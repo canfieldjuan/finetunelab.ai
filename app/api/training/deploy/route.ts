@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { inferenceServerManager, type OllamaConfig, sanitizeOllamaModelName } from '@/lib/services/inference-server-manager';
+import { inferenceServerManager, type OllamaConfig, sanitizeOllamaModelName, type ServerInfo } from '@/lib/services/inference-server-manager';
 import { runpodServerlessService } from '@/lib/inference/runpod-serverless-service';
 import { fireworksDeploymentService } from '@/lib/inference/fireworks-deployment-service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
@@ -242,7 +242,7 @@ export async function POST(req: NextRequest) {
     // ========================================================================
     console.log('[DeployAPI] Starting', server_type, 'server');
 
-    let serverInfo;
+    let serverInfo: ServerInfo | undefined;
 
     // ========================================================================
     // RunPod Common Setup (for both RUNPOD and RUNPOD_SERVERLESS)
@@ -866,6 +866,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!serverInfo) {
+      return NextResponse.json(
+        { error: 'Failed to initialize server info' },
+        { status: 500 }
+      );
+    }
+
     console.log('[DeployAPI] Server spawned:', serverInfo.serverId);
 
     // ========================================================================
@@ -1196,7 +1203,7 @@ export async function GET(req: NextRequest) {
             fireworksApiKey
         );
 
-        let mappedStatus: STATUS.RUNNING | STATUS.STARTING | STATUS.ERROR;
+        let mappedStatus: typeof STATUS.RUNNING | typeof STATUS.STARTING | typeof STATUS.ERROR;
         if (fireworksStatus.state === 'READY') {
           mappedStatus = STATUS.RUNNING; // Maps to active
         } else if (fireworksStatus.state === 'FAILED' || fireworksStatus.state === 'TERMINATED') {
