@@ -109,8 +109,8 @@ export function FilterPanel({
       <CardContent>
         <div className="space-y-6">
           {/* Ratings Filter */}
-          <div>
-            <label className="text-sm font-semibold mb-2 block">Rating</label>
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+            <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Rating</label>
             <div className="flex gap-3">
               {[1, 2, 3, 4, 5].map(rating => (
                 <div key={rating} className="flex items-center space-x-2">
@@ -119,9 +119,9 @@ export function FilterPanel({
                     id={`rating-${rating}`}
                     checked={filters.ratings.includes(rating)}
                     onChange={() => handleRatingToggle(rating)}
-                    className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                    className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all"
                   />
-                  <label htmlFor={`rating-${rating}`} className="text-sm cursor-pointer">
+                  <label htmlFor={`rating-${rating}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
                     {rating}⭐
                   </label>
                 </div>
@@ -130,8 +130,8 @@ export function FilterPanel({
           </div>
 
           {/* Success/Failure Filter */}
-          <div>
-            <label className="text-sm font-semibold mb-2 block">Success Status</label>
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+            <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Success Status</label>
             <div className="flex gap-3">
               {([
                 { value: 'all', label: 'All' },
@@ -145,9 +145,9 @@ export function FilterPanel({
                     name="success-filter"
                     checked={filters.successFilter === option.value}
                     onChange={() => handleSuccessFilterChange(option.value)}
-                    className="w-4 h-4 cursor-pointer"
+                    className="w-4 h-4 cursor-pointer accent-blue-600 transition-all"
                   />
-                  <label htmlFor={`success-${option.value}`} className="text-sm cursor-pointer">
+                  <label htmlFor={`success-${option.value}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
                     {option.label}
                   </label>
                 </div>
@@ -156,8 +156,8 @@ export function FilterPanel({
           </div>
 
           {/* Session Type Filter */}
-          <div>
-            <label className="text-sm font-semibold mb-2 block">Session Type</label>
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+            <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Session Type</label>
             <div className="flex gap-3">
               {([
                 { value: 'all', label: 'All Sessions' },
@@ -171,9 +171,9 @@ export function FilterPanel({
                     name="widget-filter"
                     checked={filters.widgetSessionFilter === option.value}
                     onChange={() => handleWidgetSessionFilterChange(option.value)}
-                    className="w-4 h-4 cursor-pointer"
+                    className="w-4 h-4 cursor-pointer accent-blue-600 transition-all"
                   />
-                  <label htmlFor={`widget-${option.value}`} className="text-sm cursor-pointer">
+                  <label htmlFor={`widget-${option.value}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
                     {option.label}
                   </label>
                 </div>
@@ -183,9 +183,9 @@ export function FilterPanel({
 
           {/* Training Methods Filter */}
           {availableTrainingMethods.length > 0 && (
-            <div>
-              <label className="text-sm font-semibold mb-2 block">Training Method</label>
-              <div className="grid grid-cols-2 gap-2">
+            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Training Method</label>
+              <div className="grid grid-cols-2 gap-3">
                 {availableTrainingMethods.map(method => (
                   <div key={method} className="flex items-center space-x-2">
                     <input
@@ -193,9 +193,9 @@ export function FilterPanel({
                       id={`training-${method}`}
                       checked={filters.trainingMethods.includes(method)}
                       onChange={() => handleTrainingMethodToggle(method)}
-                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                      className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all"
                     />
-                    <label htmlFor={`training-${method}`} className="text-sm cursor-pointer uppercase">
+                    <label htmlFor={`training-${method}`} className="text-sm cursor-pointer uppercase hover:text-blue-600 transition-colors">
                       {method}
                     </label>
                   </div>
@@ -206,46 +206,60 @@ export function FilterPanel({
 
           {/* Models Filter */}
           {availableModels.length > 0 && (
-            <div>
-              <label className="text-sm font-semibold mb-2 block">Models</label>
-              <div className="max-h-48 overflow-y-auto border rounded p-2 space-y-2">
-                {availableModels.map(model => (
-                  <div key={model.id} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id={`model-${model.id}`}
-                      checked={filters.models.includes(model.id)}
-                      onChange={() => handleModelToggle(model.id)}
-                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
-                    />
-                    <label htmlFor={`model-${model.id}`} className="text-sm cursor-pointer truncate">
-                      {model.name}
-                    </label>
-                  </div>
-                ))}
+            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Models</label>
+              <div className="relative max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 shadow-inner">
+                <div className="p-3 space-y-2">
+                  {availableModels.map(model => (
+                    <div 
+                      key={model.id} 
+                      className="flex items-center space-x-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        id={`model-${model.id}`}
+                        checked={filters.models.includes(model.id)}
+                        onChange={() => handleModelToggle(model.id)}
+                        className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all flex-shrink-0"
+                      />
+                      <label htmlFor={`model-${model.id}`} className="text-sm cursor-pointer truncate hover:text-blue-600 transition-colors flex-1">
+                        {model.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {/* Scroll shadow indicator */}
+                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-gray-800 to-transparent pointer-events-none"></div>
               </div>
             </div>
           )}
 
           {/* Sessions Filter */}
           {availableSessions.length > 0 && (
-            <div>
-              <label className="text-sm font-semibold mb-2 block">Sessions</label>
-              <div className="max-h-48 overflow-y-auto border rounded p-2 space-y-2">
-                {availableSessions.map(session => (
-                  <div key={session.id} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id={`session-${session.id}`}
-                      checked={filters.sessions.includes(session.id)}
-                      onChange={() => handleSessionToggle(session.id)}
-                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
-                    />
-                    <label htmlFor={`session-${session.id}`} className="text-sm cursor-pointer truncate">
-                      {session.name}
-                    </label>
-                  </div>
-                ))}
+            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Sessions</label>
+              <div className="relative max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 shadow-inner">
+                <div className="p-3 space-y-2">
+                  {availableSessions.map(session => (
+                    <div 
+                      key={session.id} 
+                      className="flex items-center space-x-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        id={`session-${session.id}`}
+                        checked={filters.sessions.includes(session.id)}
+                        onChange={() => handleSessionToggle(session.id)}
+                        className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all flex-shrink-0"
+                      />
+                      <label htmlFor={`session-${session.id}`} className="text-sm cursor-pointer truncate hover:text-blue-600 transition-colors flex-1">
+                        {session.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {/* Scroll shadow indicator */}
+                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-gray-800 to-transparent pointer-events-none"></div>
               </div>
             </div>
           )}
