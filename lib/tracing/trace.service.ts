@@ -76,10 +76,16 @@ export async function startTrace(params: StartTraceParams): Promise<TraceContext
   }
 
   try {
-    // Get user ID from session
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) {
-      traceDebugLog('startTrace', 'No user session, returning no-op context');
+    // Get user ID from params (server-side) or session (client-side)
+    let userId = params.userId;
+
+    if (!userId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id;
+    }
+
+    if (!userId) {
+      traceDebugLog('startTrace', 'No userId provided and no user session, returning no-op context');
       return createNoOpContext(params);
     }
 
@@ -93,7 +99,7 @@ export async function startTrace(params: StartTraceParams): Promise<TraceContext
       traceId,
       spanId,
       parentSpanId,
-      userId: session.user.id,
+      userId,
       conversationId: params.conversationId,
       messageId: params.messageId,
       startTime: new Date(),
@@ -127,18 +133,24 @@ export async function startTrace(params: StartTraceParams): Promise<TraceContext
  * @param result - Result data including end time and status
  */
 export async function endTrace(context: TraceContext, result: TraceResult): Promise<void> {
+  console.log(`[TRACE DEBUG] endTrace called for span_id: ${context.spanId}, status: ${result.status}`);
   traceDebugLog('endTrace', { traceId: context.traceId, spanId: context.spanId, status: result.status });
 
-  if (!isTracingEnabled()) {
+  const tracingEnabled = isTracingEnabled();
+  console.log(`[TRACE DEBUG] Tracing enabled: ${tracingEnabled}`);
+  if (!tracingEnabled) {
+    console.log(`[TRACE DEBUG] Tracing disabled - skipping endTrace for ${context.spanId}`);
     traceDebugLog('endTrace', 'Tracing disabled, skipping');
     return;
   }
 
   try {
-    // Get session for auth
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      traceDebugLog('endTrace', 'No session, skipping');
+    // Get service role key for auth
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    console.log(`[TRACE DEBUG] Service key present: ${!!serviceKey}`);
+    if (!serviceKey) {
+      console.log(`[TRACE DEBUG] No service key - skipping endTrace for ${context.spanId}`);
+      traceDebugLog('endTrace', 'No service key, skipping');
       return;
     }
 
@@ -150,6 +162,29 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       result.inputTokens !== undefined && result.outputTokens !== undefined
         ? result.inputTokens + result.outputTokens
         : undefined;
+
+    // Auto-calculate cost if not provided but tokens available
+    let costUsd = result.costUsd;
+    if (!costUsd && result.inputTokens && result.outputTokens) {
+      const modelName = result.metadata?.modelName as string | undefined;
+      if (modelName) {
+        try {
+          const { calculateCost, matchModelToPricing } = await import('./pricing-config');
+          const pricingKey = matchModelToPricing(modelName);
+          costUsd = calculateCost(pricingKey, result.inputTokens, result.outputTokens);
+          traceDebugLog('Auto-calculated cost', { modelName, costUsd });
+        } catch (err) {
+          traceDebugLog('Failed to auto-calculate cost', err);
+        }
+      }
+    }
+
+    // Auto-calculate token throughput if not provided
+    let tokensPerSecond = result.tokensPerSecond;
+    if (!tokensPerSecond && result.outputTokens && durationMs > 0) {
+      tokensPerSecond = (result.outputTokens / durationMs) * 1000;
+      traceDebugLog('Auto-calculated throughput', { tokensPerSecond });
+    }
 
     // Create trace update payload
     const traceUpdate = {
@@ -168,7 +203,14 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       input_tokens: result.inputTokens || null,
       output_tokens: result.outputTokens || null,
       total_tokens: totalTokens || null,
-      cost_usd: result.costUsd || null,
+      cost_usd: costUsd || null,
+      ttft_ms: result.ttftMs || null,
+      tokens_per_second: tokensPerSecond || null,
+      cache_creation_input_tokens: result.cacheCreationInputTokens || null,
+      cache_read_input_tokens: result.cacheReadInputTokens || null,
+      retry_count: result.retryCount || null,
+      retry_reason: result.retryReason || null,
+      error_category: result.errorCategory || null,
       error_message: result.errorMessage || null,
       error_type: result.errorType || null,
       input_data: result.inputData || null,
@@ -176,10 +218,15 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       metadata: result.metadata || null,
     };
 
+    console.log(`[TRACE DEBUG] Calling sendTraceEnd for span_id: ${context.spanId}, batch size will be: ${traceBatch.length + 1}`);
+
     // Send trace end to API (non-blocking)
-    sendTraceEnd(session.access_token, traceUpdate).catch(error => {
+    sendTraceEnd(serviceKey, traceUpdate).catch(error => {
       console.error('[Trace Service] Error ending trace:', error);
+      console.error('[TRACE DEBUG] sendTraceEnd error details:', error);
     });
+
+    console.log(`[TRACE DEBUG] sendTraceEnd called successfully for span_id: ${context.spanId}`);
 
     // USAGE METERING: Track root traces for billing
     // Only meter root traces (no parent) to count top-level operations
@@ -242,6 +289,7 @@ export async function createChildSpan(
     parentContext: parent,
     conversationId: parent.conversationId,
     messageId: parent.messageId,
+    userId: parent.userId,
   });
 }
 
@@ -253,13 +301,15 @@ async function sendTraceStart(
   context: TraceContext,
   params: StartTraceParams
 ): Promise<void> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) return;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) return;
 
-  await fetch('/api/analytics/traces', {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+
+  await fetch(`${baseUrl}/api/analytics/traces`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${serviceKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -267,6 +317,7 @@ async function sendTraceStart(
       span_id: context.spanId,
       parent_trace_id: context.parentSpanId || null,
       span_name: params.spanName,
+      user_id: context.userId,
       start_time: context.startTime.toISOString(),
       operation_type: params.operationType,
       model_name: params.modelName || null,
@@ -291,23 +342,15 @@ async function sendTraceEnd(
   // Add to batch
   traceBatch.push(traceUpdate as Partial<TraceRecord>);
 
-  // Start flush timer if not already running
-  if (!batchFlushTimer) {
-    batchFlushTimer = setTimeout(() => {
-      flushTraceBatch(accessToken).catch(error => {
-        console.error('[Trace Service] Error flushing batch:', error);
-      });
-    }, tracingConfig.batchIntervalMs);
-  }
+  console.log(`[TRACE DEBUG] Trace added to batch, batch size: ${traceBatch.length}, threshold: ${tracingConfig.batchSize}`);
 
-  // Flush immediately if batch is full
-  if (traceBatch.length >= tracingConfig.batchSize) {
-    if (batchFlushTimer) {
-      clearTimeout(batchFlushTimer);
-      batchFlushTimer = null;
-    }
-    await flushTraceBatch(accessToken);
+  // Always flush immediately to avoid timer issues in serverless
+  // The timer-based batching doesn't work reliably when requests complete quickly
+  if (batchFlushTimer) {
+    clearTimeout(batchFlushTimer);
+    batchFlushTimer = null;
   }
+  await flushTraceBatch(accessToken);
 }
 
 /**
@@ -319,13 +362,35 @@ async function flushTraceBatch(accessToken: string): Promise<void> {
   const batch = [...traceBatch];
   traceBatch = [];
 
-  traceDebugLog('flushTraceBatch', { count: batch.length });
+  // Deduplicate by span_id - keep last occurrence (most recent state)
+  const uniqueTraces = new Map<string, Partial<TraceRecord>>();
+  for (const trace of batch) {
+    if (trace.span_id) {
+      if (uniqueTraces.has(trace.span_id)) {
+        console.warn(`[Trace Service] Duplicate span_id in batch: ${trace.span_id} - keeping latest`);
+      }
+      uniqueTraces.set(trace.span_id, trace);
+    }
+  }
+
+  const dedupedBatch = Array.from(uniqueTraces.values());
+
+  console.log(`[TRACE DEBUG] flushTraceBatch called with ${batch.length} traces, ${dedupedBatch.length} after dedup`);
+  traceDebugLog('flushTraceBatch', {
+    originalCount: batch.length,
+    dedupedCount: dedupedBatch.length,
+    duplicates: batch.length - dedupedBatch.length
+  });
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  console.log(`[TRACE DEBUG] Sending traces to: ${baseUrl}/api/analytics/traces`);
 
   // Send each trace in the batch
   // In a production system, you might want to support bulk inserts
-  for (const trace of batch) {
+  for (const trace of dedupedBatch) {
+    console.log(`[TRACE DEBUG] Sending trace POST for span_id: ${trace.span_id}, status: ${trace.status}`);
     try {
-      await fetch('/api/analytics/traces', {
+      const response = await fetch(`${baseUrl}/api/analytics/traces`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -333,13 +398,22 @@ async function flushTraceBatch(accessToken: string): Promise<void> {
         },
         body: JSON.stringify(trace),
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[TRACE DEBUG] Trace POST failed for span_id: ${trace.span_id}, status: ${response.status}, error: ${errorText}`);
+      } else {
+        console.log(`[TRACE DEBUG] Trace POST succeeded for span_id: ${trace.span_id}`);
+      }
     } catch (error) {
       console.error('[Trace Service] Error sending trace:', error);
+      console.error(`[TRACE DEBUG] Fetch error for span_id: ${trace.span_id}:`, error);
       // Continue with remaining traces even if one fails
     }
   }
 
-  traceDebugLog('flushTraceBatch complete', { count: batch.length });
+  console.log(`[TRACE DEBUG] flushTraceBatch complete, sent ${dedupedBatch.length} traces`);
+  traceDebugLog('flushTraceBatch complete', { sent: dedupedBatch.length });
 }
 
 /**

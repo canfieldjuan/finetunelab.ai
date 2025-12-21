@@ -8,6 +8,7 @@ import { getGraphitiClient, type EmbedderConfig } from '../graphiti/client';
 import { graphragConfig } from '../config';
 import { classifyQuery } from '../utils/query-classifier';
 import type { SearchSource, GraphRAGRetrievalMetadata } from '../types';
+import type { TraceContext } from '@/lib/tracing/types';
 
 // ============================================================================
 // Types
@@ -19,6 +20,7 @@ export interface EnhanceOptions {
   maxContextLength?: number;
   includeMetadata?: boolean;
   embedderConfig?: EmbedderConfig;
+  traceContext?: TraceContext; // Optional parent trace context for observability
 }
 
 export interface EnhancedPrompt {
@@ -72,6 +74,7 @@ export class GraphRAGService {
         maxContextLength,
         includeMetadata = true,
         embedderConfig,
+        traceContext,
       } = options;
 
       // Set embedder config on client if provided
@@ -103,7 +106,8 @@ export class GraphRAGService {
         isToolSpecific: classification.isToolSpecific,
         action: 'SEARCH',
       });
-      const searchResult = await searchService.search(userMessage, userId);
+      // Pass trace context to search service for child span creation
+      const searchResult = await searchService.search(userMessage, userId, traceContext);
 
       let filteredSources = searchResult.sources || [];
 

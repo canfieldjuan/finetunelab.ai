@@ -6,6 +6,8 @@
 import { getGraphitiClient, type GraphitiSearchParams, type GraphitiSearchResult } from './client';
 import { graphragConfig } from '../config';
 import type { SearchResult, SearchSource, GraphRAGRetrievalMetadata } from '../types';
+import { traceService } from '@/lib/tracing/trace.service';
+import type { TraceContext } from '@/lib/tracing/types';
 
 // ============================================================================
 // Search Service
@@ -17,8 +19,23 @@ export class SearchService {
   /**
    * Search knowledge graph with hybrid search
    */
-  async search(query: string, userId: string): Promise<SearchResult> {
+  async search(query: string, userId: string, parentContext?: TraceContext): Promise<SearchResult> {
     const startTime = Date.now();
+    let retrievalContext: TraceContext | undefined;
+
+    // Start trace for GraphRAG retrieval if parent context provided
+    if (parentContext) {
+      try {
+        retrievalContext = await traceService.createChildSpan(
+          parentContext,
+          'graphrag.retrieve',
+          'retrieval'
+        );
+        console.log('[SearchService] Started GraphRAG retrieval trace');
+      } catch (traceErr) {
+        console.error('[SearchService] Failed to start retrieval trace:', traceErr);
+      }
+    }
 
     const params: GraphitiSearchParams = {
       query,
@@ -51,6 +68,49 @@ export class SearchService {
       : 0;
 
     const queryTime = Date.now() - startTime;
+
+    // End retrieval trace with structured data
+    if (retrievalContext) {
+      try {
+        const { truncateString, truncateRAGChunks } = await import('@/lib/tracing/trace-utils');
+        const { RAGOutputData } = await import('@/lib/tracing/types');
+
+        const inputData = {
+          query: truncateString(query, 500),
+          searchMethod: graphragConfig.search.searchMethod,
+          topK: graphragConfig.search.topK,
+        };
+
+        const outputData: RAGOutputData = {
+          topChunks: truncateRAGChunks(
+            graphitiResult.edges.map(edge => ({
+              fact: edge.fact,
+              score: edge.score || 0,
+              sourceDescription: edge.source_description,
+              entityName: edge.source_node?.name,
+            })),
+            5
+          ),
+          totalCandidates: graphitiResult.edges.length,
+          avgConfidence: avgRelevance,
+        };
+
+        await traceService.endTrace(retrievalContext, {
+          endTime: new Date(),
+          status: 'completed',
+          inputData,
+          outputData,
+          metadata: {
+            userId,
+            queryTimeMs: queryTime,
+            sourcesCount: sources.length,
+          },
+        });
+        console.log('[SearchService] Ended GraphRAG retrieval trace (success)');
+      } catch (traceErr) {
+        console.error('[SearchService] Failed to end retrieval trace:', traceErr);
+      }
+    }
 
     return {
       context,

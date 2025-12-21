@@ -75,6 +75,7 @@ export class UnifiedLLMClient {
       maxTokens?: number;
       userId?: string;
       toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
+      enableThinking?: boolean;
     }
   ): Promise<LLMResponse> {
     console.log('[UnifiedLLMClient] Chat request for model:', modelId, 'userId:', options?.userId || 'not provided');
@@ -116,6 +117,7 @@ export class UnifiedLLMClient {
     options: {
       temperature?: number;
       maxTokens?: number;
+      enableThinking?: boolean;
     }
   ): Promise<LLMResponse> {
     // Format request using adapter
@@ -126,6 +128,7 @@ export class UnifiedLLMClient {
         temperature: options.temperature,
         maxTokens: options.maxTokens,
         stream: false,
+        enableThinking: options.enableThinking,
       },
     };
 
@@ -207,6 +210,7 @@ export class UnifiedLLMClient {
       temperature?: number;
       maxTokens?: number;
       toolCallHandler: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
+      enableThinking?: boolean;
     }
   ): Promise<LLMResponse> {
     // Filter out messages with empty/null content (Anthropic requirement)
@@ -243,6 +247,7 @@ export class UnifiedLLMClient {
           maxTokens: options.maxTokens,
           tools: options.tools,
           stream: false,
+          enableThinking: options.enableThinking,
         },
       };
 

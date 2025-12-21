@@ -47,7 +47,7 @@ export function TraceExplorer() {
   const [operationFilter, setOperationFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [providerFilter, setProviderFilter] = useState<string>('all');
-  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
+  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('7d'); // Changed default from 24h to 7d
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -134,7 +134,14 @@ export function TraceExplorer() {
       if (!response.ok) throw new Error('Failed to fetch trace details');
 
       const data = await response.json();
-      setDetailedTrace(data.traces || []);
+      console.log('[TraceExplorer] Trace details response:', {
+        success: data.success,
+        dataType: Array.isArray(data.data) ? 'array' : typeof data.data,
+        dataLength: data.data?.length,
+        firstTrace: data.data?.[0],
+        fullData: data
+      });
+      setDetailedTrace(data.data || []);
     } catch (err) {
       console.error('[TraceExplorer] Error fetching trace details:', err);
       setDetailedTrace(null);
