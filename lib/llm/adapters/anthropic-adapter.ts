@@ -62,19 +62,38 @@ export class AnthropicAdapter extends BaseProviderAdapter {
       temperature: options.temperature ?? config.default_temperature ?? 0.7,
     };
 
-    // Add system message if present
+    // Add system message with cache control (enables prompt caching)
     if (systemMessage) {
-      body.system = systemMessage;
+      body.system = [
+        {
+          type: 'text',
+          text: systemMessage,
+          cache_control: { type: 'ephemeral' },
+        },
+      ];
     }
 
     // Add tools if provided and supported
     if (options.tools && options.tools.length > 0 && config.supports_functions) {
-      body.tools = this.formatTools(options.tools);
+      const formattedTools = this.formatTools(options.tools);
+      // Add cache control to the last tool for prompt caching
+      if (formattedTools.length > 0) {
+        formattedTools[formattedTools.length - 1].cache_control = { type: 'ephemeral' };
+      }
+      body.tools = formattedTools;
     }
 
     // Add streaming flag if requested
     if (options.stream && config.supports_streaming) {
       body.stream = true;
+    }
+
+    // Add extended thinking if requested (Claude feature)
+    if (options.enableThinking) {
+      body.thinking = {
+        type: 'enabled',
+        budget_tokens: 10000, // Allow up to 10K tokens for thinking
+      };
     }
 
     console.log('[AnthropicAdapter] Request:', {
@@ -125,6 +144,7 @@ export class AnthropicAdapter extends BaseProviderAdapter {
     name: string;
     description: string;
     input_schema: Record<string, unknown>;
+    cache_control?: { type: string };
   }> {
     return tools.map(tool => {
       let inputSchema = tool.function.parameters as unknown;
@@ -204,11 +224,13 @@ export class AnthropicAdapter extends BaseProviderAdapter {
 
     const content = rawContent;
 
-    // Extract usage metrics
+    // Extract usage metrics including cache tokens
     const usage = body.usage
       ? {
           input_tokens: body.usage.input_tokens || 0,
           output_tokens: body.usage.output_tokens || 0,
+          cache_creation_input_tokens: body.usage.cache_creation_input_tokens,
+          cache_read_input_tokens: body.usage.cache_read_input_tokens,
         }
       : undefined;
 

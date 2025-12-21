@@ -66,6 +66,9 @@ export interface StartTraceParams {
   /** Session tag for user-friendly trace search (format: chat_model_{uuid}_{counter}) */
   sessionTag?: string;
 
+  /** User ID for server-side operations (bypasses session requirement) */
+  userId?: string;
+
   /** Parent trace context for nested operations */
   parentContext?: TraceContext;
 
@@ -97,6 +100,21 @@ export interface TraceResult {
 
   /** Token generation throughput (tokens per second) */
   tokensPerSecond?: number;
+
+  /** Cache creation tokens (Anthropic prompt caching) - charged at 1.25x */
+  cacheCreationInputTokens?: number;
+
+  /** Cache read tokens (Anthropic prompt caching) - charged at 0.1x (90% discount) */
+  cacheReadInputTokens?: number;
+
+  /** Number of retry attempts (0 = first attempt, 1+ = retried) */
+  retryCount?: number;
+
+  /** Reason for retry (e.g., rate_limit, timeout, network_error) */
+  retryReason?: string;
+
+  /** Categorized error type for analytics */
+  errorCategory?: string;
 
   /** Input data (will be stored as JSONB, be mindful of size) */
   inputData?: unknown;
@@ -162,6 +180,11 @@ export interface TraceRecord {
   cost_usd?: number | null;
   ttft_ms?: number | null;
   tokens_per_second?: number | null;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+  retry_count?: number | null;
+  retry_reason?: string | null;
+  error_category?: string | null;
   input_data?: Record<string, unknown> | null;
   output_data?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
