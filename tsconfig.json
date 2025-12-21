@@ -40,6 +40,10 @@
     "node_modules",
     "lib/training/llama.cpp/tools/server/webui",
     "lib/llmops-widget/node_modules",
-    "scripts"
+    "scripts",
+    "validate-*.ts",
+    "check-*.ts",
+    "test-*.ts",
+    "*.test.ts"
   ]
 }
