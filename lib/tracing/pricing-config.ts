@@ -88,19 +88,34 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
  * @param modelName - Model identifier (e.g., "gpt-4o-mini", "claude-3-5-sonnet-20241022")
  * @param inputTokens - Number of input tokens consumed
  * @param outputTokens - Number of output tokens generated
+ * @param cacheCreationInputTokens - Cache creation tokens (Anthropic: 1.25x input rate)
+ * @param cacheReadInputTokens - Cache read tokens (Anthropic: 0.1x input rate)
  * @returns Total cost in USD
  */
 export function calculateCost(
   modelName: string,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
+  cacheCreationInputTokens?: number,
+  cacheReadInputTokens?: number
 ): number {
   const pricing = MODEL_PRICING[modelName] || MODEL_PRICING['_default'];
 
   const inputCost = (inputTokens / 1_000_000) * pricing.inputPricePer1M;
   const outputCost = (outputTokens / 1_000_000) * pricing.outputPricePer1M;
 
-  return inputCost + outputCost;
+  let cacheCreationCost = 0;
+  let cacheReadCost = 0;
+
+  if (cacheCreationInputTokens) {
+    cacheCreationCost = (cacheCreationInputTokens / 1_000_000) * pricing.inputPricePer1M * 1.25;
+  }
+
+  if (cacheReadInputTokens) {
+    cacheReadCost = (cacheReadInputTokens / 1_000_000) * pricing.inputPricePer1M * 0.1;
+  }
+
+  return inputCost + outputCost + cacheCreationCost + cacheReadCost;
 }
 
 /**

@@ -172,7 +172,13 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
         try {
           const { calculateCost, matchModelToPricing } = await import('./pricing-config');
           const pricingKey = matchModelToPricing(modelName);
-          costUsd = calculateCost(pricingKey, result.inputTokens, result.outputTokens);
+          costUsd = calculateCost(
+            pricingKey,
+            result.inputTokens,
+            result.outputTokens,
+            result.cacheCreationInputTokens,
+            result.cacheReadInputTokens
+          );
           traceDebugLog('Auto-calculated cost', { modelName, costUsd });
         } catch (err) {
           traceDebugLog('Failed to auto-calculate cost', err);

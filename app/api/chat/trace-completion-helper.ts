@@ -13,6 +13,8 @@ interface TraceCompletionParams {
   tokenUsage?: {
     input_tokens: number;
     output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
   };
   selectedModelId?: string;
   temperature?: number;
@@ -100,7 +102,13 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
     let costUsd: number | undefined;
     if (tokenUsage && selectedModelId) {
       const pricingKey = matchModelToPricing(selectedModelId);
-      costUsd = calculateCost(pricingKey, tokenUsage.input_tokens, tokenUsage.output_tokens);
+      costUsd = calculateCost(
+        pricingKey,
+        tokenUsage.input_tokens,
+        tokenUsage.output_tokens,
+        tokenUsage.cache_creation_input_tokens,
+        tokenUsage.cache_read_input_tokens
+      );
       console.log(`[Trace] Calculated cost: $${costUsd.toFixed(6)} for ${tokenUsage.input_tokens} + ${tokenUsage.output_tokens} tokens`);
     }
 
@@ -150,7 +158,12 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
  */
 export async function completeTraceBasic(
   traceContext: TraceContext,
-  tokenUsage?: { input_tokens: number; output_tokens: number }
+  tokenUsage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  }
 ): Promise<void> {
   try {
     await traceService.endTrace(traceContext, {
@@ -158,6 +171,8 @@ export async function completeTraceBasic(
       status: 'completed',
       inputTokens: tokenUsage?.input_tokens,
       outputTokens: tokenUsage?.output_tokens,
+      cacheCreationInputTokens: tokenUsage?.cache_creation_input_tokens,
+      cacheReadInputTokens: tokenUsage?.cache_read_input_tokens,
     });
     console.log(`[Trace] Completed trace ${traceContext.spanId} with basic data`);
   } catch (error) {
