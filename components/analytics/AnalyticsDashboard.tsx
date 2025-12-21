@@ -46,6 +46,7 @@ const CacheSavingsCard = lazy(() => import('./CacheSavingsCard').then(m => ({ de
 const OperationCostChart = lazy(() => import('./OperationCostChart').then(m => ({ default: m.OperationCostChart })));
 const BudgetSettingsCard = lazy(() => import('./BudgetSettingsCard').then(m => ({ default: m.BudgetSettingsCard })));
 const BudgetAlertsPanel = lazy(() => import('./BudgetAlertsPanel').then(m => ({ default: m.BudgetAlertsPanel })));
+const EfficiencyRecommendations = lazy(() => import('./EfficiencyRecommendations').then(m => ({ default: m.EfficiencyRecommendations })));
 
 // Keep FilterPanel, ActiveFiltersBar, and ExportModal as regular imports (lightweight UI components)
 import { FilterPanel, ActiveFiltersBar, ExportModal } from './index';
@@ -845,6 +846,11 @@ export function AnalyticsDashboard() {
                 <BudgetAlertsPanel />
               </Suspense>
             </div>
+
+            {/* Efficiency Recommendations - Category 4 Phase 4 */}
+            <Suspense fallback={<ChartLoader />}>
+              <EfficiencyRecommendations />
+            </Suspense>
           </TabsContent>
 
           {/* Errors Tab */}
