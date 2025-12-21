@@ -38,6 +38,7 @@ const QualityForecastChart = lazy(() => import('./QualityForecastChart'));
 const SentimentAnalyzer = lazy(() => import('./SentimentAnalyzer'));
 const SentimentTrendChart = lazy(() => import('./SentimentTrendChart'));
 const ProviderTelemetryPanel = lazy(() => import('./ProviderTelemetryPanel').then(m => ({ default: m.ProviderTelemetryPanel })));
+const ModelComparisonPanel = lazy(() => import('./ModelComparisonPanel').then(m => ({ default: m.ModelComparisonPanel })));
 const ResearchJobsPanel = lazy(() => import('./ResearchJobsPanel').then(m => ({ default: m.ResearchJobsPanel })));
 const ProviderComparisonView = lazy(() => import('./ProviderComparisonView').then(m => ({ default: m.ProviderComparisonView })));
 const ErrorPatternsView = lazy(() => import('./ErrorPatternsView').then(m => ({ default: m.ErrorPatternsView })));
@@ -69,8 +70,6 @@ function ChartLoader() {
 export function AnalyticsDashboard() {
   const { user, session } = useAuth();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   // Filter state (data selection)
   const [filters, setFilters] = useState<AnalyticsFilters>({
@@ -114,8 +113,6 @@ export function AnalyticsDashboard() {
 
   console.log('[AnalyticsDashboard] State:', {
     timeRange,
-    selectedModelId,
-    selectedSessionId,
     dataLoaded: !!data,
     modelCount: data?.modelPerformance?.length || 0,
     sessionCount: data?.sessionMetrics?.length || 0,
@@ -169,38 +166,6 @@ export function AnalyticsDashboard() {
       endDate: endDate.toISOString()
     };
   }, [timeRange]);
-
-  // NEW: Keep filters in sync with table selections (model)
-  useEffect(() => {
-    console.log('[AnalyticsDashboard] selectedModelId changed:', selectedModelId);
-    setFilters((prev) => {
-      const next = {
-        ...prev,
-        models: selectedModelId ? [selectedModelId] : []
-      };
-      console.log('[AnalyticsDashboard] Updating filters:', {
-        previousModels: prev.models,
-        newModels: next.models,
-        selectedModelId,
-        changed: JSON.stringify(prev.models) !== JSON.stringify(next.models)
-      });
-      return next;
-    });
-  }, [selectedModelId]);
-
-  // NEW: Keep filters in sync with table selections (session)
-  useEffect(() => {
-    setFilters((prev) => {
-      const next = {
-        ...prev,
-        sessions: selectedSessionId ? [selectedSessionId] : []
-      };
-      if (JSON.stringify(prev.sessions) !== JSON.stringify(next.sessions)) {
-        console.log('[AnalyticsDashboard] Applied session filter from selection:', next.sessions);
-      }
-      return next;
-    });
-  }, [selectedSessionId]);
 
   // Load saved filters + settings from localStorage when user changes
   useEffect(() => {
@@ -389,10 +354,14 @@ export function AnalyticsDashboard() {
         {/* Active Filters Bar */}
         <ActiveFiltersBar
           filters={filters}
-          selectedModelId={selectedModelId}
-          selectedSessionId={selectedSessionId}
-          onClearModel={() => setSelectedModelId(null)}
-          onClearSession={() => setSelectedSessionId(null)}
+          selectedModelId={filters.models[0] || null}
+          selectedSessionId={filters.sessions[0] || null}
+          onClearModel={() => {
+            setFilters(prev => ({ ...prev, models: [] }));
+          }}
+          onClearSession={() => {
+            setFilters(prev => ({ ...prev, sessions: [] }));
+          }}
           onClearFilter={(filterKey) => {
             setFilters(prev => {
               const next = { ...prev };
@@ -426,6 +395,8 @@ export function AnalyticsDashboard() {
                   filters={filters}
                   onFiltersChange={setFilters}
                   availableTrainingMethods={availableTrainingMethods}
+                  availableModels={availableModels}
+                  availableSessions={availableSessions}
                 />
               </div>
             )}
@@ -705,8 +676,6 @@ export function AnalyticsDashboard() {
               <Suspense fallback={<ChartLoader />}>
                 <ModelPerformanceTable
                   data={data.modelPerformance}
-                  selectedModelId={selectedModelId}
-                  onModelSelect={setSelectedModelId}
                 />
               </Suspense>
             )}
@@ -715,8 +684,6 @@ export function AnalyticsDashboard() {
             <Suspense fallback={<ChartLoader />}>
               <SessionComparisonTable
                 data={data.sessionMetrics}
-                selectedSessionId={selectedSessionId}
-                onSessionSelect={setSelectedSessionId}
               />
             </Suspense>
 
@@ -869,6 +836,10 @@ export function AnalyticsDashboard() {
 
           {/* Research Tab */}
           <TabsContent value="research" className="space-y-6 mt-6">
+            <Suspense fallback={<ChartLoader />}>
+              <ModelComparisonPanel />
+            </Suspense>
+
             <div className="grid gap-6 md:grid-cols-2">
               <Suspense fallback={<ChartLoader />}>
                 <QualityForecastChart

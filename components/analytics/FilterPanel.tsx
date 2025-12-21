@@ -10,19 +10,25 @@ interface FilterPanelProps {
   filters: AnalyticsFilters;
   onFiltersChange: (filters: AnalyticsFilters) => void;
   availableTrainingMethods: string[];
+  availableModels: Array<{ id: string; name: string }>;
+  availableSessions: Array<{ id: string; name: string }>;
 }
 
 export function FilterPanel({
   filters,
   onFiltersChange,
-  availableTrainingMethods
+  availableTrainingMethods,
+  availableModels,
+  availableSessions
 }: FilterPanelProps) {
   console.log('[FilterPanel] Rendering with filters:', filters);
 
-  // Calculate active filter count (models and sessions excluded - handled by table selections)
+  // Calculate active filter count
   const activeFilterCount =
     filters.ratings.length +
     filters.trainingMethods.length +
+    filters.models.length +
+    filters.sessions.length +
     (filters.successFilter !== 'all' ? 1 : 0) +
     (filters.widgetSessionFilter !== 'all' ? 1 : 0);
 
@@ -58,6 +64,20 @@ export function FilterPanel({
       ? filters.trainingMethods.filter(m => m !== method)
       : [...filters.trainingMethods, method];
     onFiltersChange({ ...filters, trainingMethods: newMethods });
+  };
+
+  const handleModelToggle = (modelId: string) => {
+    const newModels = filters.models.includes(modelId)
+      ? filters.models.filter(m => m !== modelId)
+      : [...filters.models, modelId];
+    onFiltersChange({ ...filters, models: newModels });
+  };
+
+  const handleSessionToggle = (sessionId: string) => {
+    const newSessions = filters.sessions.includes(sessionId)
+      ? filters.sessions.filter(s => s !== sessionId)
+      : [...filters.sessions, sessionId];
+    onFiltersChange({ ...filters, sessions: newSessions });
   };
 
   return (
@@ -184,12 +204,51 @@ export function FilterPanel({
             </div>
           )}
 
-          {/* Note about model/session filtering */}
-          <div className="pt-4 border-t">
-            <p className="text-xs text-muted-foreground italic">
-              💡 To filter by model or session, click a row in the Model Performance or Session Comparison tables below.
-            </p>
-          </div>
+          {/* Models Filter */}
+          {availableModels.length > 0 && (
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Models</label>
+              <div className="max-h-48 overflow-y-auto border rounded p-2 space-y-2">
+                {availableModels.map(model => (
+                  <div key={model.id} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`model-${model.id}`}
+                      checked={filters.models.includes(model.id)}
+                      onChange={() => handleModelToggle(model.id)}
+                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                    />
+                    <label htmlFor={`model-${model.id}`} className="text-sm cursor-pointer truncate">
+                      {model.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sessions Filter */}
+          {availableSessions.length > 0 && (
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Sessions</label>
+              <div className="max-h-48 overflow-y-auto border rounded p-2 space-y-2">
+                {availableSessions.map(session => (
+                  <div key={session.id} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`session-${session.id}`}
+                      checked={filters.sessions.includes(session.id)}
+                      onChange={() => handleSessionToggle(session.id)}
+                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                    />
+                    <label htmlFor={`session-${session.id}`} className="text-sm cursor-pointer truncate">
+                      {session.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

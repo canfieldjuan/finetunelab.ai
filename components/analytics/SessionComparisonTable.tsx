@@ -10,14 +10,10 @@ import { formatSessionName } from '@/lib/utils/format-labels';
 
 interface SessionComparisonTableProps {
   data: SessionMetrics[];
-  onSessionSelect?: (sessionId: string | null) => void;
-  selectedSessionId?: string | null;
 }
 
 export function SessionComparisonTable({
-  data,
-  onSessionSelect,
-  selectedSessionId
+  data
 }: SessionComparisonTableProps) {
   // Get default visible metrics
   const defaultMetrics = SESSION_METRICS.filter(m => m.defaultVisible).map(m => m.key);
@@ -43,7 +39,6 @@ export function SessionComparisonTable({
 
   console.log('[SessionComparisonTable] Rendering with data:', {
     sessionCount: data?.length || 0,
-    selectedSessionId,
     selectedMetrics: selectedMetrics.length,
     showMetricSelector
   });
@@ -137,7 +132,7 @@ export function SessionComparisonTable({
             <div>
               <CardTitle>Session-Based A/B Testing</CardTitle>
               <CardDescription className="mt-1">
-                Compare performance across different testing sessions. Click any row to filter all charts to that session. Active filter shown above.
+                Compare performance across different testing sessions.
               </CardDescription>
               {pairwise && (
                 <div className="mt-1 text-xs">
@@ -187,21 +182,10 @@ export function SessionComparisonTable({
                   </thead>
                   <tbody>
                     {sessions.map((session) => {
-                      const isSelected = selectedSessionId === session.sessionId;
                       return (
                         <tr
                           key={session.sessionId}
-                          className={`border-b hover:bg-gray-50 cursor-pointer transition-colors ${
-                            isSelected ? 'bg-blue-50 border-blue-200' : ''
-                          }`}
-                          onClick={() => {
-                            console.log('[SessionComparisonTable] Session clicked:', {
-                              sessionId: session.sessionId,
-                              isSelected,
-                              willDeselect: isSelected
-                            });
-                            onSessionSelect?.(isSelected ? null : session.sessionId);
-                          }}
+                          className="border-b hover:bg-gray-50 transition-colors"
                         >
                           <td className="py-2 px-3">
                             <div className="font-medium truncate max-w-[200px]" title={session.sessionId}>
@@ -274,16 +258,8 @@ export function SessionComparisonTable({
             </div>
           ))}
         </div>
-        <div className="mt-3 text-xs text-gray-500 flex items-center justify-between">
-          <span>Click a row to filter all charts to that session</span>
-          {selectedSessionId && (
-            <button
-              onClick={() => onSessionSelect?.(null)}
-              className="text-blue-600 hover:text-blue-800 underline"
-            >
-              Clear filter
-            </button>
-          )}
+        <div className="mt-3 text-xs text-gray-500">
+          <span>Use the Filter Panel to filter charts by session.</span>
         </div>
       </CardContent>
     </Card>

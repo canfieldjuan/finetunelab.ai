@@ -9,14 +9,10 @@ import { formatModelName, formatProviderName } from '@/lib/utils/format-labels';
 
 interface ModelPerformanceTableProps {
   data: ModelPerformanceMetrics[];
-  onModelSelect?: (modelId: string | null) => void;
-  selectedModelId?: string | null;
 }
 
 export function ModelPerformanceTable({
-  data,
-  onModelSelect,
-  selectedModelId
+  data
 }: ModelPerformanceTableProps) {
   // Get default visible metrics
   const defaultMetrics = MODEL_METRICS.filter(m => m.defaultVisible).map(m => m.key);
@@ -27,7 +23,6 @@ export function ModelPerformanceTable({
 
   console.log('[ModelPerformanceTable] Rendering with data:', {
     modelCount: data?.length || 0,
-    selectedModelId,
     selectedMetrics: selectedMetrics.length,
     showMetricSelector
   });
@@ -106,7 +101,7 @@ export function ModelPerformanceTable({
             <div>
               <CardTitle>Model Performance Comparison</CardTitle>
               <CardDescription className="mt-1">
-                Compare quality, speed, cost, and efficiency metrics across all models. Click any row to filter all charts to that model. Active filter shown above.
+                Compare quality, speed, cost, and efficiency metrics across all models.
               </CardDescription>
             </div>
             <button
@@ -139,21 +134,10 @@ export function ModelPerformanceTable({
             </thead>
             <tbody>
               {data.map((model) => {
-                const isSelected = selectedModelId === model.modelId;
                 return (
                   <tr
                     key={model.modelId}
-                    className={`border-b hover:bg-gray-50 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-blue-50 border-blue-200' : ''
-                    }`}
-                    onClick={() => {
-                      console.log('[ModelPerformanceTable] Model clicked:', {
-                        modelId: model.modelId,
-                        isSelected,
-                        willDeselect: isSelected
-                      });
-                      onModelSelect?.(isSelected ? null : model.modelId);
-                    }}
+                    className="border-b hover:bg-gray-50 transition-colors"
                   >
                     <td className="py-2 px-3">
                       <div>
@@ -208,16 +192,8 @@ export function ModelPerformanceTable({
             </tbody>
           </table>
         </div>
-        <div className="mt-3 text-xs text-gray-500 flex items-center justify-between">
-          <span>Click a row to filter all charts to that model</span>
-          {selectedModelId && (
-            <button
-              onClick={() => onModelSelect?.(null)}
-              className="text-blue-600 hover:text-blue-800 underline"
-            >
-              Clear filter
-            </button>
-          )}
+        <div className="mt-3 text-xs text-gray-500">
+          <span>Click a row to highlight it. Use the Filter Panel to filter charts by model.</span>
         </div>
       </CardContent>
     </Card>
