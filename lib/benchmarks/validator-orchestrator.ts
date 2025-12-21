@@ -16,6 +16,7 @@ import {
 export interface JudgmentRecord {
   message_id: string;
   benchmark_id?: string | null;
+  trace_id?: string | null;
   judge_type: 'rule' | 'human' | 'llm';
   judge_name: string;
   criterion: string;
