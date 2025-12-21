@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProviderStats {
   provider: string;
@@ -30,6 +31,7 @@ interface ComparisonResponse {
 }
 
 export function ProviderComparisonView() {
+  const { session } = useAuth();
   const [comparison, setComparison] = useState<ProviderStats[]>([]);
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(true);
@@ -37,13 +39,23 @@ export function ProviderComparisonView() {
 
   useEffect(() => {
     fetchComparison();
-  }, [timeRange]);
+  }, [timeRange, session]);
 
   async function fetchComparison() {
+    if (!session?.access_token) {
+      setError('Not authenticated');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/analytics/provider-comparison?timeRange=${timeRange}`);
+      const res = await fetch(`/api/analytics/provider-comparison?timeRange=${timeRange}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
       if (!res.ok) {
         throw new Error(`Failed to fetch: ${res.status}`);
       }

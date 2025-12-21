@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertCircle, TrendingUp, Wrench } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ErrorPattern {
   category: string;
@@ -33,6 +34,7 @@ interface ErrorPatternsResponse {
 }
 
 export function ErrorPatternsView() {
+  const { session } = useAuth();
   const [data, setData] = useState<ErrorPatternsResponse['data'] | null>(null);
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(true);
@@ -40,13 +42,23 @@ export function ErrorPatternsView() {
 
   useEffect(() => {
     fetchErrorPatterns();
-  }, [timeRange]);
+  }, [timeRange, session]);
 
   async function fetchErrorPatterns() {
+    if (!session?.access_token) {
+      setError('Not authenticated');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/analytics/error-patterns?timeRange=${timeRange}`);
+      const res = await fetch(`/api/analytics/error-patterns?timeRange=${timeRange}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
       if (!res.ok) {
         throw new Error(`Failed to fetch: ${res.status}`);
       }
