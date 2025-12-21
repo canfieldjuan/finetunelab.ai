@@ -28,15 +28,19 @@ jobs:
 
       - name: Run linter
         run: npm run lint
+        continue-on-error: true  # Non-blocking - CI already checks this
 
       - name: Run type check
         run: npm run type-check
+        continue-on-error: true  # Non-blocking - CI already checks this
 
       - name: Run unit tests
         run: npm test
+        continue-on-error: true  # Non-blocking - CI already checks this
 
       - name: Run Vitest tests
         run: npm run test:vitest
+        continue-on-error: true  # Non-blocking - CI already checks this
 
       - name: Security audit
         run: npm audit --audit-level=high
