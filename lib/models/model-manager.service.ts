@@ -289,7 +289,7 @@ class ModelManagerService {
   // Supports provider secret fallback: if model has no API key, looks up provider secret
   // ============================================================================
 
-  async getModelConfig(modelId: string, userId?: string): Promise<ModelConfig | null> {
+  async getModelConfig(modelId: string, userId?: string, client?: SupabaseClient): Promise<ModelConfig | null> {
     try {
       console.log('[ModelManager] Getting config for model:', modelId, 'userId:', userId || 'not provided');
 
@@ -297,15 +297,15 @@ class ModelManagerService {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const isUUID = uuidRegex.test(modelId);
 
-      // Use admin client to bypass RLS for runtime model access
-      // This is a server-side operation that needs access to all models (user + global)
-      const client = supabaseAdmin || defaultSupabase;
+      // Use provided client (preferred), admin client, or default client as fallback
+      // Passing a client from the caller ensures proper access to user-specific models
+      const supabaseClient = client || supabaseAdmin || defaultSupabase;
 
       let data: any | null = null;
       let error: any | null = null;
 
       if (isUUID) {
-        ({ data, error } = await client
+        ({ data, error } = await supabaseClient
           .from('llm_models')
           .select('*')
           .eq('id', modelId)
@@ -313,7 +313,7 @@ class ModelManagerService {
       } else {
         console.log('[ModelManager] Alias resolution for model:', modelId);
         // Try matching by name, model_id, or served_model_name on enabled/global models
-        const { data: aliasList, error: aliasErr } = await client
+        const { data: aliasList, error: aliasErr } = await supabaseClient
           .from('llm_models')
           .select('*')
           .eq('enabled', true)
@@ -376,7 +376,7 @@ class ModelManagerService {
         try {
           const { secretsManager } = await import('@/lib/secrets/secrets-manager.service');
           // Pass the admin client to bypass RLS for server-side secret lookup
-          const providerKey = await secretsManager.getDecryptedApiKey(userId, data.provider, client);
+          const providerKey = await secretsManager.getDecryptedApiKey(userId, data.provider, supabaseClient);
           if (providerKey) {
             apiKey = providerKey;
             console.log('[ModelManager] ✓ Using provider secret for:', data.provider, '(length:', providerKey.length, 'chars)');

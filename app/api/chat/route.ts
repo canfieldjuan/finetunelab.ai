@@ -896,7 +896,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         console.log('[API] ✓✓✓ Using UnifiedLLMClient with model:', selectedModelId);
 
         // Load model config to get actual provider for metadata
-        actualModelConfig = await modelManager.getModelConfig(selectedModelId, userId || undefined);
+        // Pass supabaseAdmin to ensure access to user-specific models (bypasses RLS)
+        actualModelConfig = await modelManager.getModelConfig(selectedModelId, userId || undefined, supabaseAdmin || undefined);
         if (actualModelConfig) {
           console.log('[API] Model config loaded - actual provider:', actualModelConfig.provider);
         }
@@ -992,7 +993,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               );
               // Load model config for metadata (legacy path)
               try {
-                actualModelConfig = await modelManager.getModelConfig(model, userId || undefined);
+                actualModelConfig = await modelManager.getModelConfig(model, userId || undefined, supabaseAdmin || undefined);
               } catch {}
               messageMetadata = {
                 model_name: actualModelConfig?.name || model,
@@ -1082,7 +1083,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         // Load model config for metadata (legacy path)
         // Try to get config from registry, fallback to using model string as-is
         try {
-          actualModelConfig = await modelManager.getModelConfig(model, userId || undefined);
+          actualModelConfig = await modelManager.getModelConfig(model, userId || undefined, supabaseAdmin || undefined);
           if (actualModelConfig) {
             console.log('[API] [LEGACY] Model config loaded - actual provider:', actualModelConfig.provider);
           }
