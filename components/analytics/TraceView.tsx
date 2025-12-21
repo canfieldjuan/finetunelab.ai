@@ -32,6 +32,12 @@ export interface Trace {
   cost_usd?: number;
   ttft_ms?: number;
   tokens_per_second?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  retry_count?: number;
+  retry_reason?: string;
+  error_category?: string;
+  error_type?: string;
   children?: Trace[];
   input_data?: unknown;
   output_data?: unknown;
