@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { runpodService } from '@/lib/training/runpod-service';
+import { runPodService } from '@/lib/training/runpod-service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
 
 export const runtime = 'nodejs';
@@ -141,7 +141,7 @@ export async function POST(
           );
         }
 
-        await runpodService.stopPod(cloudDeployment.deployment_id, secret.value);
+        await runPodService.stopPod(cloudDeployment.deployment_id, secret.value);
 
         await supabase
           .from('cloud_deployments')
