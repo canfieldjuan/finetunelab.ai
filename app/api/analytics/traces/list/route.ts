@@ -188,7 +188,7 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
 
     if (quality) {
       const avgScore = quality.scores.length > 0
-        ? quality.scores.reduce((a, b) => a + b, 0) / quality.scores.length
+        ? quality.scores.reduce((a: number, b: number) => a + b, 0) / quality.scores.length
         : undefined;
       enriched.quality_score = avgScore;
       enriched.passed_validations = quality.passed;
