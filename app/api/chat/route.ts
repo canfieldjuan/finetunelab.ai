@@ -28,6 +28,7 @@ import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext } from '@/lib/tracing/types';
 import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
+import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
 
 // Use Node.js runtime instead of Edge for OpenAI SDK compatibility
 export const runtime = 'nodejs';
@@ -159,7 +160,11 @@ export async function POST(req: NextRequest) {
       console.log('[API] Context injection OFF: Removed query_knowledge_graph tool');
     }
 
+    // Keep tools as-is for trace logging (empty array is meaningful)
     const activeTools = tools.length > 0 ? tools : undefined;
+
+    // For traces, always pass tools array (even if empty) to show what was available
+    const toolsForTrace = tools;
 
     // ========================================================================
     // WIDGET MODE DETECTION & API KEY VALIDATION
@@ -546,6 +551,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             {
               minConfidence: graphragConfig.search.threshold,
               embedderConfig,
+              traceContext, // Pass trace context for child span creation
             }
           );
 
@@ -958,6 +964,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               maxTokens: safeMaxTokens,
               userId: userId || undefined,
               toolCallHandler,
+              enableThinking,
             }
           );
         } catch (modelError) {
@@ -1005,6 +1012,16 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 })
               };
             } else {
+              // End trace before early return
+              if (traceContext) {
+                await traceService.endTrace(traceContext, {
+                  endTime: new Date(),
+                  status: 'failed',
+                  errorMessage: `Model not found: ${selectedModelId}`,
+                  errorType: 'ModelNotFoundError'
+                });
+              }
+
               return new Response(
                 JSON.stringify({
                   error: `Model not found. Please select a different model from the dropdown.`,
@@ -1022,6 +1039,17 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           if (errorMsg.includes('status: 401') || errorMsg.includes('authentication failed')) {
             console.error('[API] Authentication error for model:', selectedModelId);
             const providerName = actualModelConfig?.provider || 'the provider';
+
+            // End trace before early return
+            if (traceContext) {
+              await traceService.endTrace(traceContext, {
+                endTime: new Date(),
+                status: 'failed',
+                errorMessage: `Authentication failed for ${providerName}`,
+                errorType: 'AuthenticationError'
+              });
+            }
+
             return new Response(
               JSON.stringify({
                 error: `Authentication failed - API key missing or invalid`,
@@ -1197,6 +1225,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
           if (assistantMsgError) {
             console.error('[API] Widget mode: Failed to save assistant message:', assistantMsgError);
+
+            // End trace even if message save failed
+            if (traceContext) {
+              await completeTraceBasic(traceContext, tokenUsage);
+            }
           } else {
             console.log('[API] Widget mode: Assistant message saved');
             console.log('[API] [METRICS] Saved message with metrics:', {
@@ -1207,65 +1240,20 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               tool_success: toolsCalled?.every(t => t.success)
             });
 
-            // End trace with comprehensive data and cost
+            // End trace with comprehensive data
             if (traceContext && assistantMsgData?.id) {
-              const { truncateString } = await import('@/lib/tracing/trace-utils');
-              const { calculateCost, matchModelToPricing } = await import('@/lib/tracing/pricing-config');
-
-              const systemPrompt = enhancedMessages.find(m => m.role === 'system')?.content;
-              const lastUserMessage = enhancedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content;
-
-              const llmInputData = {
-                systemPrompt: systemPrompt ? truncateString(String(systemPrompt), 5000) : undefined,
-                userMessage: lastUserMessage ? truncateString(String(lastUserMessage), 5000) : undefined,
-                conversationHistory: enhancedMessages
-                  .filter(m => m.role !== 'system')
-                  .slice(-5)
-                  .map(m => ({
-                    role: m.role,
-                    content: truncateString(String(m.content || ''), 500),
-                  })),
-                parameters: {
-                  temperature,
-                  maxTokens,
-                },
-                toolDefinitions: tools?.map(t => ({
-                  name: t.function.name,
-                  description: t.function.description,
-                })),
-              };
-
-              const llmOutputData = {
-                content: truncateString(finalResponse, 10000),
-                reasoning: reasoning ? truncateString(reasoning, 10000) : undefined,
-                stopReason: 'stop',
-                toolCallsMade: toolsCalled?.map(t => ({
-                  name: t.name,
-                  success: t.success,
-                })),
-              };
-
-              let costUsd: number | undefined;
-              if (tokenUsage && selectedModelId) {
-                const pricingKey = matchModelToPricing(selectedModelId);
-                costUsd = calculateCost(pricingKey, tokenUsage.input_tokens, tokenUsage.output_tokens);
-                console.log(`[Trace] Calculated cost: $${costUsd.toFixed(6)} for ${tokenUsage.input_tokens} + ${tokenUsage.output_tokens} tokens`);
-              }
-
-              let tokensPerSecond: number | undefined;
-              if (tokenUsage?.output_tokens && latency_ms > 0) {
-                tokensPerSecond = (tokenUsage.output_tokens / latency_ms) * 1000;
-              }
-
-              await traceService.endTrace(traceContext, {
-                endTime: new Date(),
-                status: 'completed',
-                inputTokens: tokenUsage?.input_tokens,
-                outputTokens: tokenUsage?.output_tokens,
-                costUsd,
-                tokensPerSecond,
-                inputData: llmInputData,
-                outputData: llmOutputData,
+              await completeTraceWithFullData({
+                traceContext,
+                finalResponse,
+                enhancedMessages,
+                tokenUsage,
+                selectedModelId,
+                temperature,
+                maxTokens,
+                tools: toolsForTrace,
+                toolsCalled,
+                reasoning,
+                latencyMs: latency_ms,
               });
             }
 
@@ -1386,6 +1374,22 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           console.error('[API] Widget mode: Error saving messages:', error);
           // Continue even if message saving fails
         }
+      } else if (traceContext) {
+        // Regular chat non-streaming - end trace with full data
+        console.log('[API] Regular chat (non-streaming): Ending trace');
+        await completeTraceWithFullData({
+          traceContext,
+          finalResponse,
+          enhancedMessages,
+          tokenUsage,
+          selectedModelId,
+          temperature,
+          maxTokens,
+          tools: toolsForTrace,
+          toolsCalled,
+          reasoning,
+          latencyMs: latency_ms,
+        });
       }
 
       // Create stream that "fake streams" the complete response
@@ -1802,69 +1806,55 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
                 // End trace with streaming metrics
                 if (traceContext && streamMsgData?.id) {
-                  try {
-                    const { truncateString } = await import('@/lib/tracing/trace-utils');
-                    const { calculateCost, matchModelToPricing } = await import('@/lib/tracing/pricing-config');
-
-                    const systemPrompt = enhancedMessages.find(m => m.role === 'system')?.content;
-                    const lastUserMessage = enhancedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content;
-
-                    const llmInputData = {
-                      systemPrompt: systemPrompt ? truncateString(String(systemPrompt), 5000) : undefined,
-                      userMessage: lastUserMessage ? truncateString(String(lastUserMessage), 5000) : undefined,
-                      conversationHistory: enhancedMessages
-                        .filter(m => m.role !== 'system')
-                        .slice(-5)
-                        .map(m => ({
-                          role: m.role,
-                          content: truncateString(String(m.content || ''), 500),
-                        })),
-                      parameters: { temperature, maxTokens },
-                      toolDefinitions: tools?.map(t => ({
-                        name: t.function.name,
-                        description: t.function.description,
-                      })),
-                    };
-
-                    const llmOutputData = {
-                      content: truncateString(accumulatedResponse, 10000),
-                      stopReason: 'stop',
-                      toolCallsMade: toolCallsTracking.length > 0
-                        ? toolCallsTracking.map(t => ({ name: t.name, success: t.success }))
-                        : undefined,
-                    };
-
-                    let costUsd: number | undefined;
-                    if (estimatedInputTokens && estimatedOutputTokens && selectedModelId) {
-                      const pricingKey = matchModelToPricing(selectedModelId);
-                      costUsd = calculateCost(pricingKey, estimatedInputTokens, estimatedOutputTokens);
-                      console.log(`[Trace] Streaming cost: ${costUsd.toFixed(6)} USD`);
-                    }
-
-                    let tokensPerSecond: number | undefined;
-                    if (estimatedOutputTokens && streamLatencyMs > 0) {
-                      tokensPerSecond = (estimatedOutputTokens / streamLatencyMs) * 1000;
-                    }
-
-                    await traceService.endTrace(traceContext, {
-                      endTime: new Date(),
-                      status: 'completed',
-                      inputTokens: estimatedInputTokens,
-                      outputTokens: estimatedOutputTokens,
-                      costUsd,
-                      ttftMs,
-                      tokensPerSecond,
-                      inputData: llmInputData,
-                      outputData: llmOutputData,
-                    });
-                  } catch (traceErr) {
-                    console.error('[Trace] Failed to end streaming trace:', traceErr);
-                  }
+                  await completeTraceWithFullData({
+                    traceContext,
+                    finalResponse: accumulatedResponse,
+                    enhancedMessages,
+                    tokenUsage: estimatedInputTokens && estimatedOutputTokens ? {
+                      input_tokens: estimatedInputTokens,
+                      output_tokens: estimatedOutputTokens,
+                    } : undefined,
+                    selectedModelId,
+                    temperature,
+                    maxTokens,
+                    tools: toolsForTrace,
+                    toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
+                    latencyMs: streamLatencyMs,
+                    ttftMs,
+                  });
                 }
               } catch (error) {
                 console.error('[API] Widget mode (streaming): Error saving messages:', error);
                 // Continue even if message saving fails
               }
+            } else if (traceContext) {
+              // Regular chat streaming - end trace with full data (same as widget mode)
+              console.log('[API] Regular chat (streaming): Ending trace with full data');
+
+              // Calculate latency and estimate tokens (same as widget mode)
+              const streamLatencyMs = Date.now() - streamStartTime;
+              const estimatedOutputTokens = Math.ceil(accumulatedResponse.length / 4);
+              const userMessageContent = messages[messages.length - 1]?.content;
+              const estimatedInputTokens = typeof userMessageContent === 'string'
+                ? Math.ceil(userMessageContent.length / 4)
+                : 0;
+
+              await completeTraceWithFullData({
+                traceContext,
+                finalResponse: accumulatedResponse,
+                enhancedMessages,
+                tokenUsage: estimatedInputTokens && estimatedOutputTokens ? {
+                  input_tokens: estimatedInputTokens,
+                  output_tokens: estimatedOutputTokens,
+                } : undefined,
+                selectedModelId,
+                temperature,
+                maxTokens,
+                tools: toolsForTrace,
+                toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
+                latencyMs: streamLatencyMs,
+                ttftMs,
+              });
             }
 
             // If nothing was accumulated (unexpected), send a short placeholder to avoid blank UI
@@ -1878,6 +1868,21 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             controller.close();
           } catch (error) {
             console.error('[API] Streaming error:', error);
+
+            // End trace on streaming error
+            if (traceContext) {
+              try {
+                await traceService.endTrace(traceContext, {
+                  endTime: new Date(),
+                  status: 'failed',
+                  errorMessage: error instanceof Error ? error.message : String(error),
+                  errorType: error instanceof Error ? error.constructor.name : 'StreamingError'
+                });
+              } catch (traceErr) {
+                console.error('[API] Failed to end trace on streaming error:', traceErr);
+              }
+            }
+
             const errorData = `data: ${JSON.stringify({ error: 'Stream error' })}\n\n`;
             controller.enqueue(encoder.encode(errorData));
             controller.close();
@@ -1895,6 +1900,20 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     }
   } catch (error) {
     console.error('Chat API error:', error);
+
+    // End trace if active
+    if (traceContext) {
+      try {
+        await traceService.endTrace(traceContext, {
+          endTime: new Date(),
+          status: 'failed',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorType: error instanceof Error ? error.constructor.name : 'UnknownError'
+        });
+      } catch (traceErr) {
+        console.error('[API] Failed to end trace on error:', traceErr);
+      }
+    }
 
     // Categorize and save error for batch testing/analytics
     const { category, severity } = categorizeError(error);

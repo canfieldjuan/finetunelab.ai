@@ -17,6 +17,7 @@ export interface AdapterRequest {
     maxTokens?: number;
     tools?: ToolDefinition[];
     stream?: boolean;
+    enableThinking?: boolean;
   };
 }
 
@@ -26,6 +27,8 @@ export interface AdapterResponse {
   usage?: {
     input_tokens: number;
     output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
   };
   toolCalls?: Array<{
     id: string;

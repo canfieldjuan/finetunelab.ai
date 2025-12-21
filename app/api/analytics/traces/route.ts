@@ -308,11 +308,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Block 3: Insert trace into database
+    // Block 3: Upsert trace into database (use upsert to handle race conditions)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: trace, error: insertError } = await (supabase as any)
       .from('llm_traces')
-      .insert({
+      .upsert({
         user_id: userId,
         conversation_id,
         message_id,
@@ -340,6 +340,9 @@ export async function POST(req: NextRequest) {
         error_message,
         error_type,
         session_tag
+      }, {
+        onConflict: 'span_id',
+        ignoreDuplicates: false
       })
       .select()
       .single();
@@ -488,8 +491,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Build trace hierarchy if trace_id is provided
-    const typedTraces: TraceRecord[] = (traces ?? []) as TraceRecord[];
+    // Deduplicate by span_id at database level (safety measure)
+    const rawTraces = (traces ?? []) as TraceRecord[];
+    const seenSpanIds = new Set<string>();
+    const typedTraces: TraceRecord[] = rawTraces.filter(trace => {
+      if (seenSpanIds.has(trace.span_id)) {
+        console.warn(`[Traces API - GET] Filtering duplicate from DB: span_id=${trace.span_id}`);
+        return false;
+      }
+      seenSpanIds.add(trace.span_id);
+      return true;
+    });
 
     // Enrich with quality data
     const enrichedTraces = await enrichTracesWithQualityData(supabase, typedTraces);
@@ -584,13 +596,24 @@ function buildTraceHierarchy(traces: TraceRecord[]): TraceHierarchyEntry[] {
   const traceMap = new Map<string, TraceHierarchyEntry>();
   const rootTraces: TraceHierarchyEntry[] = [];
 
-  // First pass: create map
+  // First pass: deduplicate and create map
+  const spanIds = new Set<string>();
+  const uniqueTraces: TraceRecord[] = [];
+
   for (const trace of traces) {
+    if (spanIds.has(trace.span_id)) {
+      console.warn(`[buildTraceHierarchy] Duplicate span_id detected: ${trace.span_id}`);
+      continue;
+    }
+    spanIds.add(trace.span_id);
+    uniqueTraces.push(trace);
     traceMap.set(trace.span_id, { ...trace, children: [] });
   }
 
-  // Second pass: build hierarchy
-  for (const trace of traces) {
+  console.log(`[buildTraceHierarchy] Processing ${traces.length} traces, ${uniqueTraces.length} unique spans`);
+
+  // Second pass: build hierarchy using deduplicated traces
+  for (const trace of uniqueTraces) {
     const currentNode = traceMap.get(trace.span_id);
     if (!currentNode) {
       continue;
@@ -600,6 +623,7 @@ function buildTraceHierarchy(traces: TraceRecord[]): TraceHierarchyEntry[] {
       if (parent) {
         parent.children.push(currentNode);
       } else {
+        console.log(`[buildTraceHierarchy] Orphan span ${trace.span_id} - parent ${trace.parent_trace_id} not found`);
         rootTraces.push(currentNode);
       }
     } else {
@@ -607,5 +631,6 @@ function buildTraceHierarchy(traces: TraceRecord[]): TraceHierarchyEntry[] {
     }
   }
 
+  console.log(`[buildTraceHierarchy] Built hierarchy with ${rootTraces.length} root traces`);
   return rootTraces;
 }
