@@ -552,7 +552,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             {
               minConfidence: graphragConfig.search.threshold,
               embedderConfig,
-              traceContext, // Pass trace context for child span creation
+              traceContext: traceContext ?? undefined, // Pass trace context for child span creation
             }
           );
 
