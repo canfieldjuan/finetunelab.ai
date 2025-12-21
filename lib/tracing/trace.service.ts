@@ -20,6 +20,7 @@
 import { supabase } from '@/lib/supabaseClient';
 import { tracingConfig, isTracingEnabled, traceDebugLog } from '@/lib/config/tracing.config';
 import { recordRootTraceUsage } from '@/lib/billing/usage-meter.service';
+import { categorizeError } from './error-categorizer';
 import type {
   TraceContext,
   StartTraceParams,
@@ -260,11 +261,15 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
 export async function captureError(context: TraceContext, error: Error): Promise<void> {
   traceDebugLog('captureError', { traceId: context.traceId, error: error.message });
 
+  // Auto-categorize error for analytics
+  const categorized = categorizeError(undefined, error.message, error.name);
+
   await endTrace(context, {
     endTime: new Date(),
     status: 'failed',
     errorMessage: error.message,
     errorType: error.name,
+    errorCategory: categorized.category,
   });
 }
 

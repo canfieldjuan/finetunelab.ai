@@ -38,6 +38,8 @@ const SentimentAnalyzer = lazy(() => import('./SentimentAnalyzer'));
 const SentimentTrendChart = lazy(() => import('./SentimentTrendChart'));
 const ProviderTelemetryPanel = lazy(() => import('./ProviderTelemetryPanel').then(m => ({ default: m.ProviderTelemetryPanel })));
 const ResearchJobsPanel = lazy(() => import('./ResearchJobsPanel').then(m => ({ default: m.ResearchJobsPanel })));
+const ProviderComparisonView = lazy(() => import('./ProviderComparisonView').then(m => ({ default: m.ProviderComparisonView })));
+const ErrorPatternsView = lazy(() => import('./ErrorPatternsView').then(m => ({ default: m.ErrorPatternsView })));
 
 // Keep FilterPanel, ActiveFiltersBar, and ExportModal as regular imports (lightweight UI components)
 import { FilterPanel, ActiveFiltersBar, ExportModal } from './index';
@@ -838,6 +840,16 @@ export function AnalyticsDashboard() {
               <SLABreachChart data={data.responseTimeTrends.map(d => ({ date: d.date, slaBreachRate: d.slaBreachRate, sampleSize: d.sampleSize }))} />
             </Suspense>
           )}
+
+          {/* Provider Comparison - Phase 3-5: Advanced Performance Analytics */}
+          <Suspense fallback={<ChartLoader />}>
+            <ProviderComparisonView />
+          </Suspense>
+
+          {/* Error Patterns - Phase 3-5: Advanced Performance Analytics */}
+          <Suspense fallback={<ChartLoader />}>
+            <ErrorPatternsView />
+          </Suspense>
         </CollapsibleSection>
 
         {/* Section 4: Cost & Resource Analysis */}

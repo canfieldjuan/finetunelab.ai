@@ -19,7 +19,8 @@ import { validateApiKey } from '@/lib/auth/api-key-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { categorizeError } from '@/lib/batch-testing/error-categorizer';
+import { categorizeError as categorizeBatchError } from '@/lib/batch-testing/error-categorizer';
+import { categorizeError as categorizeTraceError } from '@/lib/tracing/error-categorizer';
 import { saveBasicJudgment } from '@/lib/batch-testing/evaluation-integration';
 import { evaluateWithLLMJudge, shouldEvaluateMessage } from '@/lib/evaluation/llm-judge-integration';
 import { calculateBasicQualityScore } from '@/lib/batch-testing/evaluation-integration';
@@ -895,7 +896,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         console.log('[API] ✓✓✓ Using UnifiedLLMClient with model:', selectedModelId);
 
         // Load model config to get actual provider for metadata
-        actualModelConfig = await modelManager.getModelConfig(selectedModelId, userId || undefined);
+        // Pass supabaseAdmin to ensure access to user-specific models (bypasses RLS)
+        actualModelConfig = await modelManager.getModelConfig(selectedModelId, userId || undefined, supabaseAdmin || undefined);
         if (actualModelConfig) {
           console.log('[API] Model config loaded - actual provider:', actualModelConfig.provider);
         }
@@ -991,7 +993,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               );
               // Load model config for metadata (legacy path)
               try {
-                actualModelConfig = await modelManager.getModelConfig(model, userId || undefined);
+                actualModelConfig = await modelManager.getModelConfig(model, userId || undefined, supabaseAdmin || undefined);
               } catch {}
               messageMetadata = {
                 model_name: actualModelConfig?.name || model,
@@ -1081,7 +1083,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         // Load model config for metadata (legacy path)
         // Try to get config from registry, fallback to using model string as-is
         try {
-          actualModelConfig = await modelManager.getModelConfig(model, userId || undefined);
+          actualModelConfig = await modelManager.getModelConfig(model, userId || undefined, supabaseAdmin || undefined);
           if (actualModelConfig) {
             console.log('[API] [LEGACY] Model config loaded - actual provider:', actualModelConfig.provider);
           }
@@ -1901,14 +1903,20 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
   } catch (error) {
     console.error('Chat API error:', error);
 
+    // Categorize error for trace analytics
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorType = error instanceof Error ? error.constructor.name : 'UnknownError';
+    const traceErrorCategory = categorizeTraceError(undefined, errorMsg, errorType);
+
     // End trace if active
     if (traceContext) {
       try {
         await traceService.endTrace(traceContext, {
           endTime: new Date(),
           status: 'failed',
-          errorMessage: error instanceof Error ? error.message : String(error),
-          errorType: error instanceof Error ? error.constructor.name : 'UnknownError'
+          errorMessage: errorMsg,
+          errorType: errorType,
+          errorCategory: traceErrorCategory.category,
         });
       } catch (traceErr) {
         console.error('[API] Failed to end trace on error:', traceErr);
@@ -1916,7 +1924,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     }
 
     // Categorize and save error for batch testing/analytics
-    const { category, severity } = categorizeError(error);
+    const { category, severity } = categorizeBatchError(error);
     console.log('[API] Error categorized:', { category, severity });
 
     // Save error to database if we have conversation context
