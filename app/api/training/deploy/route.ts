@@ -691,6 +691,7 @@ export async function POST(req: NextRequest) {
           deployment_name: deploymentName,
           model_path: modelPath,
           hf_token: hfToken,
+          model_id: config?.model_id || (job ? job.model_name : deploymentName),
         },
         fireworksApiKey
       );
