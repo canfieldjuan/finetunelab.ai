@@ -10,6 +10,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown, Clock, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { TraceReplayPanel } from './TraceReplayPanel';
 
 export interface Trace {
   id: string;
@@ -475,6 +476,11 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
               )}
             </div>
           ) : null}
+
+          {/* Trace Replay Section */}
+          <div className="mt-4">
+            <TraceReplayPanel trace={selectedTrace} />
+          </div>
         </div>
       )}
     </div>

@@ -102,3 +102,122 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+interface ModelConfig {
+  modelName: string;
+  provider: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+interface ComparisonRequest {
+  name: string;
+  description?: string;
+  models: ModelConfig[];
+  systemPrompt?: string;
+  testCases?: string[];
+  trafficSplit?: number[];
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = (await req.json()) as ComparisonRequest;
+    const { name, description, models, systemPrompt, testCases, trafficSplit } = body;
+
+    if (!name || !models || models.length < 2) {
+      return NextResponse.json(
+        { error: 'Name and at least 2 models are required' },
+        { status: 400 }
+      );
+    }
+
+    const defaultTrafficSplit = models.map(() => 100 / models.length);
+    const finalTrafficSplit = trafficSplit || defaultTrafficSplit;
+
+    if (finalTrafficSplit.length !== models.length) {
+      return NextResponse.json(
+        { error: 'Traffic split length must match number of models' },
+        { status: 400 }
+      );
+    }
+
+    const totalTraffic = finalTrafficSplit.reduce((sum, val) => sum + val, 0);
+    if (Math.abs(totalTraffic - 100) > 0.01) {
+      return NextResponse.json(
+        { error: 'Traffic split must sum to 100' },
+        { status: 400 }
+      );
+    }
+
+    const { data: experiment, error: expError } = await supabase
+      .from('ab_experiments')
+      .insert({
+        user_id: user.id,
+        name,
+        description: description || `Comparing ${models.map(m => m.modelName).join(' vs ')}`,
+        hypothesis: `Testing which model performs better for the given use case`,
+        status: 'draft',
+        experiment_type: 'model_comparison',
+        primary_metric: 'average_rating',
+        secondary_metrics: ['success_rate', 'avg_latency', 'cost_per_request'],
+        traffic_percentage: 100,
+        start_date: new Date().toISOString(),
+        tags: ['model_comparison', 'automated'],
+        metadata: { systemPrompt, testCases },
+      })
+      .select()
+      .single();
+
+    if (expError) {
+      return NextResponse.json({ error: expError.message }, { status: 500 });
+    }
+
+    const variants = models.map((model, index) => ({
+      experiment_id: experiment.id,
+      name: model.modelName,
+      description: `${model.provider} - ${model.modelName}`,
+      is_control: index === 0,
+      configuration: {
+        modelName: model.modelName,
+        modelProvider: model.provider,
+        temperature: model.temperature ?? 0.7,
+        maxTokens: model.maxTokens ?? 1000,
+      },
+      traffic_percentage: finalTrafficSplit[index],
+    }));
+
+    const { data: createdVariants, error: varError } = await supabase
+      .from('ab_experiment_variants')
+      .insert(variants)
+      .select();
+
+    if (varError) {
+      return NextResponse.json({ error: varError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      experiment,
+      variants: createdVariants,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
