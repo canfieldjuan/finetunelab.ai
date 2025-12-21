@@ -859,19 +859,19 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // When enabled, prepend <think> to the last user message to trigger
     // step-by-step reasoning with <think>...</think> output blocks
     // ========================================================================
-    // COMMENTED OUT FOR DEBUGGING - No thinking instructions
-    // if (enableThinking) {
-    //   console.log('[API] Thinking mode enabled - adding <think> instruction');
-    //   // Add thinking instruction to system prompt
-    //   const thinkingInstruction = `\n\nIMPORTANT: You have thinking mode enabled. Before answering, reason through the problem step-by-step inside <think>...</think> tags. Show your complete reasoning process, then provide your final answer after the </think> tag.`;
-    //
-    //   if (enhancedMessages.length > 0 && enhancedMessages[0].role === 'system') {
-    //     enhancedMessages[0] = {
-    //       ...enhancedMessages[0],
-    //       content: enhancedMessages[0].content + thinkingInstruction
-    //     };
-    //   }
-    // }
+    if (enableThinking) {
+      console.log('[API] Thinking mode enabled - adding <think> instruction');
+      // Add thinking instruction to system prompt
+      const thinkingInstruction = `\n\nIMPORTANT: You have thinking mode enabled. Before answering, reason through the problem step-by-step inside <think>...</think> tags. Show your complete reasoning process, then provide your final answer after the </think> tag.`;
+
+      if (enhancedMessages.length > 0 && enhancedMessages[0].role === 'system') {
+        const currentContent = enhancedMessages[0].content || '';
+        enhancedMessages[0] = {
+          ...enhancedMessages[0],
+          content: currentContent + thinkingInstruction
+        };
+      }
+    }
 
     // Branch: Use non-streaming for tool-enabled requests (except OpenAI which supports streaming + tools)
     // OpenAI can stream with tools, Anthropic cannot yet
