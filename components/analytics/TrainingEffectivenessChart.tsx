@@ -74,8 +74,24 @@ export function TrainingEffectivenessChart({ data }: TrainingEffectivenessChartP
                   <tr key={method.trainingMethod} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-3">
                       <div className="font-medium">{getMethodDisplay(method.trainingMethod)}</div>
-                      <div className="text-xs text-gray-500">
-                        {method.modelCount} model{method.modelCount !== 1 ? 's' : ''}
+                      {/* List models explicitly to avoid confusion */}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {method.models.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {method.models.slice(0, 3).map(m => (
+                              <span key={m.modelId} className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[10px] border border-gray-200 dark:border-gray-700">
+                                {m.modelName}
+                              </span>
+                            ))}
+                            {method.models.length > 3 && (
+                              <span className="text-[10px] text-gray-500 self-center">
+                                +{method.models.length - 3} more
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="italic text-gray-400">No specific models identified</span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-3 text-right font-medium">
