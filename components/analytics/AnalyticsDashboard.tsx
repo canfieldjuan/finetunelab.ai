@@ -44,6 +44,8 @@ const ErrorPatternsView = lazy(() => import('./ErrorPatternsView').then(m => ({ 
 const ModelCostBreakdown = lazy(() => import('./ModelCostBreakdown').then(m => ({ default: m.ModelCostBreakdown })));
 const CacheSavingsCard = lazy(() => import('./CacheSavingsCard').then(m => ({ default: m.CacheSavingsCard })));
 const OperationCostChart = lazy(() => import('./OperationCostChart').then(m => ({ default: m.OperationCostChart })));
+const BudgetSettingsCard = lazy(() => import('./BudgetSettingsCard').then(m => ({ default: m.BudgetSettingsCard })));
+const BudgetAlertsPanel = lazy(() => import('./BudgetAlertsPanel').then(m => ({ default: m.BudgetAlertsPanel })));
 
 // Keep FilterPanel, ActiveFiltersBar, and ExportModal as regular imports (lightweight UI components)
 import { FilterPanel, ActiveFiltersBar, ExportModal } from './index';
@@ -833,6 +835,16 @@ export function AnalyticsDashboard() {
             <Suspense fallback={<ChartLoader />}>
               <OperationCostChart />
             </Suspense>
+
+            {/* Budget Tracking - Category 4 Phase 3 */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Suspense fallback={<ChartLoader />}>
+                <BudgetSettingsCard />
+              </Suspense>
+              <Suspense fallback={<ChartLoader />}>
+                <BudgetAlertsPanel />
+              </Suspense>
+            </div>
           </TabsContent>
 
           {/* Errors Tab */}
