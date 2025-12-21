@@ -39,7 +39,7 @@ export function ProviderComparisonView() {
 
   useEffect(() => {
     fetchComparison();
-  }, [timeRange, session]);
+  }, [timeRange]);
 
   async function fetchComparison() {
     if (!session?.access_token) {

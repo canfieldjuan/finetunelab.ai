@@ -42,7 +42,7 @@ export function ErrorPatternsView() {
 
   useEffect(() => {
     fetchErrorPatterns();
-  }, [timeRange, session]);
+  }, [timeRange]);
 
   async function fetchErrorPatterns() {
     if (!session?.access_token) {
