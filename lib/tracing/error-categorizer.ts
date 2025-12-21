@@ -36,7 +36,7 @@ function extractStatusCode(errorMessage: string): number | undefined {
 export function categorizeError(
   statusCode?: number,
   errorMessage?: string,
-  errorType?: string
+  _errorType?: string
 ): CategorizedError {
   const msg = (errorMessage || '').toLowerCase();
   const code = statusCode || extractStatusCode(msg);

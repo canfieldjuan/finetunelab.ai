@@ -85,18 +85,18 @@ export async function GET(request: NextRequest) {
         sseService.off('research_event', eventHandler);
         try {
           controller.close();
-        } catch (e) {
+        } catch (_e) {
           // Ignore if already closed
         }
       });
 
       // Timeout after 10 minutes (research should complete before this)
-      const timeout = setTimeout(() => {
+      const _timeout = setTimeout(() => {
         console.log(`[API /research/stream] Timeout reached for job: ${jobId}`);
         sseService.off('research_event', eventHandler);
         try {
           controller.close();
-        } catch (e) {
+        } catch (_e) {
           // Ignore if already closed
         }
       }, 10 * 60 * 1000);

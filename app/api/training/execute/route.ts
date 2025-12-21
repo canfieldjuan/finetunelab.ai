@@ -71,11 +71,6 @@ type ConfigDatasetRow = {
   training_datasets: TrainingDatasetRecord | null;
 };
 
-interface LocalProviderConfigLocal {
-  base_url: string;
-  timeout_ms?: number;
-}
-
 type ProviderSettingsRow = {
   value: LocalProviderConfig | null;
 };

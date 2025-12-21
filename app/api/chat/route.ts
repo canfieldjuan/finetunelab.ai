@@ -6,7 +6,7 @@ import { streamAnthropicResponse, runAnthropicWithToolCalls } from '@/lib/llm/an
 import { graphragService, graphragConfig } from '@/lib/graphrag';
 import type { EmbedderConfig } from '@/lib/graphrag/graphiti/client';
 import { executeTool } from '@/lib/tools/toolManager';
-import type { EnhancedPrompt, SearchSource, SearchMetadata, GraphRAGRetrievalMetadata } from '@/lib/graphrag';
+import type { EnhancedPrompt, SearchSource, GraphRAGRetrievalMetadata } from '@/lib/graphrag';
 import { supabase } from '@/lib/supabaseClient';
 import { loadLLMConfig } from '@/lib/config/llmConfig';
 import { unifiedLLMClient } from '@/lib/llm/unified-client';
@@ -17,8 +17,6 @@ import { gatherConversationContext } from '@/lib/context/context-provider.servic
 import type { ContextInjectionResult } from '@/lib/context/types';
 import { validateApiKey } from '@/lib/auth/api-key-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 import { categorizeError as categorizeBatchError } from '@/lib/batch-testing/error-categorizer';
 import { categorizeError as categorizeTraceError } from '@/lib/tracing/error-categorizer';
 import { saveBasicJudgment } from '@/lib/batch-testing/evaluation-integration';
@@ -384,7 +382,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Add base system prompt for casual, direct responses
-    let enhancedMessages: ChatMessage[] = [
+    const enhancedMessages: ChatMessage[] = [
       {
         role: 'system',
         content: `You are a helpful assistant for Fine Tune Lab. You have access to the user's uploaded documents through a knowledge graph.
@@ -538,7 +536,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             };
             console.log('[API] Using custom embedder:', embedderConfig.provider);
           }
-        } catch (settingsErr) {
+        } catch (_settingsErr) {
           console.log('[API] Could not fetch embedding settings, using defaults');
         }
 
@@ -1087,7 +1085,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           if (actualModelConfig) {
             console.log('[API] [LEGACY] Model config loaded - actual provider:', actualModelConfig.provider);
           }
-        } catch (error) {
+        } catch (_error) {
           console.log('[API] [LEGACY] Could not load model config, using model string:', model);
         }
 
@@ -1143,7 +1141,6 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           finalResponse = `deep_research_started jobId: ${lastDeepResearchJobId}`;
         } else if (toolsCalled && toolsCalled.length > 0) {
           // If tools were called but no content generated, create a helpful summary
-          const successCount = toolsCalled.filter(t => t.success).length;
           const failureCount = toolsCalled.filter(t => !t.success).length;
           const toolNames = toolsCalled.map(t => t.name).join(', ');
           

@@ -172,7 +172,7 @@ import { createClient } from '@supabase/supabase-js';
 import { datasetValidator } from '@/lib/training/dataset-validator';
 import { normalizedToJsonl } from '@/lib/training/format-normalizer';
 import { estimateTrainingCost } from '@/lib/training/dataset-cost-estimator';
-import type { DatasetFormat, EnhancedDatasetStats } from '@/lib/training/dataset.types';
+import type { DatasetFormat } from '@/lib/training/dataset.types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes for large uploads

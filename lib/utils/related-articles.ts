@@ -86,5 +86,5 @@ export function getRelatedArticles(
   return related
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-    .map(({ score, ...article }) => article);
+    .map(({ score: _, ...article }) => article);
 }

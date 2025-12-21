@@ -6,7 +6,7 @@ import { researchService } from './research.service';
 import { researchController } from './research.controller';
 import type { SortBy } from './types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 interface ExpressRouter {
   post: (path: string, handler: (req: any, res: any) => void) => void;
   get: (path: string, handler: (req: any, res: any) => void) => void;

@@ -19,13 +19,6 @@ interface Recommendation {
   action: string;
 }
 
-interface ModelUsage {
-  model_name: string;
-  cost_usd: number;
-  trace_count: number;
-  avg_cost_per_trace: number;
-}
-
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');

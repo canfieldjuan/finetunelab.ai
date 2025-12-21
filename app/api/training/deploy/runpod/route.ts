@@ -500,7 +500,7 @@ export async function POST(request: NextRequest) {
 
     // Extract dataset metadata (already loaded from junction table)
     // NOTE: The field is 'total_examples', not 'sample_count'!
-    let sampleCount = dataset?.total_examples || 0;
+    const sampleCount = dataset?.total_examples || 0;
 
     console.log('[RunPod API] Dataset total_examples from junction:', sampleCount);
     console.log('[RunPod API] Dataset object:', JSON.stringify(dataset));

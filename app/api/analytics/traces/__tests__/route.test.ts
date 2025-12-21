@@ -64,7 +64,7 @@ describe('app/api/analytics/traces', () => {
 
     expect(response.status).toBe(200);
     expect(insert).toHaveBeenCalledTimes(1);
-    const insertArg = insert.mock.calls[0]?.[0];
+    const insertArg = (insert.mock.calls[0] as any[])?.[0];
     expect(insertArg.user_id).toBe('user-123');
   });
 

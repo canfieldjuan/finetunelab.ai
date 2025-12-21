@@ -8,7 +8,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import {
   getDemoSessionMetrics,
   getDemoPromptResults,
@@ -17,9 +16,6 @@ import {
 } from '@/lib/demo/demo-analytics.service';
 
 export const runtime = 'nodejs';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
  * Escape CSV value

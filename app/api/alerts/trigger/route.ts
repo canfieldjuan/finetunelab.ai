@@ -15,8 +15,6 @@ import { decrypt } from '@/lib/models/encryption';
 export const runtime = 'nodejs';
 
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || process.env.ALERT_TRIGGER_API_KEY;
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');
@@ -58,7 +56,7 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    let enhancedJobData: TrainingJobAlertData = {
+    const enhancedJobData: TrainingJobAlertData = {
       jobId: body.job_id,
       userId: body.user_id,
       modelName: body.model_name || null,

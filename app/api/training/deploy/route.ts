@@ -272,7 +272,7 @@ export async function POST(req: NextRequest) {
         if (hfSecret?.api_key_encrypted) {
           hfToken = decrypt(hfSecret.api_key_encrypted);
         }
-      } catch (error) {
+      } catch (_error) {
         console.warn('[DeployAPI] HuggingFace token not available (optional for gated models)');
       }
 
@@ -604,7 +604,6 @@ export async function POST(req: NextRequest) {
 
       // Insert or update model entry
       let modelEntry;
-      let isNewModel = false;
 
       try {
         if (existingModel) {
@@ -637,7 +636,6 @@ export async function POST(req: NextRequest) {
           }
 
           modelEntry = data;
-          isNewModel = true;
           console.log('[DeployAPI] Model entry created:', modelEntry.id);
         }
 
@@ -684,35 +682,6 @@ export async function POST(req: NextRequest) {
       const fireworksApiKey = decrypt(fireworksSecret.api_key_encrypted);
 
       const deploymentName = name || (job ? `${job.model_name.replace('/', '-')}-finetuned` : `model-${Date.now()}`);
-
-      // Note: modelPath is the local path to the trained model files
-      const fireworksResponse = await fireworksDeploymentService.deployModel(
-        {
-          deployment_name: deploymentName,
-          model_path: modelPath,
-          hf_token: hfToken,
-          model_id: config?.model_id || (job ? job.model_name : deploymentName),
-        },
-        fireworksApiKey
-      );
-
-    } else if (server_type === 'fireworks') {
-      // ========================================================================
-      // FIREWORKS.AI DEPLOYMENT
-      // ========================================================================
-      console.log('[DeployAPI] Deploying to Fireworks.ai...');
-
-      // Get Fireworks API key from secrets vault
-      const fireworksSecret = await secretsManager.getSecret(userId, 'fireworks', supabase);
-      if (!fireworksSecret) {
-        return NextResponse.json(
-          { error: 'Fireworks.ai API key not configured. Please add it in Settings > Secrets.' },
-          { status: 400 }
-        );
-      }
-      const fireworksApiKey = decrypt(fireworksSecret.api_key_encrypted);
-
-      const deploymentName = name || (job ? `${job.model_name.replace('/', '-')}-finetuned` : `model-${Date.now()}`);
       
       // Get HuggingFace token for gated models (optional) - required for Fireworks model upload
       try {
@@ -720,7 +689,7 @@ export async function POST(req: NextRequest) {
         if (hfSecret?.api_key_encrypted) {
           hfToken = decrypt(hfSecret.api_key_encrypted);
         }
-      } catch (error) {
+      } catch (_error) {
         console.warn('[DeployAPI] HuggingFace token not available (optional for gated models on Fireworks)');
       }
 

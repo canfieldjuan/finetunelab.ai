@@ -213,7 +213,7 @@ async function executeDemoAtlasTool(
         const sanitized = expression.replace(/[^0-9+\-*/().%\s]/g, '');
         const result = Function(`"use strict"; return (${sanitized})`)();
         return { expression, result };
-      } catch (err) {
+      } catch (_err) {
         return { error: `Invalid expression: ${expression}` };
       }
     }

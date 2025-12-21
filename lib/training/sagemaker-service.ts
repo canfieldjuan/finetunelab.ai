@@ -10,7 +10,6 @@ import {
   CreateTrainingJobCommandInput,
   DescribeTrainingJobCommand,
   StopTrainingJobCommand,
-  TrainingJobStatus,
 } from '@aws-sdk/client-sagemaker';
 import {
   CloudWatchLogsClient,

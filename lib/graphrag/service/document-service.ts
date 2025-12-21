@@ -753,7 +753,7 @@ export class DocumentService {
       }
 
       // Find best break point (prefer sentence > paragraph > word)
-      let breakPoint = this.findBestBreakPoint(remaining, maxChunkSize);
+      const breakPoint = this.findBestBreakPoint(remaining, maxChunkSize);
 
       chunks.push(remaining.slice(0, breakPoint).trim());
       remaining = remaining.slice(breakPoint).trim();

@@ -25,8 +25,8 @@ export async function executeAdvancedAnalytics(
   args: Record<string, unknown>,
   userId: string,
   authHeader?: string,
-  authClient?: any
-): Promise<any> {
+  _authClient?: unknown
+): Promise<unknown> {
   console.log('[AdvancedAnalytics] Executing:', args.operation);
 
   const { operation, period, startDate, endDate, cohortId, modelIds, threshold } = args as unknown as AdvancedAnalyticsArgs;
@@ -74,7 +74,7 @@ async function modelComparison(
   endDate?: string,
   modelIds?: string[],
   authHeader?: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[AdvancedAnalytics] Model comparison:', { period, startDate, endDate });
 
   try {
@@ -125,7 +125,7 @@ async function benchmarkAnalysis(
   startDate?: string,
   endDate?: string,
   authHeader?: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[AdvancedAnalytics] Benchmark analysis:', { period, startDate, endDate });
 
   try {
@@ -177,7 +177,7 @@ async function cohortAnalysis(
   startDate?: string,
   endDate?: string,
   authHeader?: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[AdvancedAnalytics] Cohort analysis:', cohortId);
 
   try {
@@ -230,7 +230,7 @@ async function anomalyDetection(
   endDate?: string,
   threshold?: number,
   authHeader?: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[AdvancedAnalytics] Anomaly detection:', { period, threshold });
 
   try {
@@ -282,7 +282,7 @@ async function sentimentTrends(
   startDate?: string,
   endDate?: string,
   authHeader?: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[AdvancedAnalytics] Sentiment trends:', { period, startDate, endDate });
 
   try {
@@ -333,7 +333,7 @@ async function qualityForecast(
   startDate?: string,
   endDate?: string,
   authHeader?: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[AdvancedAnalytics] Quality forecast:', { period, startDate, endDate });
 
   try {

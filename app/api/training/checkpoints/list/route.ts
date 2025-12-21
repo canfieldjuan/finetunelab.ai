@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
       console.log('[CheckpointListAPI] Training server returned', response.status, '- trying database fallback');
     }
 
-  } catch (error) {
+  } catch (_error) {
     // Training server unreachable - this is expected when server isn't running
     console.log('[CheckpointListAPI] Training server unreachable - trying database fallback');
   }

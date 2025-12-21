@@ -87,7 +87,7 @@ export default function CohortAnalysisView({
   useEffect(() => {
     console.log('[CohortAnalysisView] Initial load');
     fetchCohorts();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   useEffect(() => {

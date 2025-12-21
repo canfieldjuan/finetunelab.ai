@@ -127,7 +127,7 @@ class Logger {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
         return false;
       }
-    } catch (_e) { /* noop */ }
+    } catch { /* noop */ }
     return true;
   }
 

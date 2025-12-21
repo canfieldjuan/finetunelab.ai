@@ -7,7 +7,7 @@ import { getGraphitiClient, type GraphitiSearchParams, type GraphitiSearchResult
 import { graphragConfig } from '../config';
 import type { SearchResult, SearchSource, GraphRAGRetrievalMetadata } from '../types';
 import { traceService } from '@/lib/tracing/trace.service';
-import type { TraceContext } from '@/lib/tracing/types';
+import type { TraceContext, RAGOutputData } from '@/lib/tracing/types';
 
 // ============================================================================
 // Search Service
@@ -73,7 +73,6 @@ export class SearchService {
     if (retrievalContext) {
       try {
         const { truncateString, truncateRAGChunks } = await import('@/lib/tracing/trace-utils');
-        const { RAGOutputData } = await import('@/lib/tracing/types');
 
         const inputData = {
           query: truncateString(query, 500),

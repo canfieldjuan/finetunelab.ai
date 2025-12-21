@@ -30,7 +30,7 @@ For more information, see the documentation at /docs/cloud-deployment
  * POST - Deploy to Lambda Labs (DEPRECATED)
  * Returns 410 Gone with migration instructions
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   console.log('[Lambda API - DEPRECATED] Received POST request - returning 410 Gone');
 
   return NextResponse.json(
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
  * GET - Check Lambda Labs job status (DEPRECATED)
  * Returns 410 Gone with migration instructions
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   console.log('[Lambda API - DEPRECATED] Received GET request - returning 410 Gone');
 
   return NextResponse.json(
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
  * DELETE - Stop Lambda Labs job (DEPRECATED)
  * Returns 410 Gone with migration instructions
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE(_request: NextRequest) {
   console.log('[Lambda API - DEPRECATED] Received DELETE request - returning 410 Gone');
 
   return NextResponse.json(

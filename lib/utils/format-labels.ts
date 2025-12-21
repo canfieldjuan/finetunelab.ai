@@ -72,7 +72,7 @@ export function formatSessionName(sessionName: string | null | undefined): strin
   if (!sessionName) return '';
 
   // Remove common prefixes
-  let formatted = sessionName
+  const formatted = sessionName
     .replace(/^(session|experiment)_/i, '')
     .replace(/_/g, ' ');
 

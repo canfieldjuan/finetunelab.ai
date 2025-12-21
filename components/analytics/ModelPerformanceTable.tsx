@@ -41,7 +41,7 @@ export function ModelPerformanceTable({
             </p>
             <ul className="text-xs mt-3 space-y-1 text-left max-w-md mx-auto">
               <li>• Active filters (sessions, ratings, etc.) exclude all messages</li>
-              <li>• Messages don't have model_id populated</li>
+              <li>• Messages don&apos;t have model_id populated</li>
               <li>• No assistant messages in the selected time range</li>
             </ul>
             <p className="text-xs mt-4 text-gray-500">

@@ -10,17 +10,6 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
-interface BudgetSetting {
-  id: string;
-  user_id: string;
-  budget_type: 'daily' | 'weekly' | 'monthly';
-  budget_limit_usd: number;
-  alert_threshold_percent: number;
-  enabled: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');

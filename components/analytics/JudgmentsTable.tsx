@@ -164,7 +164,7 @@ export function JudgmentsTable({ data, timeRange = '30d' }: JudgmentsTableProps)
       <CardHeader>
         <CardTitle>Quality Issues - Detailed View</CardTitle>
         <p className="text-sm text-muted-foreground mt-1">
-          Click "View examples" to see specific failed responses with traces for debugging.
+          Click &quot;View examples&quot; to see specific failed responses with traces for debugging.
         </p>
       </CardHeader>
       <CardContent>

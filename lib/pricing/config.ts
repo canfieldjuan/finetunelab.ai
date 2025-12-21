@@ -5,13 +5,6 @@
  * Model limits can be configured via environment variables
  */
 
-const getEnvNumber = (key: string, defaultValue: number): number => {
-  const value = process.env[key];
-  if (!value) return defaultValue;
-  const parsed = parseInt(value, 10);
-  return isNaN(parsed) ? defaultValue : parsed;
-};
-
 export type PlanTier = 'free_trial' | 'pro' | 'pro_plus' | 'enterprise';
 
 export interface PlanLimits {

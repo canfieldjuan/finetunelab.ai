@@ -32,7 +32,7 @@ describe('POST app/api/training/local/metrics', () => {
     const jobsSelectQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      single: vi.fn<[], Promise<SupabaseResponse<{ id: string; job_token: string }>>>(),
+      single: vi.fn<() => Promise<SupabaseResponse<{ id: string; job_token: string }>>>(),
     };
     const metricsInsertQuery = {
       insert: vi.fn().mockReturnThis(),
@@ -183,7 +183,7 @@ describe('POST app/api/training/local/metrics', () => {
     expect(metricsInsertQuery.insert).toHaveBeenCalledTimes(1);
     expect(jobsUpdate).toHaveBeenCalledTimes(1);
 
-    const updateArg = jobsUpdate.mock.calls[0]?.[0];
+    const updateArg = (jobsUpdate.mock.calls[0] as any[])?.[0];
     expect(updateArg).toMatchObject({
       current_step: 2,
       current_epoch: 0,

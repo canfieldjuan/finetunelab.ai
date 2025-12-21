@@ -133,7 +133,7 @@ describe('POST app/api/training/jobs/[jobId]/metrics', () => {
     expect(jobsUpdate).toHaveBeenCalledTimes(1);
     expect(metricsInsert).toHaveBeenCalledTimes(1);
 
-    const updateArg = jobsUpdate.mock.calls[0]?.[0];
+    const updateArg = (jobsUpdate.mock.calls[0] as any[])?.[0];
     expect(updateArg).toMatchObject({
       current_step: 2,
       current_epoch: 1,
@@ -143,7 +143,7 @@ describe('POST app/api/training/jobs/[jobId]/metrics', () => {
       status: 'running',
     });
 
-    const insertArg = metricsInsert.mock.calls[0]?.[0];
+    const insertArg = (metricsInsert.mock.calls[0] as any[])?.[0];
     expect(insertArg).toMatchObject({
       job_id: 'job-123',
       step: 2,
