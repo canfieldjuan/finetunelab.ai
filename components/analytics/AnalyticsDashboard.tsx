@@ -413,201 +413,211 @@ export function AnalyticsDashboard() {
             {showMetricConfig && (
               <div className="p-4 space-y-6">
                 <div className="text-xs text-muted-foreground">
-                  Configure how metrics are calculated (SLA thresholds, pricing models). This does not affect which data is included.
-                </div>
-                {/* SLA + Default Pricing */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">SLA Threshold (ms)</div>
-                    <input
-                      type="number"
-                      min={1}
-                      placeholder="2000"
-                      value={settings.slaThresholdMs ?? ''}
-                      onChange={(e) => setSettings(s => ({ ...s, slaThresholdMs: Number(e.target.value) || undefined }))}
-                      className="w-full border rounded px-2 py-1 text-sm"
-                    />
-                    <div className="text-[11px] text-muted-foreground">Used for breach-rate and percentile analysis.</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">Default Pricing ($ per 1K tokens)</div>
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <label className="text-[11px] block mb-1">Input</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          min={0}
-                          placeholder="0.03"
-                          value={settings.priceBook?.default?.inputPer1K ?? ''}
-                          onChange={(e) => setSettings(s => ({
-                            ...s,
-                            priceBook: {
-                              default: { inputPer1K: Number(e.target.value) || 0, outputPer1K: s.priceBook?.default?.outputPer1K ?? 0.06 },
-                              providers: s.priceBook?.providers ?? {},
-                              models: s.priceBook?.models ?? {}
-                            }
-                          }))}
-                          className="w-full border rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-[11px] block mb-1">Output</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          min={0}
-                          placeholder="0.06"
-                          value={settings.priceBook?.default?.outputPer1K ?? ''}
-                          onChange={(e) => setSettings(s => ({
-                            ...s,
-                            priceBook: {
-                              default: { inputPer1K: s.priceBook?.default?.inputPer1K ?? 0.03, outputPer1K: Number(e.target.value) || 0 },
-                              providers: s.priceBook?.providers ?? {},
-                              models: s.priceBook?.models ?? {}
-                            }
-                          }))}
-                          className="w-full border rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  Configure how metrics are calculated. These settings affect cost estimation and SLA reporting.
                 </div>
 
-                {/* Provider Overrides */}
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground">Provider Override</div>
-                  <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-                    <div>
-                      <label className="text-[11px] block mb-1">Provider (e.g., openai, anthropic)</label>
+                {/* Section 1: Global Standards */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium text-foreground">Global Standards</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* SLA */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">SLA Threshold (ms)</label>
                       <input
-                        type="text"
-                        value={provKey}
-                        onChange={(e) => setProvKey(e.target.value)}
-                        className="w-full border rounded px-2 py-1 text-sm"
-                        placeholder="provider"
+                        type="number"
+                        min={1}
+                        placeholder="2000"
+                        value={settings.slaThresholdMs ?? ''}
+                        onChange={(e) => setSettings(s => ({ ...s, slaThresholdMs: Number(e.target.value) || undefined }))}
+                        className="w-full border rounded px-2 py-1.5 text-sm bg-background"
                       />
                     </div>
-                    <div>
-                      <label className="text-[11px] block mb-1">Input $/1K</label>
+                    {/* Default Input */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Default Input Cost ($/1k)</label>
                       <input
                         type="number"
                         step="0.0001"
                         min={0}
-                        value={provIn}
-                        onChange={(e) => setProvIn(e.target.value)}
-                        className="w-full border rounded px-2 py-1 text-sm"
                         placeholder="0.03"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] block mb-1">Output $/1K</label>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min={0}
-                        value={provOut}
-                        onChange={(e) => setProvOut(e.target.value)}
-                        className="w-full border rounded px-2 py-1 text-sm"
-                        placeholder="0.06"
-                      />
-                    </div>
-                    <button
-                      className="text-sm px-3 py-1 border rounded"
-                      onClick={() => {
-                        if (!provKey.trim()) return;
-                        const inRate = Number(provIn);
-                        const outRate = Number(provOut);
-                        if (!Number.isFinite(inRate) || !Number.isFinite(outRate)) return;
-                        const key = provKey.trim().toLowerCase();
-                        setSettings(s => ({
+                        value={settings.priceBook?.default?.inputPer1K ?? ''}
+                        onChange={(e) => setSettings(s => ({
                           ...s,
                           priceBook: {
-                            default: s.priceBook?.default ?? { inputPer1K: 0.03, outputPer1K: 0.06 },
-                            providers: { ...(s.priceBook?.providers ?? {}), [key]: { inputPer1K: inRate, outputPer1K: outRate } },
+                            default: { inputPer1K: Number(e.target.value) || 0, outputPer1K: s.priceBook?.default?.outputPer1K ?? 0.06 },
+                            providers: s.priceBook?.providers ?? {},
                             models: s.priceBook?.models ?? {}
                           }
-                        }));
-                        setProvKey(''); setProvIn(''); setProvOut('');
-                      }}
-                    >
-                      Apply
-                    </button>
-                  </div>
-                  {settings.priceBook && Object.keys(settings.priceBook.providers || {}).length > 0 && (
-                    <div className="text-[11px] text-muted-foreground">
-                      Active providers: {Object.keys(settings.priceBook.providers || {}).join(', ')}
-                    </div>
-                  )}
-                </div>
-
-                {/* Model Overrides */}
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground">Model Override</div>
-                  <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-                    <div>
-                      <label className="text-[11px] block mb-1">Model ID (exact match)</label>
-                      <input
-                        type="text"
-                        value={modelKey}
-                        onChange={(e) => setModelKey(e.target.value)}
-                        className="w-full border rounded px-2 py-1 text-sm"
-                        placeholder="model_id"
+                        }))}
+                        className="w-full border rounded px-2 py-1.5 text-sm bg-background"
                       />
                     </div>
-                    <div>
-                      <label className="text-[11px] block mb-1">Input $/1K</label>
+                    {/* Default Output */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Default Output Cost ($/1k)</label>
                       <input
                         type="number"
                         step="0.0001"
                         min={0}
-                        value={modelIn}
-                        onChange={(e) => setModelIn(e.target.value)}
-                        className="w-full border rounded px-2 py-1 text-sm"
-                        placeholder="0.03"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] block mb-1">Output $/1K</label>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min={0}
-                        value={modelOut}
-                        onChange={(e) => setModelOut(e.target.value)}
-                        className="w-full border rounded px-2 py-1 text-sm"
                         placeholder="0.06"
-                      />
-                    </div>
-                    <button
-                      className="text-sm px-3 py-1 border rounded"
-                      onClick={() => {
-                        if (!modelKey.trim()) return;
-                        const inRate = Number(modelIn);
-                        const outRate = Number(modelOut);
-                        if (!Number.isFinite(inRate) || !Number.isFinite(outRate)) return;
-                        const key = modelKey.trim();
-                        setSettings(s => ({
+                        value={settings.priceBook?.default?.outputPer1K ?? ''}
+                        onChange={(e) => setSettings(s => ({
                           ...s,
                           priceBook: {
-                            default: s.priceBook?.default ?? { inputPer1K: 0.03, outputPer1K: 0.06 },
+                            default: { inputPer1K: s.priceBook?.default?.inputPer1K ?? 0.03, outputPer1K: Number(e.target.value) || 0 },
                             providers: s.priceBook?.providers ?? {},
-                            models: { ...(s.priceBook?.models ?? {}), [key]: { inputPer1K: inRate, outputPer1K: outRate } }
+                            models: s.priceBook?.models ?? {}
                           }
-                        }));
-                        setModelKey(''); setModelIn(''); setModelOut('');
-                      }}
-                    >
-                      Apply
-                    </button>
-                  </div>
-                  {settings.priceBook && Object.keys(settings.priceBook.models || {}).length > 0 && (
-                    <div className="text-[11px] text-muted-foreground">
-                      Active models: {Object.keys(settings.priceBook.models || {}).join(', ')}
+                        }))}
+                        className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                      />
                     </div>
-                  )}
+                  </div>
                 </div>
 
+                <div className="border-t border-border" />
+
+                {/* Section 2: Cost Overrides */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium text-foreground">Cost Overrides</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Provider Overrides */}
+                    <div className="space-y-2 bg-muted/30 p-3 rounded-md border border-border/50">
+                      <label className="text-xs font-medium text-muted-foreground block mb-2">Add Provider Override</label>
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={provKey}
+                          onChange={(e) => setProvKey(e.target.value)}
+                          className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                          placeholder="Provider (e.g., openai)"
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min={0}
+                            value={provIn}
+                            onChange={(e) => setProvIn(e.target.value)}
+                            className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                            placeholder="In $/1k"
+                          />
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min={0}
+                            value={provOut}
+                            onChange={(e) => setProvOut(e.target.value)}
+                            className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                            placeholder="Out $/1k"
+                          />
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              if (!provKey.trim()) return;
+                              const inRate = Number(provIn);
+                              const outRate = Number(provOut);
+                              if (!Number.isFinite(inRate) || !Number.isFinite(outRate)) return;
+                              const key = provKey.trim().toLowerCase();
+                              setSettings(s => ({
+                                ...s,
+                                priceBook: {
+                                  default: s.priceBook?.default ?? { inputPer1K: 0.03, outputPer1K: 0.06 },
+                                  providers: { ...(s.priceBook?.providers ?? {}), [key]: { inputPer1K: inRate, outputPer1K: outRate } },
+                                  models: s.priceBook?.models ?? {}
+                                }
+                              }));
+                              setProvKey(''); setProvIn(''); setProvOut('');
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                      {settings.priceBook && Object.keys(settings.priceBook.providers || {}).length > 0 && (
+                        <div className="pt-2 mt-2 border-t border-border/50">
+                          <div className="text-[10px] uppercase text-muted-foreground font-semibold mb-1">Active Providers</div>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.keys(settings.priceBook.providers || {}).map(p => (
+                              <span key={p} className="text-xs bg-background border px-1.5 py-0.5 rounded text-muted-foreground">
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Model Overrides */}
+                    <div className="space-y-2 bg-muted/30 p-3 rounded-md border border-border/50">
+                      <label className="text-xs font-medium text-muted-foreground block mb-2">Add Model Override</label>
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={modelKey}
+                          onChange={(e) => setModelKey(e.target.value)}
+                          className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                          placeholder="Model ID (exact match)"
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min={0}
+                            value={modelIn}
+                            onChange={(e) => setModelIn(e.target.value)}
+                            className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                            placeholder="In $/1k"
+                          />
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min={0}
+                            value={modelOut}
+                            onChange={(e) => setModelOut(e.target.value)}
+                            className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                            placeholder="Out $/1k"
+                          />
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              if (!modelKey.trim()) return;
+                              const inRate = Number(modelIn);
+                              const outRate = Number(modelOut);
+                              if (!Number.isFinite(inRate) || !Number.isFinite(outRate)) return;
+                              const key = modelKey.trim();
+                              setSettings(s => ({
+                                ...s,
+                                priceBook: {
+                                  default: s.priceBook?.default ?? { inputPer1K: 0.03, outputPer1K: 0.06 },
+                                  providers: s.priceBook?.providers ?? {},
+                                  models: { ...(s.priceBook?.models ?? {}), [key]: { inputPer1K: inRate, outputPer1K: outRate } }
+                                }
+                              }));
+                              setModelKey(''); setModelIn(''); setModelOut('');
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                      {settings.priceBook && Object.keys(settings.priceBook.models || {}).length > 0 && (
+                        <div className="pt-2 mt-2 border-t border-border/50">
+                          <div className="text-[10px] uppercase text-muted-foreground font-semibold mb-1">Active Models</div>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.keys(settings.priceBook.models || {}).map(m => (
+                              <span key={m} className="text-xs bg-background border px-1.5 py-0.5 rounded text-muted-foreground truncate max-w-[150px]">
+                                {m}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
                 {/* Reset Buttons */}
                 <div className="mt-2 flex items-center gap-4 pt-4 border-t">
                   <button
