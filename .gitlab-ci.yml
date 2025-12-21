@@ -94,16 +94,19 @@ build:
     - main
     - develop
 
-# Deploy to production (customize based on your deployment target)
+# Deploy to production using Render
 deploy-production:
   stage: deploy
-  image: node:${NODE_VERSION}
+  image: curlimages/curl:latest
   dependencies:
     - build
   script:
-    - echo "Deploying to production..."
-    - echo "Add your deployment commands here (Vercel, Render, etc.)"
-    # Example: npm run deploy
+    - echo "Deploying to Render production..."
+    - |
+      curl -X POST "https://api.render.com/v1/services/${RENDER_PRODUCTION_SERVICE_ID}/deploys" \
+        -H "Authorization: Bearer ${RENDER_API_KEY}" \
+        -H "Content-Type: application/json"
+    - echo "Production deployment triggered successfully"
   environment:
     name: production
     url: https://finetunelab.ai
@@ -111,15 +114,19 @@ deploy-production:
     - main
   when: manual  # Requires manual trigger for safety
 
-# Deploy to staging
+# Deploy to staging using Render
 deploy-staging:
   stage: deploy
-  image: node:${NODE_VERSION}
+  image: curlimages/curl:latest
   dependencies:
     - build
   script:
-    - echo "Deploying to staging..."
-    - echo "Add your staging deployment commands here"
+    - echo "Deploying to Render staging..."
+    - |
+      curl -X POST "https://api.render.com/v1/services/${RENDER_STAGING_SERVICE_ID}/deploys" \
+        -H "Authorization: Bearer ${RENDER_API_KEY}" \
+        -H "Content-Type: application/json"
+    - echo "Staging deployment triggered successfully"
   environment:
     name: staging
     url: https://staging.finetunelab.ai

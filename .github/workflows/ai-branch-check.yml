@@ -1,0 +1,67 @@
+name: AI Branch Quality Check
+
+# Special workflow for AI-generated code
+on:
+  push:
+    branches:
+      - 'claude/**'
+      - 'copilot/**'
+      - 'chatgpt/**'
+
+jobs:
+  ai-code-quality:
+    name: AI Code Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for console.logs
+        run: |
+          if git diff HEAD^ HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' | grep -E '^\+.*console\.(log|debug|info)'; then
+            echo "❌ Found console.log statements in AI code"
+            echo "Please remove debug statements before merging"
+            exit 1
+          fi
+          echo "✅ No console.log statements found"
+
+      - name: Check for TODO comments
+        run: |
+          if git diff HEAD^ HEAD | grep -i '^\+.*TODO'; then
+            echo "⚠️  Found TODO comments in AI code"
+            echo "Consider creating GitHub issues for these"
+          fi
+
+      - name: Check for hardcoded values
+        run: |
+          if git diff HEAD^ HEAD | grep -E '^\+.*(api_key|password|secret|token).*=.*["\047][^"\047]+["\047]'; then
+            echo "❌ Found potential hardcoded secrets"
+            echo "Use environment variables instead"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets found"
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run type check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+
+      - name: Comment results
+        if: always()
+        run: |
+          echo "AI code quality check completed for ${{ github.ref_name }}"

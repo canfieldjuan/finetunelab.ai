@@ -1,0 +1,44 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update-dependencies:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Check for outdated packages
+        run: |
+          npm outdated || true
+          echo "Review outdated packages above"
+
+      - name: Run security audit
+        run: |
+          npm audit --production
+          npm audit fix --dry-run
+
+      - name: Create issue for updates
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Dependency Updates - ${date}`,
+              body: `Weekly dependency update check. Review outdated packages and security advisories.`,
+              labels: ['dependencies', 'maintenance']
+            })

@@ -1,0 +1,92 @@
+# Render.com Blueprint - FinetuneLab Infrastructure as Code
+# This file defines your Render services declaratively
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # Production Web Service
+  - type: web
+    name: finetunelab-production
+    env: node
+    region: oregon
+    plan: starter  # Change to 'pro' or 'standard' as needed
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false  # Set via Render Dashboard
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=4096
+    autoDeploy: false  # Controlled via GitHub Actions
+
+  # Staging Web Service
+  - type: web
+    name: finetunelab-staging
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    branch: develop  # Auto-deploy from develop branch
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=4096
+    autoDeploy: true  # Auto-deploy from develop branch
+
+  # Redis Cache (Optional - if using Redis)
+  # - type: redis
+  #   name: finetunelab-cache
+  #   plan: starter
+  #   maxmemoryPolicy: allkeys-lru
+  #   ipAllowList: []  # Empty = allow all
+
+  # Background Worker (Optional - if using BullMQ)
+  # - type: worker
+  #   name: finetunelab-worker
+  #   env: node
+  #   region: oregon
+  #   plan: starter
+  #   buildCommand: npm ci
+  #   startCommand: npm run scheduler:start
+  #   envVars:
+  #     - key: NODE_ENV
+  #       value: production
+  #     - fromGroup: finetunelab-env-group
+  #   autoDeploy: true
+
+# Environment Variable Groups
+# Create these in Render Dashboard: Account Settings → Environment Groups
+# envVarGroups:
+#   - name: finetunelab-env-group
+#     envVars:
+#       - key: SUPABASE_URL
+#       - key: SUPABASE_ANON_KEY
+#       - key: DATABASE_URL
+
+databases:
+  # PostgreSQL Database (if not using Supabase)
+  # - name: finetunelab-db
+  #   databaseName: finetunelab
+  #   user: finetunelab
+  #   plan: starter
+  #   region: oregon
+  #   ipAllowList: []
