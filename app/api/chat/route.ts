@@ -1230,7 +1230,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
             // End trace even if message save failed
             if (traceContext) {
-              await completeTraceBasic(traceContext, tokenUsage);
+              await completeTraceBasic(traceContext, tokenUsage ?? undefined);
             }
           } else {
             console.log('[API] Widget mode: Assistant message saved');
