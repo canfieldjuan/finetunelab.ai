@@ -106,88 +106,91 @@ export function FilterPanel({
           )}
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          {/* Ratings Filter */}
-          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-            <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Rating</label>
-            <div className="flex gap-3">
-              {[1, 2, 3, 4, 5].map(rating => (
-                <div key={rating} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id={`rating-${rating}`}
-                    checked={filters.ratings.includes(rating)}
-                    onChange={() => handleRatingToggle(rating)}
-                    className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all"
-                  />
-                  <label htmlFor={`rating-${rating}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
-                    {rating}⭐
-                  </label>
-                </div>
-              ))}
+      <CardContent className="p-4">
+        <div className="space-y-4">
+          {/* Top Row: Fixed Options */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Ratings Filter */}
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Rating</label>
+              <div className="flex flex-wrap gap-3">
+                {[1, 2, 3, 4, 5].map(rating => (
+                  <div key={rating} className="flex items-center space-x-1.5">
+                    <input
+                      type="checkbox"
+                      id={`rating-${rating}`}
+                      checked={filters.ratings.includes(rating)}
+                      onChange={() => handleRatingToggle(rating)}
+                      className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all"
+                    />
+                    <label htmlFor={`rating-${rating}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
+                      {rating}⭐
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Success Status */}
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Success Status</label>
+              <div className="flex flex-wrap gap-3">
+                {([
+                  { value: 'all', label: 'All' },
+                  { value: 'success', label: 'Success' },
+                  { value: 'failure', label: 'Failure' }
+                ] as Array<{ value: 'all' | 'success' | 'failure'; label: string }>).map(option => (
+                  <div key={option.value} className="flex items-center space-x-1.5">
+                    <input
+                      type="radio"
+                      id={`success-${option.value}`}
+                      name="success-filter"
+                      checked={filters.successFilter === option.value}
+                      onChange={() => handleSuccessFilterChange(option.value)}
+                      className="w-4 h-4 cursor-pointer accent-blue-600 transition-all"
+                    />
+                    <label htmlFor={`success-${option.value}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
+                      {option.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Session Type */}
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Session Type</label>
+              <div className="flex flex-wrap gap-3">
+                {([
+                  { value: 'all', label: 'All' },
+                  { value: 'widget', label: 'Widget' },
+                  { value: 'normal', label: 'Normal' }
+                ] as Array<{ value: 'all' | 'widget' | 'normal'; label: string }>).map(option => (
+                  <div key={option.value} className="flex items-center space-x-1.5">
+                    <input
+                      type="radio"
+                      id={`widget-${option.value}`}
+                      name="widget-filter"
+                      checked={filters.widgetSessionFilter === option.value}
+                      onChange={() => handleWidgetSessionFilterChange(option.value)}
+                      className="w-4 h-4 cursor-pointer accent-blue-600 transition-all"
+                    />
+                    <label htmlFor={`widget-${option.value}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
+                      {option.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Success/Failure Filter */}
-          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-            <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Success Status</label>
-            <div className="flex gap-3">
-              {([
-                { value: 'all', label: 'All' },
-                { value: 'success', label: 'Success' },
-                { value: 'failure', label: 'Failure' }
-              ] as Array<{ value: 'all' | 'success' | 'failure'; label: string }>).map(option => (
-                <div key={option.value} className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    id={`success-${option.value}`}
-                    name="success-filter"
-                    checked={filters.successFilter === option.value}
-                    onChange={() => handleSuccessFilterChange(option.value)}
-                    className="w-4 h-4 cursor-pointer accent-blue-600 transition-all"
-                  />
-                  <label htmlFor={`success-${option.value}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
-                    {option.label}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Session Type Filter */}
-          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-            <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Session Type</label>
-            <div className="flex gap-3">
-              {([
-                { value: 'all', label: 'All Sessions' },
-                { value: 'widget', label: 'Widget Only' },
-                { value: 'normal', label: 'Normal Only' }
-              ] as Array<{ value: 'all' | 'widget' | 'normal'; label: string }>).map(option => (
-                <div key={option.value} className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    id={`widget-${option.value}`}
-                    name="widget-filter"
-                    checked={filters.widgetSessionFilter === option.value}
-                    onChange={() => handleWidgetSessionFilterChange(option.value)}
-                    className="w-4 h-4 cursor-pointer accent-blue-600 transition-all"
-                  />
-                  <label htmlFor={`widget-${option.value}`} className="text-sm cursor-pointer hover:text-blue-600 transition-colors">
-                    {option.label}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Training Methods Filter */}
+          {/* Training Methods - If present */}
           {availableTrainingMethods.length > 0 && (
-            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-              <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Training Method</label>
-              <div className="grid grid-cols-2 gap-3">
+            <div className="pt-3 border-t border-border">
+               <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Training Method</label>
+               <div className="flex flex-wrap gap-4">
                 {availableTrainingMethods.map(method => (
-                  <div key={method} className="flex items-center space-x-2">
+                  <div key={method} className="flex items-center space-x-1.5">
                     <input
                       type="checkbox"
                       id={`training-${method}`}
@@ -204,63 +207,64 @@ export function FilterPanel({
             </div>
           )}
 
-          {/* Models Filter */}
-          {availableModels.length > 0 && (
-            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-              <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Models</label>
-              <div className="relative max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 shadow-inner">
-                <div className="p-3 space-y-2">
-                  {availableModels.map(model => (
-                    <div 
-                      key={model.id} 
-                      className="flex items-center space-x-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        id={`model-${model.id}`}
-                        checked={filters.models.includes(model.id)}
-                        onChange={() => handleModelToggle(model.id)}
-                        className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all flex-shrink-0"
-                      />
-                      <label htmlFor={`model-${model.id}`} className="text-sm cursor-pointer truncate hover:text-blue-600 transition-colors flex-1">
-                        {model.name}
-                      </label>
+          {/* Bottom Row: Scrollable Lists */}
+          {(availableModels.length > 0 || availableSessions.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-border">
+              {/* Models Filter */}
+              {availableModels.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Models</label>
+                  <div className="relative h-32 overflow-y-auto border rounded-md bg-background">
+                    <div className="p-2 space-y-1">
+                      {availableModels.map(model => (
+                        <div 
+                          key={model.id} 
+                          className="flex items-center space-x-2 p-1.5 rounded hover:bg-accent transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            id={`model-${model.id}`}
+                            checked={filters.models.includes(model.id)}
+                            onChange={() => handleModelToggle(model.id)}
+                            className="w-3.5 h-3.5 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all flex-shrink-0"
+                          />
+                          <label htmlFor={`model-${model.id}`} className="text-xs cursor-pointer truncate hover:text-blue-600 transition-colors flex-1">
+                            {model.name}
+                          </label>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
-                {/* Scroll shadow indicator */}
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-gray-800 to-transparent pointer-events-none"></div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {/* Sessions Filter */}
-          {availableSessions.length > 0 && (
-            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-              <label className="text-sm font-semibold mb-3 block text-gray-700 dark:text-gray-300">Sessions</label>
-              <div className="relative max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 shadow-inner">
-                <div className="p-3 space-y-2">
-                  {availableSessions.map(session => (
-                    <div 
-                      key={session.id} 
-                      className="flex items-center space-x-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        id={`session-${session.id}`}
-                        checked={filters.sessions.includes(session.id)}
-                        onChange={() => handleSessionToggle(session.id)}
-                        className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all flex-shrink-0"
-                      />
-                      <label htmlFor={`session-${session.id}`} className="text-sm cursor-pointer truncate hover:text-blue-600 transition-colors flex-1">
-                        {session.name}
-                      </label>
+              {/* Sessions Filter */}
+              {availableSessions.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Sessions</label>
+                  <div className="relative h-32 overflow-y-auto border rounded-md bg-background">
+                    <div className="p-2 space-y-1">
+                      {availableSessions.map(session => (
+                        <div 
+                          key={session.id} 
+                          className="flex items-center space-x-2 p-1.5 rounded hover:bg-accent transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            id={`session-${session.id}`}
+                            checked={filters.sessions.includes(session.id)}
+                            onChange={() => handleSessionToggle(session.id)}
+                            className="w-3.5 h-3.5 rounded border-gray-300 cursor-pointer accent-blue-600 transition-all flex-shrink-0"
+                          />
+                          <label htmlFor={`session-${session.id}`} className="text-xs cursor-pointer truncate hover:text-blue-600 transition-colors flex-1">
+                            {session.name}
+                          </label>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
-                {/* Scroll shadow indicator */}
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-gray-800 to-transparent pointer-events-none"></div>
-              </div>
+              )}
             </div>
           )}
         </div>
