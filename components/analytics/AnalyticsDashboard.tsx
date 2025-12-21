@@ -632,13 +632,43 @@ export function AnalyticsDashboard() {
 
         {/* Tabs Interface */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="performance">Performance</TabsTrigger>
-            <TabsTrigger value="quality">Quality</TabsTrigger>
-            <TabsTrigger value="usage">Usage</TabsTrigger>
-            <TabsTrigger value="errors">Errors</TabsTrigger>
-            <TabsTrigger value="research">Research</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-6 h-12 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
+            <TabsTrigger 
+              value="overview"
+              className="data-[state=active]:bg-white data-[state=active]:dark:bg-gray-900 data-[state=active]:shadow-sm data-[state=active]:font-semibold transition-all"
+            >
+              Overview
+            </TabsTrigger>
+            <TabsTrigger 
+              value="performance"
+              className="data-[state=active]:bg-white data-[state=active]:dark:bg-gray-900 data-[state=active]:shadow-sm data-[state=active]:font-semibold transition-all"
+            >
+              Performance
+            </TabsTrigger>
+            <TabsTrigger 
+              value="quality"
+              className="data-[state=active]:bg-white data-[state=active]:dark:bg-gray-900 data-[state=active]:shadow-sm data-[state=active]:font-semibold transition-all"
+            >
+              Quality
+            </TabsTrigger>
+            <TabsTrigger 
+              value="usage"
+              className="data-[state=active]:bg-white data-[state=active]:dark:bg-gray-900 data-[state=active]:shadow-sm data-[state=active]:font-semibold transition-all"
+            >
+              Usage
+            </TabsTrigger>
+            <TabsTrigger 
+              value="errors"
+              className="data-[state=active]:bg-white data-[state=active]:dark:bg-gray-900 data-[state=active]:shadow-sm data-[state=active]:font-semibold transition-all"
+            >
+              Errors
+            </TabsTrigger>
+            <TabsTrigger 
+              value="research"
+              className="data-[state=active]:bg-white data-[state=active]:dark:bg-gray-900 data-[state=active]:shadow-sm data-[state=active]:font-semibold transition-all"
+            >
+              Research
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
