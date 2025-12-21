@@ -44,6 +44,9 @@
     "validate-*.ts",
     "check-*.ts",
     "test-*.ts",
-    "*.test.ts"
+    "*.test.ts",
+    "__tests__",
+    "tests",
+    "worktrees"
   ]
 }

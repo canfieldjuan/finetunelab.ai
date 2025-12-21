@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 interface ChatHeaderProps {
   isWidgetMode: boolean;
   activeId: string | null;
-  loading: boolean;
+  loading?: boolean;
   sessionId?: string | null;
   experimentName?: string | null;
   onExport?: () => void;

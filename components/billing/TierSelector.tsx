@@ -20,13 +20,10 @@ export function TierSelector({
   onTierSelect,
   sessionToken,
 }: TierSelectorProps) {
-  const [selectedTier, setSelectedTier] = useState<UsageTier | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleTierSelect = async (tier: UsageTier) => {
     if (tier === currentTier) return;
-
-    setSelectedTier(tier);
 
     if (onTierSelect) {
       onTierSelect(tier);

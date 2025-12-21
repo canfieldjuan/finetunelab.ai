@@ -17,7 +17,7 @@ interface UsageWarnings {
 
 interface UsageWarningBannerProps {
   warnings: UsageWarnings;
-  tier: string;
+  tier?: string;
 }
 
 export function UsageWarningBanner({

@@ -12,16 +12,18 @@ interface ComparisonModalProps {
 }
 
 export function ComparisonModal({ jobs, isOpen, onClose }: ComparisonModalProps) {
-  if (!isOpen) return null;
-
   // Find best run (lowest eval_loss)
   const bestRun = useMemo(() => {
+    if (!jobs || jobs.length === 0) return null;
     return jobs.reduce((best, job) => {
       const jobLoss = job.best_eval_loss ?? Infinity;
-      const bestLoss = best.best_eval_loss ?? Infinity;
+      const bestLoss = best?.best_eval_loss ?? Infinity;
       return jobLoss < bestLoss ? job : best;
     }, jobs[0]);
   }, [jobs]);
+
+  if (!isOpen) return null;
+  if (!bestRun) return null;
 
   // Helper to get clean model name
   const getCleanModelName = (modelPath: string | null): string => {
