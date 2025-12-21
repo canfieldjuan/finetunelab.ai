@@ -46,7 +46,7 @@ const getEnvNumber = (key: string, defaultValue: number): number => {
 export const neo4jConfig = {
   uri: getEnvVar('NEO4J_URI', 'bolt://localhost:7687'),
   user: getEnvVar('NEO4J_USER', 'neo4j'),
-  password: getEnvVar('NEO4J_PASSWORD', ''), // Empty default for client-side
+  password: getEnvVar('NEO4J_PASSWORD', 'dummy-password-for-build'), // Default for build-time
   database: getEnvVar('NEO4J_DATABASE', 'neo4j'),
 } as const;
 
