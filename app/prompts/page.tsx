@@ -8,7 +8,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { PromptVersionManager } from '@/components/prompts/PromptVersionManager';
 
 export default function PromptsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function PromptsPage() {
   }
 
   return (
-    <PageWrapper user={user}>
+    <PageWrapper user={user} currentPage="prompts" signOut={signOut}>
       <div className="container mx-auto p-6">
         <h1 className="text-3xl font-bold mb-6">Prompt Management</h1>
         <PromptVersionManager promptName="default_system_prompt" />
