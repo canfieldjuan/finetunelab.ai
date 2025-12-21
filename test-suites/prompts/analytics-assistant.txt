@@ -1,0 +1,27 @@
+Prompt: Training Job Health Sweep
+I kicked off jobs atlas-eval, qa-guru, and rag-refresh. Give me a table with status, progress %, GPU utilization, and ETA for each. If any job is stalled >60 minutes, flag it. Pull whatever you need from `training_metrics`
+(list_jobs first, then drill into each job) and narrate next actions.
+
+Prompt: Loss Curve Post-Mortem
+Job ID `72c9b6ee-ops-demo` blew up overnight. Retrieve full metrics (loss, eval_loss, perplexity, throughput, gpu_memory) and explain what changed between the last two checkpoints. Include at least one insight tied to `training_metrics.get_job_metrics` output and a remediation checklist.
+
+Prompt: Epoch Prediction Drift
+I suspect our agent-answer quality regressed after epoch 11 on job `model-insights-pro`. Compare epochs 8, 11, and 13 predictions, highlight where logits/confidences diverged, and state whether we should roll back. Use `training_predictions.compare_epochs` then summarize with a short risk rating.
+
+Prompt: Cohort vs Model Performance
+Marketing wants to know how enterprise vs self-serve cohorts are performing on Atlas. Run an `advanced_analytics.cohort_analysis` for cohort `enterprise-clients`, then overlay a `model_comparison` for the top three finetunes so we can recommend the optimal default per cohort. Present the findings with bullets for win/loss metrics plus one actionable takeaway.
+
+Prompt: Anomaly Radar & Sentiment Pulse
+Weekly telemetry looked spooky. Run `advanced_analytics.anomaly_detection` over the last week using threshold 2.0, then grab `sentiment_trends` for the same window. Tell me (a) which metric spiked, (b) whether sentiment corroborates it, and (c) what follow-up traces to inspect.
+
+Prompt: Token Burn Autopsy
+Our finance dashboard shows a 40% token overage yesterday. Use `token_analyzer.cost_analysis` scoped to yesterday and, if needed, `usage_stats` per conversation `conv-tier1-demo`. Explain which models or conversations are burning tokens and recommend optimization levers.
+
+Prompt: Dataset Hygiene + Export
+Before the next fine-tune, audit the conversation dataset tagged `atlas-evals`. Use `dataset_manager.stats` and `validate` to surface quality issues, then trigger `analytics_export.create_export` for a timeseries CSV covering the last 7 days. Deliver a short QA summary plus the export reference so ops can download it.
+
+Prompt: Trace-Aware Insight Packet
+I need a narrative tying eval anomalies back to trace IDs. Pull recent trace-heavy sessions via `training_metrics.list_jobs` (look for failed or retried runs), then stitch in any relevant context from `query_knowledge_graph` (search "trace naming"), and end by recommending which trace IDs analytics should pin for deeper review.
+
+Prompt: Executive Analytics Exporter
+Product leadership wants a downloadable briefing for the last 14 days covering (1) message transcripts from conversations tagged `priority-beta` and (2) a consolidated analytics overview. Use `dataset_manager.export` (jsonl) for the messages, then generate a companion CSV via `analytics_export.create_export` with exportType `overview`. After gathering the data, outline the report sections, include links/IDs for both exports, and summarize key insights with cost, quality, and trace health notes so an exec could read it without opening the raw files.

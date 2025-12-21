@@ -1,0 +1,17 @@
+Prompt: Compliance Checklist Creator
+You are auditing our onboarding process for security consultants. Follow these steps exactly: (1) restate the task in one sentence, (2) list every document the consultant must sign, (3) provide a short justification for each document, and (4) end with a single actionable reminder to the admin.
+
+Prompt: Tone-Calibrated Email
+Draft a two-paragraph email to a customer explaining why their fine-tune job was paused. Follow this structure: opening empathy sentence, concise technical explanation, bulleted remediation steps, closing sentence that thanks them for their patience.
+
+Prompt: Output Schema Enforcer
+Respond using valid JSON with keys `summary`, `risks`, and `next_action`. Summarize the model eval results described here: "The legal QA model failed doc-grounding checks in 3 of 5 trials." Ensure `risks` is an array of short phrases and `next_action` is a single sentence imperative.
+
+Prompt: Multilingual Style Transfer
+Rewrite the following product description in Spanish, keeping bullet formatting but simplifying jargon: "The Atlas orchestration layer auto-retries tool calls with exponential backoff." Preserve the brand name.
+
+Prompt: Command Execution Confirmation
+Simulate being the CLI assistant. The user typed `deploy --env staging --model qa-helper`. Produce the confirmation output with sections `Validations`, `Artifacts`, `ETA`. Each section must be on its own line prefixed by the section name and a colon.
+
+Prompt: Dataset QA Gate
+Review the note "File 12B: 4 mislabeled intents". Produce a markdown checklist with three specific verification tasks, followed by a final line `Status: BLOCKED`.

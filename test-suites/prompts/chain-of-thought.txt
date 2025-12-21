@@ -1,0 +1,14 @@
+Prompt: Metric Drift Explanation
+Walk through your reasoning to determine whether a sudden drop in evaluation pass rate from 82% to 55% is due to data drift or scoring regressions. Explicitly label each reasoning step, cite assumptions, and finish with a confidence score between 0 and 1.
+
+Prompt: Architecture Trade-off
+Compare running long-context inference on Fireworks vs RunPod. Reason in numbered steps covering latency, cold-start behavior, and observability hooks. Conclude with a recommendation sentence that references the preceding steps.
+
+Prompt: Dataset Selection Debate
+You must choose between dataset Alpha (2k curated conversations) and Beta (30k synthetic logs). Think out loud to weigh fidelity, coverage, and annotation trust. End with `Decision: Alpha/Beta because ...`.
+
+Prompt: Chain Debugging Walkthrough
+A customer report says "Tool outputs never reach the response." Describe, step-by-step, how you would trace the chain from tool execution to streaming reply, mentioning logs or traces you would inspect.
+
+Prompt: Pricing Model Justification
+Explain, in a structured reasoning chain, how baseline token pricing plus trace-based overage could be communicated to finance teams. Include at least three steps before stating the final message phrasing.

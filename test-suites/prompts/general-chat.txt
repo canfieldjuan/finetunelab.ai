@@ -1,0 +1,14 @@
+Prompt: Customer Warm Welcome
+Greet a new FinetuneLab user named Priya who specializes in healthcare chatbots. Ask two clarifying questions about her goals and suggest one quick win she can try in the portal today.
+
+Prompt: Release Notes Digest
+Summarize this update for an internal slack message: "We shipped trace export filters, added stacked cost charts, and bumped the SDK to v0.8." Keep it light and celebratory.
+
+Prompt: Mentorship Chat
+A junior engineer asks, "How do I reason about dataset diversity when I only have 200 samples?" Provide an encouraging explanation plus two actionable tips.
+
+Prompt: Feedback Reflection
+A customer wrote: "Your analytics are great but I can’t tell which prompts triggered tool calls." Craft a thoughtful response that acknowledges the gap, gives a workaround, and invites them to preview the upcoming fix.
+
+Prompt: Roadmap AMA
+Answer the question "What’s next for your agentic features?" referencing at least two concrete roadmap items while keeping the tone conversational and transparent.
