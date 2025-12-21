@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { runPodService } from '@/lib/training/runpod-service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
+import { decrypt } from '@/lib/secrets/encryption';
 
 export const runtime = 'nodejs';
 
@@ -134,14 +135,15 @@ export async function POST(
 
       try {
         const secret = await secretsManager.getSecret(user.id, 'runpod', supabase);
-        if (!secret?.value) {
+        if (!secret) {
           return NextResponse.json(
             { success: false, error: 'RunPod API key not configured' },
             { status: 400 }
           );
         }
 
-        await runPodService.stopPod(cloudDeployment.deployment_id, secret.value);
+        const runpodApiKey = decrypt(secret.api_key_encrypted);
+        await runPodService.stopPod(cloudDeployment.deployment_id, runpodApiKey);
 
         await supabase
           .from('cloud_deployments')

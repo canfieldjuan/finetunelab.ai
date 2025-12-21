@@ -10,6 +10,7 @@ import { sendTrainingJobAlert, AlertType, TrainingJobAlertData } from '@/lib/ale
 import { createClient } from '@supabase/supabase-js';
 import { runPodService } from '@/lib/training/runpod-service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
+import { decrypt } from '@/lib/secrets/encryption';
 
 export const runtime = 'nodejs';
 
@@ -202,8 +203,9 @@ export async function POST(request: NextRequest) {
           console.log('[AlertTrigger] Auto-terminating RunPod pod:', cloudDeployment.deployment_id);
 
           const secret = await secretsManager.getSecret(body.user_id, 'runpod', supabase);
-          if (secret?.value) {
-            await runPodService.stopPod(cloudDeployment.deployment_id, secret.value);
+          if (secret) {
+            const runpodApiKey = decrypt(secret.api_key_encrypted);
+            await runPodService.stopPod(cloudDeployment.deployment_id, runpodApiKey);
 
             await supabase
               .from('cloud_deployments')
