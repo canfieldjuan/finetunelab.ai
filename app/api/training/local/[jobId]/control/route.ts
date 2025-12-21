@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { runPodService } from '@/lib/training/runpod-service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
-import { decrypt } from '@/lib/secrets/encryption';
+import { decrypt } from '@/lib/models/encryption';
 
 export const runtime = 'nodejs';
 
