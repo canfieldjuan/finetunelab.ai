@@ -567,6 +567,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       console.log('[useChat] typeof contextInjectionEnabled:', typeof contextInjectionEnabled);
       console.log('[useChat] enableDeepResearch:', enableDeepResearch);
       console.log('[useChat] enableThinking:', enableThinking);
+      console.log('[useChat] tools count:', tools.length);
+      console.log('[useChat] modifiedTools count:', modifiedTools.length);
+      console.log('[useChat] modifiedTools:', modifiedTools.map(t => t.function?.name || 'unknown'));
 
       const response = await fetch("/api/chat", {
         method: "POST",

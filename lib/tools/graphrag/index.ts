@@ -45,7 +45,7 @@ CRITICAL: When presenting knowledge graph results, provide comprehensive analysi
     maxResults: graphragQueryConfig.maxResults,
   },
 
-  async execute(params: Record<string, unknown>, conversationId?: string, userId?: string) {
+  async execute(params: Record<string, unknown>, conversationId?: string, userId?: string, supabaseClient?: unknown, traceContext?: any) {
     const { query, maxResults } = params;
 
     if (typeof query !== 'string') {
@@ -74,7 +74,8 @@ CRITICAL: When presenting knowledge graph results, provide comprehensive analysi
         query,
         maxResults: maxResults as number | undefined
       },
-      userId
+      userId,
+      traceContext
     );
   },
 };

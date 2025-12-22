@@ -651,6 +651,31 @@ async function processBackgroundBatch(
 
   console.log('[Background Batch] Created conversation:', conversation.id);
 
+  // Fetch all enabled tools (tools are global, not user-specific)
+  console.log('[Background Batch] Fetching enabled tools');
+  const { data: userTools, error: toolsError } = await supabaseAdmin
+    .from('tools')
+    .select('*')
+    .eq('is_enabled', true)
+    .order('name');
+
+  if (toolsError) {
+    console.error('[Background Batch] Error fetching tools:', toolsError);
+    // Continue without tools rather than failing the entire batch
+  }
+
+  // Convert tools to API format
+  const tools = userTools?.map((tool) => ({
+    type: 'function' as const,
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters as Record<string, unknown>
+    }
+  })) || [];
+
+  console.log('[Background Batch] Loaded tools:', tools.map(t => t.function.name).join(', '));
+
   // Auto-generate session tag for batch test
   if (config.model_name) {
     try {
@@ -693,7 +718,8 @@ async function processBackgroundBatch(
         config.benchmark_id,
         widgetSessionId,
         conversation.id,  // Pass conversation ID for efficient lookups
-        config.judge_config  // Pass judge configuration
+        config.judge_config,  // Pass judge configuration
+        tools  // Pass enabled tools for trace recording
       );
 
       if (success) {
@@ -836,7 +862,8 @@ async function processSinglePrompt(
   benchmarkId: string | undefined,
   widgetSessionId: string,
   conversationId: string,  // Conversation ID for efficient message lookup
-  judgeConfig?: { enabled: boolean; model: string; criteria: string[] }
+  judgeConfig: { enabled: boolean; model: string; criteria: string[] } | undefined,
+  tools: Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }>
 ): Promise<boolean> {
   console.log(`[Process Prompt] ${promptIndex + 1}: Sending to /api/chat`);
 
@@ -865,7 +892,8 @@ async function processSinglePrompt(
         widgetSessionId: widgetSessionId,
         forceNonStreaming: true,  // Force metrics capture path
         runId: runId,  // Link to experiment run
-        benchmarkId: benchmarkId  // Link to benchmark for task-specific evaluation
+        benchmarkId: benchmarkId,  // Link to benchmark for task-specific evaluation
+        tools: tools  // Include enabled tools for trace recording
       })
     });
 

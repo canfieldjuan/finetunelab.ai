@@ -80,7 +80,8 @@ export async function executeTool(
   conversationId: string,
   messageId?: string,
   userId?: string,
-  supabaseClient?: unknown
+  supabaseClient?: unknown,
+  traceContext?: any
 ): Promise<{ data: unknown; error: string | null; executionTimeMs: number }> {
   console.log('[ToolManager] Executing tool:', toolName, 'with params:', params);
 
@@ -128,7 +129,7 @@ export async function executeTool(
 
     // Wrap execution with timeout to prevent server hang
     result = await withTimeout(
-      toolDef.execute(params, conversationId, userId, supabaseClient),
+      toolDef.execute(params, conversationId, userId, supabaseClient, traceContext),
       TOOL_TIMEOUT_MS,
       `Tool: ${toolName}`
     );

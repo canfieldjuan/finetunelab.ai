@@ -7,7 +7,8 @@ import { graphragService } from '../../graphrag';
 
 export async function executeGraphRAGQuery(
   args: { query: string; maxResults?: number },
-  userId?: string
+  userId?: string,
+  traceContext?: any
 ): Promise<unknown> {
   if (!userId) {
     throw new Error('User ID is required to query knowledge graph. Please ensure you are logged in.');
@@ -28,7 +29,8 @@ export async function executeGraphRAGQuery(
     query || 'list all documents and entities',
     {
       maxSources: safeMaxResults,
-      includeMetadata: true
+      includeMetadata: true,
+      traceContext
     }
   );
 

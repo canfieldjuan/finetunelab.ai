@@ -67,6 +67,15 @@ export class HuggingFaceAdapter extends BaseProviderAdapter {
     // Use model_id as-is (supports explicit provider suffix if user specifies)
     const modelId = config.model_id;
 
+    console.log('[HuggingFaceAdapter] Preparing request for model:', modelId);
+
+    // Warn if model ID looks like a display name (contains spaces)
+    if (modelId.includes(' ')) {
+      console.warn('[HuggingFaceAdapter] ⚠️ WARNING: Model ID contains spaces:', modelId);
+      console.warn('[HuggingFaceAdapter] This likely indicates a display name was used instead of the HuggingFace Repo ID.');
+      console.warn('[HuggingFaceAdapter] Please update the model configuration to use a valid Repo ID (e.g., "Qwen/Qwen2.5-3B-Instruct").');
+    }
+
     // Detect if model supports chat format or needs completion format
     const useChatFormat = this.isChatModel(modelId, config.is_chat_model);
 

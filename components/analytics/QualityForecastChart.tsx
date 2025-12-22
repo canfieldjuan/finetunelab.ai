@@ -60,33 +60,54 @@ export default function QualityForecastChart({
   const fetchHistoricalData = async (metric: MetricType, range: string) => {
     console.log('[QualityForecastChart] Fetching real historical data:', { metric, range });
 
-    // Get auth session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-      throw new Error('Authentication required to fetch forecast data');
+    try {
+      // Get auth session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error('[QualityForecastChart] Auth error:', sessionError);
+        throw new Error('Authentication required to fetch forecast data');
+      }
+
+      const params = new URLSearchParams({
+        metric,
+        timeRange: range
+      });
+
+      const url = `/api/analytics/forecast-data?${params.toString()}`;
+      console.log('[QualityForecastChart] Fetching from:', url);
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('[QualityForecastChart] Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[QualityForecastChart] Error response:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Unknown error' };
+        }
+        throw new Error(errorData.error || `API error: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('[QualityForecastChart] Real data fetched:', result.historical?.length || 0, 'points');
+
+      return result.historical;
+    } catch (err) {
+      console.error('[QualityForecastChart] fetchHistoricalData error:', err);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to fetch forecast data');
     }
-
-    const params = new URLSearchParams({
-      metric,
-      timeRange: range
-    });
-
-    const response = await fetch(`/api/analytics/forecast-data?${params.toString()}`, {
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || `API error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('[QualityForecastChart] Real data fetched:', result.dataPoints, 'points');
-
-    return result.historical;
   };
 
   // Build chart data from forecast result

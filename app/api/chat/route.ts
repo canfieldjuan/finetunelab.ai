@@ -102,6 +102,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Generate unique request ID for tracking
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    console.log(`[API] [${requestId}] ========== NEW REQUEST START ==========`);
+
     // Parse request body with error handling for aborted requests
     let messages: ChatMessage[] = [];
     let memory: { userId?: string; userPreferences?: Record<string, unknown>; conversationMemories?: Record<string, unknown> } | null = null;
@@ -132,6 +136,11 @@ export async function POST(req: NextRequest) {
         contextInjectionEnabled,
         enableThinking,
       } = await req.json());
+
+      // DEBUG: Log what we received from the request
+      console.log(`[API] [${requestId}] [DEBUG-REQUEST-BODY] modelId from request body:`, modelId);
+      console.log(`[API] [${requestId}] [DEBUG-REQUEST-BODY] conversationId from request body:`, conversationId);
+      console.log(`[API] [${requestId}] [DEBUG-REQUEST-BODY] widgetSessionId from request body:`, widgetSessionId);
     } catch (jsonError) {
       console.log('[API] Request aborted or invalid JSON:', jsonError instanceof Error ? jsonError.message : 'Unknown error');
       // Return 499 (Client Closed Request) for aborted requests
@@ -146,18 +155,23 @@ export async function POST(req: NextRequest) {
     console.log('[API] contextInjectionEnabled === false:', contextInjectionEnabled === false);
     console.log('[API] contextInjectionEnabled !== false:', contextInjectionEnabled !== false);
     console.log('[API] requestUserId:', requestUserId ? 'present' : 'missing');
+    console.log('[API] rawTools type:', typeof rawTools, 'isArray:', Array.isArray(rawTools), 'length:', Array.isArray(rawTools) ? rawTools.length : 'N/A');
 
     // Normalize model UUID for DB writes (allow human-readable names for routing logic)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const llmModelIdForDb: string | null = modelId && uuidRegex.test(modelId) ? modelId : null;
 
     let tools = Array.isArray(rawTools) ? rawTools.filter(isToolDefinition) : [];
+    console.log('[API] After isToolDefinition filter, tools count:', tools.length);
 
     // Remove query_knowledge_graph tool if context injection is disabled
     if (contextInjectionEnabled === false) {
+      const beforeCount = tools.length;
       tools = tools.filter((tool: ToolDefinition) => tool.function.name !== 'query_knowledge_graph');
-      console.log('[API] Context injection OFF: Removed query_knowledge_graph tool');
+      console.log('[API] Context injection OFF: Removed query_knowledge_graph tool (before:', beforeCount, 'after:', tools.length, ')');
     }
+    console.log('[API] Final tools count before trace:', tools.length);
+    console.log('[API] Final tools names:', tools.map(t => t.function.name));
 
     // Keep tools as-is for trace logging (empty array is meaningful)
     const activeTools = tools.length > 0 ? tools : undefined;
@@ -589,14 +603,15 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     selectedModelId = null;
     let useUnifiedClient = false;
 
-    console.log('[API] [MODEL-SELECT] modelId from request:', modelId, 'type:', typeof modelId);
-    console.log('[API] [MODEL-SELECT] conversationId:', conversationId, 'userId:', userId);
+    console.log(`[API] [${requestId}] [MODEL-SELECT] modelId from request:`, modelId, 'type:', typeof modelId);
+    console.log(`[API] [${requestId}] [MODEL-SELECT] conversationId:`, conversationId, 'userId:', userId);
 
     // Option 1: Use modelId from request (new dynamic model registry)
     if (modelId) {
-      console.log('[API] ✓ Using model from request:', modelId);
+      console.log(`[API] [${requestId}] ✓ Using model from request:`, modelId);
       selectedModelId = modelId;
       useUnifiedClient = true;
+      console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-1] selectedModelId set from request:`, selectedModelId);
     }
     // Option 2: Get model from conversation (if exists)
     else if (conversationId && userId) {
@@ -608,9 +623,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           .single();
 
         if (conversation?.llm_model_id) {
-          console.log('[API] Using model from conversation:', conversation.llm_model_id);
+          console.log(`[API] [${requestId}] Using model from conversation:`, conversation.llm_model_id);
           selectedModelId = conversation.llm_model_id;
           useUnifiedClient = true;
+          console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-2] selectedModelId set from conversation:`, selectedModelId);
         }
       } catch (error) {
         console.log('[API] Could not load conversation model:', error);
@@ -730,6 +746,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     // Ensure selectedModelId captures the actual model we will run
     if (!selectedModelId) {
       selectedModelId = model;
+      console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-3] selectedModelId fallback to legacy config:`, selectedModelId);
+    } else {
+      console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-3] selectedModelId already set (no fallback):`, selectedModelId);
     }
 
     // Tool-call aware chat completion (provider-aware)
@@ -772,7 +791,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       const toolStartTime = Date.now();
-      const result = await executeTool(toolName, args, convId, undefined, userId || undefined);
+      const result = await executeTool(toolName, args, convId, undefined, userId || undefined, undefined, toolTraceContext);
       const toolExecutionTime = Date.now() - toolStartTime;
 
       // Capture web_search results for SSE previews (standard search path only)
@@ -895,12 +914,18 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
         // Load model config to get actual provider for metadata
         // Pass supabaseAdmin to ensure access to user-specific models (bypasses RLS)
+        console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4A] Calling getModelConfig with selectedModelId:`, selectedModelId);
         actualModelConfig = await modelManager.getModelConfig(selectedModelId, userId || undefined, supabaseAdmin || undefined);
         if (actualModelConfig) {
-          console.log('[API] Model config loaded - actual provider:', actualModelConfig.provider);
+          console.log(`[API] [${requestId}] Model config loaded - actual provider:`, actualModelConfig.provider);
+          console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4B] getModelConfig returned:`, { id: actualModelConfig.id, name: actualModelConfig.name, provider: actualModelConfig.provider, model_id: actualModelConfig.model_id });
+        } else {
+          console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4B] getModelConfig returned NULL for selectedModelId:`, selectedModelId);
         }
 
         // Create metadata object for persistence
+        console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-5] Creating message metadata with selectedModelId:`, selectedModelId);
+        console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-5] actualModelConfig for metadata:`, actualModelConfig ? { id: actualModelConfig.id, name: actualModelConfig.name, provider: actualModelConfig.provider } : 'null');
         messageMetadata = {
           model_name: actualModelConfig?.name || selectedModelId,
           provider: actualModelConfig?.provider || provider,
@@ -944,6 +969,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
 
         // Start trace for LLM operation
+        console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4] About to start trace with selectedModelId:`, selectedModelId);
+        console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4] Provider:`, actualModelConfig?.provider || provider);
+        console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4] actualModelConfig:`, actualModelConfig ? { id: actualModelConfig.id, name: actualModelConfig.name, provider: actualModelConfig.provider } : 'null');
         traceContext = await traceService.startTrace({
           spanName: 'llm.completion',
           operationType: 'llm_call',
@@ -1551,6 +1579,22 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       // STREAMING PATH: Regular chat without tools
       console.log('[API] Using streaming path (no tools)');
       const streamStartTime = Date.now(); // Track latency for streaming
+
+      // Load model config if using UnifiedClient (to get correct provider)
+      if (useUnifiedClient && selectedModelId && !actualModelConfig) {
+        try {
+          console.log('[API] [STREAMING] Loading model config for:', selectedModelId);
+          actualModelConfig = await modelManager.getModelConfig(selectedModelId, userId || undefined, supabaseAdmin || undefined);
+          if (actualModelConfig) {
+            console.log('[API] [STREAMING] Model config loaded - actual provider:', actualModelConfig.provider);
+          } else {
+            console.log('[API] [STREAMING] Model config not found for:', selectedModelId);
+          }
+        } catch (configError) {
+          console.error('[API] [STREAMING] Error loading model config:', configError);
+          // Continue without model config - will use fallback provider
+        }
+      }
 
       // Create metadata object for persistence (streaming path)
       const messageMetadata = {

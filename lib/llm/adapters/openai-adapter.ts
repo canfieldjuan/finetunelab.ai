@@ -77,6 +77,11 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       ? (config.served_model_name || config.model_id)
       : config.model_id;
 
+    console.log('[OpenAIAdapter] Preparing request for model:', modelName, 'provider:', config.provider);
+    if (modelName !== config.model_id) {
+      console.log('[OpenAIAdapter] Using served_model_name instead of model_id');
+    }
+
     // GPT-5 models only support temperature of 1.0
     const isGpt5 = config.model_id.startsWith('gpt-5');
     const temperature = isGpt5 ? 1.0 : (options.temperature ?? config.default_temperature ?? 0.7);

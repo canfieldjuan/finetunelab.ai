@@ -63,191 +63,148 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Trace Replay</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="model-name">Model Name</Label>
-            <Input
-              id="model-name"
-              value={modelName}
-              onChange={(e) => setModelName(e.target.value)}
-              className="mt-1"
-            />
-            {modelName !== trace.model_name && (
-              <Badge variant="outline" className="mt-1 text-xs">Modified</Badge>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="model-provider">Model Provider</Label>
-            <Input
-              id="model-provider"
-              value={modelProvider}
-              onChange={(e) => setModelProvider(e.target.value)}
-              className="mt-1"
-            />
-            {modelProvider !== trace.model_provider && (
-              <Badge variant="outline" className="mt-1 text-xs">Modified</Badge>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="temperature">Temperature</Label>
-            <Input
-              id="temperature"
-              type="number"
-              step="0.1"
-              value={temperature}
-              onChange={(e) => setTemperature(parseFloat(e.target.value))}
-              className="mt-1"
-            />
-            {temperature !== originalParams.temperature && (
-              <Badge variant="outline" className="mt-1 text-xs">Modified</Badge>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="max-tokens">Max Tokens</Label>
-            <Input
-              id="max-tokens"
-              type="number"
-              value={maxTokens}
-              onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-              className="mt-1"
-            />
-            {maxTokens !== originalParams.maxTokens && (
-              <Badge variant="outline" className="mt-1 text-xs">Modified</Badge>
-            )}
-          </div>
-        </div>
-
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div>
-          <Label htmlFor="system-prompt">System Prompt</Label>
-          <textarea
-            id="system-prompt"
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            rows={3}
-            className="w-full mt-1 px-3 py-2 border rounded-md"
+          <Label htmlFor="model-name" className="text-xs text-muted-foreground">Model Name</Label>
+          <Input
+            id="model-name"
+            value={modelName}
+            onChange={(e) => setModelName(e.target.value)}
+            className="h-8 text-sm mt-1"
           />
-          {systemPrompt !== inputData.systemPrompt && (
-            <Badge variant="outline" className="mt-1 text-xs">Modified</Badge>
-          )}
         </div>
+        <div>
+          <Label htmlFor="model-provider" className="text-xs text-muted-foreground">Provider</Label>
+          <Input
+            id="model-provider"
+            value={modelProvider}
+            onChange={(e) => setModelProvider(e.target.value)}
+            className="h-8 text-sm mt-1"
+          />
+        </div>
+        <div>
+          <Label htmlFor="temperature" className="text-xs text-muted-foreground">Temperature</Label>
+          <Input
+            id="temperature"
+            type="number"
+            step="0.1"
+            value={temperature}
+            onChange={(e) => setTemperature(parseFloat(e.target.value))}
+            className="h-8 text-sm mt-1"
+          />
+        </div>
+        <div>
+          <Label htmlFor="max-tokens" className="text-xs text-muted-foreground">Max Tokens</Label>
+          <Input
+            id="max-tokens"
+            type="number"
+            value={maxTokens}
+            onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+            className="h-8 text-sm mt-1"
+          />
+        </div>
+      </div>
 
+      <div>
+        <Label htmlFor="system-prompt" className="text-xs text-muted-foreground">System Prompt</Label>
+        <textarea
+          id="system-prompt"
+          value={systemPrompt}
+          onChange={(e) => setSystemPrompt(e.target.value)}
+          rows={2}
+          className="w-full mt-1 px-3 py-2 border rounded-md text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-ring focus:border-input bg-transparent"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <input
             type="checkbox"
             id="disable-cache"
             checked={disableCache}
             onChange={(e) => setDisableCache(e.target.checked)}
-            className="rounded"
+            className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
           />
-          <Label htmlFor="disable-cache">Disable Cache</Label>
+          <Label htmlFor="disable-cache" className="text-sm font-normal">Disable Cache</Label>
         </div>
 
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-sm text-red-600">{error}</p>
-          </div>
-        )}
-
-        <Button onClick={replayTrace} disabled={replaying} className="w-full">
-          <Play className="h-4 w-4 mr-2" />
-          {replaying ? 'Replaying...' : 'Replay Trace'}
+        <Button onClick={replayTrace} disabled={replaying} size="sm" className="w-auto px-6">
+          <Play className="h-3.5 w-3.5 mr-2" />
+          {replaying ? 'Replaying...' : 'Run Replay'}
         </Button>
+      </div>
 
-        {replayResult && (
-          <div className="space-y-4 pt-4 border-t">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">Comparison Results</h3>
-              <Badge variant="outline">Replay Complete</Badge>
-            </div>
+      {error && (
+        <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-600">
+          {error}
+        </div>
+      )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Original Trace</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Model:</span>
-                    <span>{replayResult.originalTrace.model_name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Provider:</span>
-                    <span>{replayResult.originalTrace.model_provider}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Input Tokens:</span>
-                    <span>{replayResult.originalTrace.input_tokens || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Output Tokens:</span>
-                    <span>{replayResult.originalTrace.output_tokens || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cost:</span>
-                    <span>${replayResult.originalTrace.cost_usd || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Duration:</span>
-                    <span>{replayResult.originalTrace.duration_ms || 'N/A'}ms</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <h4 className="text-sm font-semibold">Replay Trace</h4>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Model:</span>
-                    <span>{replayResult.replayTrace.model_name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Provider:</span>
-                    <span>{replayResult.replayTrace.model_provider}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Input Tokens:</span>
-                    <span>{replayResult.replayTrace.input_tokens || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Output Tokens:</span>
-                    <span>{replayResult.replayTrace.output_tokens || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cost:</span>
-                    <span>${replayResult.replayTrace.cost_usd || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Duration:</span>
-                    <span>{replayResult.replayTrace.duration_ms || 'N/A'}ms</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {replayResult.overridesApplied && Object.keys(replayResult.overridesApplied).length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-sm font-semibold mb-2">Overrides Applied</h4>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(replayResult.overridesApplied).map(([key, value]) => (
-                    <Badge key={key} variant="secondary">
-                      {key}: {String(value)}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
+      {replayResult && (
+        <div className="mt-4 border rounded-lg overflow-hidden">
+          <div className="bg-muted/30 px-3 py-2 border-b flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Replay Results</h3>
+            <Badge variant="outline" className="text-[10px] h-5">Success</Badge>
           </div>
-        )}
-      </CardContent>
-    </Card>
+
+          <div className="grid grid-cols-2 divide-x">
+            {/* Original Column */}
+            <div className="p-3 bg-gray-50/50">
+              <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Original</div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Model</span>
+                  <span className="font-medium">{replayResult.originalTrace.model_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tokens</span>
+                  <span className="font-mono">{replayResult.originalTrace.total_tokens?.toLocaleString() || '-'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cost</span>
+                  <span className="font-mono">${replayResult.originalTrace.cost_usd?.toFixed(6) || '-'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Duration</span>
+                  <span className="font-mono">{replayResult.originalTrace.duration_ms}ms</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Replay Column */}
+            <div className="p-3 bg-white">
+              <div className="text-xs font-semibold text-blue-600 mb-2 uppercase tracking-wider flex items-center gap-1">
+                 Replay <ArrowRight className="h-3 w-3" />
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Model</span>
+                  <span className="font-medium">{replayResult.replayTrace.model_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tokens</span>
+                  <span className={`font-mono ${replayResult.replayTrace.total_tokens < replayResult.originalTrace.total_tokens ? 'text-green-600' : ''}`}>
+                    {replayResult.replayTrace.total_tokens?.toLocaleString() || '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cost</span>
+                  <span className={`font-mono ${replayResult.replayTrace.cost_usd < replayResult.originalTrace.cost_usd ? 'text-green-600' : ''}`}>
+                    ${replayResult.replayTrace.cost_usd?.toFixed(6) || '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Duration</span>
+                  <span className={`font-mono ${replayResult.replayTrace.duration_ms < replayResult.originalTrace.duration_ms ? 'text-green-600' : ''}`}>
+                    {replayResult.replayTrace.duration_ms}ms
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

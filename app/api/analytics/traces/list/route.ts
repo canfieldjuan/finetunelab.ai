@@ -56,9 +56,16 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('llm_traces')
       .select('id, trace_id, span_name, operation_type, status, start_time, duration_ms, model_name, model_provider, conversation_id, message_id, session_tag, error_message, input_tokens, output_tokens, total_tokens, cost_usd, ttft_ms, tokens_per_second', { count: 'exact' })
-      .eq('user_id', user.id)
-      .is('parent_trace_id', null) // Only root traces for list view
-      .order('start_time', { ascending: false });
+      .eq('user_id', user.id);
+
+    // Only filter to root traces if NOT filtering for child span operations
+    // Retrieval, tool_call, embedding operations are typically child spans
+    const childSpanOperations = ['retrieval', 'tool_call', 'embedding'];
+    if (!operationType || !childSpanOperations.includes(operationType)) {
+      query = query.is('parent_trace_id', null); // Only root traces for list view
+    }
+
+    query = query.order('start_time', { ascending: false });
 
     // Apply filters
     if (operationType && operationType !== 'all') {

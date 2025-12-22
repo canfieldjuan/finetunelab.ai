@@ -218,6 +218,7 @@ import intelligentEmailTool from './intelligent_email';
 import emailAnalysisTool from './intelligent_email/analysis.tool';
 import { emailSecurityTool } from './intelligent_email/security.tool';
 import { analyticsExportTool } from './analytics-export';
+import { unifiedExportTool } from './unified-export';
 import { trainingControlTool } from './trainingControl';
 import graphragQueryTool from './graphrag';
 
@@ -235,7 +236,8 @@ registerTool(evaluationMetricsTool);
 registerTool(intelligentEmailTool);
 registerTool(emailAnalysisTool);
 registerTool(emailSecurityTool);
-registerTool(analyticsExportTool);
+registerTool(analyticsExportTool); // Deprecated - keeping during grace period
+registerTool(unifiedExportTool); // NEW - Unified Export System v2 (now in main!)
 registerTool(trainingControlTool);
 registerTool(graphragQueryTool);
 

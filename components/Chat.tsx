@@ -595,6 +595,9 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
         }
       }));
       setTools(apiTools);
+      console.log('[Chat] ===== TOOLS LOADED =====');
+      console.log('[Chat] Tools count:', apiTools.length);
+      console.log('[Chat] Tool names:', apiTools.map(t => t.function.name));
       log.debug('Chat', 'Loaded tools', { count: apiTools.length });
     };
     loadTools();

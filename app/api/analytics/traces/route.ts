@@ -299,6 +299,9 @@ export async function POST(req: NextRequest) {
       session_tag
     } = body;
 
+    // DEBUG: Log status value
+    console.log(`[Traces API - POST] Received status: "${status}" (type: ${typeof status}) for span: ${span_id}`);
+
     // Validate required fields
     if (!trace_id || !span_id || !span_name || !operation_type) {
       debugLog('POST', 'Missing required fields');
@@ -349,6 +352,7 @@ export async function POST(req: NextRequest) {
 
     if (insertError) {
       debugLog('POST', `Insert error: ${insertError.message}`);
+      console.error(`[Traces API - POST] Upsert error for span ${span_id}:`, insertError);
       return NextResponse.json(
         { error: `Failed to capture trace: ${insertError.message}` },
         { status: 500 }
@@ -356,6 +360,7 @@ export async function POST(req: NextRequest) {
     }
 
     debugLog('POST', `Trace captured: ${trace.id}`);
+    console.log(`[Traces API - POST] Upsert successful - span: ${span_id}, status in DB: ${trace.status}`);
 
     return NextResponse.json({
       success: true,

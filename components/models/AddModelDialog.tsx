@@ -128,6 +128,11 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     if (!formData.model_id?.trim()) return 'Model ID is required';
     if (!formData.auth_type) return 'Auth type is required';
 
+    // HuggingFace specific validation
+    if (formData.provider === 'huggingface' && formData.model_id?.includes(' ')) {
+      return 'Model ID cannot contain spaces. It must be a valid HuggingFace Repo ID (e.g., "owner/repo").';
+    }
+
     // API key is now optional - will use provider secret if not provided
 
     return null;

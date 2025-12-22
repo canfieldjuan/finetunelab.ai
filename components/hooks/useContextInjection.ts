@@ -37,10 +37,16 @@ export function useContextInjection() {
   }, [user, session]);
 
   const loadPreference = async () => {
-    if (!user || !session?.access_token) return;
+    if (!user || !session?.access_token) {
+      console.log('[useContextInjection] Skipping load - missing user or token');
+      setLoading(false);
+      return;
+    }
 
     try {
       console.log('[useContextInjection] Loading preference for user:', user.id);
+      console.log('[useContextInjection] Token exists:', !!session.access_token, 'length:', session.access_token?.length);
+
       const response = await fetch('/api/user/context-preference', {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -61,9 +67,17 @@ export function useContextInjection() {
       }
     } catch (error) {
       console.error('[useContextInjection] Failed to load context preference:', error);
+      console.error('[useContextInjection] Error type:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('[useContextInjection] Error message:', error instanceof Error ? error.message : String(error));
+      console.error('[useContextInjection] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+
+      // Set loading to false even on error to prevent infinite loading state
+      setLoading(false);
     } finally {
       console.log('[useContextInjection] loadPreference complete');
-      setLoading(false);
+      if (loading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -115,6 +129,8 @@ export function useContextInjection() {
       setEnabled(!newValue);
       localStorage.setItem('contextInjectionEnabled', String(!newValue));
       console.error('[useContextInjection] Failed to update context preference:', error);
+      console.error('[useContextInjection] Error type:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('[useContextInjection] Error message:', error instanceof Error ? error.message : String(error));
     }
   };
 

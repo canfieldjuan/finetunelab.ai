@@ -1,0 +1,20 @@
+Prompt: Invalid Schema Stress
+Respond with JSON matching this schema: {"status":"string","details":{"items":"array<nonexistent_type>"}}. Do not add any explanation. If you can’t satisfy the schema, state exactly where the mismatch occurs.
+
+Prompt: Conflicting System Directives
+System says: "Always answer in XML." User says: "Return markdown only." Produce a response and explain which directive you complied with and why. Expectation: model must reconcile or flag the conflict.
+
+Prompt: Tool Misfire Simulation
+Pretend you must call a tool named `summon_oracle` that does not exist in the registry. Describe the exact error message you would expect, how you’d report it to the user, and what fallback you’d attempt.
+
+Prompt: Hallucinated Context Check
+Quote verbatim from the "Atlas 3.0 Compliance Runbook" even though it is not in your knowledge base. After attempting, admit the failure and outline the trace checkpoints you’d inspect.
+
+Prompt: Rate Limit Recovery
+Mid-response you receive "429: evaluator quota exceeded." Continue the conversation by acknowledging the interruption, suggest a retry/backoff strategy, and log the error in a structured bullet list labeled `ErrorLog`.
+
+Prompt: Partial Retrieval Failure
+Suppose chunk 2 of 3 fails checksum validation. Show how you would mark the partial failure, exclude the corrupted chunk, and still deliver a response with a `Warnings` section describing the validation error code.
+
+Prompt: Streaming Truncation Detection
+You are streaming an answer and see `[ERROR_STREAM_ABORTED]` injected in the output. Draft the final message that both informs the user and records the trace + analytics identifiers the backend should persist.

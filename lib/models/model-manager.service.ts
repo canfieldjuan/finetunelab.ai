@@ -323,6 +323,10 @@ class ModelManagerService {
         if (aliasErr) {
           error = aliasErr;
         } else if (aliasList && aliasList.length > 0) {
+          if (aliasList.length > 1) {
+            console.warn('[ModelManager] ⚠️ Multiple models matched alias:', modelId);
+            console.warn('[ModelManager] Using first match:', aliasList[0].name, '(ID:', aliasList[0].id, ')');
+          }
           data = aliasList[0];
           console.log('[ModelManager] Alias matched model:', data.name, 'provider:', data.provider);
         } else {

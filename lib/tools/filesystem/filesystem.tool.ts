@@ -73,7 +73,7 @@ const filesystemTool: ToolDefinition = {
     allowedPaths: config.security.allowedPaths,
   },
   
-  async execute(params: Record<string, unknown>) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) {
     const {
       operation,
       path: targetPath,
