@@ -52,8 +52,8 @@ export class RunPodProvider implements DeploymentProvider {
         script,
         config
     );
-    
-    return response.id;
+
+    return response.pod_id;
   }
 
   async getStatus(jobId: string): Promise<{
@@ -63,14 +63,12 @@ export class RunPodProvider implements DeploymentProvider {
   }> {
     try {
       const podStatus = await runPodService.getPodStatus(jobId, this.apiKey);
-      
-      // Map RunPod status to DeploymentStatus
-      // runPodService.getPodStatus returns a string status
-      // We need to map it if it's not already mapped.
-      // Actually runPodService.getPodStatus returns a string which is already mapped in runpod-service.ts
-      
+
+      // getPodStatus returns RunPodDeploymentStatus which has .status property
       return {
-        status: podStatus as DeploymentStatus
+        status: podStatus.status,
+        metrics: podStatus.metrics,
+        error: podStatus.error_message
       };
     } catch (error) {
       return {
@@ -81,7 +79,7 @@ export class RunPodProvider implements DeploymentProvider {
   }
 
   async cancel(jobId: string): Promise<void> {
-    await runPodService.terminatePod(jobId, this.apiKey);
+    await runPodService.stopPod(jobId, this.apiKey);
   }
 
   async getLogs(jobId: string): Promise<string[]> {
