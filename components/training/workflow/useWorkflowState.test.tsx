@@ -70,9 +70,19 @@ export function UseWorkflowStateDemo() {
   const handlePopulateConfigData = () => {
     const configData: Step2ConfigData = {
       trainingConfig: {
-        learning_rate: 0.0002,
-        batch_size: 4,
-        num_epochs: 3,
+        model: { name: 'meta-llama/Llama-2-7b-hf', trust_remote_code: false, torch_dtype: 'float16', device_map: 'auto' },
+        tokenizer: { name: 'meta-llama/Llama-2-7b-hf', trust_remote_code: false },
+        training: {
+          method: 'sft',
+          learning_rate: 0.0002,
+          batch_size: 4,
+          num_epochs: 3,
+          use_lora: true,
+          gradient_accumulation_steps: 1,
+          warmup_steps: 100,
+          max_length: 512,
+        },
+        data: { strategy: 'standard', generation_type: 'real', train_split: 0.8 },
       },
       templateType: 'lora_finetuning',
       validatedAt: new Date(),
