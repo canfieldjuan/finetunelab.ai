@@ -117,15 +117,15 @@ export class ScriptBuilder {
     const configBase64 = Buffer.from(configJson).toString('base64');
     const trainerScriptBase64 = this.getStandaloneTrainerContent();
 
-    return \`#!/bin/bash
+    return `#!/bin/bash
 # PHASE 2 FIX: Enhanced logging and error handling
 # Removed -e flag to prevent immediate exit on error and allow debugging
 set -uo pipefail
 
 # Setup environment
-export HF_TOKEN="\${huggingFaceToken}"
-\${wandbKey ? \`export WANDB_API_KEY="\${wandbKey}"\` : ''}
-export JOB_ID="\${jobId}"
+export HF_TOKEN="${huggingFaceToken}"
+${wandbKey ? `export WANDB_API_KEY="${wandbKey}"` : ''}
+export JOB_ID="${jobId}"
 
 # Prevent restart loops - check if script already ran
 LOCK_FILE="/workspace/.training_started"
@@ -307,7 +307,7 @@ else
   echo "[\$(date)] Terminating pod"
   exit \$EXIT_CODE
 fi
-\`;
+`;
   }
 
   /**
