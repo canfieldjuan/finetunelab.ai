@@ -642,8 +642,8 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Get deployment details to return consistent response format
-    const deployment = await trainingDeploymentService.getJobStatus('runpod', jobId);
+    // Get full pod details from RunPod service for database storage and response
+    const deployment = await runPodService.getPodStatus(jobId, runpodApiKey);
 
     console.log('[RunPod API] Pod created:', jobId);
 
@@ -665,8 +665,8 @@ export async function POST(request: NextRequest) {
           volume_size_gb,
           environment_variables,
         },
-        estimated_cost: deployment.cost.estimated_cost,
-        cost_per_hour: deployment.cost.cost_per_hour,
+        estimated_cost: deployment.cost?.estimated_cost,
+        cost_per_hour: deployment.cost?.cost_per_hour,
         budget_limit,
       })
       .select()
@@ -685,8 +685,8 @@ export async function POST(request: NextRequest) {
       pod_id: deployment.pod_id,
       pod_url: deployment.pod_url,
       status: deployment.status,
-      gpu_type: deployment.gpu_type,
-      gpu_count: deployment.gpu_count,
+      gpu_type,  // From request params
+      gpu_count, // From request params
       cost: deployment.cost,
       message: 'RunPod deployment created successfully',
     });
