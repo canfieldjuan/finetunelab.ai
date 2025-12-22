@@ -180,6 +180,23 @@ export async function analyzeConversationSentiment(
     throw new Error('Conversation not found');
   }
 
+  // Check cache first
+  if (conversation.metadata?.sentiment_score) {
+    console.log('[SentimentService] Using cached sentiment from metadata');
+    const sentimentScore = conversation.metadata.sentiment_score as SentimentScore;
+    const overallSentiment = determineSentimentType(sentimentScore.compound);
+    const satisfactionLevel = conversation.user_rating || calculateSatisfaction(sentimentScore);
+
+    return {
+      conversation_id: conversationId,
+      overall_sentiment: overallSentiment,
+      sentiment_score: sentimentScore,
+      satisfaction_level: satisfactionLevel,
+      tone_shift_count: 0,
+      analyzed_at: (conversation.metadata.sentiment_analyzed_at as string) || new Date().toISOString()
+    };
+  }
+
   // Try to use real Graphiti sentiment analysis
   let sentimentScore: SentimentScore;
   let overallSentiment: SentimentType;
@@ -220,6 +237,24 @@ export async function analyzeConversationSentiment(
     console.error('[SentimentService] Error in Graphiti analysis, using fallback:', err);
     sentimentScore = extractSentimentFromMetadata(conversation.metadata);
     overallSentiment = determineSentimentType(sentimentScore.compound);
+  }
+
+  // Save result to metadata for caching
+  try {
+    const newMetadata = {
+      ...conversation.metadata,
+      sentiment_score: sentimentScore,
+      sentiment_analyzed_at: new Date().toISOString()
+    };
+
+    await supabase
+      .from('conversations')
+      .update({ metadata: newMetadata })
+      .eq('id', conversationId);
+      
+    console.log('[SentimentService] Cached sentiment score to metadata');
+  } catch (saveError) {
+    console.warn('[SentimentService] Failed to cache sentiment score:', saveError);
   }
 
   const satisfactionLevel = conversation.user_rating || calculateSatisfaction(sentimentScore);
@@ -322,18 +357,24 @@ export async function getSentimentTrends(
     let type: SentimentType;
     let sentiment: SentimentScore;
 
-    // Try to get real-time analysis for this conversation
-    // Graphiti endpoint is fast (20-50ms) so this is acceptable for reasonable dataset sizes
-    try {
-      const analysis = await analyzeConversationSentiment(conv.id, supabase);
-      type = analysis.overall_sentiment;
-      sentiment = analysis.sentiment_score;
-      console.log('[SentimentService] Conversation', conv.id, 'analyzed:', type, 'compound:', sentiment.compound);
-    } catch {
-      // Fallback to metadata
-      console.log('[SentimentService] Conversation', conv.id, 'failed analysis, using fallback');
-      sentiment = extractSentimentFromMetadata(conv.metadata);
+    // Check if we have cached sentiment in metadata
+    if (conv.metadata?.sentiment_score) {
+      sentiment = conv.metadata.sentiment_score as SentimentScore;
       type = determineSentimentType(sentiment.compound);
+    } else {
+      // Try to get real-time analysis for this conversation
+      // Graphiti endpoint is fast (20-50ms) so this is acceptable for reasonable dataset sizes
+      try {
+        const analysis = await analyzeConversationSentiment(conv.id, supabase);
+        type = analysis.overall_sentiment;
+        sentiment = analysis.sentiment_score;
+        console.log('[SentimentService] Conversation', conv.id, 'analyzed:', type, 'compound:', sentiment.compound);
+      } catch {
+        // Fallback to metadata
+        console.log('[SentimentService] Conversation', conv.id, 'failed analysis, using fallback');
+        sentiment = extractSentimentFromMetadata(conv.metadata);
+        type = determineSentimentType(sentiment.compound);
+      }
     }
 
     const satisfaction = conv.user_rating || calculateSatisfaction(sentiment);

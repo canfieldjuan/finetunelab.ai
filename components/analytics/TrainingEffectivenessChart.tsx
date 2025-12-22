@@ -45,6 +45,40 @@ export function TrainingEffectivenessChart({ data }: TrainingEffectivenessChartP
     return map[method] || method;
   };
 
+  // Find base metrics for comparison
+  const baseMetrics = data.find(d => d.trainingMethod === 'base');
+
+  // Helper to render improvement badge
+  const renderImprovement = (current: number, base: number, type: 'rating' | 'success' | 'latency' | 'cost') => {
+    if (!base || base === 0) return null;
+    
+    let diff = 0;
+    let isGood = false;
+    let suffix = '';
+
+    if (type === 'rating') {
+      diff = ((current - base) / base) * 100;
+      isGood = diff > 0;
+      suffix = '%';
+    } else if (type === 'success') {
+      diff = current - base; // Absolute percentage point difference
+      isGood = diff > 0;
+      suffix = 'pts';
+    } else if (type === 'latency' || type === 'cost') {
+      diff = ((current - base) / base) * 100;
+      isGood = diff < 0; // Lower is better
+      suffix = '%';
+    }
+
+    if (Math.abs(diff) < 0.1) return null;
+
+    return (
+      <div className={`text-[10px] font-medium ${isGood ? 'text-green-600' : 'text-red-600'}`}>
+        {diff > 0 ? '+' : ''}{diff.toFixed(1)}{suffix}
+      </div>
+    );
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -102,43 +136,63 @@ export function TrainingEffectivenessChart({ data }: TrainingEffectivenessChartP
                     </td>
                     <td className="py-3 px-3 text-right">
                       {method.evaluationCount > 0 ? (
-                        <span className="text-yellow-600">
-                          {method.avgRating.toFixed(1)} ⭐
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-yellow-600">
+                            {method.avgRating.toFixed(1)} ⭐
+                          </span>
+                          {method.trainingMethod !== 'base' && baseMetrics && (
+                            renderImprovement(method.avgRating, baseMetrics.avgRating, 'rating')
+                          )}
+                        </div>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="py-3 px-3 text-right">
                       {method.evaluationCount > 0 ? (
-                        <span
-                          className={
-                            method.successRate >= 80
-                              ? 'text-green-600 font-medium'
-                              : method.successRate >= 60
-                              ? 'text-yellow-600'
-                              : 'text-red-600 font-medium'
-                          }
-                        >
-                          {method.successRate.toFixed(1)}%
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span
+                            className={
+                              method.successRate >= 80
+                                ? 'text-green-600 font-medium'
+                                : method.successRate >= 60
+                                ? 'text-yellow-600'
+                                : 'text-red-600 font-medium'
+                            }
+                          >
+                            {method.successRate.toFixed(1)}%
+                          </span>
+                          {method.trainingMethod !== 'base' && baseMetrics && (
+                            renderImprovement(method.successRate, baseMetrics.successRate, 'success')
+                          )}
+                        </div>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="py-3 px-3 text-right">
                       {method.avgResponseTime > 0 ? (
-                        <span className="text-gray-700">
-                          {Math.round(method.avgResponseTime)}ms
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-gray-700">
+                            {Math.round(method.avgResponseTime)}ms
+                          </span>
+                          {method.trainingMethod !== 'base' && baseMetrics && (
+                            renderImprovement(method.avgResponseTime, baseMetrics.avgResponseTime, 'latency')
+                          )}
+                        </div>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <span className="text-gray-700 font-mono">
-                        ${method.avgCostPerMessage.toFixed(4)}
-                      </span>
+                      <div className="flex flex-col items-end">
+                        <span className="text-gray-700 font-mono">
+                          ${method.avgCostPerMessage.toFixed(4)}
+                        </span>
+                        {method.trainingMethod !== 'base' && baseMetrics && (
+                          renderImprovement(method.avgCostPerMessage, baseMetrics.avgCostPerMessage, 'cost')
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
