@@ -81,8 +81,8 @@ export class LocalProvider implements DeploymentProvider {
   async cancel(jobId: string): Promise<void> {
     await this.provider.cancelJob(jobId);
   }
-  
+
   async getLogs(jobId: string): Promise<string[]> {
-    return [];
+    return this.provider.getLogs(jobId, 1000); // Get last 1000 lines
   }
 }

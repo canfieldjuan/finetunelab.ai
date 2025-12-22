@@ -83,11 +83,30 @@ export class RunPodProvider implements DeploymentProvider {
   async cancel(jobId: string): Promise<void> {
     await runPodService.terminatePod(jobId, this.apiKey);
   }
-  
+
   async getLogs(jobId: string): Promise<string[]> {
-    // RunPod doesn't have a simple getLogs API in the service yet?
-    // Checking runpod-service.ts might be needed.
-    // For now return empty.
-    return [];
+    // RunPod doesn't provide a direct logs API via GraphQL
+    // Logs are available in the RunPod web console or via SSH
+    const consoleUrl = `https://www.runpod.io/console/pods/${jobId}`;
+
+    return [
+      '⚠️  RunPod Log Access Information',
+      '─────────────────────────────────────────────────────────',
+      '',
+      'RunPod does not provide a programmatic logs API.',
+      'You can access logs through:',
+      '',
+      `1. Web Console: ${consoleUrl}`,
+      '   - Click on the pod',
+      '   - Navigate to the "Logs" tab',
+      '   - View real-time training output',
+      '',
+      '2. SSH Access (for advanced users):',
+      '   - Use RunPod SSH button in console',
+      '   - Access logs at: /workspace/training_output.log',
+      '',
+      'The training script outputs progress to the RunPod console automatically.',
+      ''
+    ];
   }
 }
