@@ -4,6 +4,11 @@
  * Main service for handling conversation exports. Coordinates loading data,
  * formatting, file generation, and tracking.
  *
+ * @deprecated This service has been replaced by UnifiedExportService (lib/export-unified).
+ * Please use /api/export/v2 instead of this service directly.
+ * See migration guide: /docs/export-migration.md
+ * This class will be removed after 60-day grace period.
+ *
  * @module lib/export/exportService
  */
 

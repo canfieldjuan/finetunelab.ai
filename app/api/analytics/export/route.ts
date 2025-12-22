@@ -350,6 +350,11 @@ async function createExportRecord(
  * POST handler
  */
 export async function POST(req: NextRequest) {
+  // ⚠️ DEPRECATION WARNING
+  console.warn('[DEPRECATED] POST /api/analytics/export is deprecated. Please migrate to POST /api/export/v2 with exportType="analytics"');
+  console.warn('[DEPRECATED] See migration guide: /docs/export-migration.md');
+  console.warn('[DEPRECATED] This endpoint will be removed after 60-day grace period');
+
   try {
     // Parse body first so we can use userId for server-to-server auth
     const body = await req.json();

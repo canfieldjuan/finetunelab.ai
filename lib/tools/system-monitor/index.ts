@@ -60,7 +60,7 @@ export const systemMonitorTool: ToolDefinition = {
     healthCheckInterval: systemMonitorConfig.health.checkInterval,
   },
 
-  async execute(params: Record<string, unknown>) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) {
     const { operation, ...options } = params;
 
     if (!operation || typeof operation !== 'string') {

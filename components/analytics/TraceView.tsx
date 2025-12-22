@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown, Clock, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { ChevronRight, ChevronDown, Clock, AlertCircle, CheckCircle, XCircle, ArrowRight, Zap, Database, TrendingUp, Play } from 'lucide-react';
 import { TraceReplayPanel } from './TraceReplayPanel';
 
 export interface Trace {
@@ -92,6 +92,16 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
 
     return unique;
   }, [traces]);
+
+  // Auto-expand root traces on load
+  React.useEffect(() => {
+    if (uniqueTraces.length > 0) {
+      const newExpanded = new Set<string>();
+      // Expand root traces
+      uniqueTraces.forEach(t => newExpanded.add(t.span_id));
+      setExpandedTraces(newExpanded);
+    }
+  }, [uniqueTraces]);
 
   // Calculate timeline boundaries
   const timeline = useMemo(() => {
@@ -236,16 +246,46 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
           </div>
 
           {/* Timeline bar */}
-          <div className="w-64 relative h-6">
+          <div className="w-80 relative h-8 bg-gray-100 rounded-sm">
+            {/* Timeline bar with gradient and status-based styling */}
             <div
-              className={`absolute h-4 top-1 rounded ${
-                trace.status === 'failed' ? 'bg-red-300' : 'bg-blue-300'
+              className={`absolute h-6 top-1 rounded shadow-sm transition-all ${
+                trace.status === 'failed' 
+                  ? 'bg-gradient-to-r from-red-400 to-red-500' 
+                  : trace.status === 'completed'
+                  ? 'bg-gradient-to-r from-blue-400 to-blue-500'
+                  : 'bg-gradient-to-r from-yellow-400 to-yellow-500 animate-pulse'
               }`}
               style={{
                 left: `${barStart}%`,
-                width: `${Math.max(barWidth, 1)}%`,
+                width: `${Math.max(barWidth, 2)}%`,
               }}
-            />
+              title={`Duration: ${trace.duration_ms}ms`}
+            >
+              {/* TTFT marker if available */}
+              {trace.ttft_ms && trace.duration_ms && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-white"
+                  style={{
+                    left: `${(trace.ttft_ms / trace.duration_ms) * 100}%`,
+                  }}
+                  title={`TTFT: ${trace.ttft_ms}ms`}
+                />
+              )}
+            </div>
+            
+            {/* Duration label */}
+            {barWidth > 10 && (
+              <div 
+                className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-white pointer-events-none"
+                style={{ left: `${barStart}%`, width: `${barWidth}%` }}
+              >
+                {trace.duration_ms && trace.duration_ms < 1000 
+                  ? `${trace.duration_ms}ms` 
+                  : `${(trace.duration_ms! / 1000).toFixed(2)}s`
+                }
+              </div>
+            )}
           </div>
         </div>
 
@@ -282,106 +322,115 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
 
       {/* Details panel */}
       {selectedTrace && (
-        <div className="border-t p-4">
-          <h4 className="font-semibold mb-3">Trace Details</h4>
-
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-gray-600">Span ID:</p>
-              <p className="font-mono">{selectedTrace.span_id}</p>
-            </div>
-            <div>
-              <p className="text-gray-600">Trace ID:</p>
-              <p className="font-mono">{selectedTrace.trace_id}</p>
-            </div>
-            <div>
-              <p className="text-gray-600">Status:</p>
-              <p className="flex items-center gap-1">
-                {getStatusIcon(selectedTrace.status)}
-                {selectedTrace.status}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-600">Duration:</p>
-              <p>{selectedTrace.duration_ms}ms</p>
-            </div>
-
-            {/* Token metrics */}
-            {selectedTrace.input_tokens != null && (
-              <div>
-                <p className="text-gray-600">Input Tokens:</p>
-                <p className="font-mono">{selectedTrace.input_tokens.toLocaleString()}</p>
-              </div>
-            )}
-            {selectedTrace.output_tokens != null && (
-              <div>
-                <p className="text-gray-600">Output Tokens:</p>
-                <p className="font-mono">{selectedTrace.output_tokens.toLocaleString()}</p>
-              </div>
-            )}
-            {selectedTrace.total_tokens != null && (
-              <div>
-                <p className="text-gray-600">Total Tokens:</p>
-                <p className="font-mono font-semibold">{selectedTrace.total_tokens.toLocaleString()}</p>
-              </div>
-            )}
-
-            {/* Cost */}
-            {selectedTrace.cost_usd != null && selectedTrace.cost_usd > 0 && (
-              <div>
-                <p className="text-gray-600">Cost:</p>
-                <p className="font-semibold text-green-600">${selectedTrace.cost_usd.toFixed(6)}</p>
-              </div>
-            )}
-
-            {/* Performance metrics */}
-            {selectedTrace.tokens_per_second != null && selectedTrace.tokens_per_second > 0 && (
-              <div>
-                <p className="text-gray-600">Throughput:</p>
-                <p className="text-blue-600">{selectedTrace.tokens_per_second.toFixed(1)} tok/s</p>
-              </div>
-            )}
-            {selectedTrace.ttft_ms != null && selectedTrace.ttft_ms > 0 && (
-              <div>
-                <p className="text-gray-600">TTFT:</p>
-                <p className="text-purple-600">{selectedTrace.ttft_ms}ms</p>
-              </div>
-            )}
-
-            {/* Cache metrics (Anthropic prompt caching) */}
-            {selectedTrace.cache_read_input_tokens != null && selectedTrace.cache_read_input_tokens > 0 && (
-              <div>
-                <p className="text-gray-600">Cache Hits:</p>
-                <p className="text-green-600 font-semibold">
-                  {selectedTrace.cache_read_input_tokens.toLocaleString()} tokens
-                  {selectedTrace.input_tokens && (
-                    <span className="text-xs ml-1 font-normal">
-                      ({((selectedTrace.cache_read_input_tokens / selectedTrace.input_tokens) * 100).toFixed(1)}%)
-                    </span>
-                  )}
-                </p>
-              </div>
-            )}
-            {selectedTrace.cache_creation_input_tokens != null && selectedTrace.cache_creation_input_tokens > 0 && (
-              <div>
-                <p className="text-gray-600">Cache Writes:</p>
-                <p className="text-amber-600">{selectedTrace.cache_creation_input_tokens.toLocaleString()} tokens</p>
-              </div>
-            )}
-
-            {/* Retry information */}
-            {selectedTrace.retry_count != null && selectedTrace.retry_count > 0 && (
-              <div>
-                <p className="text-gray-600">Retries:</p>
-                <p className="text-orange-600 font-semibold">
-                  {selectedTrace.retry_count}x
-                  {selectedTrace.retry_reason && (
-                    <span className="text-xs ml-1 font-normal text-gray-500">({selectedTrace.retry_reason})</span>
-                  )}
-                </p>
-              </div>
-            )}
+        <div className="border-t p-4 bg-gray-50/50">
+          <div className="flex items-center justify-between mb-4">
+             <h4 className="font-semibold text-sm text-gray-900">Trace Details</h4>
+             <div className="flex gap-4 text-xs text-gray-500 font-mono">
+                <span>Span: {selectedTrace.span_id}</span>
+                <span>Trace: {selectedTrace.trace_id}</span>
+             </div>
           </div>
+
+          {/* Compact Metrics Grid */}
+          <div className="grid grid-cols-4 gap-3 mb-4">
+             {/* Status */}
+             <div className="bg-white p-2 rounded border flex flex-col justify-center">
+                <span className="text-xs text-gray-500 mb-1">Status</span>
+                <div className="flex items-center gap-1.5 font-medium text-sm">
+                   {getStatusIcon(selectedTrace.status)}
+                   <span className="capitalize">{selectedTrace.status}</span>
+                </div>
+             </div>
+
+             {/* Duration */}
+             <div className="bg-white p-2 rounded border flex flex-col justify-center">
+                <span className="text-xs text-gray-500 mb-1">Duration</span>
+                <div className="font-medium text-sm">{selectedTrace.duration_ms}ms</div>
+             </div>
+
+             {/* Cost */}
+             {selectedTrace.cost_usd != null && (
+                <div className="bg-white p-2 rounded border flex flex-col justify-center">
+                   <span className="text-xs text-gray-500 mb-1">Cost</span>
+                   <div className="font-medium text-sm text-green-600">${selectedTrace.cost_usd.toFixed(6)}</div>
+                </div>
+             )}
+
+             {/* Throughput */}
+             {selectedTrace.tokens_per_second != null && (
+                <div className="bg-white p-2 rounded border flex flex-col justify-center">
+                   <span className="text-xs text-gray-500 mb-1">Speed</span>
+                   <div className="font-medium text-sm text-blue-600">{selectedTrace.tokens_per_second.toFixed(1)} t/s</div>
+                </div>
+             )}
+          </div>
+
+          {/* Compact Token Flow */}
+          {(selectedTrace.input_tokens != null || selectedTrace.output_tokens != null) && (
+            <div className="mb-4 p-3 bg-white rounded border border-blue-100 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="h-3.5 w-3.5 text-blue-500" />
+                <span className="text-xs font-semibold text-gray-700">Token Flow</span>
+              </div>
+              
+              <div className="flex items-center text-sm">
+                {/* Input */}
+                <div className="flex-1 flex items-center gap-2">
+                   <span className="text-gray-500 text-xs uppercase tracking-wider">Input</span>
+                   <span className="font-mono font-medium">{selectedTrace.input_tokens?.toLocaleString() || 0}</span>
+                </div>
+
+                <ArrowRight className="h-3 w-3 text-gray-300 mx-2" />
+
+                {/* Cache (if any) */}
+                {(selectedTrace.cache_read_input_tokens || selectedTrace.cache_creation_input_tokens) && (
+                   <>
+                     <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs border border-green-100 mx-2">
+                        <Database className="h-3 w-3" />
+                        <span className="font-medium">
+                           {selectedTrace.cache_read_input_tokens ? 
+                              `${selectedTrace.cache_read_input_tokens.toLocaleString()} Hit` : 
+                              `${selectedTrace.cache_creation_input_tokens?.toLocaleString()} Write`}
+                        </span>
+                     </div>
+                     <ArrowRight className="h-3 w-3 text-gray-300 mx-2" />
+                   </>
+                )}
+
+                {/* Output */}
+                <div className="flex-1 flex items-center gap-2 justify-center">
+                   <span className="text-gray-500 text-xs uppercase tracking-wider">Output</span>
+                   <span className="font-mono font-medium text-purple-600">{selectedTrace.output_tokens?.toLocaleString() || 0}</span>
+                </div>
+
+                <div className="text-gray-300 mx-3">|</div>
+
+                {/* Total */}
+                <div className="flex-1 flex items-center gap-2 justify-end">
+                   <span className="text-gray-500 text-xs uppercase tracking-wider">Total</span>
+                   <span className="font-mono font-bold text-indigo-600">{selectedTrace.total_tokens?.toLocaleString() || 0}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Additional Metrics Row (TTFT, Retries) */}
+          {(selectedTrace.ttft_ms != null || selectedTrace.retry_count != null) && (
+             <div className="flex gap-3 mb-4">
+                {selectedTrace.ttft_ms != null && (
+                   <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 rounded border border-purple-100 text-xs">
+                      <Clock className="h-3 w-3" />
+                      <span className="font-medium">TTFT: {selectedTrace.ttft_ms}ms</span>
+                   </div>
+                )}
+                {selectedTrace.retry_count != null && selectedTrace.retry_count > 0 && (
+                   <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 rounded border border-orange-100 text-xs">
+                      <span className="font-bold">🔄 {selectedTrace.retry_count}x</span>
+                      <span>Retries</span>
+                   </div>
+                )}
+             </div>
+          )}
 
           {/* Error message if failed */}
           {selectedTrace.status === 'failed' && selectedTrace.error_message ? (
@@ -410,82 +459,104 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
             </div>
           ) : null}
 
-          {/* Input/Output data preview */}
-          {(selectedTrace.input_data || selectedTrace.output_data) ? (
-            <div className="mt-4 space-y-3">
-              {selectedTrace.input_data ? (
-                <details className="group">
-                  <summary className="cursor-pointer text-sm font-medium">
-                    Input Data
-                  </summary>
-                  <pre className="mt-2 p-2 bg-gray-50 rounded text-xs overflow-x-auto">
-                    {JSON.stringify(selectedTrace.input_data, null, 2)}
-                  </pre>
-                </details>
-              ) : null}
+          {/* Input/Output Data */}
+          {(selectedTrace.input_data || selectedTrace.output_data) && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {selectedTrace.input_data && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Input Data</span>
+                    <span className="text-[10px] text-gray-400">JSON</span>
+                  </div>
+                  <div className="p-0">
+                    <pre className="p-3 text-xs bg-gray-50/30 overflow-x-auto max-h-[300px] overflow-y-auto font-mono text-gray-800">
+                      {JSON.stringify(selectedTrace.input_data, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
 
-              {selectedTrace.output_data ? (
-                <details className="group">
-                  <summary className="cursor-pointer text-sm font-medium">
-                    Output Data
-                  </summary>
-                  <pre className="mt-2 p-2 bg-gray-50 rounded text-xs overflow-x-auto">
-                    {JSON.stringify(selectedTrace.output_data, null, 2)}
-                  </pre>
-                </details>
-              ) : null}
+              {selectedTrace.output_data && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Output Data</span>
+                    <span className="text-[10px] text-gray-400">JSON</span>
+                  </div>
+                  <div className="p-0">
+                    <pre className="p-3 text-xs bg-gray-50/30 overflow-x-auto max-h-[300px] overflow-y-auto font-mono text-gray-800">
+                      {JSON.stringify(selectedTrace.output_data, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
             </div>
-          ) : null}
+          )}
 
           {/* Quality Evaluation Section */}
           {(selectedTrace.judgments && selectedTrace.judgments.length > 0) || selectedTrace.user_rating ? (
-            <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <h4 className="font-semibold mb-3 text-purple-900">Quality Evaluation</h4>
+            <div className="mt-4 p-3 bg-purple-50/50 rounded border border-purple-100">
+              <div className="flex items-center justify-between mb-2">
+                 <h4 className="font-semibold text-xs text-purple-900 uppercase tracking-wider">Quality Evaluation</h4>
+                 {selectedTrace.user_rating && (
+                    <div className="flex items-center gap-1.5 bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100">
+                       <span className="text-xs font-medium text-yellow-800">User Rating:</span>
+                       <span className="text-sm">{'⭐'.repeat(selectedTrace.user_rating)}</span>
+                    </div>
+                 )}
+              </div>
 
               {selectedTrace.judgments && selectedTrace.judgments.length > 0 && (
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {selectedTrace.judgments.map((judgment) => (
-                    <div key={judgment.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                      <div className="flex-1">
+                    <div key={judgment.id} className="flex items-center justify-between p-2 bg-white rounded border border-purple-100 shadow-sm">
+                      <div className="min-w-0 flex-1 mr-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{judgment.criterion}</span>
-                          <span className="text-xs text-gray-500">({judgment.judge_type})</span>
+                          <span className="font-medium text-xs truncate" title={judgment.criterion}>{judgment.criterion}</span>
+                          <span className="text-[10px] text-gray-400 uppercase">{judgment.judge_type}</span>
                         </div>
                         {judgment.notes && (
-                          <p className="text-xs text-gray-600 mt-1">{judgment.notes}</p>
+                          <p className="text-[10px] text-gray-500 truncate mt-0.5">{judgment.notes}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-mono">{(judgment.score * 100).toFixed(0)}%</span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-xs font-mono font-medium ${judgment.score > 0.7 ? 'text-green-600' : 'text-orange-600'}`}>
+                           {(judgment.score * 100).toFixed(0)}%
+                        </span>
                         {judgment.passed ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
+                          <CheckCircle className="h-3.5 w-3.5 text-green-500" />
                         ) : (
-                          <XCircle className="h-5 w-5 text-red-500" />
+                          <XCircle className="h-3.5 w-3.5 text-red-500" />
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-
-              {selectedTrace.user_rating && (
-                <div className="mt-3 p-3 bg-yellow-50 rounded border border-yellow-200">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">User Rating:</span>
-                    <span className="text-lg">{'⭐'.repeat(selectedTrace.user_rating)}</span>
-                    <span className="text-sm text-gray-600">({selectedTrace.user_rating}/5)</span>
-                  </div>
-                  {selectedTrace.user_notes && (
-                    <p className="text-sm text-gray-700 mt-2">{selectedTrace.user_notes}</p>
-                  )}
-                </div>
+              
+              {selectedTrace.user_notes && (
+                 <div className="mt-2 text-xs text-gray-600 italic bg-white/50 p-2 rounded">
+                    "{selectedTrace.user_notes}"
+                 </div>
               )}
             </div>
           ) : null}
 
           {/* Trace Replay Section */}
           <div className="mt-4">
-            <TraceReplayPanel trace={selectedTrace} />
+            <details className="group border rounded-lg bg-white">
+              <summary className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 bg-blue-50 rounded text-blue-600">
+                    <Play className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="font-medium text-sm text-gray-700">Replay Trace</span>
+                </div>
+                <ChevronDown className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="p-3 border-t">
+                <TraceReplayPanel trace={selectedTrace} />
+              </div>
+            </details>
           </div>
         </div>
       )}

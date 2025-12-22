@@ -74,7 +74,7 @@ const datetimeTool: ToolDefinition = {
   /**
    * Execute datetime operation
    */
-  async execute(params: Record<string, unknown>) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) {
     const action = params.action as string;
     
     if (!action) {

@@ -30,6 +30,11 @@ exportService.registerFormatter('txt', new TxtFormatter());
 exportService.registerFormatter('jsonl', new JsonlFormatter('full', true, true));
 
 export async function POST(req: NextRequest) {
+  // ⚠️ DEPRECATION WARNING
+  console.warn('[DEPRECATED] POST /api/export/generate is deprecated. Please migrate to POST /api/export/v2');
+  console.warn('[DEPRECATED] See migration guide: /docs/export-migration.md');
+  console.warn('[DEPRECATED] This endpoint will be removed after 60-day grace period');
+
   try {
     // Authenticate user
     const authHeader = req.headers.get('authorization');

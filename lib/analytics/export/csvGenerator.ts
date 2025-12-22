@@ -3,6 +3,11 @@
  * Generates CSV files from analytics data
  * Phase 2: Export Format Generators
  * Date: October 25, 2025
+ *
+ * @deprecated This generator has been replaced by the Unified Export System (lib/export-unified/formatters/CSVFormatter.ts).
+ * Please use the UnifiedExportService via /api/export/v2 instead.
+ * See migration guide: /docs/export-migration.md
+ * This file will be removed after 60-day grace period.
  */
 
 import { AnalyticsDataset } from '../types';

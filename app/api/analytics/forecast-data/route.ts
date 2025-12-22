@@ -56,7 +56,7 @@ async function aggregateSuccessRateByDay(
   const { data: evaluations, error } = await supabase
     .from('message_evaluations')
     .select('created_at, success')
-    .eq('evaluator_id', userId)
+    .eq('user_id', userId)
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
     .order('created_at', { ascending: true });
@@ -105,7 +105,7 @@ async function aggregateAvgRatingByDay(
   const { data: evaluations, error } = await supabase
     .from('message_evaluations')
     .select('created_at, rating')
-    .eq('evaluator_id', userId)
+    .eq('user_id', userId)
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
     .not('rating', 'is', null)
@@ -313,19 +313,44 @@ export async function GET(req: NextRequest) {
     switch (metric) {
       case 'success_rate':
         console.log('[ForecastData] Fetching success_rate data...');
-        historical = await aggregateSuccessRateByDay(supabaseAny, user.id, startDate, endDate);
+        try {
+          historical = await aggregateSuccessRateByDay(supabaseAny, user.id, startDate, endDate);
+          console.log('[ForecastData] success_rate query returned:', historical.length, 'points');
+        } catch (err) {
+          console.error('[ForecastData] Error in aggregateSuccessRateByDay:', err);
+          const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+          throw new Error(`Failed to fetch success_rate data: ${errorMessage}`);
+        }
         break;
       case 'avg_rating':
         console.log('[ForecastData] Fetching avg_rating data...');
-        historical = await aggregateAvgRatingByDay(supabaseAny, user.id, startDate, endDate);
+        try {
+          historical = await aggregateAvgRatingByDay(supabaseAny, user.id, startDate, endDate);
+          console.log('[ForecastData] avg_rating query returned:', historical.length, 'points');
+        } catch (err) {
+          console.error('[ForecastData] Error in aggregateAvgRatingByDay:', err);
+          throw new Error(`Failed to fetch avg_rating data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
         break;
       case 'response_time_p95':
         console.log('[ForecastData] Fetching response_time_p95 data...');
-        historical = await aggregateResponseTimeP95ByDay(supabaseAny, user.id, startDate, endDate);
+        try {
+          historical = await aggregateResponseTimeP95ByDay(supabaseAny, user.id, startDate, endDate);
+          console.log('[ForecastData] response_time_p95 query returned:', historical.length, 'points');
+        } catch (err) {
+          console.error('[ForecastData] Error in aggregateResponseTimeP95ByDay:', err);
+          throw new Error(`Failed to fetch response_time_p95 data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
         break;
       case 'sla_breach_rate':
         console.log('[ForecastData] Fetching sla_breach_rate data...');
-        historical = await aggregateSLABreachRateByDay(supabaseAny, user.id, startDate, endDate);
+        try {
+          historical = await aggregateSLABreachRateByDay(supabaseAny, user.id, startDate, endDate);
+          console.log('[ForecastData] sla_breach_rate query returned:', historical.length, 'points');
+        } catch (err) {
+          console.error('[ForecastData] Error in aggregateSLABreachRateByDay:', err);
+          throw new Error(`Failed to fetch sla_breach_rate data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
         break;
     }
 

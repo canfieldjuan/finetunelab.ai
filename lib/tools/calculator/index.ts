@@ -35,13 +35,13 @@ const calculatorTool: ToolDefinition = {
   /**
    * Execute calculator operation
    */
-  async execute(params: Record<string, unknown>) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) {
     const { expression } = params;
-    
+
     if (!expression || typeof expression !== 'string') {
       throw new Error('[Calculator] Parameter validation failed: expression is required and must be a string');
     }
-    
+
     return calculatorService.evaluate(expression);
   },
 };

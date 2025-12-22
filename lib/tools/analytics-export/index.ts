@@ -2,8 +2,13 @@
  * Analytics Export Tool - Tool Definition
  * Phase 6: LLM Integration
  * Date: October 25, 2025
- * 
+ *
  * Enables LLM to create analytics exports and provide download links
+ *
+ * @deprecated This tool has been replaced by unified_export tool (lib/tools/unified-export).
+ * Please use the unified_export tool which supports all export types via the v2 API.
+ * See migration guide: /docs/export-migration.md
+ * This tool will be removed after 60-day grace period.
  */
 
 import { ToolDefinition } from '../types';

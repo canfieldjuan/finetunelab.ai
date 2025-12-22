@@ -57,6 +57,11 @@ export async function sendPrompt(
     try {
       console.log(`[HF Adapter] Sending prompt to ${model} (attempt ${attempt}/${retries})`);
 
+      if (model.includes(' ')) {
+        console.warn('[HF Adapter] ⚠️ WARNING: Model ID contains spaces:', model);
+        console.warn('[HF Adapter] This likely indicates a display name was used instead of the HuggingFace Repo ID.');
+      }
+
       const response = await fetch(`${HF_API_BASE}/${model}`, {
         method: 'POST',
         headers: {

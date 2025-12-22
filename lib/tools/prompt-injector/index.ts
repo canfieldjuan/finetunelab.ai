@@ -31,7 +31,7 @@ const promptInjectorTool: ToolDefinition = {
   config: {
     enabled: true,
   },
-  async execute(params: Record<string, unknown>) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) {
     const { operation, prompts, options } = params;
     if (operation !== 'inject_batch') {
       throw new Error('[PromptInjector] Only inject_batch operation is supported');
