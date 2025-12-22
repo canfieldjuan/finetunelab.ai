@@ -9,8 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { LocalTrainingProvider } from '@/lib/services/training-providers/local.provider';
-import { LocalProviderConfig } from '@/lib/training/training-config.types';
+import { trainingDeploymentService } from '@/lib/training/training-deployment.service';
+import crypto from 'crypto';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -75,65 +75,33 @@ export async function POST(request: NextRequest) {
 
     console.log('[Local Training Start] Config loaded:', configData.name);
 
-    // Get provider config
-    const providerConfig: LocalProviderConfig = {
-      type: 'local',
-      base_url: process.env.NEXT_PUBLIC_TRAINING_SERVER_URL || 'http://localhost:8000',
-      timeout_ms: parseInt(process.env.TRAINING_PROVIDER_TIMEOUT_MS || '5000', 10),
-    };
-
-    console.log('[Local Training Start] Provider config:', providerConfig.base_url);
-
-    // Initialize provider and test connection
-    const provider = new LocalTrainingProvider(providerConfig);
-    const connectionTest = await provider.validateConnection();
-
-    if (!connectionTest.success) {
-      console.error('[Local Training Start] Training server not available:', connectionTest.error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Training server not available: ${connectionTest.error}`,
-        },
-        { status: 503 }
-      );
-    }
-
-    console.log('[Local Training Start] Training server is healthy');
-
-    // Prepare training request
-    const trainingRequest = {
-      config: configData.config_json,
-      dataset_path: body.dataset_path || '',
-      execution_id: body.execution_id || crypto.randomUUID(),
-      name: body.name || configData.name,
-      user_id: user.id,
-    };
+    const executionId = body.execution_id || crypto.randomUUID();
+    const modelName = body.name || configData.name;
+    const datasetPath = body.dataset_path || '';
 
     console.log('[Local Training Start] Submitting job to training server');
-    console.log('[Local Training Start] Execution ID:', trainingRequest.execution_id);
-    console.log('[Local Training Start] Dataset path:', trainingRequest.dataset_path);
+    console.log('[Local Training Start] Execution ID:', executionId);
+    console.log('[Local Training Start] Dataset path:', datasetPath);
 
-    // Call training server via provider
-    const jobResult = await provider.executeTraining(trainingRequest);
-
-    if (!jobResult.success) {
-      console.error('[Local Training Start] Failed to submit job:', jobResult.error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: jobResult.error,
-        },
-        { status: 500 }
-      );
-    }
+    // Use unified service
+    const jobId = await trainingDeploymentService.deployJob(
+      'local',
+      configData.config_json,
+      modelName,
+      datasetPath,
+      {
+        jobId: executionId,
+        userId: user.id,
+        accessToken: authHeader.replace('Bearer ', '')
+      }
+    );
 
     console.log('[Local Training Start] Job submitted successfully');
-    console.log('[Local Training Start] Job ID:', jobResult.job_id);
+    console.log('[Local Training Start] Job ID:', jobId);
 
     return NextResponse.json({
       success: true,
-      job_id: jobResult.job_id,
+      job_id: jobId,
       message: 'Training started successfully',
     }, { status: 200 });
 

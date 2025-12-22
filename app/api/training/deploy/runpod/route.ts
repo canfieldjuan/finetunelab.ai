@@ -252,6 +252,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { runPodService } from '@/lib/training/runpod-service';
+import { trainingDeploymentService } from '@/lib/training/training-deployment.service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
 import { decrypt } from '@/lib/models/encryption';
 import type { RunPodDeploymentRequest } from '@/lib/training/deployment.types';
@@ -592,12 +593,6 @@ export async function POST(request: NextRequest) {
 
     console.log('[RunPod API] === FINAL URL: ' + appUrl + ' ===');
 
-    const trainingScript = runPodService.generateTrainingScript(
-      modelName,
-      datasetStoragePath,
-      trainingConfig.config_json || {}
-    );
-
     // Construct URLs that will be passed to RunPod
     // Note: job_id is passed in POST body, not URL path
     const metricsApiUrl = `${appUrl}/api/training/local/metrics`;
@@ -606,48 +601,51 @@ export async function POST(request: NextRequest) {
     console.log('[RunPod API] DEBUG - Constructed METRICS_API_URL:', metricsApiUrl);
     console.log('[RunPod API] DEBUG - Constructed ALERT_API_URL:', alertApiUrl);
 
-    const deployment = await runPodService.createPod(
+    // Use the unified TrainingDeploymentService
+    // We ignore the returned ID as we already generated one and passed it in
+    await trainingDeploymentService.deployJob(
+      'runpod',
+      trainingConfig.config_json || {},
+      modelName,
+      datasetStoragePath,
       {
-        training_config_id,
-        gpu_type,
-        gpu_count,
-        docker_image,
-        volume_size_gb,
-        environment_variables: {
+        jobId: jobId, // Pass the pre-generated job ID
+        trainingConfigId: training_config_id,
+        gpuType: gpu_type,
+        gpuCount: gpu_count,
+        dockerImage: docker_image,
+        volumeSizeGb: volume_size_gb,
+        budgetLimit: budget_limit,
+        huggingFaceToken: hfToken,
+        wandbKey: environment_variables?.WANDB_API_KEY,
+        envVars: {
           ...environment_variables,
           JOB_ID: jobId,
           JOB_TOKEN: jobToken,
-          USER_ID: user.id,  // Pass user ID for predictions persistence
-          // Fixed environment variable names to match Python script expectations
+          USER_ID: user.id,
           SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL!,
           SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          // Also provide service role key as fallback for RLS bypass if needed
           SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
           DATASET_URL: datasetDownloadUrl,
           MODEL_NAME: modelName,
-          // Metrics API configuration for cloud training metrics reporting
           METRICS_API_URL: metricsApiUrl,
-          // Alert API configuration for job status notifications
           ALERT_API_URL: alertApiUrl,
           INTERNAL_API_KEY: process.env.INTERNAL_API_KEY || '',
           ...(hfToken && hfRepoName && {
             HF_TOKEN: hfToken,
             HF_REPO_NAME: hfRepoName
-          }), // Include HF credentials if available
-          // Performance tuning for cloud training
+          }),
           DEFAULT_DATALOADER_NUM_WORKERS: '4',
           DEFAULT_DATALOADER_PREFETCH_FACTOR: '2',
           DEFAULT_PRETOKENIZE: 'true',
-        },
-        budget_limit,
-      },
-      runpodApiKey,
-      trainingScript,
-      trainingConfig.config_json,  // Pass training config for time estimation
-      dataset?.total_examples       // Pass dataset size for time estimation
+        }
+      }
     );
 
-    console.log('[RunPod API] Pod created:', deployment.pod_id);
+    // Get deployment details to return consistent response format
+    const deployment = await trainingDeploymentService.getJobStatus('runpod', jobId);
+
+    console.log('[RunPod API] Pod created:', jobId);
 
     // Store deployment in database
     const { error: insertError } = await supabase

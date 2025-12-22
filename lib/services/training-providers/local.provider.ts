@@ -157,9 +157,16 @@ export class LocalTrainingProvider {
       let payload: TrainingJobRequest = request;
       try {
         if (request && request.config) {
-          console.log('[LocalProvider] Normalizing config for backend');
-          const normalized = normalizeForBackend(request.config as unknown as TrainingConfig);
-          payload = { ...request, config: normalized } as TrainingJobRequest;
+          // Check if already normalized (has 'lora' key at top level)
+          // ScriptBuilder output always includes 'lora' key
+          if ((request.config as any).lora) {
+            console.log('[LocalProvider] Config appears already normalized, skipping normalization');
+            payload = request;
+          } else {
+            console.log('[LocalProvider] Normalizing config for backend');
+            const normalized = normalizeForBackend(request.config as unknown as TrainingConfig);
+            payload = { ...request, config: normalized } as TrainingJobRequest;
+          }
         }
       } catch (normErr) {
         console.warn('[LocalProvider] Config normalization skipped:', normErr);
