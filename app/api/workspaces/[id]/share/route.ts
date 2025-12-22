@@ -175,11 +175,11 @@ export async function POST(
 // Get shared resources for a workspace
 export async function GET(
   request: NextRequest,
-  context: RouteContext<'/api/workspaces/[id]/share'>
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
-    const { id: workspaceId } = await context.params;
+    const { id: workspaceId } = await params;
 
     // Get current user
     const {
@@ -236,11 +236,11 @@ export async function GET(
 // Delete a shared resource (unshare)
 export async function DELETE(
   request: NextRequest,
-  context: RouteContext<'/api/workspaces/[id]/share'>
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
-    const { id: workspaceId } = await context.params;
+    const { id: workspaceId } = await params;
 
     // Get current user
     const {

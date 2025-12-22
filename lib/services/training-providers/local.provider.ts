@@ -157,9 +157,16 @@ export class LocalTrainingProvider {
       let payload: TrainingJobRequest = request;
       try {
         if (request && request.config) {
-          console.log('[LocalProvider] Normalizing config for backend');
-          const normalized = normalizeForBackend(request.config as unknown as TrainingConfig);
-          payload = { ...request, config: normalized } as TrainingJobRequest;
+          // Check if already normalized (has 'lora' key at top level)
+          // ScriptBuilder output always includes 'lora' key
+          if ((request.config as any).lora) {
+            console.log('[LocalProvider] Config appears already normalized, skipping normalization');
+            payload = request;
+          } else {
+            console.log('[LocalProvider] Normalizing config for backend');
+            const normalized = normalizeForBackend(request.config as unknown as TrainingConfig);
+            payload = { ...request, config: normalized } as TrainingJobRequest;
+          }
         }
       } catch (normErr) {
         console.warn('[LocalProvider] Config normalization skipped:', normErr);
@@ -387,6 +394,41 @@ export class LocalTrainingProvider {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('[LocalProvider] Failed to force-start job:', errorMsg);
       return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Get training logs for a job
+   *
+   * @param jobId The job ID to get logs for
+   * @param limit Maximum number of log lines to return (default: 100)
+   * @param offset Line offset to start from for pagination (default: 0)
+   * @returns Array of log lines
+   */
+  async getLogs(jobId: string, limit: number = 100, offset: number = 0): Promise<string[]> {
+    console.log('[LocalProvider] Getting logs for job:', jobId, { limit, offset });
+
+    try {
+      const url = `${this.config.base_url}/api/training/logs/${jobId}?limit=${limit}&offset=${offset}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(errorData.error || `Failed to get logs: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('[LocalProvider] Retrieved', data.logs?.length || 0, 'log lines');
+
+      return data.logs || [];
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[LocalProvider] Failed to get logs:', errorMsg);
+      return [];
     }
   }
 

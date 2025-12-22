@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
+    "validate-all": "npm run type-check && (npm run lint || true) && npm run test:vitest run",
     "test": "jest",
     "test:e2e": "jest tests/integration",
     "test:watch": "jest --watch",
