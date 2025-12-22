@@ -1,0 +1,14 @@
+Prompt: Logistics Timeline Puzzle
+Three finetuning jobs (A, B, C) must run on two GPU clusters. A needs 2 hours, B needs 3, C needs 1. Only one job can run per cluster at a time, and B must finish before C starts. Determine the minimum total time and describe the schedule.
+
+Prompt: Contradiction Detector
+Analyze this claim: "All premium customers use OpenAI endpoints exclusively, yet the billing dashboard shows Anthropic spend for 40% of premium seats." Decide if the claim is logically sound and explain the contradiction, if any.
+
+Prompt: Token Budget Allocation
+You have 20k tokens to split between system, user, and context messages. System needs at least 3k, context must be twice the user allocation. Reason step-by-step to derive one valid allocation and explain why it satisfies every constraint.
+
+Prompt: Root Cause Tree
+Given symptom: "RAG answers reference outdated policy." Evaluate four hypothetical causes and pick the most probable using elimination: (a) chunker dropped metadata, (b) embeddings index stale, (c) API key rotated, (d) tracing disabled. Provide your reasoning chain.
+
+Prompt: Data Consistency Riddle
+A telemetry table shows 1200 chat events, the analytics dashboard shows 300 sessions, and billing reports 1500 prompts. Explain how all three can be correct simultaneously and infer what each metric likely counts.

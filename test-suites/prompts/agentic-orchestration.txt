@@ -1,0 +1,14 @@
+Prompt: Concurrent Tool Planner
+You can call `web_search`, `query_metrics`, and `fetch_contract`. Devise a plan for answering "Which enterprise customers are experimenting with Retrieval-Augmented Agents this quarter?" Describe which tools to call, in what order, and what data each call should return before composing the final brief.
+
+Prompt: Recovery After Tool Failure
+A tool call to `sync_hubspot` returned HTTP 429 while `web_search` succeeded. Explain how you would retry or fallback without losing previously gathered facts, and outline the response you would send to the user.
+
+Prompt: Multi-Step Research Agent
+Simulate a conversation turn where you (the agent) must (1) summarize today’s GPU price trends, (2) compare them to last week, and (3) recommend a procurement action. Explicitly note where tool or data access is required and how you verify freshness.
+
+Prompt: Deployment Verifier
+Create a checklist the agent should execute after running `deploy_model`. Include verifying trace IDs, confirming analytics ingestion, and validating billing usage increments. Present it as numbered execution stages with sub-bullets for automated vs manual checks.
+
+Prompt: Delegated Workflow
+Design an agent workflow for "Prepare a go-live readiness packet" that coordinates a RAG retrieval step, a code-quality audit tool, and a notification sender. Explain trigger conditions for each step and how the agent confirms completion before summarizing to the operator.

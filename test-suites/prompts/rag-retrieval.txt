@@ -1,0 +1,14 @@
+Prompt: Policy Lookup
+Retrieve the latest "incident response escalation" policy from the knowledge base and answer the question "Who approves customer communications?" Cite the document title and version year in brackets.
+
+Prompt: Chunk Comparison
+Given two context snippets about feature flags, explain which one is newer and why. Reference specific metadata fields such as `updated_at` or `owner_team` in your explanation.
+
+Prompt: Multi-Doc Synthesis
+Summarize how the Training Dashboard works using at least two separate documents. After summarizing, list the doc titles you pulled from under a `Sources:` heading.
+
+Prompt: Retrieval Failure Drill
+If no chunk is returned for "Atlas telemetry quotas", outline the troubleshooting steps you would take (e.g., embeddings, namespaces, permissions) and craft a polite user-facing response that acknowledges the gap.
+
+Prompt: Context Relevance Judge
+You are given a user question "How do I throttle webhook retries?" plus three retrieved chunks. Rate each chunk as `relevant` or `irrelevant`, explain your rating, and recommend whether to fetch more context.
