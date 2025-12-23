@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Play, RefreshCw, ArrowRight } from 'lucide-react';
-import { createClient } from '@/lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 import type { Trace } from './TraceView';
 
 interface TraceReplayPanelProps {
@@ -44,7 +44,9 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
       if (disableCache) overrides.disableCache = true;
 
       // Get session token for authentication
-      const supabase = createClient();
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
