@@ -109,11 +109,6 @@ export class SearchService {
             cacheHitCount: 0, // No caching layer yet
           }
         });
-            userId,
-            queryTimeMs: queryTime,
-            sourcesCount: sources.length,
-          },
-        });
         console.log('[SearchService] Ended GraphRAG retrieval trace (success)');
       } catch (traceErr) {
         console.error('[SearchService] Failed to end retrieval trace:', traceErr);
