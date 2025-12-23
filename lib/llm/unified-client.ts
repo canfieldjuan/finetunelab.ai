@@ -4,6 +4,7 @@
 
 import type { ChatMessage, ToolDefinition, LLMResponse, LLMUsage, ToolCallMetadata } from './openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
+import type { RequestMetadata } from '@/lib/tracing/types';
 import { modelManager } from '@/lib/models/model-manager.service';
 import { OpenAIAdapter } from './adapters/openai-adapter';
 import { AnthropicAdapter } from './adapters/anthropic-adapter';
@@ -187,6 +188,7 @@ export class UnifiedLLMClient {
         input_tokens: 0,
         output_tokens: 0,
       },
+      requestMetadata: adapterResponse.requestMetadata,
     };
 
     console.log('[UnifiedLLMClient] Response:', {
@@ -511,6 +513,7 @@ export class UnifiedLLMClient {
       temperature?: number;
       maxTokens?: number;
       userId?: string;
+      onMetadata?: (metadata: RequestMetadata) => void;
     }
   ): AsyncGenerator<string, void, unknown> {
     console.log('[UnifiedLLMClient] Stream request for model:', modelId);
@@ -561,6 +564,29 @@ export class UnifiedLLMClient {
 
     if (!response.ok) {
       throw new Error(`Streaming request failed: ${response.status} ${response.statusText}`);
+    }
+
+    // Capture metadata if callback provided
+    if (options?.onMetadata) {
+      try {
+        // Sanitize headers (remove auth)
+        const sanitizedHeaders: Record<string, string> = {};
+        for (const [key, value] of Object.entries(headers)) {
+          if (!key.toLowerCase().includes('auth') && !key.toLowerCase().includes('key')) {
+            sanitizedHeaders[key] = value;
+          } else {
+            sanitizedHeaders[key] = '[REDACTED]';
+          }
+        }
+
+        options.onMetadata({
+          apiEndpoint: url,
+          providerRequestId: response.headers.get('x-request-id') || response.headers.get('x-amzn-requestid') || undefined,
+          requestHeadersSanitized: sanitizedHeaders,
+        });
+      } catch (err) {
+        console.error('[UnifiedLLMClient] Error capturing metadata:', err);
+      }
     }
 
     // Read streaming response

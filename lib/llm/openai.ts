@@ -60,12 +60,15 @@ export interface ToolCallMetadata {
   error?: string;
 }
 
+import type { RequestMetadata } from '@/lib/tracing/types';
+
 // METRIC: Response with usage data (matches Anthropic interface)
 export interface LLMResponse {
   content: string;
   reasoning?: string; // Extended thinking/intermediate steps from Claude models
   usage: LLMUsage;
   toolsCalled?: ToolCallMetadata[];
+  requestMetadata?: RequestMetadata;
 }
 
 export async function* streamOpenAIResponse(

@@ -1143,12 +1143,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       let reasoning: string | undefined;
       let tokenUsage: { input_tokens: number; output_tokens: number } | null = null;
       let toolsCalled: Array<{name: string; success: boolean; error?: string}> | null = null;
+      let requestMetadata: RequestMetadata | undefined;
       // Both OpenAI and Anthropic now return LLMResponse { content, usage, toolsCalled, reasoning }
       if (typeof llmResponse === 'object' && 'content' in llmResponse && 'usage' in llmResponse) {
         finalResponse = llmResponse.content;
         reasoning = (llmResponse as { reasoning?: string }).reasoning;
         tokenUsage = llmResponse.usage;
         toolsCalled = (llmResponse as { toolsCalled?: Array<{name: string; success: boolean; error?: string}> }).toolsCalled || null;
+        requestMetadata = (llmResponse as { requestMetadata?: RequestMetadata }).requestMetadata;
         console.log('[API] Token usage:', tokenUsage.input_tokens, 'in,', tokenUsage.output_tokens, 'out');
         if (reasoning) {
           console.log('[API] Reasoning/thinking:', reasoning.length, 'chars');
@@ -1281,6 +1283,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 toolsCalled: toolsCalled ?? undefined,
                 reasoning,
                 latencyMs: latency_ms,
+                requestMetadata,
+                ragContext: graphRAGMetadata ? {
+                  contextTokens: graphRAGMetadata.estimatedTokens,
+                  retrievalLatencyMs: graphRAGMetadata.metadata?.retrieval_time_ms,
+                } : undefined,
               });
             }
 
@@ -1416,6 +1423,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           toolsCalled: toolsCalled ?? undefined,
           reasoning,
           latencyMs: latency_ms,
+          requestMetadata,
+          ragContext: graphRAGMetadata ? {
+            contextTokens: graphRAGMetadata.estimatedTokens,
+            retrievalLatencyMs: graphRAGMetadata.metadata?.retrieval_time_ms,
+          } : undefined,
         });
       }
 
@@ -1629,6 +1641,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
       const stream = new ReadableStream({
         async start(controller) {
+          // Variable to capture request metadata from streaming client
+          let capturedRequestMetadata: RequestMetadata | undefined;
+
           try {
             // Send GraphRAG metadata if available
             if (graphRAGMetadata) {
@@ -1705,6 +1720,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     temperature,
                     maxTokens,
                     userId: userId || undefined,
+                    onMetadata: (meta) => { capturedRequestMetadata = meta; }
                   }
                 )) {
                   if (!firstChunkReceived && chunk.length > 0) {
@@ -1864,6 +1880,16 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
                     latencyMs: streamLatencyMs,
                     ttftMs,
+                    requestMetadata: capturedRequestMetadata,
+                    performanceMetrics: {
+                      streamingEnabled: true,
+                      inferenceTimeMs: streamLatencyMs,
+                      // Queue time not available in streaming response yet
+                    },
+                    ragContext: graphRAGMetadata ? {
+                      contextTokens: graphRAGMetadata.estimatedTokens,
+                      retrievalLatencyMs: graphRAGMetadata.metadata?.retrieval_time_ms,
+                    } : undefined,
                   });
                 }
               } catch (error) {
@@ -1897,6 +1923,15 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
                 latencyMs: streamLatencyMs,
                 ttftMs,
+                requestMetadata: capturedRequestMetadata,
+                performanceMetrics: {
+                  streamingEnabled: true,
+                  inferenceTimeMs: streamLatencyMs,
+                },
+                ragContext: graphRAGMetadata ? {
+                  contextTokens: graphRAGMetadata.estimatedTokens,
+                  retrievalLatencyMs: graphRAGMetadata.metadata?.retrieval_time_ms,
+                } : undefined,
               });
             }
 

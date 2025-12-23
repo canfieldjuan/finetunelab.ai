@@ -3,7 +3,7 @@
  * Centralizes trace completion logic to avoid duplication
  */
 
-import type { TraceContext } from '@/lib/tracing/types';
+import type { TraceContext, RequestMetadata, PerformanceMetrics } from '@/lib/tracing/types';
 import * as traceService from '@/lib/tracing/trace.service';
 
 interface TraceCompletionParams {
@@ -24,6 +24,14 @@ interface TraceCompletionParams {
   reasoning?: string;
   latencyMs?: number;
   ttftMs?: number;
+  requestMetadata?: RequestMetadata;
+  performanceMetrics?: PerformanceMetrics;
+  ragContext?: {
+    contextTokens?: number;
+    retrievalLatencyMs?: number;
+    chunkDeduplicationCount?: number;
+    cacheHitCount?: number;
+  };
 }
 
 /**
@@ -43,6 +51,9 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
     reasoning,
     latencyMs,
     ttftMs,
+    requestMetadata,
+    performanceMetrics,
+    ragContext,
   } = params;
 
   try {
@@ -131,6 +142,9 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
       ttftMs,
       inputData: llmInputData,
       outputData: llmOutputData,
+      requestMetadata,
+      performanceMetrics,
+      ragContext,
     });
 
     console.log(`[Trace] Completed trace ${traceContext.spanId} with full data`);

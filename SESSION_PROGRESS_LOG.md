@@ -8,7 +8,125 @@
 
 ## Session Timeline
 
-### **Phase 24: Security Hardening Kickoff** (Current)
+### **Phase 25: Trace Metadata Enhancement** (Current)
+**Started**: December 22, 2025  
+**User Request**: Extend trace system with richer request/performance/RAG/evaluation metadata  
+**Requirements**: Never assume—verify code in target files, identify exact insertion points, avoid breaking dependent modules, document work before implementation, validate changes before applying.
+
+#### **Current State Analysis** ✅
+
+**Verified Files & Insertion Points:**
+
+1. **`lib/tracing/trace.service.ts`** (459 lines)
+   - **Lines 200-250**: `endTrace()` function builds `traceUpdate` payload (line 200-220)
+   - **Current fields**: trace_id, span_id, duration_ms, tokens, cost_usd, ttft_ms, tokens_per_second, cache tokens, retry_count, retry_reason, error_category
+   - **Missing**: api_endpoint, api_base_url, request_headers_sanitized, provider_request_id, queue_time_ms, inference_time_ms, network_time_ms, streaming_enabled, chunk_usage, retrieval_latency_ms, context_tokens, groundedness_score, warning_flags
+   - **Insertion point**: After line 220 in `traceUpdate` object
+
+2. **`lib/tracing/types.ts`** (331 lines)
+   - **Lines 74-135**: `TraceResult` interface definition
+   - **Lines 155-195**: `TraceRecord` interface (DB mapping)
+   - **Lines 250-331**: Structured input/output types (LLMInputData, LLMOutputData, RAGOutputData)
+   - **Gap**: No `RequestMetadata`, `PerformanceMetrics`, `RagContextMetadata`, `EvaluationMetadata` interfaces
+   - **Insertion point**: After line 135 (after TraceResult) for new interfaces
+
+3. **`supabase/migrations/` (existing)**
+   - Latest trace migration: `20251220000004_add_advanced_performance_fields.sql`
+   - Fields already added: cache_creation_input_tokens, cache_read_input_tokens, retry_count, retry_reason, error_category
+   - **New migration needed**: `20251222_add_trace_request_metadata.sql`
+
+4. **`app/api/analytics/traces/list/route.ts`** (213 lines)
+   - **Line 57**: SELECT clause with current column list
+   - **Gap**: Missing new metadata columns
+   - **Insertion point**: Add new columns to SELECT at line 57
+
+5. **`app/api/chat/trace-completion-helper.ts`** (183 lines)
+   - **Lines 26-46**: `TraceCompletionParams` interface
+   - **Lines 122-170**: `endTrace()` calls with metadata
+   - **Gap**: No streaming_enabled, performance breakdown, retry_events
+   - **Insertion point**: Extend params interface at line 26
+
+6. **`lib/graphrag/graphiti/search-service.ts`** (292 lines)
+   - **Lines 70-95**: Already captures RAG metrics (context_chunks_used, retrieval_time_ms, avgConfidence)
+   - **Gap**: Missing chunk deduplication stats, reranking metrics, cache hits
+   - **Insertion point**: Extend outputData at line 80
+
+7. **`lib/llm/adapters/base-adapter.ts`** (178 lines)
+   - **Lines 23-36**: `AdapterResponse` interface with usage
+   - **Gap**: No request metadata capture (endpoint URL, headers, provider_request_id)
+   - **Insertion point**: Extend AdapterResponse after line 36
+
+8. **`lib/evaluation/validators/executor.ts`** & **`app/api/evaluation/judge/route.ts`**
+   - `saveJudgments()` at line 154 (executor.ts)
+   - `saveJudgmentsToDatabase()` at line 389 (judge/route.ts)
+   - **Gap**: Judgments not linked to trace_id in all cases
+   - **Needs verification**: Check if trace_id column exists in judgments table
+
+#### **Files That Will Be Affected by Changes**
+
+| File | Change Type | Risk Level |
+|------|------------|------------|
+| `lib/tracing/types.ts` | Add interfaces | LOW |
+| `lib/tracing/trace.service.ts` | Extend payload | LOW |
+| `supabase/migrations/*.sql` | Add columns | MEDIUM |
+| `app/api/analytics/traces/list/route.ts` | Extend SELECT | LOW |
+| `app/api/analytics/traces/route.ts` | Extend SELECT | LOW |
+| `components/analytics/TraceView.tsx` | Display new fields | LOW |
+| `components/analytics/TraceExplorer.tsx` | Filter on new fields | LOW |
+| `lib/export-unified/formatters/*.ts` | Export new fields | LOW |
+| `app/api/chat/trace-completion-helper.ts` | Pass new metadata | MEDIUM |
+| `app/api/chat/route.ts` | Capture streaming/perf | MEDIUM |
+| `lib/llm/adapters/*.ts` | Capture request metadata | MEDIUM |
+| `lib/graphrag/graphiti/search-service.ts` | Extend RAG metrics | LOW |
+| `app/api/evaluation/judge/route.ts` | Link trace_id | MEDIUM |
+
+#### **Phased Implementation Plan**
+
+**PHASE 1: Schema & Type Foundations** (No runtime impact)
+- Create `20251222_add_trace_request_metadata.sql` migration
+- Extend `lib/tracing/types.ts` with new interfaces
+- Extend `lib/tracing/trace.service.ts` payload handling
+- **Verification**: Run migration, verify columns exist, ensure backward compat
+
+**PHASE 2: Provider & Chat Instrumentation** (Gradual rollout)
+- Extend `AdapterResponse` in base-adapter.ts
+- Update OpenAI/Anthropic/HuggingFace adapters to capture request metadata
+- Update `trace-completion-helper.ts` to accept new params
+- Update `app/api/chat/route.ts` streaming logic for TTFT breakdown
+- **Verification**: Test chat flow, verify traces include new fields
+
+**PHASE 3: RAG / Context Metrics** (Isolated)
+- Extend `lib/graphrag/graphiti/search-service.ts` output
+- Add chunk deduplication/cache hit tracking
+- **Verification**: Test RAG queries, verify metrics in traces
+
+**PHASE 4: Evaluation & Session Linking** (Cross-cutting)
+- Update evaluation pipelines to link trace_id
+- Ensure session_id, message_position written to traces
+- Capture warning/fallback events
+- **Verification**: Run evaluations, verify trace linkage
+
+**PHASE 5: UI/Export Updates** (Consumer-side)
+- Update `TraceView.tsx` and `TraceExplorer.tsx` for new sections
+- Update export formatters for new columns
+- Update analytics API routes for new SELECT columns
+- **Verification**: Test UI rendering, export functionality
+
+**PHASE 6: Validation & Testing**
+- Add tests for new metadata insertion
+- Add tests for header masking
+- Update export tests
+- Performance regression testing
+- **Verification**: Full test suite pass
+
+#### **Next Steps** ⏳
+- Await user approval on this plan
+- Once approved, start Phase 1 with migration creation
+- Each phase requires verification before proceeding
+
+---
+
+### **Phase 24: Security Hardening Kickoff** (Historical)
 **Started**: December 18, 2025  
 **User Request**: "lets start systematically looking for security issues..."  
 **Requirements**: Never assume—verify code in target files, identify exact insertion points, avoid breaking dependent modules, document work before implementation.
