@@ -558,7 +558,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                       </div>
                     )}
                   </div>
-                  {selectedTrace.chunk_usage && (
+                  {selectedTrace.chunk_usage && typeof selectedTrace.chunk_usage === 'object' && Object.keys(selectedTrace.chunk_usage).length > 0 && (
                     <div className="p-3 border-t bg-gray-50/30">
                       <span className="text-[10px] text-gray-500 uppercase block mb-1">Chunk Usage</span>
                       <pre className="text-xs font-mono text-gray-800 overflow-x-auto">
@@ -570,7 +570,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
               )}
 
               {/* RAG Context */}
-              {(selectedTrace.context_tokens !== undefined || selectedTrace.retrieval_latency_ms !== undefined || selectedTrace.rag_graph_used || selectedTrace.rag_nodes_retrieved !== undefined) && (
+              {(selectedTrace.context_tokens !== undefined || selectedTrace.retrieval_latency_ms !== undefined || selectedTrace.rag_graph_used || selectedTrace.rag_nodes_retrieved !== undefined || selectedTrace.groundedness_score !== undefined) && (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-indigo-50 px-3 py-2 border-b flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -627,10 +627,50 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                         <span className="text-xs font-mono font-medium">{selectedTrace.rag_answer_grounded ? 'Yes' : 'No'}</span>
                       </div>
                     )}
+                    {selectedTrace.groundedness_score !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Groundedness</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.groundedness_score.toFixed(3)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
-              
+
+              {/* Quality & Warnings */}
+              {(selectedTrace.response_quality_breakdown || selectedTrace.warning_flags) && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-amber-50 px-3 py-2 border-b flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-3.5 w-3.5 text-amber-600" />
+                      <span className="text-xs font-semibold text-amber-900 uppercase tracking-wider">Quality & Warnings</span>
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    {selectedTrace.warning_flags && selectedTrace.warning_flags.length > 0 && (
+                      <div className="mb-3">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1.5">Warning Flags</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedTrace.warning_flags.map((flag, idx) => (
+                            <span key={idx} className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded border border-orange-200 font-mono">
+                              {flag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedTrace.response_quality_breakdown && typeof selectedTrace.response_quality_breakdown === 'object' && Object.keys(selectedTrace.response_quality_breakdown).length > 0 && (
+                      <div>
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">Quality Breakdown</span>
+                        <pre className="text-xs font-mono text-gray-800 overflow-x-auto bg-amber-50/30 p-2 rounded border border-amber-100">
+                          {JSON.stringify(selectedTrace.response_quality_breakdown, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Request Metadata */}
               {(selectedTrace.api_endpoint || selectedTrace.request_headers_sanitized) && (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm md:col-span-2">
