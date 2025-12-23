@@ -579,11 +579,19 @@ export class UnifiedLLMClient {
           }
         }
 
-        options.onMetadata({
+        const metadata = {
           apiEndpoint: url,
           providerRequestId: response.headers.get('x-request-id') || response.headers.get('x-amzn-requestid') || undefined,
           requestHeadersSanitized: sanitizedHeaders,
+        };
+
+        console.log('[UnifiedLLMClient] Capturing request metadata:', {
+          endpoint: metadata.apiEndpoint,
+          providerId: metadata.providerRequestId,
+          headerKeys: Object.keys(metadata.requestHeadersSanitized || {}),
         });
+
+        options.onMetadata(metadata);
       } catch (err) {
         console.error('[UnifiedLLMClient] Error capturing metadata:', err);
       }

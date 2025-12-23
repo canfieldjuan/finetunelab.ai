@@ -24,7 +24,7 @@ import { evaluateWithLLMJudge, shouldEvaluateMessage } from '@/lib/evaluation/ll
 import { calculateBasicQualityScore } from '@/lib/batch-testing/evaluation-integration';
 import crypto from 'crypto';
 import { traceService } from '@/lib/tracing/trace.service';
-import type { TraceContext } from '@/lib/tracing/types';
+import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
 import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
@@ -1720,7 +1720,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     temperature,
                     maxTokens,
                     userId: userId || undefined,
-                    onMetadata: (meta) => { capturedRequestMetadata = meta; }
+                    onMetadata: (meta) => {
+                      console.log('[Chat API] Received request metadata:', meta);
+                      capturedRequestMetadata = meta;
+                    }
                   }
                 )) {
                   if (!firstChunkReceived && chunk.length > 0) {
@@ -1890,6 +1893,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                       contextTokens: graphRAGMetadata.estimatedTokens,
                       retrievalLatencyMs: graphRAGMetadata.metadata?.retrieval_time_ms,
                     } : undefined,
+                  });
+
+                  console.log('[Chat API] Trace completed with metadata:', {
+                    hasRequestMetadata: !!capturedRequestMetadata,
+                    requestMetadata: capturedRequestMetadata,
+                    hasRAGContext: !!graphRAGMetadata,
                   });
                 }
               } catch (error) {
