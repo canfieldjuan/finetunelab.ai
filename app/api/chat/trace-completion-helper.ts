@@ -1,6 +1,8 @@
 /**
  * Helper function to complete LLM traces consistently
  * Centralizes trace completion logic to avoid duplication
+ *
+ * Updated: 2025-12-23 - Enhanced with messageId linkage for LLM judge
  */
 
 import type {
