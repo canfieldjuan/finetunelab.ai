@@ -15,6 +15,7 @@ interface TraceCompletionParams {
   traceContext: TraceContext;
   finalResponse: string;
   enhancedMessages: Array<{ role: string; content: string | unknown }>;
+  messageId?: string;
   tokenUsage?: {
     input_tokens: number;
     output_tokens: number;
@@ -42,6 +43,7 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
     traceContext,
     finalResponse,
     enhancedMessages,
+    messageId,
     tokenUsage,
     selectedModelId,
     temperature,
@@ -58,6 +60,12 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
 
   try {
     console.log(`[Trace Helper] Starting completeTraceWithFullData for ${traceContext.spanId}`);
+
+    // Update traceContext with message_id if provided
+    if (messageId) {
+      traceContext.messageId = messageId;
+      console.log(`[Trace Helper] Updated trace ${traceContext.spanId} with message_id: ${messageId}`);
+    }
 
     // Dynamic imports to avoid circular dependencies
     const { truncateString } = await import('@/lib/tracing/trace-utils');

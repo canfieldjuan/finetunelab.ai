@@ -1341,14 +1341,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
             // End trace with comprehensive data
             if (traceContext && assistantMsgData?.id) {
-              // Update traceContext with message_id so it gets saved in the trace
-              traceContext.messageId = assistantMsgData.id;
-              console.log(`[API] Updated trace ${traceContext.spanId} with message_id: ${assistantMsgData.id}`);
-
               await completeTraceWithFullData({
                 traceContext,
                 finalResponse,
                 enhancedMessages,
+                messageId: assistantMsgData.id,
                 tokenUsage: tokenUsage ?? undefined,
                 selectedModelId,
                 temperature,
@@ -1980,6 +1977,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     traceContext,
                     finalResponse: accumulatedResponse,
                     enhancedMessages,
+                    messageId: streamMsgData.id,
                     tokenUsage: estimatedInputTokens && estimatedOutputTokens ? {
                       input_tokens: estimatedInputTokens,
                       output_tokens: estimatedOutputTokens,
