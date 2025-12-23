@@ -245,6 +245,7 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       error_type: result.errorType || null,
       input_data: result.inputData || null,
       output_data: result.outputData || null,
+      reasoning: result.reasoning || null,
       metadata: result.metadata || null,
     };
 

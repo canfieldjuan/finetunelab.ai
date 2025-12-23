@@ -1,9 +1,28 @@
 import type { NextConfig } from 'next';
+import fs from 'fs';
+import path from 'path';
+import { config as loadEnv } from 'dotenv';
+
+const envCandidates = [
+  path.join(__dirname, '.env.local'),
+  path.join(__dirname, '.env'),
+  path.join(__dirname, '..', '.env.local'),
+  path.join(__dirname, '..', '.env'),
+];
+
+for (const envPath of envCandidates) {
+  if (fs.existsSync(envPath)) {
+    loadEnv({ path: envPath });
+    break;
+  }
+}
 
 const nextConfig: NextConfig = {
   // Tell Next.js to treat pdf-parse as external for server components
   // This prevents webpack from bundling it
   serverExternalPackages: ['pdf-parse'],
+
+  outputFileTracingRoot: path.join(__dirname),
 
   // Allow cross-origin requests from VM/Docker networks during development
   allowedDevOrigins: ['192.168.56.1', '192.168.1.19'],

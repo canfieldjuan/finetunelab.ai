@@ -30,8 +30,9 @@ function initializeStorage() {
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Get authorization header
     const authHeader = request.headers.get('authorization');
@@ -60,16 +61,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const exportId = params.id;
-
     console.log('[Delete API] Deleting export:', {
-      exportId,
+      exportId: id,
       userId: user.id,
     });
 
     // Get export info (this validates ownership via RLS)
     const service = getUnifiedExportService();
-    const exportInfo = await service.getExportInfo(exportId, user.id);
+    const exportInfo = await service.getExportInfo(id, user.id);
 
     if (!exportInfo) {
       return NextResponse.json({ error: 'Export not found' }, { status: 404 });
@@ -89,7 +88,7 @@ export async function DELETE(
     const { error: dbError } = await supabase
       .from('unified_exports')
       .delete()
-      .eq('id', exportId)
+      .eq('id', id)
       .eq('user_id', user.id);
 
     if (dbError) {
@@ -100,7 +99,7 @@ export async function DELETE(
       );
     }
 
-    console.log('[Delete API] Export deleted successfully:', exportId);
+    console.log('[Delete API] Export deleted successfully:', id);
 
     return NextResponse.json({
       success: true,

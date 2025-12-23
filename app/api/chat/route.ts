@@ -24,7 +24,7 @@ import { evaluateWithLLMJudge, shouldEvaluateMessage } from '@/lib/evaluation/ll
 import { calculateBasicQualityScore } from '@/lib/batch-testing/evaluation-integration';
 import crypto from 'crypto';
 import { traceService } from '@/lib/tracing/trace.service';
-import type { TraceContext } from '@/lib/tracing/types';
+import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
 import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
@@ -1878,6 +1878,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     maxTokens,
                     tools: toolsForTrace,
                     toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
+                    reasoning: undefined, // Reasoning not available in streaming mode
                     latencyMs: streamLatencyMs,
                     ttftMs,
                     requestMetadata: capturedRequestMetadata,
@@ -1921,6 +1922,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 maxTokens,
                 tools: toolsForTrace,
                 toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
+                reasoning: undefined, // Reasoning not available in streaming mode
                 latencyMs: streamLatencyMs,
                 ttftMs,
                 requestMetadata: capturedRequestMetadata,

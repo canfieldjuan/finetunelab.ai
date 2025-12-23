@@ -69,7 +69,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { STATUS } from '@/lib/constants';
 import type { TrainingJob } from '@/lib/hooks/useTrainingJobsRealtime';
 import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
@@ -79,16 +79,35 @@ interface ReconciledTrainingJob extends TrainingJob {
   _originalStatus?: string;
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase: SupabaseClient | null =
+  supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : null;
 
 export async function GET(request: NextRequest) {
   console.log('[Training Jobs API] GET request');
 
   try {
+    if (!supabase || !supabaseUrl || !supabaseServiceKey) {
+      console.error('[Training Jobs API] Supabase admin client is not configured.');
+      return NextResponse.json(
+        { error: 'Server not configured. Missing Supabase environment variables.' },
+        { status: 500 }
+      );
+    }
+
+    if (!supabaseAnonKey) {
+      console.error('[Training Jobs API] NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured.');
+      return NextResponse.json(
+        { error: 'Server not configured. Missing Supabase environment variables.' },
+        { status: 500 }
+      );
+    }
+
     let userId: string | null = null;
 
     // Try API key authentication first (for SDK access)

@@ -30,8 +30,9 @@ function initializeStorage() {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Get authorization header
     const authHeader = request.headers.get('authorization');
@@ -60,16 +61,14 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const exportId = params.id;
-
     console.log('[Download API] Downloading export:', {
-      exportId,
+      exportId: id,
       userId: user.id,
     });
 
     // Get export info
     const service = getUnifiedExportService();
-    const exportInfo = await service.getExportInfo(exportId, user.id);
+    const exportInfo = await service.getExportInfo(id, user.id);
 
     if (!exportInfo) {
       // Try fallback to old export tables (backward compatibility)
@@ -79,7 +78,7 @@ export async function GET(
       const { data: oldConvExport } = await supabase
         .from('conversation_exports')
         .select('*')
-        .eq('id', exportId)
+        .eq('id', id)
         .eq('user_id', user.id)
         .single();
 
@@ -97,7 +96,7 @@ export async function GET(
       const { data: oldAnalyticsExport } = await supabase
         .from('analytics_exports')
         .select('*')
-        .eq('id', exportId)
+        .eq('id', id)
         .eq('user_id', user.id)
         .single();
 
@@ -145,10 +144,10 @@ export async function GET(
     const fileContent = await storage.getExport(exportInfo.filePath);
 
     // Increment download count
-    await service.incrementDownloadCount(exportId, user.id);
+    await service.incrementDownloadCount(id, user.id);
 
     console.log('[Download API] Export downloaded:', {
-      exportId,
+      exportId: id,
       fileName: exportInfo.fileName,
       fileSize: exportInfo.fileSize,
       downloadCount: exportInfo.downloadCount + 1,
@@ -168,7 +167,7 @@ export async function GET(
         'Content-Disposition': `attachment; filename="${exportInfo.fileName}"`,
         'Content-Length': exportInfo.fileSize.toString(),
         'Cache-Control': 'private, max-age=3600', // Cache for 1 hour
-        'X-Export-ID': exportId,
+        'X-Export-ID': id,
         'X-Export-Type': exportInfo.exportType,
         'X-Export-Format': exportInfo.format,
       },

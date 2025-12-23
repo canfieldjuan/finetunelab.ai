@@ -142,6 +142,7 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
       ttftMs,
       inputData: llmInputData,
       outputData: llmOutputData,
+      reasoning,
       requestMetadata,
       performanceMetrics,
       ragContext,

@@ -67,6 +67,7 @@ export interface Trace {
   groundedness_score?: number;
   response_quality_breakdown?: Record<string, unknown>;
   warning_flags?: string[];
+  reasoning?: string;
 }
 
 interface TraceViewProps {
@@ -439,8 +440,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                 )}
                 {selectedTrace.retry_count != null && selectedTrace.retry_count > 0 && (
                    <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 rounded border border-orange-100 text-xs">
-                      <span className="font-bold">🔄 {selectedTrace.retry_count}x</span>
-                      <span>Retries</span>
+                      <span className="font-bold">{selectedTrace.retry_count}x Retries</span>
                    </div>
                 )}
              </div>
@@ -474,10 +474,10 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
           ) : null}
 
           {/* Technical Details & Metadata */}
-          {(selectedTrace.api_endpoint || selectedTrace.request_headers_sanitized || selectedTrace.queue_time_ms || selectedTrace.context_tokens || selectedTrace.retrieval_latency_ms) && (
+          {(selectedTrace.api_endpoint || selectedTrace.queue_time_ms || selectedTrace.context_tokens) && (
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Performance Metrics */}
-              {(selectedTrace.queue_time_ms !== undefined || selectedTrace.inference_time_ms !== undefined || selectedTrace.chunk_usage) && (
+              {(selectedTrace.queue_time_ms !== undefined || selectedTrace.inference_time_ms !== undefined || !!selectedTrace.chunk_usage) && (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-blue-50 px-3 py-2 border-b flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -511,7 +511,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                       </div>
                     )}
                   </div>
-                  {selectedTrace.chunk_usage && (
+                  {!!selectedTrace.chunk_usage && (
                     <div className="p-3 border-t bg-gray-50/30">
                       <span className="text-[10px] text-gray-500 uppercase block mb-1">Chunk Usage</span>
                       <pre className="text-xs font-mono text-gray-800 overflow-x-auto">
@@ -548,7 +548,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
               )}
               
               {/* Request Metadata */}
-              {(selectedTrace.api_endpoint || selectedTrace.request_headers_sanitized) && (
+              {(selectedTrace.api_endpoint || !!selectedTrace.request_headers_sanitized) && (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm md:col-span-2">
                   <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Request Metadata</span>
@@ -566,7 +566,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                         <span className="text-xs font-mono font-medium">{selectedTrace.provider_request_id}</span>
                       </div>
                     )}
-                    {selectedTrace.request_headers_sanitized && (
+                    {!!selectedTrace.request_headers_sanitized && (
                       <div className="mt-2">
                         <span className="text-[10px] text-gray-500 uppercase block mb-1">Headers</span>
                         <pre className="p-2 text-xs bg-gray-50 rounded border overflow-x-auto font-mono text-gray-800">
@@ -580,10 +580,30 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
             </div>
           )}
 
+          {/* Reasoning/Thinking Section */}
+          {selectedTrace.reasoning && (
+            <div className="mt-4 border rounded-lg overflow-hidden bg-white shadow-sm">
+              <div className="bg-purple-50 px-3 py-2 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-3.5 w-3.5 text-purple-600" />
+                  <span className="text-xs font-semibold text-purple-900 uppercase tracking-wider">Extended Thinking</span>
+                </div>
+                <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                  {selectedTrace.reasoning.length} chars
+                </span>
+              </div>
+              <div className="p-3">
+                <pre className="text-xs bg-purple-50/30 p-3 rounded border border-purple-100 overflow-x-auto max-h-[400px] overflow-y-auto font-mono text-gray-800 whitespace-pre-wrap">
+                  {selectedTrace.reasoning}
+                </pre>
+              </div>
+            </div>
+          )}
+
           {/* Input/Output Data */}
-          {(selectedTrace.input_data || selectedTrace.output_data) && (
+          {(!!selectedTrace.input_data || !!selectedTrace.output_data) && (
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {selectedTrace.input_data && (
+              {!!selectedTrace.input_data && (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Input Data</span>
@@ -597,7 +617,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                 </div>
               )}
 
-              {selectedTrace.output_data && (
+              {!!selectedTrace.output_data && (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Output Data</span>

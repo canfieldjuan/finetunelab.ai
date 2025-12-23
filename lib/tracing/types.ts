@@ -122,6 +122,9 @@ export interface TraceResult {
   /** Output data (will be stored as JSONB, be mindful of size) */
   outputData?: unknown;
 
+  /** Reasoning/thinking from extended thinking mode (Claude, Qwen, etc.) */
+  reasoning?: string;
+
   /** Error message if status is 'failed' */
   errorMessage?: string;
 

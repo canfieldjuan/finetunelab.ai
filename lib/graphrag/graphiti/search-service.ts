@@ -107,8 +107,8 @@ export class SearchService {
             retrievalLatencyMs: queryTime,
             chunkDeduplicationCount: 0, // Graphiti handles deduplication internally
             cacheHitCount: 0, // No caching layer yet
-          }
-        });
+          },
+          metadata: {
             userId,
             queryTimeMs: queryTime,
             sourcesCount: sources.length,
