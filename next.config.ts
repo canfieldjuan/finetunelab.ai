@@ -29,7 +29,52 @@ const nextConfig: NextConfig = {
     productionBrowserSourceMaps: false,
   }),
 
+  // Production build memory optimizations
+  ...(process.env.NODE_ENV === 'production' && {
+    // Disable source maps in production to save memory
+    productionBrowserSourceMaps: false,
+
+    // Reduce build parallelism to save memory
+    experimental: {
+      ...((process.env.NODE_ENV === 'production') && {
+        workerThreads: false,
+        cpus: 1,
+      }),
+    },
+  }),
+
   webpack: (config, { isServer, dev, dir }) => {
+    // Production build memory optimizations
+    if (!dev) {
+      // Reduce memory usage during production builds
+      config.optimization = {
+        ...config.optimization,
+        minimize: true,
+        // Use single-threaded minification to save memory
+        minimizer: config.optimization.minimizer,
+        // Reduce chunk splitting complexity
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            default: false,
+            vendors: false,
+            // Simplified chunking strategy
+            commons: {
+              name: 'commons',
+              chunks: 'all',
+              minChunks: 2,
+              priority: 10,
+            },
+          },
+        },
+      };
+
+      // Disable performance hints to reduce memory overhead
+      config.performance = {
+        hints: false,
+      };
+    }
+
     // Optimize file watching in development to prevent "too many open files" error
     if (dev) {
       const projectRoot = dir || process.cwd();

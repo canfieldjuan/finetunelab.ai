@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next dev -p 3000",
-    "build": "next build",
+    "build": "cross-env NODE_OPTIONS='--max-old-space-size=4096' next build",
+    "build:low-mem": "cross-env NODE_OPTIONS='--max-old-space-size=2048 --max-semi-space-size=128' next build",
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
@@ -24,7 +25,9 @@
     "generate:sdk": "npm run generate:openapi && openapi-typescript-codegen --input public/openapi.json --output sdk/typescript --client fetch",
     "generate:sdk:python": "npm run generate:openapi && openapi-generator-cli generate -i public/openapi.json -g python -o sdk/python",
     "scheduler:start": "npx tsx scripts/start-scheduler-worker.ts",
-    "scheduler:check": "npx tsx scripts/check-schedules-once.ts"
+    "scheduler:check": "npx tsx scripts/check-schedules-once.ts",
+    "review:ai": "npx tsx scripts/ollama-code-review.ts",
+    "review:cloud": "npx tsx scripts/replicate-code-review.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
