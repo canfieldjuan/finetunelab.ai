@@ -651,30 +651,48 @@ async function processBackgroundBatch(
 
   console.log('[Background Batch] Created conversation:', conversation.id);
 
-  // Fetch all enabled tools (tools are global, not user-specific)
-  console.log('[Background Batch] Fetching enabled tools');
-  const { data: userTools, error: toolsError } = await supabaseAdmin
-    .from('tools')
-    .select('*')
-    .eq('is_enabled', true)
-    .order('name');
+  // Fetch model configuration to check provider
+  const { data: modelConfig } = await supabaseAdmin
+    .from('llm_models')
+    .select('provider')
+    .eq('id', config.model_name)
+    .single();
 
-  if (toolsError) {
-    console.error('[Background Batch] Error fetching tools:', toolsError);
-    // Continue without tools rather than failing the entire batch
-  }
+  const modelProvider = modelConfig?.provider;
+  console.log('[Background Batch] Model provider:', modelProvider);
 
-  // Convert tools to API format
-  const tools = userTools?.map((tool) => ({
-    type: 'function' as const,
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters as Record<string, unknown>
+  // Only fetch tools for providers that support function calling via their API
+  // HuggingFace Inference API doesn't support OpenAI-style function calling
+  const providerSupportsTools = modelProvider && !['huggingface', 'replicate'].includes(modelProvider.toLowerCase());
+
+  let tools: any[] = [];
+  if (providerSupportsTools) {
+    console.log('[Background Batch] Fetching enabled tools (provider supports function calling)');
+    const { data: userTools, error: toolsError } = await supabaseAdmin
+      .from('tools')
+      .select('*')
+      .eq('is_enabled', true)
+      .order('name');
+
+    if (toolsError) {
+      console.error('[Background Batch] Error fetching tools:', toolsError);
+      // Continue without tools rather than failing the entire batch
     }
-  })) || [];
 
-  console.log('[Background Batch] Loaded tools:', tools.map(t => t.function.name).join(', '));
+    // Convert tools to API format
+    tools = userTools?.map((tool) => ({
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters as Record<string, unknown>
+      }
+    })) || [];
+
+    console.log('[Background Batch] Loaded tools:', tools.map(t => t.function.name).join(', '));
+  } else {
+    console.log('[Background Batch] Skipping tools (provider does not support function calling via API)');
+  }
 
   // Auto-generate session tag for batch test
   if (config.model_name) {
