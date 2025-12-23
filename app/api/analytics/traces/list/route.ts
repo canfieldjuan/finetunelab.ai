@@ -141,11 +141,27 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
   const traceIds = traces.map(t => t.trace_id);
   const messageIds = traces.map(t => t.message_id).filter(Boolean);
 
+  console.log('[Traces List] enrichTracesWithQuality - traceIds:', traceIds.length, 'messageIds:', messageIds.length);
+
   // Fetch quality metrics from judgments (by both trace_id and message_id)
-  const { data: judgments } = await supabase
+  let judgmentsQuery = supabase
     .from('judgments')
-    .select('trace_id, message_id, criterion, score, passed, judge_type')
-    .or(`trace_id.in.(${traceIds.join(',')}),message_id.in.(${messageIds.join(',')})`)
+    .select('trace_id, message_id, criterion, score, passed, judge_type');
+
+  // Build OR condition based on what we have
+  if (messageIds.length > 0) {
+    judgmentsQuery = judgmentsQuery.or(`trace_id.in.(${traceIds.join(',')}),message_id.in.(${messageIds.join(',')})`);
+  } else {
+    judgmentsQuery = judgmentsQuery.in('trace_id', traceIds);
+  }
+
+  const { data: judgments, error: judgmentsError } = await judgmentsQuery;
+
+  if (judgmentsError) {
+    console.error('[Traces List] Error fetching judgments:', judgmentsError);
+  }
+
+  console.log('[Traces List] Found judgments:', judgments?.length || 0, judgments);
 
   // Fetch user ratings from message_evaluations
   const { data: evaluations } = await supabase
@@ -160,6 +176,7 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
 
   // Process judgments
   if (judgments) {
+    console.log('[Traces List] Processing', judgments.length, 'judgments');
     for (const j of judgments) {
       // Match judgment to trace by trace_id or message_id
       const matchingTrace = traces.find(t =>
@@ -167,7 +184,14 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
         (j.message_id && t.message_id === j.message_id)
       );
 
-      if (!matchingTrace) continue;
+      if (!matchingTrace) {
+        console.log('[Traces List] No matching trace for judgment:', {
+          criterion: j.criterion,
+          trace_id: j.trace_id,
+          message_id: j.message_id
+        });
+        continue;
+      }
 
       const traceId = matchingTrace.trace_id;
 
@@ -181,6 +205,7 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
         passed: j.passed,
         judge_type: j.judge_type
       });
+      console.log('[Traces List] Matched judgment to trace:', traceId, j.criterion, j.judge_type);
 
       // Aggregate scores
       if (!qualityMap.has(traceId)) {
@@ -210,7 +235,7 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
   }
 
   // Merge quality data into traces
-  return traces.map(trace => {
+  const enrichedTraces = traces.map(trace => {
     const quality = qualityMap.get(trace.trace_id);
     const evaluation = evaluationMap.get(trace.trace_id);
     const traceJudgments = judgmentsMap.get(trace.trace_id);
@@ -234,8 +259,12 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
     // Attach individual judgments for display in UI
     if (traceJudgments && traceJudgments.length > 0) {
       enriched.judgments = traceJudgments;
+      console.log('[Traces List] Attached', traceJudgments.length, 'judgments to trace:', trace.trace_id);
     }
 
     return enriched;
   });
+
+  console.log('[Traces List] Final enrichment: judgmentsMap size:', judgmentsMap.size);
+  return enrichedTraces;
 }
