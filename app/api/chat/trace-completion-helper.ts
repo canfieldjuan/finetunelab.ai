@@ -22,6 +22,7 @@ interface TraceCompletionParams {
   tools?: Array<{ function: { name: string; description?: string } }>;
   toolsCalled?: Array<{ name: string; success: boolean }>;
   reasoning?: string;
+  messageId?: string;
   latencyMs?: number;
   ttftMs?: number;
   requestMetadata?: RequestMetadata;
@@ -49,6 +50,7 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
     tools,
     toolsCalled,
     reasoning,
+    messageId,
     latencyMs,
     ttftMs,
     requestMetadata,
@@ -127,6 +129,11 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
     let tokensPerSecond: number | undefined;
     if (tokenUsage?.output_tokens && latencyMs && latencyMs > 0) {
       tokensPerSecond = (tokenUsage.output_tokens / latencyMs) * 1000;
+    }
+
+    // Update trace context with message ID if provided (crucial for linking judgments)
+    if (messageId) {
+      traceContext.messageId = messageId;
     }
 
     // End trace with full data

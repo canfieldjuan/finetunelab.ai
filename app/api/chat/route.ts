@@ -1282,6 +1282,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 tools: toolsForTrace,
                 toolsCalled: toolsCalled ?? undefined,
                 reasoning,
+                messageId: assistantMsgData.id,
                 latencyMs: latency_ms,
                 requestMetadata,
                 ragContext: graphRAGMetadata ? {
@@ -1879,6 +1880,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     tools: toolsForTrace,
                     toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
                     reasoning: undefined, // Reasoning not available in streaming mode
+                    messageId: streamMsgData.id,
                     latencyMs: streamLatencyMs,
                     ttftMs,
                     requestMetadata: capturedRequestMetadata,
