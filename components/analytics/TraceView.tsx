@@ -570,7 +570,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
               )}
 
               {/* RAG Context */}
-              {(selectedTrace.context_tokens !== undefined || selectedTrace.retrieval_latency_ms !== undefined || selectedTrace.rag_graph_used || selectedTrace.rag_nodes_retrieved !== undefined || selectedTrace.groundedness_score !== undefined) && (
+              {(selectedTrace.context_tokens !== undefined || selectedTrace.retrieval_latency_ms !== undefined || selectedTrace.rag_graph_used || selectedTrace.rag_nodes_retrieved !== undefined || selectedTrace.groundedness_score != null) && (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-indigo-50 px-3 py-2 border-b flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -627,7 +627,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                         <span className="text-xs font-mono font-medium">{selectedTrace.rag_answer_grounded ? 'Yes' : 'No'}</span>
                       </div>
                     )}
-                    {selectedTrace.groundedness_score !== undefined && (
+                    {selectedTrace.groundedness_score != null && (
                       <div className="flex flex-col">
                         <span className="text-[10px] text-gray-500 uppercase">Groundedness</span>
                         <span className="text-xs font-mono font-medium">{selectedTrace.groundedness_score.toFixed(3)}</span>
