@@ -139,12 +139,13 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
   if (!traces || traces.length === 0) return traces;
 
   const traceIds = traces.map(t => t.trace_id);
+  const messageIds = traces.map(t => t.message_id).filter(Boolean);
 
-  // Fetch quality metrics from judgments
+  // Fetch quality metrics from judgments (by both trace_id and message_id)
   const { data: judgments } = await supabase
     .from('judgments')
-    .select('trace_id, criterion, score, passed, judge_type')
-    .in('trace_id', traceIds);
+    .select('trace_id, message_id, criterion, score, passed, judge_type')
+    .or(`trace_id.in.(${traceIds.join(',')}),message_id.in.(${messageIds.join(',')})`)
 
   // Fetch user ratings from message_evaluations
   const { data: evaluations } = await supabase
@@ -160,13 +161,21 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
   // Process judgments
   if (judgments) {
     for (const j of judgments) {
-      if (!j.trace_id) continue;
+      // Match judgment to trace by trace_id or message_id
+      const matchingTrace = traces.find(t =>
+        (j.trace_id && t.trace_id === j.trace_id) ||
+        (j.message_id && t.message_id === j.message_id)
+      );
+
+      if (!matchingTrace) continue;
+
+      const traceId = matchingTrace.trace_id;
 
       // Store individual judgments for display
-      if (!judgmentsMap.has(j.trace_id)) {
-        judgmentsMap.set(j.trace_id, []);
+      if (!judgmentsMap.has(traceId)) {
+        judgmentsMap.set(traceId, []);
       }
-      judgmentsMap.get(j.trace_id).push({
+      judgmentsMap.get(traceId).push({
         criterion: j.criterion,
         score: j.score,
         passed: j.passed,
@@ -174,14 +183,14 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
       });
 
       // Aggregate scores
-      if (!qualityMap.has(j.trace_id)) {
-        qualityMap.set(j.trace_id, {
+      if (!qualityMap.has(traceId)) {
+        qualityMap.set(traceId, {
           scores: [],
           passed: 0,
           total: 0,
         });
       }
-      const metrics = qualityMap.get(j.trace_id);
+      const metrics = qualityMap.get(traceId);
       metrics.scores.push(j.score || 0);
       metrics.total++;
       if (j.passed) metrics.passed++;
