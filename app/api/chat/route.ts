@@ -1341,6 +1341,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
             // End trace with comprehensive data
             if (traceContext && assistantMsgData?.id) {
+              // Update traceContext with message_id so it gets saved in the trace
+              traceContext.messageId = assistantMsgData.id;
+              console.log(`[API] Updated trace ${traceContext.spanId} with message_id: ${assistantMsgData.id}`);
+
               await completeTraceWithFullData({
                 traceContext,
                 finalResponse,
