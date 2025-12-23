@@ -119,7 +119,7 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
                           judgeModel === 'claude-sonnet-4-5-20250929' ? 0.008 :
                           0.001; // claude-haiku-4-5-20251001
 
-    const criteriaMultiplier = judgeCriteria.length / 5; // Base is 5 criteria
+    const criteriaMultiplier = judgeCriteria.length / 6; // Base is 6 criteria (including groundedness)
     return promptLimit * costPerMessage * criteriaMultiplier;
   }
 
@@ -855,7 +855,7 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
                 <div className="space-y-2">
                   <Label className="text-sm">Evaluation Criteria</Label>
                   <div className="grid grid-cols-2 gap-2">
-                    {['helpfulness', 'accuracy', 'clarity', 'safety', 'completeness'].map(criterion => (
+                    {['helpfulness', 'accuracy', 'clarity', 'safety', 'completeness', 'groundedness'].map(criterion => (
                       <div key={criterion} className="flex items-center gap-2">
                         <input
                           type="checkbox"
