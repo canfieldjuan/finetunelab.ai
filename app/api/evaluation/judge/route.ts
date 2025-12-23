@@ -389,21 +389,32 @@ function prepareCriteria(
 async function saveJudgmentsToDatabase(supabase: SupabaseClient, judgments: LLMJudgmentResult[]) {
   const uniqueMessageIds = Array.from(new Set(judgments.map(j => j.message_id)));
 
+  console.log('[EvaluationJudge] saveJudgmentsToDatabase - Looking up trace_ids for message_ids:', uniqueMessageIds);
+
   // Fetch trace IDs for these messages to link judgments
-  const { data: traces } = await supabase
+  const { data: traces, error: tracesError } = await supabase
     .from('llm_traces')
     .select('message_id, trace_id')
     .in('message_id', uniqueMessageIds)
     .order('created_at', { ascending: false });
+
+  if (tracesError) {
+    console.error('[EvaluationJudge] Error fetching traces:', tracesError);
+  }
+
+  console.log('[EvaluationJudge] Found traces:', traces?.length || 0, traces);
 
   const messageToTraceMap = new Map<string, string>();
   if (traces) {
     for (const trace of traces) {
       if (trace.message_id && !messageToTraceMap.has(trace.message_id)) {
         messageToTraceMap.set(trace.message_id, trace.trace_id);
+        console.log('[EvaluationJudge] Mapped message_id:', trace.message_id, '-> trace_id:', trace.trace_id);
       }
     }
   }
+
+  console.log('[EvaluationJudge] Final messageToTraceMap size:', messageToTraceMap.size);
 
   const records = judgments.map((judgment) => ({
     message_id: judgment.message_id,
@@ -423,6 +434,13 @@ async function saveJudgmentsToDatabase(supabase: SupabaseClient, judgments: LLMJ
     },
     notes: `AI evaluation: ${judgment.score}/10 (${(judgment.confidence * 100).toFixed(0)}% confidence)`,
   }));
+
+  console.log('[EvaluationJudge] Inserting judgment records:', records.map(r => ({
+    message_id: r.message_id,
+    trace_id: r.trace_id,
+    criterion: r.criterion,
+    score: r.score
+  })));
 
   const { error } = await supabase.from('judgments').insert(records);
 
