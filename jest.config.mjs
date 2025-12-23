@@ -11,6 +11,17 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/worktrees/',
+    // Skip llama.cpp subdirectory (embedded project with own test setup)
+    '/lib/training/llama.cpp/',
+    // Skip E2E and integration tests that require running server/Supabase
+    ...(!process.env.RUN_INTEGRATION_TESTS ? [
+      '/__tests__/integration/',
+      '/tests/integration/',
+    ] : []),
+  ],
   globals: {
     fetch: global.fetch,
   },

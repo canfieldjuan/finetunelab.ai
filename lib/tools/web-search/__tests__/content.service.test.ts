@@ -22,12 +22,12 @@ describe('ContentService Integration Test', () => {
 
   it('should handle fetch errors gracefully and return an empty string', async () => {
     const invalidUrl = 'https://invalid-url-for-testing.xyz';
-    
+
     console.log(`[Test] Testing error handling for: ${invalidUrl}`);
     const content = await contentService.fetchAndClean(invalidUrl);
     console.log(`[Test] Completed error handling test. Content: "${content}"`);
 
     // Verification
     expect(content).toBe('');
-  }, 15000); // Increase timeout to 15 seconds for network error handling
+  }, 30000); // Increase timeout to 30 seconds for network error handling
 });
