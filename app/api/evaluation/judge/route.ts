@@ -389,6 +389,7 @@ function prepareCriteria(
 async function saveJudgmentsToDatabase(supabase: SupabaseClient, judgments: LLMJudgmentResult[]) {
   const uniqueMessageIds = Array.from(new Set(judgments.map(j => j.message_id)));
 
+  // Fetch trace IDs for these messages to link judgments
   const { data: traces } = await supabase
     .from('llm_traces')
     .select('message_id, trace_id')
@@ -428,6 +429,43 @@ async function saveJudgmentsToDatabase(supabase: SupabaseClient, judgments: LLMJ
   if (error) {
     console.error('[EvaluationJudge] Failed to save judgments:', error);
     throw new Error(`Database save failed: ${error.message}`);
+  }
+
+  // Update trace with evaluation summary if trace_id exists
+  const traceUpdates = new Map<string, { groundedness: number[], quality: number[] }>();
+  
+  for (const record of records) {
+    if (!record.trace_id) continue;
+    
+    if (!traceUpdates.has(record.trace_id)) {
+      traceUpdates.set(record.trace_id, { groundedness: [], quality: [] });
+    }
+    
+    const update = traceUpdates.get(record.trace_id)!;
+    
+    if (record.criterion === 'groundedness') {
+      update.groundedness.push(record.score);
+    } else {
+      update.quality.push(record.score);
+    }
+  }
+
+  // Apply updates to traces (fire and forget)
+  for (const [traceId, scores] of traceUpdates.entries()) {
+    const updates: Record<string, unknown> = {};
+    
+    if (scores.groundedness.length > 0) {
+      const avg = scores.groundedness.reduce((a, b) => a + b, 0) / scores.groundedness.length;
+      updates.groundedness_score = avg;
+    }
+    
+    // We could also update response_quality_breakdown here if needed
+    
+    if (Object.keys(updates).length > 0) {
+      supabase.from('llm_traces').update(updates).eq('trace_id', traceId).then(({ error }) => {
+        if (error) console.error(`[EvaluationJudge] Failed to update trace ${traceId}:`, error);
+      });
+    }
   }
 
   console.log('[EvaluationJudge] Saved', records.length, 'judgments to database');

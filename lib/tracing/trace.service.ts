@@ -218,6 +218,29 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       retry_count: result.retryCount || null,
       retry_reason: result.retryReason || null,
       error_category: result.errorCategory || null,
+      
+      // Request Metadata
+      api_endpoint: result.requestMetadata?.apiEndpoint || null,
+      api_base_url: result.requestMetadata?.apiBaseUrl || null,
+      request_headers_sanitized: result.requestMetadata?.requestHeadersSanitized || null,
+      provider_request_id: result.requestMetadata?.providerRequestId || null,
+
+      // Performance Metrics
+      queue_time_ms: result.performanceMetrics?.queueTimeMs || null,
+      inference_time_ms: result.performanceMetrics?.inferenceTimeMs || null,
+      network_time_ms: result.performanceMetrics?.networkTimeMs || null,
+      streaming_enabled: result.performanceMetrics?.streamingEnabled || false,
+      chunk_usage: result.performanceMetrics?.chunkUsage || null,
+
+      // RAG Metrics
+      context_tokens: result.ragContext?.contextTokens || null,
+      retrieval_latency_ms: result.ragContext?.retrievalLatencyMs || null,
+
+      // Evaluation Metrics
+      groundedness_score: result.evaluation?.groundednessScore || null,
+      response_quality_breakdown: result.evaluation?.responseQualityBreakdown || null,
+      warning_flags: result.evaluation?.warningFlags || null,
+
       error_message: result.errorMessage || null,
       error_type: result.errorType || null,
       input_data: result.inputData || null,

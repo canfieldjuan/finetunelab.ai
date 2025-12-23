@@ -94,12 +94,21 @@ export class SearchService {
           avgConfidence: avgRelevance,
         };
 
+        // Calculate context tokens (approximate)
+        const contextTokens = context.length / 4;
+
         await traceService.endTrace(retrievalContext, {
           endTime: new Date(),
           status: 'completed',
           inputData,
           outputData,
-          metadata: {
+          ragContext: {
+            contextTokens: Math.ceil(contextTokens),
+            retrievalLatencyMs: queryTime,
+            chunkDeduplicationCount: 0, // Graphiti handles deduplication internally
+            cacheHitCount: 0, // No caching layer yet
+          }
+        });
             userId,
             queryTimeMs: queryTime,
             sourcesCount: sources.length,

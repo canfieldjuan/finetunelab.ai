@@ -53,6 +53,20 @@ export interface Trace {
   }>;
   user_rating?: number;
   user_notes?: string;
+  api_endpoint?: string;
+  api_base_url?: string;
+  request_headers_sanitized?: Record<string, unknown>;
+  provider_request_id?: string;
+  queue_time_ms?: number;
+  inference_time_ms?: number;
+  network_time_ms?: number;
+  streaming_enabled?: boolean;
+  chunk_usage?: Record<string, unknown>;
+  context_tokens?: number;
+  retrieval_latency_ms?: number;
+  groundedness_score?: number;
+  response_quality_breakdown?: Record<string, unknown>;
+  warning_flags?: string[];
 }
 
 interface TraceViewProps {
@@ -458,6 +472,113 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
               </div>
             </div>
           ) : null}
+
+          {/* Technical Details & Metadata */}
+          {(selectedTrace.api_endpoint || selectedTrace.request_headers_sanitized || selectedTrace.queue_time_ms || selectedTrace.context_tokens || selectedTrace.retrieval_latency_ms) && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Performance Metrics */}
+              {(selectedTrace.queue_time_ms !== undefined || selectedTrace.inference_time_ms !== undefined || selectedTrace.chunk_usage) && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-blue-50 px-3 py-2 border-b flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-3.5 w-3.5 text-blue-600" />
+                      <span className="text-xs font-semibold text-blue-900 uppercase tracking-wider">Performance Metrics</span>
+                    </div>
+                  </div>
+                  <div className="p-3 grid grid-cols-2 gap-2">
+                    {selectedTrace.queue_time_ms !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Queue Time</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.queue_time_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.inference_time_ms !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Inference Time</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.inference_time_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.network_time_ms !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Network Time</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.network_time_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.streaming_enabled !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Streaming</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.streaming_enabled ? 'Enabled' : 'Disabled'}</span>
+                      </div>
+                    )}
+                  </div>
+                  {selectedTrace.chunk_usage && (
+                    <div className="p-3 border-t bg-gray-50/30">
+                      <span className="text-[10px] text-gray-500 uppercase block mb-1">Chunk Usage</span>
+                      <pre className="text-xs font-mono text-gray-800 overflow-x-auto">
+                        {JSON.stringify(selectedTrace.chunk_usage, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* RAG Context */}
+              {(selectedTrace.context_tokens !== undefined || selectedTrace.retrieval_latency_ms !== undefined) && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-indigo-50 px-3 py-2 border-b flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-3.5 w-3.5 text-indigo-600" />
+                      <span className="text-xs font-semibold text-indigo-900 uppercase tracking-wider">RAG Context</span>
+                    </div>
+                    {selectedTrace.context_tokens && (
+                      <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
+                        {selectedTrace.context_tokens} tokens
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-3 grid grid-cols-2 gap-2">
+                     {selectedTrace.retrieval_latency_ms !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Retrieval Latency</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.retrieval_latency_ms}ms</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Request Metadata */}
+              {(selectedTrace.api_endpoint || selectedTrace.request_headers_sanitized) && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm md:col-span-2">
+                  <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Request Metadata</span>
+                  </div>
+                  <div className="p-3 grid grid-cols-1 gap-2">
+                    {selectedTrace.api_endpoint && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">API Endpoint</span>
+                        <span className="text-xs font-mono font-medium break-all">{selectedTrace.api_endpoint}</span>
+                      </div>
+                    )}
+                    {selectedTrace.provider_request_id && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Provider Request ID</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.provider_request_id}</span>
+                      </div>
+                    )}
+                    {selectedTrace.request_headers_sanitized && (
+                      <div className="mt-2">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">Headers</span>
+                        <pre className="p-2 text-xs bg-gray-50 rounded border overflow-x-auto font-mono text-gray-800">
+                          {JSON.stringify(selectedTrace.request_headers_sanitized, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Input/Output Data */}
           {(selectedTrace.input_data || selectedTrace.output_data) && (

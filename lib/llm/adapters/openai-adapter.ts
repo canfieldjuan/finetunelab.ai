@@ -205,10 +205,18 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       toolCallCount: toolCalls?.length || 0,
     });
 
+    // Capture request metadata
+    const requestMetadata = {
+      apiEndpoint: response.url,
+      providerRequestId: response.headers.get('x-request-id') || response.headers.get('x-amzn-requestid') || undefined,
+      requestHeadersSanitized: undefined, // Headers not available in response object
+    };
+
     return {
       content,
       usage,
       toolCalls,
+      requestMetadata,
     };
   }
 
