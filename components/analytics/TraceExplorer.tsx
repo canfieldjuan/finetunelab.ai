@@ -30,6 +30,7 @@ interface TraceListItem {
   conversation_id?: string;
   message_id?: string;
   session_tag?: string;
+  environment?: string;
   error_message?: string;
   input_tokens?: number;
   output_tokens?: number;
@@ -58,7 +59,7 @@ export function TraceExplorer() {
   const [operationFilter, setOperationFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [providerFilter, setProviderFilter] = useState<string>('all');
-  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('7d');
+  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('30d');
   
   // Advanced filters
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -74,7 +75,7 @@ export function TraceExplorer() {
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize] = useState(100);
   const [totalCount, setTotalCount] = useState(0);
 
   // Fetch traces list
@@ -132,8 +133,15 @@ export function TraceExplorer() {
         sampleTrace: data.traces?.[0]
       });
       
+      // Map metadata to top-level fields
+      const mappedTraces = (data.traces || []).map((t: any) => ({
+        ...t,
+        session_tag: t.metadata?.tags?.[0] || t.metadata?.session_id,
+        environment: t.metadata?.environment
+      }));
+      
       // Apply client-side advanced filters
-      let filteredTraces = data.traces || [];
+      let filteredTraces = mappedTraces;
       
       if (minCost !== null) {
         filteredTraces = filteredTraces.filter((t: TraceListItem) => 
@@ -667,6 +675,15 @@ export function TraceExplorer() {
                             <Badge variant="secondary" className={`text-xs px-1.5 py-0 h-5 ${getOperationColor(trace.operation_type)}`}>
                                   {trace.operation_type}
                             </Badge>
+                            {trace.environment && (
+                               <Badge variant="outline" className={`text-xs px-1.5 py-0 h-5 uppercase ${
+                                  trace.environment.toLowerCase() === 'production' 
+                                    ? 'bg-green-50 text-green-700 border-green-200' 
+                                    : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                               }`}>
+                                  {trace.environment}
+                               </Badge>
+                            )}
                             {trace.error_message && (
                                   <Badge variant="destructive" className="text-xs px-1.5 py-0 h-5">Error</Badge>
                             )}
