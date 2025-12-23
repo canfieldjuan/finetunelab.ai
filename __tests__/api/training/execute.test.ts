@@ -81,20 +81,26 @@ describe('Local Training Execution', () => {
       const pythonPath = process.env.PYTHON_PATH ||
         path.join(process.cwd(), 'lib', 'training', 'trainer_venv', 'bin', 'python3');
       const trainerPath = path.join(process.cwd(), 'lib', 'training', 'standalone_trainer.py');
-      
+
       // Spawn with --help to test argument parsing without training
       const pythonProcess = spawn(pythonPath, [trainerPath, '--help']);
-      
+
       let output = '';
-      
+      let errorOutput = '';
+
       pythonProcess.stdout.on('data', (data) => {
         output += data.toString();
       });
-      
+
+      pythonProcess.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
       pythonProcess.on('close', () => {
-        expect(output).toContain('usage:');
-        expect(output).toContain('--config');
-        expect(output).toContain('--execution-id');
+        const combinedOutput = output + errorOutput;
+        expect(combinedOutput).toContain('usage:');
+        expect(combinedOutput).toContain('--config');
+        expect(combinedOutput).toContain('--execution-id');
         done();
       });
 
@@ -107,21 +113,31 @@ describe('Local Training Execution', () => {
       const pythonPath = process.env.PYTHON_PATH ||
         path.join(process.cwd(), 'lib', 'training', 'trainer_venv', 'bin', 'python3');
       const trainerPath = path.join(process.cwd(), 'lib', 'training', 'standalone_trainer.py');
-      
+
       // Spawn without arguments - should fail
       const pythonProcess = spawn(pythonPath, [trainerPath]);
-      
+
+      let output = '';
       let errorOutput = '';
-      
+
+      pythonProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
       pythonProcess.stderr.on('data', (data) => {
         errorOutput += data.toString();
       });
-      
+
       pythonProcess.on('close', (code) => {
+        const combinedOutput = output + errorOutput;
         expect(code).not.toBe(0); // Should exit with error
-        const hasExpectedError = errorOutput.includes('required') || errorOutput.includes('error');
+        const hasExpectedError = combinedOutput.includes('required') || combinedOutput.includes('error');
         expect(hasExpectedError).toBe(true);
         done();
+      });
+
+      pythonProcess.on('error', (err) => {
+        done(err);
       });
     }, 15000);
   });

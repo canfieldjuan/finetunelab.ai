@@ -130,6 +130,64 @@ export interface TraceResult {
 
   /** Additional metadata to merge with start metadata */
   metadata?: Record<string, unknown>;
+
+  /** Request metadata (endpoint, headers, etc.) */
+  requestMetadata?: RequestMetadata;
+
+  /** Detailed performance metrics */
+  performanceMetrics?: PerformanceMetrics;
+
+  /** RAG context metrics */
+  ragContext?: RagContextMetadata;
+
+  /** Evaluation results */
+  evaluation?: EvaluationMetadata;
+}
+
+/**
+ * Request metadata captured from the provider
+ */
+export interface RequestMetadata {
+  apiEndpoint?: string;
+  apiBaseUrl?: string;
+  requestHeadersSanitized?: Record<string, string>;
+  providerRequestId?: string;
+}
+
+/**
+ * Detailed performance breakdown
+ */
+export interface PerformanceMetrics {
+  queueTimeMs?: number;
+  inferenceTimeMs?: number;
+  networkTimeMs?: number;
+  streamingEnabled?: boolean;
+  chunkUsage?: Record<string, number>;
+}
+
+/**
+ * RAG context metrics
+ */
+export interface RagContextMetadata {
+  contextTokens?: number;
+  retrievalLatencyMs?: number;
+  chunkDeduplicationCount?: number;
+  cacheHitCount?: number;
+  graphUsed?: boolean;
+  nodesRetrieved?: number;
+  chunksUsed?: number;
+  relevanceScore?: number;
+  answerGrounded?: boolean;
+  retrievalMethod?: string;
+}
+
+/**
+ * Evaluation and quality metrics
+ */
+export interface EvaluationMetadata {
+  groundednessScore?: number;
+  responseQualityBreakdown?: Record<string, number>;
+  warningFlags?: string[];
 }
 
 /**
@@ -185,6 +243,35 @@ export interface TraceRecord {
   retry_count?: number | null;
   retry_reason?: string | null;
   error_category?: string | null;
+  
+  // Request Metadata
+  api_endpoint?: string | null;
+  api_base_url?: string | null;
+  request_headers_sanitized?: Record<string, unknown> | null;
+  provider_request_id?: string | null;
+
+  // Performance Metrics
+  queue_time_ms?: number | null;
+  inference_time_ms?: number | null;
+  network_time_ms?: number | null;
+  streaming_enabled?: boolean | null;
+  chunk_usage?: Record<string, unknown> | null;
+
+  // RAG Metrics
+  context_tokens?: number | null;
+  retrieval_latency_ms?: number | null;
+  rag_graph_used?: boolean | null;
+  rag_nodes_retrieved?: number | null;
+  rag_chunks_used?: number | null;
+  rag_relevance_score?: number | null;
+  rag_answer_grounded?: boolean | null;
+  rag_retrieval_method?: string | null;
+
+  // Evaluation Metrics
+  groundedness_score?: number | null;
+  response_quality_breakdown?: Record<string, unknown> | null;
+  warning_flags?: string[] | null;
+
   input_data?: Record<string, unknown> | null;
   output_data?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;

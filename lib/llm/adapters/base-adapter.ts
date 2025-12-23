@@ -4,6 +4,7 @@
 
 import type { ChatMessage, ToolDefinition } from '../openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
+import type { RequestMetadata } from '@/lib/tracing/types';
 
 // ============================================================================
 // Request/Response Interfaces
@@ -35,6 +36,7 @@ export interface AdapterResponse {
     name: string;
     arguments: Record<string, unknown>;
   }>;
+  requestMetadata?: RequestMetadata;
 }
 
 // ============================================================================

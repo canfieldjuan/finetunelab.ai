@@ -53,6 +53,26 @@ export interface Trace {
   }>;
   user_rating?: number;
   user_notes?: string;
+  api_endpoint?: string;
+  api_base_url?: string;
+  request_headers_sanitized?: Record<string, unknown>;
+  provider_request_id?: string;
+  queue_time_ms?: number;
+  inference_time_ms?: number;
+  network_time_ms?: number;
+  streaming_enabled?: boolean;
+  chunk_usage?: Record<string, unknown>;
+  context_tokens?: number;
+  retrieval_latency_ms?: number;
+  rag_graph_used?: boolean;
+  rag_nodes_retrieved?: number;
+  rag_chunks_used?: number;
+  rag_relevance_score?: number;
+  rag_answer_grounded?: boolean;
+  rag_retrieval_method?: string;
+  groundedness_score?: number;
+  response_quality_breakdown?: Record<string, unknown>;
+  warning_flags?: string[];
 }
 
 interface TraceViewProps {
@@ -414,23 +434,6 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
             </div>
           )}
 
-          {/* Additional Metrics Row (TTFT, Retries) */}
-          {(selectedTrace.ttft_ms != null || selectedTrace.retry_count != null) && (
-             <div className="flex gap-3 mb-4">
-                {selectedTrace.ttft_ms != null && (
-                   <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 rounded border border-purple-100 text-xs">
-                      <Clock className="h-3 w-3" />
-                      <span className="font-medium">TTFT: {selectedTrace.ttft_ms}ms</span>
-                   </div>
-                )}
-                {selectedTrace.retry_count != null && selectedTrace.retry_count > 0 && (
-                   <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 rounded border border-orange-100 text-xs">
-                      <span className="font-bold">🔄 {selectedTrace.retry_count}x</span>
-                      <span>Retries</span>
-                   </div>
-                )}
-             </div>
-          )}
 
           {/* Error message if failed */}
           {selectedTrace.status === 'failed' && selectedTrace.error_message ? (
@@ -459,10 +462,212 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
             </div>
           ) : null}
 
-          {/* Input/Output Data */}
-          {(selectedTrace.input_data || selectedTrace.output_data) && (
+          {/* Technical Details & Metadata */}
+          {(selectedTrace.api_endpoint || selectedTrace.request_headers_sanitized || selectedTrace.queue_time_ms || selectedTrace.context_tokens || selectedTrace.retrieval_latency_ms) && (
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {selectedTrace.input_data && (
+              {/* Performance Metrics */}
+              {(selectedTrace.queue_time_ms !== undefined || selectedTrace.inference_time_ms !== undefined || selectedTrace.ttft_ms !== undefined || selectedTrace.tokens_per_second !== undefined || selectedTrace.duration_ms !== undefined || selectedTrace.cache_read_input_tokens !== undefined || selectedTrace.cache_creation_input_tokens !== undefined || selectedTrace.retry_count !== undefined || selectedTrace.chunk_usage) && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-blue-50 px-3 py-2 border-b flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-3.5 w-3.5 text-blue-600" />
+                      <span className="text-xs font-semibold text-blue-900 uppercase tracking-wider">Performance Metrics</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedTrace.streaming_enabled && (
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">
+                          Streaming
+                        </span>
+                      )}
+                      {selectedTrace.cache_read_input_tokens !== undefined && selectedTrace.cache_read_input_tokens > 0 && (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                          Cache Hit
+                        </span>
+                      )}
+                      {selectedTrace.ttft_ms !== undefined && selectedTrace.ttft_ms < 1000 && (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-medium">
+                          Fast TTFT
+                        </span>
+                      )}
+                      {selectedTrace.retry_count !== undefined && selectedTrace.retry_count > 0 && (
+                        <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">
+                          {selectedTrace.retry_count}x Retry
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-3 grid grid-cols-2 gap-2">
+                    {selectedTrace.duration_ms !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Total Duration</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.duration_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.ttft_ms !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Time to First Token</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.ttft_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.inference_time_ms !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Inference Time</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.inference_time_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.tokens_per_second !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Throughput</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.tokens_per_second.toFixed(1)} tok/s</span>
+                      </div>
+                    )}
+                    {selectedTrace.queue_time_ms !== undefined && selectedTrace.queue_time_ms > 0 && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Queue Time</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.queue_time_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.network_time_ms !== undefined && selectedTrace.network_time_ms > 0 && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Network Time</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.network_time_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.cache_read_input_tokens !== undefined && selectedTrace.cache_read_input_tokens > 0 && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Cache Hit</span>
+                        <span className="text-xs font-mono font-medium text-green-600">{selectedTrace.cache_read_input_tokens.toLocaleString()} tokens</span>
+                      </div>
+                    )}
+                    {selectedTrace.cache_creation_input_tokens !== undefined && selectedTrace.cache_creation_input_tokens > 0 && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Cache Write</span>
+                        <span className="text-xs font-mono font-medium text-blue-600">{selectedTrace.cache_creation_input_tokens.toLocaleString()} tokens</span>
+                      </div>
+                    )}
+                    {selectedTrace.retry_count !== undefined && selectedTrace.retry_count > 0 && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Retry Attempts</span>
+                        <span className="text-xs font-mono font-medium text-orange-600">{selectedTrace.retry_count}x</span>
+                      </div>
+                    )}
+                    {selectedTrace.retry_reason && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Retry Reason</span>
+                        <span className="text-xs font-mono font-medium text-orange-600 capitalize">{selectedTrace.retry_reason.replace(/_/g, ' ')}</span>
+                      </div>
+                    )}
+                  </div>
+                  {selectedTrace.chunk_usage && (
+                    <div className="p-3 border-t bg-gray-50/30">
+                      <span className="text-[10px] text-gray-500 uppercase block mb-1">Chunk Usage</span>
+                      <pre className="text-xs font-mono text-gray-800 overflow-x-auto">
+                        {JSON.stringify(selectedTrace.chunk_usage, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* RAG Context */}
+              {(selectedTrace.context_tokens !== undefined || selectedTrace.retrieval_latency_ms !== undefined || selectedTrace.rag_graph_used || selectedTrace.rag_nodes_retrieved !== undefined) && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-indigo-50 px-3 py-2 border-b flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-3.5 w-3.5 text-indigo-600" />
+                      <span className="text-xs font-semibold text-indigo-900 uppercase tracking-wider">RAG Context</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedTrace.rag_graph_used && (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                          Graph Used
+                        </span>
+                      )}
+                      {selectedTrace.context_tokens && (
+                        <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
+                          {selectedTrace.context_tokens} tokens
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-3 grid grid-cols-2 gap-2">
+                    {selectedTrace.retrieval_latency_ms !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Retrieval Latency</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.retrieval_latency_ms}ms</span>
+                      </div>
+                    )}
+                    {selectedTrace.rag_nodes_retrieved !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Nodes Retrieved</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.rag_nodes_retrieved}</span>
+                      </div>
+                    )}
+                    {selectedTrace.rag_chunks_used !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Chunks Used</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.rag_chunks_used}</span>
+                      </div>
+                    )}
+                    {selectedTrace.rag_relevance_score !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Relevance Score</span>
+                        <span className="text-xs font-mono font-medium">{(selectedTrace.rag_relevance_score * 100).toFixed(1)}%</span>
+                      </div>
+                    )}
+                    {selectedTrace.rag_retrieval_method && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Retrieval Method</span>
+                        <span className="text-xs font-mono font-medium capitalize">{selectedTrace.rag_retrieval_method}</span>
+                      </div>
+                    )}
+                    {selectedTrace.rag_answer_grounded !== undefined && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Answer Grounded</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.rag_answer_grounded ? 'Yes' : 'No'}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Request Metadata */}
+              {(selectedTrace.api_endpoint || selectedTrace.request_headers_sanitized) && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm md:col-span-2">
+                  <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Request Metadata</span>
+                  </div>
+                  <div className="p-3 grid grid-cols-1 gap-2">
+                    {selectedTrace.api_endpoint && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">API Endpoint</span>
+                        <span className="text-xs font-mono font-medium break-all">{selectedTrace.api_endpoint}</span>
+                      </div>
+                    )}
+                    {selectedTrace.provider_request_id && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 uppercase">Provider Request ID</span>
+                        <span className="text-xs font-mono font-medium">{selectedTrace.provider_request_id}</span>
+                      </div>
+                    )}
+                    {selectedTrace.request_headers_sanitized && (
+                      <div className="mt-2">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">Headers</span>
+                        <pre className="p-2 text-xs bg-gray-50 rounded border overflow-x-auto font-mono text-gray-800">
+                          {JSON.stringify(selectedTrace.request_headers_sanitized, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Input/Output Data */}
+          {(selectedTrace.input_data || selectedTrace.output_data) ? (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {selectedTrace.input_data ? (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Input Data</span>
@@ -474,9 +679,9 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                     </pre>
                   </div>
                 </div>
-              )}
+              ) : null}
 
-              {selectedTrace.output_data && (
+              {selectedTrace.output_data ? (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Output Data</span>
@@ -488,9 +693,9 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                     </pre>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
-          )}
+          ) : null}
 
           {/* Quality Evaluation Section */}
           {(selectedTrace.judgments && selectedTrace.judgments.length > 0) || selectedTrace.user_rating ? (

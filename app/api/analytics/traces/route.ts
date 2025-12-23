@@ -176,6 +176,34 @@ interface TracePayload {
   error_message?: string | null;
   error_type?: string | null;
   session_tag?: string | null;
+
+  // Request Metadata
+  api_endpoint?: string | null;
+  api_base_url?: string | null;
+  request_headers_sanitized?: Record<string, unknown> | null;
+  provider_request_id?: string | null;
+
+  // Performance Metrics
+  queue_time_ms?: number | null;
+  inference_time_ms?: number | null;
+  network_time_ms?: number | null;
+  streaming_enabled?: boolean | null;
+  chunk_usage?: Record<string, unknown> | null;
+
+  // RAG Metrics
+  context_tokens?: number | null;
+  retrieval_latency_ms?: number | null;
+  rag_graph_used?: boolean | null;
+  rag_nodes_retrieved?: number | null;
+  rag_chunks_used?: number | null;
+  rag_relevance_score?: number | null;
+  rag_answer_grounded?: boolean | null;
+  rag_retrieval_method?: string | null;
+
+  // Evaluation Metrics
+  groundedness_score?: number | null;
+  response_quality_breakdown?: Record<string, unknown> | null;
+  warning_flags?: string[] | null;
 }
 
 interface TraceRecord extends TracePayload {
@@ -296,7 +324,31 @@ export async function POST(req: NextRequest) {
       status,
       error_message,
       error_type,
-      session_tag
+      session_tag,
+      // Request Metadata
+      api_endpoint,
+      api_base_url,
+      request_headers_sanitized,
+      provider_request_id,
+      // Performance Metrics
+      queue_time_ms,
+      inference_time_ms,
+      network_time_ms,
+      streaming_enabled,
+      chunk_usage,
+      // RAG Metrics
+      context_tokens,
+      retrieval_latency_ms,
+      rag_graph_used,
+      rag_nodes_retrieved,
+      rag_chunks_used,
+      rag_relevance_score,
+      rag_answer_grounded,
+      rag_retrieval_method,
+      // Evaluation Metrics
+      groundedness_score,
+      response_quality_breakdown,
+      warning_flags,
     } = body;
 
     // DEBUG: Log status value
@@ -342,7 +394,31 @@ export async function POST(req: NextRequest) {
         status: status || 'pending',
         error_message,
         error_type,
-        session_tag
+        session_tag,
+        // Request Metadata
+        api_endpoint,
+        api_base_url,
+        request_headers_sanitized,
+        provider_request_id,
+        // Performance Metrics
+        queue_time_ms,
+        inference_time_ms,
+        network_time_ms,
+        streaming_enabled,
+        chunk_usage,
+        // RAG Metrics
+        context_tokens,
+        retrieval_latency_ms,
+        rag_graph_used,
+        rag_nodes_retrieved,
+        rag_chunks_used,
+        rag_relevance_score,
+        rag_answer_grounded,
+        rag_retrieval_method,
+        // Evaluation Metrics
+        groundedness_score,
+        response_quality_breakdown,
+        warning_flags,
       }, {
         onConflict: 'span_id',
         ignoreDuplicates: false

@@ -53,14 +53,17 @@ export async function POST(req: NextRequest) {
       .from('message_evaluations')
       .upsert({
         message_id: messageId,
-        evaluator_id: user.id,
+        user_id: user.id, // Fixed: was evaluator_id, should be user_id
         rating,
         success,
-        failure_tags: failureTags || [],
         notes,
-        expected_behavior: expectedBehavior,
-        actual_behavior: actualBehavior,
         trace_id: traceId,
+        // Store additional fields in metadata JSON
+        metadata: {
+          failure_tags: failureTags || [],
+          expected_behavior: expectedBehavior,
+          actual_behavior: actualBehavior,
+        },
         updated_at: new Date().toISOString(),
       })
       .select()
