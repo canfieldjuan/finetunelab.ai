@@ -515,7 +515,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                         <span className="text-xs font-mono font-medium">{selectedTrace.inference_time_ms}ms</span>
                       </div>
                     )}
-                    {selectedTrace.tokens_per_second !== undefined && (
+                    {selectedTrace.tokens_per_second != null && (
                       <div className="flex flex-col">
                         <span className="text-[10px] text-gray-500 uppercase">Throughput</span>
                         <span className="text-xs font-mono font-medium">{selectedTrace.tokens_per_second.toFixed(1)} tok/s</span>
