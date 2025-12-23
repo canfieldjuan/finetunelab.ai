@@ -143,7 +143,7 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
   // Fetch quality metrics from judgments
   const { data: judgments } = await supabase
     .from('judgments')
-    .select('trace_id, score, passed')
+    .select('trace_id, criterion, score, passed, judge_type')
     .in('trace_id', traceIds);
 
   // Fetch user ratings from message_evaluations
@@ -155,11 +155,25 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
 
   // Aggregate quality metrics by trace_id
   const qualityMap = new Map();
+  const judgmentsMap = new Map();
 
   // Process judgments
   if (judgments) {
     for (const j of judgments) {
       if (!j.trace_id) continue;
+
+      // Store individual judgments for display
+      if (!judgmentsMap.has(j.trace_id)) {
+        judgmentsMap.set(j.trace_id, []);
+      }
+      judgmentsMap.get(j.trace_id).push({
+        criterion: j.criterion,
+        score: j.score,
+        passed: j.passed,
+        judge_type: j.judge_type
+      });
+
+      // Aggregate scores
       if (!qualityMap.has(j.trace_id)) {
         qualityMap.set(j.trace_id, {
           scores: [],
@@ -190,6 +204,7 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
   return traces.map(trace => {
     const quality = qualityMap.get(trace.trace_id);
     const evaluation = evaluationMap.get(trace.trace_id);
+    const traceJudgments = judgmentsMap.get(trace.trace_id);
 
     const enriched: any = { ...trace };
 
@@ -205,6 +220,11 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
     if (evaluation) {
       enriched.user_rating = evaluation.user_rating;
       enriched.has_user_feedback = evaluation.has_user_feedback;
+    }
+
+    // Attach individual judgments for display in UI
+    if (traceJudgments && traceJudgments.length > 0) {
+      enriched.judgments = traceJudgments;
     }
 
     return enriched;
