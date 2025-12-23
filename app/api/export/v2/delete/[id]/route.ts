@@ -30,9 +30,12 @@ function initializeStorage() {
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params (Next.js 15 requirement)
+    const { id } = await params;
+
     // Get authorization header
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
@@ -60,7 +63,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const exportId = params.id;
+    const exportId = id;
 
     console.log('[Delete API] Deleting export:', {
       exportId,

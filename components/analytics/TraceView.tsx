@@ -415,7 +415,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
           )}
 
           {/* Additional Metrics Row (TTFT, Retries) */}
-          {(selectedTrace.ttft_ms != null || selectedTrace.retry_count != null) && (
+          {(selectedTrace.ttft_ms != null || selectedTrace.retry_count != null) ? (
              <div className="flex gap-3 mb-4">
                 {selectedTrace.ttft_ms != null && (
                    <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 rounded border border-purple-100 text-xs">
@@ -430,7 +430,7 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                    </div>
                 )}
              </div>
-          )}
+          ) : null}
 
           {/* Error message if failed */}
           {selectedTrace.status === 'failed' && selectedTrace.error_message ? (
@@ -460,9 +460,9 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
           ) : null}
 
           {/* Input/Output Data */}
-          {(selectedTrace.input_data || selectedTrace.output_data) && (
+          {(selectedTrace.input_data || selectedTrace.output_data) ? (
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {selectedTrace.input_data && (
+              {selectedTrace.input_data ? (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Input Data</span>
@@ -474,9 +474,9 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                     </pre>
                   </div>
                 </div>
-              )}
+              ) : null}
 
-              {selectedTrace.output_data && (
+              {selectedTrace.output_data ? (
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Output Data</span>
@@ -488,9 +488,9 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
                     </pre>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
-          )}
+          ) : null}
 
           {/* Quality Evaluation Section */}
           {(selectedTrace.judgments && selectedTrace.judgments.length > 0) || selectedTrace.user_rating ? (
