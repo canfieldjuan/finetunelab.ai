@@ -46,8 +46,16 @@ type BatchTestingAuth =
   | { mode: 'apiKey'; userId: string; apiKey: string; keyId?: string };
 
 function sendSSE(controller: ReadableStreamDefaultController, encoder: TextEncoder, event: SSEEvent) {
-  const data = `data: ${JSON.stringify(event)}\n\n`;
-  controller.enqueue(encoder.encode(data));
+  try {
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    controller.enqueue(encoder.encode(data));
+  } catch (error) {
+    // Controller already closed - this is normal during cleanup
+    if (error instanceof TypeError && error.message.includes('Controller is already closed')) {
+      return;
+    }
+    throw error;
+  }
 }
 
 async function authenticateBatchTesting(req: NextRequest): Promise<
