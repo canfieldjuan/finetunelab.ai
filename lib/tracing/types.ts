@@ -31,6 +31,15 @@ export interface TraceContext {
   /** Message ID if associated with a specific message */
   messageId?: string;
 
+  /** Previous Message ID for explicit conversation linking */
+  previousMessageId?: string;
+
+  /** Environment tag (e.g., "production", "staging", "development") */
+  environment?: string;
+
+  /** Custom tags for filtering (e.g., "ab_test_group_a", "experiment_v2") */
+  tags?: string[];
+
   /** When the span started */
   startTime: Date;
 
@@ -113,6 +122,15 @@ export interface TraceResult {
   /** Reason for retry (e.g., rate_limit, timeout, network_error) */
   retryReason?: string;
 
+  /** Reason why generation finished (e.g., "stop", "length", "content_filter") */
+  finishReason?: string;
+
+  /** Context window size of the model (e.g., 128000) */
+  contextWindowSize?: number;
+
+  /** Max tokens limit set for this request */
+  maxTokens?: number;
+
   /** Categorized error type for analytics */
   errorCategory?: string;
 
@@ -155,6 +173,8 @@ export interface RequestMetadata {
   apiBaseUrl?: string;
   requestHeadersSanitized?: Record<string, string>;
   providerRequestId?: string;
+  rateLimitRemaining?: number;
+  rateLimitReset?: number;
 }
 
 /**
@@ -191,6 +211,8 @@ export interface EvaluationMetadata {
   groundednessScore?: number;
   responseQualityBreakdown?: Record<string, number>;
   warningFlags?: string[];
+  judgeModel?: string;
+  judgeScore?: number;
 }
 
 /**

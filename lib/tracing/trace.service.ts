@@ -103,6 +103,9 @@ export async function startTrace(params: StartTraceParams): Promise<TraceContext
       userId,
       conversationId: params.conversationId,
       messageId: params.messageId,
+      previousMessageId: params.metadata?.previousMessageId as string | undefined,
+      environment: (params.metadata?.environment as string) || process.env.NODE_ENV || 'development',
+      tags: params.metadata?.tags as string[] | undefined,
       startTime: new Date(),
       spanName: params.spanName,
       operationType: params.operationType,
@@ -193,6 +196,21 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       traceDebugLog('Auto-calculated throughput', { tokensPerSecond });
     }
 
+    // Prepare extended metadata with enterprise fields
+    const extendedMetadata = {
+      ...(result.metadata || {}),
+      environment: context.environment,
+      tags: context.tags,
+      previous_message_id: context.previousMessageId,
+      finish_reason: result.finishReason,
+      context_window_size: result.contextWindowSize,
+      max_tokens: result.maxTokens,
+      rate_limit_remaining: result.requestMetadata?.rateLimitRemaining,
+      rate_limit_reset: result.requestMetadata?.rateLimitReset,
+      judge_model: result.evaluation?.judgeModel,
+      judge_score: result.evaluation?.judgeScore,
+    };
+
     // Create trace update payload
     const traceUpdate = {
       trace_id: context.traceId,
@@ -252,7 +270,7 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       input_data: result.inputData || null,
       output_data: result.outputData || null,
       reasoning: result.reasoning || null,
-      metadata: result.metadata || null,
+      metadata: extendedMetadata,
     };
 
     console.log(`[TRACE DEBUG] Calling sendTraceEnd for span_id: ${context.spanId}, batch size will be: ${traceBatch.length + 1}`);
@@ -367,7 +385,12 @@ async function sendTraceStart(
       message_id: context.messageId || null,
       session_tag: params.sessionTag || null,
       status: 'running',
-      metadata: params.metadata || null,
+      metadata: {
+        ...(params.metadata || {}),
+        environment: context.environment,
+        tags: context.tags,
+        previous_message_id: context.previousMessageId,
+      },
     }),
   });
 }
