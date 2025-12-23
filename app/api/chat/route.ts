@@ -1095,8 +1095,20 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
       } else {
         // Backward compatibility: Use old provider-specific code
-        console.log('[API] ❌ Using legacy provider-specific path - model:', model);
-        console.log('[API] ❌ Why legacy? useUnifiedClient:', useUnifiedClient, 'selectedModelId:', selectedModelId);
+        console.log('[API] ⚠️ Using legacy provider-specific path (LIMITED METADATA) - model:', model);
+        console.log('[API] ⚠️ Why legacy? useUnifiedClient:', useUnifiedClient, 'selectedModelId:', selectedModelId);
+
+        // Start trace for legacy LLM operation
+        traceContext = await traceService.startTrace({
+          spanName: 'llm.completion',
+          operationType: 'llm_call',
+          modelName: model,
+          modelProvider: provider || undefined,
+          conversationId: widgetConversationId || conversationId || undefined,
+          sessionTag: widgetSessionTag || regularChatSessionTag || undefined,
+          userId: userId || undefined,
+        });
+
         llmResponse = await runLLMWithToolCalls(
           enhancedMessages,
           model,
@@ -1151,9 +1163,39 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         tokenUsage = llmResponse.usage;
         toolsCalled = (llmResponse as { toolsCalled?: Array<{name: string; success: boolean; error?: string}> }).toolsCalled || null;
         requestMetadata = (llmResponse as { requestMetadata?: RequestMetadata }).requestMetadata;
+
+        // If requestMetadata is undefined (legacy path), add basic metadata
+        if (!requestMetadata && !useUnifiedClient) {
+          const legacyApiEndpoint = provider === 'openai'
+            ? 'https://api.openai.com/v1/chat/completions'
+            : provider === 'anthropic'
+            ? 'https://api.anthropic.com/v1/messages'
+            : undefined;
+
+          if (legacyApiEndpoint) {
+            requestMetadata = {
+              apiEndpoint: legacyApiEndpoint,
+              apiBaseUrl: legacyApiEndpoint.split('/v1')[0],
+              requestHeadersSanitized: {
+                'Content-Type': 'application/json',
+                'Authorization': '[REDACTED]',
+              },
+            };
+            console.log('[API] Legacy non-streaming: Captured basic metadata:', {
+              endpoint: legacyApiEndpoint,
+              provider,
+            });
+          }
+        }
+
         console.log('[API] Token usage:', tokenUsage.input_tokens, 'in,', tokenUsage.output_tokens, 'out');
         if (reasoning) {
           console.log('[API] Reasoning/thinking:', reasoning.length, 'chars');
+          // If we have reasoning AND content, prepend reasoning in think tags
+          if (finalResponse && finalResponse.trim().length > 0) {
+            finalResponse = `<think>\n${reasoning}\n</think>\n\n${finalResponse}`;
+            console.log('[API] Combined reasoning with response content');
+          }
         }
         if (toolsCalled) {
           const successCount = toolsCalled.filter(t => t.success).length;
@@ -1162,6 +1204,30 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       } else {
         // Fallback for legacy string responses
         finalResponse = llmResponse as string;
+
+        // Add basic metadata for legacy string responses
+        if (!useUnifiedClient) {
+          const legacyApiEndpoint = provider === 'openai'
+            ? 'https://api.openai.com/v1/chat/completions'
+            : provider === 'anthropic'
+            ? 'https://api.anthropic.com/v1/messages'
+            : undefined;
+
+          if (legacyApiEndpoint) {
+            requestMetadata = {
+              apiEndpoint: legacyApiEndpoint,
+              apiBaseUrl: legacyApiEndpoint.split('/v1')[0],
+              requestHeadersSanitized: {
+                'Content-Type': 'application/json',
+                'Authorization': '[REDACTED]',
+              },
+            };
+            console.log('[API] Legacy string response: Captured basic metadata:', {
+              endpoint: legacyApiEndpoint,
+              provider,
+            });
+          }
+        }
       }
 
       // Ensure we never stream an empty assistant message
@@ -1169,17 +1235,21 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       if (!finalResponse || finalResponse.trim().length === 0) {
         if (lastDeepResearchJobId) {
           finalResponse = `deep_research_started jobId: ${lastDeepResearchJobId}`;
+        } else if (reasoning && reasoning.trim().length > 0) {
+          // If thinking/reasoning was generated but no final response, wrap it for display
+          finalResponse = `<think>\n${reasoning}\n</think>\n\n_Note: The model generated thinking content but no final response. Please ask the question again or try with thinking disabled._`;
+          console.log('[API] Using reasoning as fallback content:', reasoning.length, 'chars');
         } else if (toolsCalled && toolsCalled.length > 0) {
           // If tools were called but no content generated, create a helpful summary
           const failureCount = toolsCalled.filter(t => !t.success).length;
           const toolNames = toolsCalled.map(t => t.name).join(', ');
-          
+
           finalResponse = `✓ Executed ${toolsCalled.length} tool(s): ${toolNames}\n\n`;
           if (failureCount > 0) {
             finalResponse += `⚠️ ${failureCount} tool(s) failed. Please check the results above.\n\n`;
           }
           finalResponse += `The operation completed. You can now proceed with your next request.`;
-          
+
           console.log('[API] Generated tool execution summary:', finalResponse);
         } else {
           finalResponse = 'No content was generated by the model.';
@@ -1287,6 +1357,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 ragContext: graphRAGMetadata ? {
                   contextTokens: graphRAGMetadata.estimatedTokens,
                   retrievalLatencyMs: graphRAGMetadata.metadata?.retrieval_time_ms,
+                  graphUsed: graphRAGMetadata.metadata?.graph_used,
+                  nodesRetrieved: graphRAGMetadata.metadata?.nodes_retrieved,
+                  chunksUsed: graphRAGMetadata.metadata?.context_chunks_used,
+                  relevanceScore: graphRAGMetadata.metadata?.context_relevance_score,
+                  answerGrounded: graphRAGMetadata.metadata?.answer_grounded_in_graph,
+                  retrievalMethod: graphRAGMetadata.metadata?.searchMethod,
                 } : undefined,
               });
             }
@@ -1682,36 +1758,18 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             let ttftMs: number | undefined;
             let firstChunkReceived = false;
 
-            // Check if we need tool-aware streaming (OpenAI only)
-            const needsToolStreaming = tools.length > 0 && provider === 'openai';
+            console.log('[STREAMING PATH DEBUG]', {
+              toolsLength: tools.length,
+              provider,
+              useUnifiedClient,
+              selectedModelId,
+            });
 
-            if (needsToolStreaming) {
-              // Use tool-aware streaming for OpenAI
-              console.log('[API] Using OpenAI tool-aware streaming');
-              const { streamOpenAIResponse } = await import('@/lib/llm/openai');
-
-              for await (const chunk of streamOpenAIResponse(
-                enhancedMessages,
-                model,
-                temperature,
-                maxTokens,
-                activeTools
-              )) {
-                if (!firstChunkReceived && chunk.length > 0) {
-                  ttftMs = Date.now() - streamStartTime;
-                  firstChunkReceived = true;
-                  console.log(`[API] TTFT: ${ttftMs}ms`);
-                }
-                // Stream text content
-                accumulatedResponse += chunk;
-                const data = `data: ${JSON.stringify({ content: chunk })}\n\n`;
-                controller.enqueue(encoder.encode(data));
-              }
-            } else {
-              // Regular streaming (no tools or non-OpenAI)
-              // Use UnifiedLLMClient if model is selected from registry
+            // PRIORITY 1: Use UnifiedLLMClient if model is selected from registry
+            // This handles both regular streaming AND tool-aware streaming with metadata capture
             if (useUnifiedClient && selectedModelId) {
-              console.log('[API] Streaming with UnifiedLLMClient, model:', selectedModelId);
+              console.log('[API] ✓ Streaming with UnifiedLLMClient (WITH METADATA CAPTURE), model:', selectedModelId);
+              console.log('[API]   Tools provided:', tools.length > 0 ? `Yes (${tools.length})` : 'No');
               try {
                 for await (const chunk of unifiedLLMClient.stream(
                   selectedModelId,
@@ -1719,6 +1777,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                   {
                     temperature,
                     maxTokens,
+                    tools: tools.length > 0 ? activeTools : undefined,
                     userId: userId || undefined,
                     onMetadata: (meta) => {
                       console.log('[Chat API] Received request metadata:', meta);
@@ -1742,7 +1801,30 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 if (errorMsg.includes('Model not found') || errorMsg.includes('Cannot coerce the result')) {
                   console.error('[API] Model not found during streaming:', selectedModelId);
                   if (isWidgetMode) {
-                    console.log('[API] Widget mode (streaming): Falling back to legacy default model');
+                    console.log('[API] ⚠️ Widget mode (streaming): Falling back to legacy default model (LIMITED METADATA)');
+
+                    // Capture basic metadata for fallback path
+                    const fallbackApiEndpoint = provider === 'openai'
+                      ? 'https://api.openai.com/v1/chat/completions'
+                      : provider === 'anthropic'
+                      ? 'https://api.anthropic.com/v1/messages'
+                      : undefined;
+
+                    if (fallbackApiEndpoint) {
+                      capturedRequestMetadata = {
+                        apiEndpoint: fallbackApiEndpoint,
+                        apiBaseUrl: fallbackApiEndpoint.split('/v1')[0],
+                        requestHeadersSanitized: {
+                          'Content-Type': 'application/json',
+                          'Authorization': '[REDACTED]',
+                        },
+                      };
+                      console.log('[API] Fallback path: Captured basic metadata:', {
+                        endpoint: fallbackApiEndpoint,
+                        provider,
+                      });
+                    }
+
                     for await (const chunk of streamLLMResponse(
                       enhancedMessages,
                       model,
@@ -1774,7 +1856,30 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               }
             } else {
               // Backward compatibility: Use old provider-specific streaming
-              console.log('[API] Streaming with legacy provider-specific path');
+              console.log('[API] ⚠️ Streaming with legacy provider-specific path (LIMITED METADATA)');
+
+              // Capture basic metadata for legacy paths
+              const legacyApiEndpoint = provider === 'openai'
+                ? 'https://api.openai.com/v1/chat/completions'
+                : provider === 'anthropic'
+                ? 'https://api.anthropic.com/v1/messages'
+                : undefined;
+
+              if (legacyApiEndpoint) {
+                capturedRequestMetadata = {
+                  apiEndpoint: legacyApiEndpoint,
+                  apiBaseUrl: legacyApiEndpoint.split('/v1')[0],
+                  requestHeadersSanitized: {
+                    'Content-Type': 'application/json',
+                    'Authorization': '[REDACTED]',
+                  },
+                };
+                console.log('[API] Legacy path: Captured basic metadata:', {
+                  endpoint: legacyApiEndpoint,
+                  provider,
+                });
+              }
+
               for await (const chunk of streamLLMResponse(
                 enhancedMessages,
                 model,
@@ -1793,7 +1898,6 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 controller.enqueue(encoder.encode(data));
               }
             }
-            } // End needsToolStreaming else block
 
             console.log('[API] [DEBUG] Streaming complete. Total accumulated response length:', accumulatedResponse.length);
             console.log('[API] [DEBUG] Response preview:', accumulatedResponse.substring(0, 200));
@@ -1940,6 +2044,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 ragContext: graphRAGMetadata ? {
                   contextTokens: graphRAGMetadata.estimatedTokens,
                   retrievalLatencyMs: graphRAGMetadata.metadata?.retrieval_time_ms,
+                  graphUsed: graphRAGMetadata.metadata?.graph_used,
+                  nodesRetrieved: graphRAGMetadata.metadata?.nodes_retrieved,
+                  chunksUsed: graphRAGMetadata.metadata?.context_chunks_used,
+                  relevanceScore: graphRAGMetadata.metadata?.context_relevance_score,
+                  answerGrounded: graphRAGMetadata.metadata?.answer_grounded_in_graph,
+                  retrievalMethod: graphRAGMetadata.metadata?.searchMethod,
                 } : undefined,
               });
             }

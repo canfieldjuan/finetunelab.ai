@@ -235,6 +235,12 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       // RAG Metrics
       context_tokens: result.ragContext?.contextTokens || null,
       retrieval_latency_ms: result.ragContext?.retrievalLatencyMs || null,
+      rag_graph_used: result.ragContext?.graphUsed || false,
+      rag_nodes_retrieved: result.ragContext?.nodesRetrieved || null,
+      rag_chunks_used: result.ragContext?.chunksUsed || null,
+      rag_relevance_score: result.ragContext?.relevanceScore || null,
+      rag_answer_grounded: result.ragContext?.answerGrounded || false,
+      rag_retrieval_method: result.ragContext?.retrievalMethod || null,
 
       // Evaluation Metrics
       groundedness_score: result.evaluation?.groundednessScore || null,

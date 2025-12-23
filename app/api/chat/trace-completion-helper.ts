@@ -3,7 +3,12 @@
  * Centralizes trace completion logic to avoid duplication
  */
 
-import type { TraceContext, RequestMetadata, PerformanceMetrics } from '@/lib/tracing/types';
+import type {
+  TraceContext,
+  RequestMetadata,
+  PerformanceMetrics,
+  RagContextMetadata,
+} from '@/lib/tracing/types';
 import * as traceService from '@/lib/tracing/trace.service';
 
 interface TraceCompletionParams {
@@ -26,12 +31,7 @@ interface TraceCompletionParams {
   ttftMs?: number;
   requestMetadata?: RequestMetadata;
   performanceMetrics?: PerformanceMetrics;
-  ragContext?: {
-    contextTokens?: number;
-    retrievalLatencyMs?: number;
-    chunkDeduplicationCount?: number;
-    cacheHitCount?: number;
-  };
+  ragContext?: RagContextMetadata;
 }
 
 /**

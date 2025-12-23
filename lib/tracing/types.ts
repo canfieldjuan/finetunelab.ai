@@ -173,6 +173,12 @@ export interface RagContextMetadata {
   retrievalLatencyMs?: number;
   chunkDeduplicationCount?: number;
   cacheHitCount?: number;
+  graphUsed?: boolean;
+  nodesRetrieved?: number;
+  chunksUsed?: number;
+  relevanceScore?: number;
+  answerGrounded?: boolean;
+  retrievalMethod?: string;
 }
 
 /**
@@ -254,6 +260,12 @@ export interface TraceRecord {
   // RAG Metrics
   context_tokens?: number | null;
   retrieval_latency_ms?: number | null;
+  rag_graph_used?: boolean | null;
+  rag_nodes_retrieved?: number | null;
+  rag_chunks_used?: number | null;
+  rag_relevance_score?: number | null;
+  rag_answer_grounded?: boolean | null;
+  rag_retrieval_method?: string | null;
 
   // Evaluation Metrics
   groundedness_score?: number | null;

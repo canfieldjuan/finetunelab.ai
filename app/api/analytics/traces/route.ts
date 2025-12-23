@@ -193,6 +193,12 @@ interface TracePayload {
   // RAG Metrics
   context_tokens?: number | null;
   retrieval_latency_ms?: number | null;
+  rag_graph_used?: boolean | null;
+  rag_nodes_retrieved?: number | null;
+  rag_chunks_used?: number | null;
+  rag_relevance_score?: number | null;
+  rag_answer_grounded?: boolean | null;
+  rag_retrieval_method?: string | null;
 
   // Evaluation Metrics
   groundedness_score?: number | null;
@@ -333,6 +339,12 @@ export async function POST(req: NextRequest) {
       // RAG Metrics
       context_tokens,
       retrieval_latency_ms,
+      rag_graph_used,
+      rag_nodes_retrieved,
+      rag_chunks_used,
+      rag_relevance_score,
+      rag_answer_grounded,
+      rag_retrieval_method,
       // Evaluation Metrics
       groundedness_score,
       response_quality_breakdown,
@@ -397,6 +409,12 @@ export async function POST(req: NextRequest) {
         // RAG Metrics
         context_tokens,
         retrieval_latency_ms,
+        rag_graph_used,
+        rag_nodes_retrieved,
+        rag_chunks_used,
+        rag_relevance_score,
+        rag_answer_grounded,
+        rag_retrieval_method,
         // Evaluation Metrics
         groundedness_score,
         response_quality_breakdown,
