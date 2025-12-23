@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Play, RefreshCw, ArrowRight } from 'lucide-react';
+import { createClient } from '@/lib/supabaseClient';
 import type { Trace } from './TraceView';
 
 interface TraceReplayPanelProps {
@@ -42,9 +43,21 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
       if (systemPrompt !== inputData.systemPrompt) overrides.systemPrompt = systemPrompt;
       if (disableCache) overrides.disableCache = true;
 
+      // Get session token for authentication
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        setError('Not authenticated. Please log in.');
+        return;
+      }
+
       const res = await fetch(`/api/analytics/traces/${trace.id}/replay`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ overrides }),
       });
 
