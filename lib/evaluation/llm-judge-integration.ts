@@ -127,6 +127,25 @@ ${context.prompt}${groundTruthContext}`;
       const passedCount = judgments.filter(j => j.passed).length;
       const totalCount = judgments.length;
       console.log(`[LLM Judge] Saved ${totalCount} judgments (${passedCount} passed) for message ${context.messageId}`);
+
+      // Update trace with groundedness score if trace_id exists
+      if (context.traceId) {
+        const groundednessJudgment = judgments.find(j => j.criterion === 'groundedness');
+        if (groundednessJudgment) {
+          const { error: traceError } = await supabase
+            .from('llm_traces')
+            .update({
+              groundedness_score: groundednessJudgment.score
+            })
+            .eq('trace_id', context.traceId);
+
+          if (traceError) {
+            console.error('[LLM Judge] Failed to update trace groundedness_score:', traceError);
+          } else {
+            console.log(`[LLM Judge] Updated trace ${context.traceId} with groundedness_score: ${groundednessJudgment.score.toFixed(3)}`);
+          }
+        }
+      }
     }
 
   } catch (error) {

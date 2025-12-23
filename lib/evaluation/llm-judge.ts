@@ -457,6 +457,20 @@ export const STANDARD_CRITERIA: LLMJudgeCriterion[] = [
     max_score: 10,
     passing_score: 7,
   },
+  {
+    name: 'groundedness',
+    description: 'Is the response grounded in the retrieved context/sources, without hallucination?',
+    scoring_guide: `
+1-2: Significant hallucinations or unsupported claims
+3-4: Some statements not supported by context
+5-6: Mostly grounded with minor unsupported details
+7-8: Well-grounded with proper attribution
+9-10: Fully grounded with explicit source citations
+    `.trim(),
+    min_score: 1,
+    max_score: 10,
+    passing_score: 7,
+  },
 ];
 
 /**
