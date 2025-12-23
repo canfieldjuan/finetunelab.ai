@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     // 3. Build query
     let query = supabase
       .from('llm_traces')
-      .select('id, trace_id, span_name, operation_type, status, start_time, duration_ms, model_name, model_provider, conversation_id, message_id, session_tag, error_message, input_tokens, output_tokens, total_tokens, cost_usd, ttft_ms, tokens_per_second, api_endpoint, api_base_url, request_headers_sanitized, provider_request_id, queue_time_ms, inference_time_ms, network_time_ms, streaming_enabled, chunk_usage, context_tokens, retrieval_latency_ms, rag_graph_used, rag_nodes_retrieved, rag_chunks_used, rag_relevance_score, rag_answer_grounded, rag_retrieval_method, groundedness_score, response_quality_breakdown, warning_flags', { count: 'exact' })
+      .select('id, trace_id, span_name, operation_type, status, start_time, duration_ms, model_name, model_provider, conversation_id, message_id, session_tag, error_message, input_tokens, output_tokens, total_tokens, cost_usd, ttft_ms, tokens_per_second, api_endpoint, api_base_url, request_headers_sanitized, provider_request_id, queue_time_ms, inference_time_ms, network_time_ms, streaming_enabled, chunk_usage, context_tokens, retrieval_latency_ms, rag_graph_used, rag_nodes_retrieved, rag_chunks_used, rag_relevance_score, rag_answer_grounded, rag_retrieval_method, groundedness_score, response_quality_breakdown, warning_flags, reasoning', { count: 'exact' })
       .eq('user_id', user.id);
 
     // Only filter to root traces if NOT filtering for child span operations

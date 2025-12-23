@@ -204,6 +204,7 @@ interface TracePayload {
   groundedness_score?: number | null;
   response_quality_breakdown?: Record<string, unknown> | null;
   warning_flags?: string[] | null;
+  reasoning?: string | null;
 }
 
 interface TraceRecord extends TracePayload {
@@ -349,6 +350,7 @@ export async function POST(req: NextRequest) {
       groundedness_score,
       response_quality_breakdown,
       warning_flags,
+      reasoning,
     } = body;
 
     // DEBUG: Log status value
@@ -419,6 +421,7 @@ export async function POST(req: NextRequest) {
         groundedness_score,
         response_quality_breakdown,
         warning_flags,
+        reasoning,
       }, {
         onConflict: 'span_id',
         ignoreDuplicates: false

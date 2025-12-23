@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import "../styles/globals.css";
 import { AuthProvider } from "../contexts/AuthContext";
 import { WorkspaceProvider } from "../contexts/WorkspaceContext";
-import { Inter } from "next/font/google";
 // import { LoggerInit } from "../components/LoggerInit"; // Temporarily disabled
 
 // Hardcode production URL to avoid env var parsing issues
@@ -45,11 +44,6 @@ export const metadata: Metadata = {
     },
   },
 };
-
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-});
 
 // Organization JSON-LD for site-wide structured data
 const organizationJsonLd = {
@@ -107,7 +101,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
       </head>
-      <body className={`${inter.className} h-full`} suppressHydrationWarning>
+      <body className="h-full font-sans antialiased" suppressHydrationWarning>
         {/* <LoggerInit /> */}
         <AuthProvider>
           <WorkspaceProvider>
