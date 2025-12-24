@@ -15,10 +15,12 @@ import {
   Info,
   CheckCircle,
   XCircle,
-  Activity
+  Activity,
+  ExternalLink
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 
 interface Anomaly {
   id: string;
@@ -54,6 +56,7 @@ export default function AnomalyFeed({
   autoRefresh = true,
   refreshInterval = 30000
 }: AnomalyFeedProps) {
+  const router = useRouter();
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -407,6 +410,12 @@ export default function AnomalyFeed({
     }
   };
 
+  // Navigate to trace
+  const handleViewTrace = (traceId: string) => {
+    console.log('[AnomalyFeed] Navigating to trace:', traceId);
+    router.push(`/analytics/traces?trace_id=${traceId}`);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -507,12 +516,23 @@ export default function AnomalyFeed({
           >
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-semibold">Anomaly Details</h3>
-              <button
-                onClick={() => setSelectedAnomaly(null)}
-                className="text-sm px-3 py-1 hover:bg-gray-100 rounded"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedAnomaly.statistics?.trace_id && (
+                  <button
+                    onClick={() => handleViewTrace(selectedAnomaly.statistics.trace_id as string)}
+                    className="text-sm px-3 py-1 bg-blue-600 text-white hover:bg-blue-700 rounded flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    View Trace
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedAnomaly(null)}
+                  className="text-sm px-3 py-1 hover:bg-gray-100 rounded"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="p-4 overflow-y-auto max-h-[70vh] space-y-4">

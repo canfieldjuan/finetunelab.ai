@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import TraceView, { type Trace } from './TraceView';
 import { useAuth } from '@/contexts/AuthContext';
 import { Search, Filter, RefreshCw, Clock, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronRight, Zap, DollarSign, TrendingUp } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 interface TraceListItem {
   id: string;
@@ -47,6 +48,7 @@ interface TraceListItem {
 
 export function TraceExplorer() {
   const { session } = useAuth();
+  const searchParams = useSearchParams();
   const [traces, setTraces] = useState<TraceListItem[]>([]);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [detailedTrace, setDetailedTrace] = useState<Trace[] | null>(null);
@@ -234,6 +236,34 @@ export function TraceExplorer() {
   useEffect(() => {
     fetchTraces();
   }, [session, page, timeRange, operationFilter, statusFilter, minCost, maxCost, minDuration, maxDuration, minThroughput, maxThroughput, hasError, hasQualityScore, minQualityScore]);
+
+  // Auto-expand trace from URL params (e.g., from anomaly navigation)
+  useEffect(() => {
+    const traceIdFromUrl = searchParams.get('trace_id');
+    if (traceIdFromUrl && !loading && traces.length > 0) {
+      console.log('[TraceExplorer] Auto-expanding trace from URL:', traceIdFromUrl);
+
+      // Check if trace exists in the list
+      const traceExists = traces.some(t => t.trace_id === traceIdFromUrl);
+
+      if (traceExists) {
+        // Auto-select and expand the trace
+        setSelectedTraceId(traceIdFromUrl);
+        fetchTraceDetails(traceIdFromUrl);
+
+        // Scroll to the trace card after a short delay to ensure it's rendered
+        setTimeout(() => {
+          const traceElement = document.querySelector(`[data-trace-id="${traceIdFromUrl}"]`);
+          if (traceElement) {
+            traceElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+      } else {
+        console.warn('[TraceExplorer] Trace not found in current filter results:', traceIdFromUrl);
+        // Could potentially fetch the specific trace or adjust filters here
+      }
+    }
+  }, [searchParams, loading, traces]);
 
   const handleSearch = () => {
     setPage(1);
@@ -651,7 +681,7 @@ export function TraceExplorer() {
           ) : (
             <div className="space-y-4">
               {traces.map((trace) => (
-                <Card key={trace.id} className="overflow-hidden hover:shadow-md transition-all border-l-4" style={{ borderLeftColor: getStatusColor(trace.status) }}>
+                <Card key={trace.id} className="overflow-hidden hover:shadow-md transition-all border-l-4" style={{ borderLeftColor: getStatusColor(trace.status) }} data-trace-id={trace.trace_id}>
                   <CardContent className="p-0">
                     <div
                       onClick={() => handleTraceClick(trace.trace_id)}
