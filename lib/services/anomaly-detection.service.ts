@@ -22,6 +22,7 @@ interface AnomalyResult {
   description: string;
   contributingFactors: string[];
   recommendedActions: string[];
+  metadata?: Record<string, unknown>;
 }
 
 interface StatisticalMetrics {
@@ -157,7 +158,8 @@ export async function detectAnomalies(
       deviation: deviationPercent,
       description: `${metricName} is ${deviationPercent.toFixed(1)}% ${latestValue > stats.mean ? 'above' : 'below'} expected range`,
       contributingFactors: [],
-      recommendedActions: ['Investigate recent changes', 'Review related metrics']
+      recommendedActions: ['Investigate recent changes', 'Review related metrics'],
+      metadata: latestPoint.metadata
     });
   }
 
