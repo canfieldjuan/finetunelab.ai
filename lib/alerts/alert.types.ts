@@ -18,7 +18,15 @@ export type AlertType =
   | 'disk_warning'
   | 'timeout_warning'
   | 'daily_summary'
-  | 'weekly_digest';
+  | 'weekly_digest'
+  // Metric-based alerts for traces
+  | 'trace_latency_high'
+  | 'trace_error_rate_high'
+  | 'trace_cost_high'
+  | 'trace_throughput_low'
+  | 'trace_ttft_high'
+  | 'anomaly_critical'
+  | 'anomaly_high';
 
 export type WebhookType = 'slack' | 'discord' | 'generic';
 
@@ -265,6 +273,14 @@ export function alertTypeToPreferenceKey(type: AlertType): keyof UserAlertPrefer
     timeout_warning: 'alert_timeout_warning',
     daily_summary: null,
     weekly_digest: null,
+    // Metric-based alerts (rule-based, not preference-based)
+    trace_latency_high: null,
+    trace_error_rate_high: null,
+    trace_cost_high: null,
+    trace_throughput_low: null,
+    trace_ttft_high: null,
+    anomaly_critical: null,
+    anomaly_high: null,
   };
   return mapping[type];
 }
@@ -286,6 +302,14 @@ export function alertTypeToWebhookKey(type: AlertType): keyof UserWebhook | null
     timeout_warning: 'alert_timeout_warning',
     daily_summary: null,
     weekly_digest: null,
+    // Metric-based alerts (rule-based, not webhook preference-based)
+    trace_latency_high: null,
+    trace_error_rate_high: null,
+    trace_cost_high: null,
+    trace_throughput_low: null,
+    trace_ttft_high: null,
+    anomaly_critical: null,
+    anomaly_high: null,
   };
   return mapping[type];
 }
@@ -310,6 +334,88 @@ export function alertTypeToIntegrationKey(type: AlertType): string | null {
     timeout_warning: null,
     daily_summary: null,
     weekly_digest: null,
+    // Metric-based alerts
+    trace_latency_high: null,
+    trace_error_rate_high: null,
+    trace_cost_high: null,
+    trace_throughput_low: null,
+    trace_ttft_high: null,
+    anomaly_critical: null,
+    anomaly_high: null,
   };
   return mapping[type];
+}
+
+/**
+ * Metric-based Alert Rule Configuration
+ */
+export type MetricType =
+  | 'latency'
+  | 'error_rate'
+  | 'cost'
+  | 'throughput'
+  | 'ttft'
+  | 'token_usage'
+  | 'anomaly_severity';
+
+export type ComparisonOperator = '>' | '<' | '>=' | '<=' | '==' | '!=';
+
+export type AggregationMethod = 'p50' | 'p95' | 'p99' | 'avg' | 'max' | 'min' | 'count' | 'sum';
+
+export interface MetricAlertRule {
+  id: string;
+  user_id: string;
+  rule_name: string;
+  description?: string;
+  metric_type: MetricType;
+  threshold_value: number;
+  comparison_operator: ComparisonOperator;
+  time_window_minutes: number;
+  aggregation_method: AggregationMethod;
+
+  // Optional filters
+  model_filter?: string; // e.g., "gpt-4"
+  operation_filter?: string; // e.g., "llm_call"
+  status_filter?: string; // e.g., "failed"
+
+  // Notification settings
+  notify_email: boolean;
+  notify_webhooks: boolean;
+  notify_integrations: boolean;
+  cooldown_minutes: number; // Prevent alert spam
+
+  // State
+  enabled: boolean;
+  last_triggered_at?: string;
+  trigger_count: number;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetricAlertRuleEvaluation {
+  rule_id: string;
+  user_id: string;
+  metric_value: number;
+  threshold_value: number;
+  triggered: boolean;
+  time_window_start: string;
+  time_window_end: string;
+  sample_count: number;
+  metadata: Record<string, unknown>;
+  evaluated_at: string;
+}
+
+export interface TraceMetricAlertData {
+  ruleId: string;
+  ruleName: string;
+  metricType: MetricType;
+  metricValue: number;
+  thresholdValue: number;
+  comparisonOperator: ComparisonOperator;
+  aggregationMethod: AggregationMethod;
+  timeWindowMinutes: number;
+  sampleCount: number;
+  modelFilter?: string;
+  operationFilter?: string;
 }
