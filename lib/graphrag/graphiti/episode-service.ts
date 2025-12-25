@@ -4,7 +4,7 @@
  */
 
 import { getGraphitiClient, type GraphitiEpisode, type GraphitiBulkEpisodeResponse } from './client';
-import type { DocumentMetadata } from '../types';
+import type { DocumentMetadata, CodeChunk } from '../types';
 
 // ============================================================================
 // Types
@@ -342,6 +342,108 @@ Expected Response: ${testCase.expected_response}`;
 
     // Note: We don't throw even if some failed, as long as we tried our best
     // The individual deleteEpisode calls will have logged specific errors
+  }
+
+  /**
+   * NEW: Add code chunks as episodes with rich metadata
+   */
+  async addCodeChunks(
+    chunks: CodeChunk[],
+    userId: string,
+    filename: string
+  ): Promise<string[]> {
+    console.log(`[EpisodeService] ===== ADDING CODE CHUNKS =====`);
+    console.log(`[EpisodeService] File: ${filename}`);
+    console.log(`[EpisodeService] Chunks: ${chunks.length}`);
+    console.log(`[EpisodeService] User: ${userId}`);
+
+    if (chunks.length === 0) {
+      console.warn('[EpisodeService] No code chunks to process');
+      return [];
+    }
+
+    // Build episodes from code chunks
+    const episodes: GraphitiEpisode[] = chunks.map((chunk, index) => {
+      // Create rich episode body with context
+      const episodeBody = this.formatCodeChunk(chunk);
+
+      // Source description with metadata
+      const sourceDescription = JSON.stringify({
+        type: 'code',
+        filename,
+        chunkType: chunk.chunkType,
+        startLine: chunk.startLine,
+        endLine: chunk.endLine,
+        entities: chunk.entities.map(e => e.name),
+        language: filename.split('.').pop(),
+        chunkIndex: index,
+      });
+
+      return {
+        name: `${filename}:${chunk.chunkType}:${chunk.startLine}-${chunk.endLine}`,
+        episode_body: episodeBody,
+        source_description: sourceDescription,
+        reference_time: new Date().toISOString(),
+        group_id: userId,
+      };
+    });
+
+    console.log(`[EpisodeService] Built ${episodes.length} episodes from code chunks`);
+    console.log(`[EpisodeService] First episode: ${episodes[0]?.name}`);
+
+    // Use bulk processing
+    const result = await this.client.addEpisodesBulk({
+      episodes,
+      group_id: userId,
+    });
+
+    console.log(`[EpisodeService] ===== CODE CHUNKS PROCESSED =====`);
+    console.log(`[EpisodeService] Episodes created: ${result.episode_ids.length}`);
+    console.log(`[EpisodeService] Entities: ${result.total_entities}`);
+    console.log(`[EpisodeService] Relations: ${result.total_relations}`);
+
+    return result.episode_ids;
+  }
+
+  /**
+   * Format code chunk for Graphiti processing
+   */
+  private formatCodeChunk(chunk: CodeChunk): string {
+    const parts = [
+      `File: ${chunk.filePath}`,
+      `Lines: ${chunk.startLine}-${chunk.endLine}`,
+      `Type: ${chunk.chunkType}`,
+      '',
+    ];
+
+    // Add imports if present
+    if (chunk.imports.length > 0) {
+      parts.push('=== IMPORTS ===');
+      parts.push(...chunk.imports);
+      parts.push('');
+    }
+
+    // Add entity definitions
+    if (chunk.entities.length > 0) {
+      parts.push('=== DEFINITIONS ===');
+      parts.push(...chunk.entities.map(e =>
+        `${e.type}: ${e.name} (lines ${e.startLine}-${e.endLine})${e.signature ? ' - ' + e.signature : ''}`
+      ));
+      parts.push('');
+    }
+
+    // Add dependencies
+    if (chunk.dependencies.length > 0) {
+      parts.push('=== DEPENDENCIES ===');
+      parts.push(chunk.dependencies.join(', '));
+      parts.push('');
+    }
+
+    // Add the actual code
+    parts.push('=== CODE ===');
+    parts.push(chunk.content);
+
+    return parts.join('\n');
   }
 }
 

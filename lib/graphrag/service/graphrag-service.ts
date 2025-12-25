@@ -200,11 +200,12 @@ export class GraphRAGService {
 
   /**
    * Inject context into user message
+   * Enhanced for code-related queries
    */
   private injectContext(userMessage: string, context: string): string {
-    return `You have access to the user's uploaded documents. Use this context to provide accurate answers.
+    return `You have access to the user's uploaded documents and code. Use this context to provide accurate answers.
 
-CONTEXT FROM USER'S DOCUMENTS:
+CONTEXT FROM USER'S DOCUMENTS AND CODE:
 ${context}
 
 USER'S QUESTION:
@@ -212,9 +213,17 @@ ${userMessage}
 
 Instructions:
 - Answer the question using the provided context
-- If the context contains relevant information, use it in your response
+- For code-related questions:
+  * Provide specific file paths and line numbers when available
+  * Show relevant code snippets from the context
+  * Explain imports, dependencies, and relationships between code entities
+  * Reference function signatures, class definitions, and type information
+  * If the context shows relationships (extends, implements, calls), explain the connections
+- For document-related questions:
+  * Use the facts and information from the context
+  * Cite sources and confidence scores when applicable
 - If the context doesn't help answer the question, say so and provide a general answer
-- Be specific and cite facts from the context when applicable`;
+- Be specific and cite facts/code from the context when applicable`;
   }
 
   /**
