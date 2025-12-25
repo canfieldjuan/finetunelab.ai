@@ -15,8 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import TraceView, { type Trace } from './TraceView';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Filter, RefreshCw, Clock, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronRight, Zap, DollarSign, TrendingUp, Radio } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { Search, Filter, RefreshCw, Clock, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronRight, Zap, DollarSign, TrendingUp, Radio, Share2, Save, BookmarkPlus, GitCompare } from 'lucide-react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 
 interface TraceListItem {
   id: string;
@@ -46,9 +46,28 @@ interface TraceListItem {
   has_user_feedback?: boolean;
 }
 
+interface SavedPreset {
+  id: string;
+  name: string;
+  filters: {
+    searchQuery?: string;
+    operationFilter?: string;
+    statusFilter?: string;
+    timeRange?: string;
+    minCost?: number | null;
+    maxCost?: number | null;
+    minDuration?: number | null;
+    maxDuration?: number | null;
+    minThroughput?: number | null;
+    maxThroughput?: number | null;
+  };
+}
+
 export function TraceExplorer() {
   const { session } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [traces, setTraces] = useState<TraceListItem[]>([]);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [detailedTrace, setDetailedTrace] = useState<Trace[] | null>(null);
@@ -62,6 +81,13 @@ export function TraceExplorer() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+
+  // Advanced features
+  const [savedPresets, setSavedPresets] = useState<SavedPreset[]>([]);
+  const [showSavePreset, setShowSavePreset] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -239,6 +265,136 @@ export function TraceExplorer() {
       setDetailLoading(false);
     }
   };
+
+  // Sync filters to URL for sharing
+  const syncFiltersToURL = () => {
+    const params = new URLSearchParams();
+
+    if (searchQuery) params.set('search', searchQuery);
+    if (operationFilter !== 'all') params.set('operation', operationFilter);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (timeRange !== '30d') params.set('time', timeRange);
+    if (minCost !== null) params.set('minCost', minCost.toString());
+    if (maxCost !== null) params.set('maxCost', maxCost.toString());
+    if (minDuration !== null) params.set('minDuration', minDuration.toString());
+    if (maxDuration !== null) params.set('maxDuration', maxDuration.toString());
+    if (minThroughput !== null) params.set('minThroughput', minThroughput.toString());
+    if (maxThroughput !== null) params.set('maxThroughput', maxThroughput.toString());
+
+    const newURL = `${pathname}?${params.toString()}`;
+    router.push(newURL, { scroll: false });
+  };
+
+  // Copy shareable URL to clipboard
+  const shareFilters = async () => {
+    syncFiltersToURL();
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      alert('Filter URL copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy URL:', err);
+    }
+  };
+
+  // Save current filters as a preset
+  const savePreset = () => {
+    if (!presetName.trim()) return;
+
+    const newPreset: SavedPreset = {
+      id: Date.now().toString(),
+      name: presetName,
+      filters: {
+        searchQuery,
+        operationFilter,
+        statusFilter,
+        timeRange,
+        minCost,
+        maxCost,
+        minDuration,
+        maxDuration,
+        minThroughput,
+        maxThroughput,
+      }
+    };
+
+    const updated = [...savedPresets, newPreset];
+    setSavedPresets(updated);
+    localStorage.setItem('trace-filter-presets', JSON.stringify(updated));
+    setPresetName('');
+    setShowSavePreset(false);
+  };
+
+  // Load a saved preset
+  const loadPreset = (preset: SavedPreset) => {
+    if (preset.filters.searchQuery !== undefined) setSearchQuery(preset.filters.searchQuery);
+    if (preset.filters.operationFilter) setOperationFilter(preset.filters.operationFilter);
+    if (preset.filters.statusFilter) setStatusFilter(preset.filters.statusFilter);
+    if (preset.filters.timeRange) setTimeRange(preset.filters.timeRange as '1h' | '24h' | '7d' | '30d');
+    if (preset.filters.minCost !== undefined) setMinCost(preset.filters.minCost);
+    if (preset.filters.maxCost !== undefined) setMaxCost(preset.filters.maxCost);
+    if (preset.filters.minDuration !== undefined) setMinDuration(preset.filters.minDuration);
+    if (preset.filters.maxDuration !== undefined) setMaxDuration(preset.filters.maxDuration);
+    if (preset.filters.minThroughput !== undefined) setMinThroughput(preset.filters.minThroughput);
+    if (preset.filters.maxThroughput !== undefined) setMaxThroughput(preset.filters.maxThroughput);
+  };
+
+  // Delete a preset
+  const deletePreset = (id: string) => {
+    const updated = savedPresets.filter(p => p.id !== id);
+    setSavedPresets(updated);
+    localStorage.setItem('trace-filter-presets', JSON.stringify(updated));
+  };
+
+  // Toggle trace for comparison
+  const toggleTraceComparison = (traceId: string) => {
+    setSelectedForComparison(prev => {
+      if (prev.includes(traceId)) {
+        return prev.filter(id => id !== traceId);
+      } else if (prev.length < 3) {
+        // Max 3 traces for comparison
+        return [...prev, traceId];
+      }
+      return prev;
+    });
+  };
+
+  // Load presets from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('trace-filter-presets');
+    if (stored) {
+      try {
+        setSavedPresets(JSON.parse(stored));
+      } catch (err) {
+        console.error('[TraceExplorer] Failed to parse saved presets:', err);
+      }
+    }
+  }, []);
+
+  // Load filters from URL on mount
+  useEffect(() => {
+    const search = searchParams.get('search');
+    const operation = searchParams.get('operation');
+    const status = searchParams.get('status');
+    const time = searchParams.get('time');
+    const minCostParam = searchParams.get('minCost');
+    const maxCostParam = searchParams.get('maxCost');
+    const minDurationParam = searchParams.get('minDuration');
+    const maxDurationParam = searchParams.get('maxDuration');
+    const minThroughputParam = searchParams.get('minThroughput');
+    const maxThroughputParam = searchParams.get('maxThroughput');
+
+    if (search) setSearchQuery(search);
+    if (operation) setOperationFilter(operation);
+    if (status) setStatusFilter(status);
+    if (time) setTimeRange(time as '1h' | '24h' | '7d' | '30d');
+    if (minCostParam) setMinCost(parseFloat(minCostParam));
+    if (maxCostParam) setMaxCost(parseFloat(maxCostParam));
+    if (minDurationParam) setMinDuration(parseInt(minDurationParam));
+    if (maxDurationParam) setMaxDuration(parseInt(maxDurationParam));
+    if (minThroughputParam) setMinThroughput(parseFloat(minThroughputParam));
+    if (maxThroughputParam) setMaxThroughput(parseFloat(maxThroughputParam));
+  }, []); // Only run once on mount
 
   useEffect(() => {
     fetchTraces();
@@ -485,8 +641,42 @@ export function TraceExplorer() {
           </p>
         </div>
 
-        {/* Live Streaming Toggle */}
+        {/* Live Streaming & Tools */}
         <div className="flex items-center gap-2">
+          {/* Comparison Mode Toggle */}
+          <Button
+            variant={comparisonMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setComparisonMode(!comparisonMode)}
+            className="flex items-center gap-2"
+          >
+            <GitCompare className="h-4 w-4" />
+            {comparisonMode ? `Compare (${selectedForComparison.length}/3)` : 'Compare'}
+          </Button>
+
+          {/* Share Filters */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={shareFilters}
+            className="flex items-center gap-2"
+          >
+            <Share2 className="h-4 w-4" />
+            Share
+          </Button>
+
+          {/* Save Preset */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSavePreset(true)}
+            className="flex items-center gap-2"
+          >
+            <Save className="h-4 w-4" />
+            Save
+          </Button>
+
+          {/* Live Streaming Toggle */}
           <Button
             variant={liveStreaming ? "default" : "outline"}
             size="sm"
@@ -521,6 +711,65 @@ export function TraceExplorer() {
           )}
         </div>
       </div>
+
+      {/* Save Preset Modal */}
+      {showSavePreset && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowSavePreset(false)}>
+          <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <CardHeader>
+              <CardTitle>Save Filter Preset</CardTitle>
+              <CardDescription>Save current filters for quick access later</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Preset Name</label>
+                <Input
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  placeholder="e.g., Slow Production Traces"
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setShowSavePreset(false)}>Cancel</Button>
+                <Button onClick={savePreset} disabled={!presetName.trim()}>Save Preset</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Saved Presets */}
+      {savedPresets.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookmarkPlus className="h-5 w-5" />
+              Saved Presets
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {savedPresets.map((preset) => (
+                <div key={preset.id} className="flex items-center gap-1 bg-muted px-3 py-1.5 rounded-md">
+                  <button
+                    onClick={() => loadPreset(preset)}
+                    className="text-sm font-medium hover:text-primary"
+                  >
+                    {preset.name}
+                  </button>
+                  <button
+                    onClick={() => deletePreset(preset.id)}
+                    className="ml-2 text-muted-foreground hover:text-destructive"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>
@@ -831,10 +1080,24 @@ export function TraceExplorer() {
                 <Card key={trace.id} className="overflow-hidden hover:shadow-md transition-all border-l-4" style={{ borderLeftColor: getStatusColor(trace.status) }} data-trace-id={trace.trace_id}>
                   <CardContent className="p-0">
                     <div
-                      onClick={() => handleTraceClick(trace.trace_id)}
+                      onClick={() => !comparisonMode && handleTraceClick(trace.trace_id)}
                       className="w-full cursor-pointer hover:bg-muted/5 transition-colors"
                     >
                       <div className="flex items-center p-4 gap-4">
+                        {/* Comparison Checkbox */}
+                        {comparisonMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedForComparison.includes(trace.trace_id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleTraceComparison(trace.trace_id);
+                            }}
+                            className="h-4 w-4"
+                            disabled={!selectedForComparison.includes(trace.trace_id) && selectedForComparison.length >= 3}
+                          />
+                        )}
+
                         {/* Status & Expand Icon */}
                         <div className="flex items-center gap-3 flex-shrink-0">
                            {selectedTraceId === trace.trace_id ? (
@@ -972,6 +1235,94 @@ export function TraceExplorer() {
           )}
         </CardContent>
       </Card>
+
+      {/* Comparison View */}
+      {comparisonMode && selectedForComparison.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <GitCompare className="h-5 w-5" />
+                Trace Comparison ({selectedForComparison.length})
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedForComparison([])}
+              >
+                Clear Selection
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {selectedForComparison.map(traceId => {
+                const trace = traces.find(t => t.trace_id === traceId);
+                if (!trace) return null;
+
+                return (
+                  <div key={traceId} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-semibold text-sm">{trace.span_name}</h4>
+                        <p className="text-xs text-muted-foreground font-mono">{trace.trace_id.slice(0, 8)}</p>
+                      </div>
+                      <Badge variant="secondary" className={`text-xs ${getOperationColor(trace.operation_type)}`}>
+                        {trace.operation_type}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Duration:</span>
+                        <div className="font-medium">{formatDuration(trace.duration_ms)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Status:</span>
+                        <div className="flex items-center gap-1">
+                          {getStatusIcon(trace.status)}
+                          <span className="capitalize">{trace.status}</span>
+                        </div>
+                      </div>
+                      {trace.total_tokens && (
+                        <div>
+                          <span className="text-muted-foreground">Tokens:</span>
+                          <div className="font-medium">{trace.total_tokens.toLocaleString()}</div>
+                        </div>
+                      )}
+                      {trace.cost_usd && (
+                        <div>
+                          <span className="text-muted-foreground">Cost:</span>
+                          <div className="font-medium">${trace.cost_usd.toFixed(5)}</div>
+                        </div>
+                      )}
+                      {trace.ttft_ms && (
+                        <div>
+                          <span className="text-muted-foreground">TTFT:</span>
+                          <div className="font-medium">{trace.ttft_ms}ms</div>
+                        </div>
+                      )}
+                      {trace.tokens_per_second && (
+                        <div>
+                          <span className="text-muted-foreground">Speed:</span>
+                          <div className="font-medium">{trace.tokens_per_second.toFixed(1)} t/s</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {trace.model_name && (
+                      <div className="pt-2 border-t">
+                        <span className="text-xs text-muted-foreground">Model: </span>
+                        <span className="text-xs font-medium">{trace.model_name}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
