@@ -7,7 +7,7 @@
  * Provides filtering, search, and detailed trace visualization
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import TraceView, { type Trace } from './TraceView';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Filter, RefreshCw, Clock, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronRight, Zap, DollarSign, TrendingUp } from 'lucide-react';
+import { Search, Filter, RefreshCw, Clock, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronRight, Zap, DollarSign, TrendingUp, Radio } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 interface TraceListItem {
@@ -55,6 +55,13 @@ export function TraceExplorer() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Live streaming state
+  const [liveStreaming, setLiveStreaming] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -265,6 +272,108 @@ export function TraceExplorer() {
     }
   }, [searchParams, loading, traces]);
 
+  // Live streaming via SSE
+  useEffect(() => {
+    if (!liveStreaming || !session?.access_token) {
+      // Disconnect if streaming is disabled
+      if (eventSourceRef.current) {
+        console.log('[TraceExplorer] Disconnecting SSE stream');
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setStreamStatus('disconnected');
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    const connectStream = () => {
+      if (eventSourceRef.current) {
+        return; // Already connected
+      }
+
+      console.log('[TraceExplorer] Connecting to SSE stream...');
+      setStreamStatus('connecting');
+
+      const eventSource = new EventSource(`/api/analytics/traces/stream`);
+      eventSourceRef.current = eventSource;
+
+      eventSource.onopen = () => {
+        console.log('[TraceExplorer] SSE stream connected');
+        setStreamStatus('connected');
+        reconnectAttemptsRef.current = 0;
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[TraceExplorer] SSE message received:', data.type);
+
+          if (data.type === 'trace') {
+            // New trace received - refresh the list
+            console.log('[TraceExplorer] New trace detected, refreshing list');
+            fetchTraces();
+          } else if (data.type === 'trace_update') {
+            // Trace updated - refresh if it's in the current view
+            console.log('[TraceExplorer] Trace updated, refreshing list');
+            fetchTraces();
+          } else if (data.type === 'connected' || data.type === 'subscribed') {
+            console.log('[TraceExplorer] Stream status:', data.message);
+          } else if (data.type === 'ping') {
+            // Keep-alive ping, no action needed
+          } else if (data.type === 'error') {
+            console.error('[TraceExplorer] Stream error:', data.message);
+          }
+        } catch (error) {
+          console.error('[TraceExplorer] Error parsing SSE message:', error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('[TraceExplorer] SSE error:', error);
+        setStreamStatus('error');
+
+        // Close and cleanup
+        eventSource.close();
+        eventSourceRef.current = null;
+
+        // Auto-reconnect with exponential backoff
+        const attempt = reconnectAttemptsRef.current + 1;
+        reconnectAttemptsRef.current = attempt;
+        const delay = Math.min(30000, attempt * 2000); // Max 30s delay
+
+        console.log(`[TraceExplorer] Reconnecting in ${delay}ms (attempt ${attempt})`);
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          connectStream();
+        }, delay);
+      };
+    };
+
+    connectStream();
+
+    // Cleanup on unmount or streaming toggle
+    return () => {
+      if (eventSourceRef.current) {
+        console.log('[TraceExplorer] Cleaning up SSE connection');
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+  }, [liveStreaming, session]);
+
+  // Toggle live streaming
+  const toggleLiveStreaming = () => {
+    setLiveStreaming(prev => !prev);
+  };
+
   const handleSearch = () => {
     setPage(1);
     fetchTraces();
@@ -368,11 +477,49 @@ export function TraceExplorer() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Trace Explorer</h1>
-        <p className="text-muted-foreground mt-1">
-          Browse and debug LLM operation traces
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Trace Explorer</h1>
+          <p className="text-muted-foreground mt-1">
+            Browse and debug LLM operation traces
+          </p>
+        </div>
+
+        {/* Live Streaming Toggle */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={liveStreaming ? "default" : "outline"}
+            size="sm"
+            onClick={toggleLiveStreaming}
+            className="flex items-center gap-2"
+          >
+            <Radio className={`h-4 w-4 ${streamStatus === 'connected' ? 'animate-pulse text-green-400' : ''}`} />
+            {liveStreaming ? 'Live' : 'Start Live'}
+          </Button>
+
+          {liveStreaming && (
+            <Badge
+              variant={
+                streamStatus === 'connected' ? 'default' :
+                streamStatus === 'connecting' ? 'secondary' :
+                streamStatus === 'error' ? 'destructive' :
+                'outline'
+              }
+              className="flex items-center gap-1"
+            >
+              <span className={`h-2 w-2 rounded-full ${
+                streamStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                streamStatus === 'connecting' ? 'bg-yellow-500' :
+                streamStatus === 'error' ? 'bg-red-500' :
+                'bg-gray-400'
+              }`} />
+              {streamStatus === 'connected' ? 'Connected' :
+               streamStatus === 'connecting' ? 'Connecting...' :
+               streamStatus === 'error' ? 'Error' :
+               'Disconnected'}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
