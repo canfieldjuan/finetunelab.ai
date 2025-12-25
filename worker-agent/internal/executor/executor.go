@@ -139,13 +139,13 @@ func (e *Executor) executeUpdateConfig(ctx context.Context, cmd api.Command) api
 }
 
 // executeRestartAgent restarts the agent
-func (e *Executor) executeRestartAgent(ctx context.Context, cmd api.CommandResult) api.CommandResult {
+func (e *Executor) executeRestartAgent(ctx context.Context, cmd api.Command) api.CommandResult {
 	log.Println("[Executor] Restart agent requested...")
 
 	// TODO: Implement graceful restart
 	// For now, just acknowledge
 	return api.CommandResult{
-		CommandID: cmd.CommandID,
+		CommandID: cmd.ID,
 		Status:    "completed",
 		Output:    "Agent restart acknowledged (requires manual restart for now)",
 		Timestamp: time.Now().Unix(),
