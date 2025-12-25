@@ -10,17 +10,21 @@ import (
 	"time"
 
 	"github.com/finetunelab/worker-agent/internal/client"
+	"github.com/finetunelab/worker-agent/internal/collector"
+	"github.com/finetunelab/worker-agent/internal/executor"
 	"github.com/finetunelab/worker-agent/pkg/api"
 )
 
 // Agent is the main worker agent
 type Agent struct {
-	config     *Config
-	httpClient *client.HTTPClient
-	workerID   string
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
+	config            *Config
+	httpClient        *client.HTTPClient
+	workerID          string
+	executor          *executor.Executor
+	metricsCollector  *collector.MetricsCollector
+	ctx               context.Context
+	cancel            context.CancelFunc
+	wg                sync.WaitGroup
 }
 
 // New creates a new worker agent
@@ -33,14 +37,22 @@ func New(config *Config) (*Agent, error) {
 	// Create HTTP client
 	httpClient := client.NewHTTPClient(config.BaseURL, config.APIKey)
 
+	// Create executor
+	exec := executor.New()
+
+	// Create metrics collector
+	metricsCollector := collector.NewMetricsCollector()
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Agent{
-		config:     config,
-		httpClient: httpClient,
-		workerID:   config.WorkerID,
-		ctx:        ctx,
-		cancel:     cancel,
+		config:           config,
+		httpClient:       httpClient,
+		workerID:         config.WorkerID,
+		executor:         exec,
+		metricsCollector: metricsCollector,
+		ctx:              ctx,
+		cancel:           cancel,
 	}, nil
 }
 
@@ -159,14 +171,16 @@ func (a *Agent) heartbeatLoop() {
 
 // sendHeartbeat sends a heartbeat to the SaaS
 func (a *Agent) sendHeartbeat() error {
+	// Collect metrics
+	metrics, err := a.metricsCollector.Collect()
+	if err != nil {
+		log.Printf("[Agent] Warning: Failed to collect metrics: %v", err)
+		metrics = &api.MetricsSnapshot{}
+	}
+
 	req := &api.HeartbeatRequest{
-		Status: "online",
-		Metrics: &api.MetricsSnapshot{
-			// TODO: Collect real metrics
-			CPUPercent:    0.0,
-			MemoryUsedMB:  0,
-			MemoryTotalMB: 0,
-		},
+		Status:  "online",
+		Metrics: metrics,
 	}
 
 	resp, err := a.httpClient.Heartbeat(a.workerID, req)
@@ -178,12 +192,29 @@ func (a *Agent) sendHeartbeat() error {
 	if len(resp.PendingCommands) > 0 {
 		log.Printf("[Agent] Received %d pending command(s)", len(resp.PendingCommands))
 		for _, cmd := range resp.PendingCommands {
-			log.Printf("[Agent] Pending command: %s (ID: %s)", cmd.CommandType, cmd.ID)
-			// TODO: Execute commands
+			log.Printf("[Agent] Executing command: %s (ID: %s)", cmd.CommandType, cmd.ID)
+			// Execute command asynchronously
+			go a.executeCommand(cmd)
 		}
 	}
 
 	return nil
+}
+
+// executeCommand executes a command and reports the result
+func (a *Agent) executeCommand(cmd api.Command) {
+	// Execute command with timeout
+	result := a.executor.Execute(a.ctx, cmd)
+
+	// Send result back to SaaS
+	if err := a.httpClient.SendCommandResult(cmd.ID, &result); err != nil {
+		log.Printf("[Agent] Failed to send command result: %v", err)
+		// Retry once after 5 seconds
+		time.Sleep(5 * time.Second)
+		if err := a.httpClient.SendCommandResult(cmd.ID, &result); err != nil {
+			log.Printf("[Agent] Failed to send command result (retry): %v", err)
+		}
+	}
 }
 
 // Wait blocks until the agent is stopped
