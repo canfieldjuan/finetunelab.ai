@@ -17,6 +17,7 @@ import {
   validateDemoSession,
 } from '@/lib/demo/demo-analytics.service';
 import type { ToolDefinition } from '@/lib/llm/openai';
+import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
@@ -248,17 +249,12 @@ export async function POST(req: NextRequest) {
     const testRun = await getDemoTestRunSummary(session_id);
     const metrics = await getDemoSessionMetrics(session_id);
 
-    // Build system prompt with session context
+    // Build system prompt with session context (simplified for user's model)
     const systemMessage = {
       role: 'system',
-      content: `You are Atlas, the Analytics Assistant for Fine Tune Lab's demo.
+      content: `You are an AI assistant helping users analyze their batch test results.
 
-## YOUR ROLE
-Help users understand their batch test results through natural language queries.
-Provide data-driven insights about latency, success rates, token usage, and response quality.
-
-## CURRENT SESSION CONTEXT
-Session ID: ${session_id}
+## CURRENT TEST CONTEXT
 Model: ${validation.modelName || 'Unknown'}
 ${testRun ? `
 Test Status: ${testRun.status}
@@ -274,99 +270,76 @@ ${metrics ? `
 - Total Tokens: ${metrics.totalInputTokens + metrics.totalOutputTokens}
 ` : ''}
 
-## YOUR 6 TOOLS
-1. **get_demo_metrics** - Get overall metrics (success rate, latency percentiles, token usage)
-2. **get_demo_results** - Get individual prompt results with sorting/filtering
-3. **search_demo_responses** - Search prompts/responses by keyword
-4. **get_latency_distribution** - Get latency histogram data
-5. **get_extreme_latency** - Get slowest or fastest prompts
-6. **calculator** - Perform mathematical calculations
+## YOUR ROLE
+Help the user understand these batch test results. Answer questions about:
+- Success rates and failure patterns
+- Latency performance (averages, percentiles)
+- Token usage and efficiency
+- Specific prompt/response quality
 
-## ANALYSIS WORKFLOWS
-
-### "What's my success rate?"
-1. Call get_demo_metrics to get overall statistics
-2. Report success rate with context (>90% excellent, 80-90% good, <80% needs attention)
-
-### "Which prompts were slowest?"
-1. Call get_extreme_latency with type: "slowest"
-2. Show the prompts with their latency times
-3. Suggest potential causes (long prompts, complex reasoning, etc.)
-
-### "What's my p95 latency?"
-1. Call get_demo_metrics
-2. Report p95LatencyMs with comparison to p50 (median) for context
-3. Explain what p95 means (95% of requests complete within this time)
-
-### "Search for [keyword]"
-1. Call search_demo_responses with the keyword
-2. Show matching prompts and responses
-3. Highlight where the keyword appears
-
-## COMMUNICATION STYLE
-- Be conversational but data-driven
-- Start with the headline (key finding), then support with data
-- Use markdown for structure
-- Show calculations explicitly when relevant
-- Suggest follow-up questions the user might want to ask
-
-Now, help the user analyze their batch test results. If they're starting fresh, offer to show them a summary of their test metrics.`,
+Be conversational and data-driven. Use the metrics summary above to answer questions.
+If the user asks for detailed breakdowns or specific examples, let them know the summary above contains the key metrics available.`,
     };
 
     const enhancedMessages = [systemMessage, ...messages];
 
-    // Get model name from environment
-    const modelName = process.env.DEMO_ATLAS_MODEL || process.env.ANALYTICS_DEFAULT_MODEL || 'gpt-4o-mini';
+    // Load user's model configuration from session
+    const supabase = await createClient();
+    const { data: modelConfig, error: configError } = await supabase
+      .from('demo_model_configs')
+      .select('endpoint_url, api_key_encrypted, model_id, model_name')
+      .eq('session_id', session_id)
+      .single();
 
-    // Determine provider
-    const getProviderForModel = (model: string): 'openai' | 'anthropic' => {
-      if (model.startsWith('claude')) return 'anthropic';
-      return 'openai';
-    };
+    if (configError || !modelConfig) {
+      console.error('[DemoAtlas] Failed to load model config:', configError);
+      return NextResponse.json({ error: 'Session configuration not found' }, { status: 404 });
+    }
 
-    const provider = getProviderForModel(modelName);
+    // Decrypt API key
+    const { decrypt } = await import('@/lib/encryption');
+    let apiKey: string;
+    try {
+      apiKey = decrypt(modelConfig.api_key_encrypted);
+    } catch (decryptError) {
+      console.error('[DemoAtlas] Failed to decrypt API key:', decryptError);
+      return NextResponse.json({ error: 'Invalid session configuration' }, { status: 400 });
+    }
 
-    // Create tool call handler bound to session
-    const toolCallHandler = async (toolName: string, args: Record<string, unknown>) => {
-      return await executeDemoAtlasTool(toolName, args, session_id);
-    };
+    // Call user's model
+    const { callDemoModel } = await import('@/lib/demo/openai-compatible-caller');
 
-    // Import provider-specific functions
-    const { runOpenAIWithToolCalls } = await import('@/lib/llm/openai');
-    const { runAnthropicWithToolCalls } = await import('@/lib/llm/anthropic');
+    const modelResponse = await callDemoModel(
+      {
+        url: modelConfig.endpoint_url,
+        apiKey: apiKey,
+        modelId: modelConfig.model_id,
+      },
+      enhancedMessages.map(m => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content,
+      })),
+      {
+        maxTokens: 2000,
+        temperature: 0.3,
+      }
+    );
 
-    // Execute chat with tools
-    let llmResponse;
-    if (provider === 'openai') {
-      llmResponse = await runOpenAIWithToolCalls(
-        enhancedMessages,
-        modelName,
-        0.3,
-        2000,
-        demoAtlasTools,
-        toolCallHandler
-      );
-    } else {
-      llmResponse = await runAnthropicWithToolCalls(
-        enhancedMessages,
-        modelName,
-        0.3,
-        2000,
-        demoAtlasTools,
-        toolCallHandler
+    // Handle model errors
+    if (!modelResponse.success) {
+      console.error('[DemoAtlas] Model call failed:', modelResponse.error);
+      return NextResponse.json(
+        { error: modelResponse.error || 'Failed to get response from model' },
+        { status: 500 }
       );
     }
 
     // Extract response content
-    let finalResponse: string;
-    let tokenUsage: { input_tokens: number; output_tokens: number } | null = null;
-
-    if (typeof llmResponse === 'object' && 'content' in llmResponse && 'usage' in llmResponse) {
-      finalResponse = llmResponse.content;
-      tokenUsage = llmResponse.usage;
-    } else {
-      finalResponse = llmResponse as string;
-    }
+    const finalResponse = modelResponse.response || '';
+    const tokenUsage = {
+      input_tokens: modelResponse.input_tokens || 0,
+      output_tokens: modelResponse.output_tokens || 0,
+    };
 
     // Stream response
     const encoder = new TextEncoder();
