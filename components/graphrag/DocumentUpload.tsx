@@ -14,7 +14,24 @@ const ALLOWED_TYPES = [
   'application/pdf',
   'text/plain',
   'text/markdown',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/x-python',
+  'text/typescript',
+  'application/typescript',
+  'text/javascript',
+  'application/javascript'
+];
+
+const ALLOWED_EXTENSIONS = [
+  '.pdf',
+  '.txt',
+  '.md',
+  '.docx',
+  '.py',
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx'
 ];
 
 export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps) {
@@ -38,8 +55,11 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
 
   // File validation helper
   const validateFile = (file: File): string | null => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return 'Invalid file type. Please upload PDF, TXT, MD, or DOCX files.';
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    const isValidType = ALLOWED_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(fileExtension);
+
+    if (!isValidType) {
+      return 'Invalid file type. Please upload PDF, TXT, MD, DOCX, or code files (TS, TSX, JS, JSX, PY).';
     }
     if (file.size > MAX_FILE_SIZE) {
       return `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`;
@@ -71,19 +91,35 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    
+
+    console.log('[DocumentUpload] ===== DROP EVENT =====');
+    console.log('[DocumentUpload] Files dropped:', e.dataTransfer.files.length);
+
     const files = Array.from(e.dataTransfer.files);
+    console.log('[DocumentUpload] Files array:', files.map(f => f.name));
+
     handleAddFiles(files);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('[DocumentUpload] ===== FILE SELECT EVENT =====');
+    console.log('[DocumentUpload] Files selected:', e.target.files?.length || 0);
+
     const files = Array.from(e.target.files || []);
+    console.log('[DocumentUpload] Files array:', files.map(f => f.name));
+
     handleAddFiles(files);
   };
 
   const handleAddFiles = (files: File[]) => {
     console.log('[DocumentUpload] ===== HANDLE ADD FILES =====');
     console.log('[DocumentUpload] Files to add:', files.length);
+    console.log('[DocumentUpload] File details:', files.map(f => ({
+      name: f.name,
+      size: f.size,
+      type: f.type,
+      sizeInMB: (f.size / 1024 / 1024).toFixed(2)
+    })));
 
     const newErrors: Record<string, string> = {};
     const validFiles: File[] = [];
@@ -168,7 +204,8 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
       if (!response.ok) {
         const data = await response.json();
         console.error('[DocumentUpload] Upload failed with error:', data.error);
-        throw new Error(data.error || 'Upload failed');
+        console.error('[DocumentUpload] Full error response:', JSON.stringify(data, null, 2));
+        throw new Error(data.error || data.details || 'Upload failed');
       }
 
       const responseData = await response.json();
@@ -190,9 +227,12 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
         [fileName]: err instanceof Error ? err.message : 'Upload failed'
       }));
     } finally {
+      console.log('[DocumentUpload] ===== UPLOAD SINGLE FILE COMPLETE =====');
+      console.log('[DocumentUpload] Removing', fileName, 'from uploading set');
       setUploadingFiles(prev => {
         const next = new Set(prev);
         next.delete(fileName);
+        console.log('[DocumentUpload] Uploading files remaining:', next.size);
         return next;
       });
     }
@@ -242,6 +282,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
       }, 1500);
 
     } finally {
+      console.log('[DocumentUpload] Finally block executing, setting isUploading to false');
       setIsUploading(false);
     }
   };
@@ -319,7 +360,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
               <span className="font-semibold">Click to upload</span> or drag and drop
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              PDF, TXT, MD, or DOCX (max 10MB per file)
+              PDF, TXT, MD, DOCX, or code files (TS, TSX, JS, JSX, PY) - max 10MB per file
             </p>
           </div>
           <input
@@ -327,7 +368,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
             id="file-upload"
             type="file"
             className="hidden"
-            accept=".pdf,.txt,.md,.docx"
+            accept=".pdf,.txt,.md,.docx,.py,.ts,.tsx,.js,.jsx"
             onChange={handleFileSelect}
             disabled={isUploading}
             multiple

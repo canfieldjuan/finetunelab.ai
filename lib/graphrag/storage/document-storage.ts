@@ -195,7 +195,7 @@ export class DocumentStorage {
       const queryStart = Date.now();
       const result = await supabase
         .from('documents')
-        .select('id, user_id, filename, file_type, upload_path, document_hash, processed, neo4j_episode_ids, version, parent_id, created_at, updated_at')
+        .select('id, user_id, filename, file_type, upload_path, document_hash, processed, neo4j_episode_ids, version, parent_id, created_at, updated_at, metadata')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100);

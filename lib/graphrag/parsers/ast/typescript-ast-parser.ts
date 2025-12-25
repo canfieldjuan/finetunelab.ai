@@ -369,7 +369,7 @@ export class TypeScriptASTParser extends BaseASTParser {
       },
     });
 
-    return [...new Set(deps)];
+    return Array.from(new Set(deps));
   }
 
   private createRelation(type: 'EXTENDS' | 'IMPLEMENTS', source: CodeEntity, targetName: string): CodeRelation {

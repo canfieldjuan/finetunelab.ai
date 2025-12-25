@@ -991,7 +991,7 @@ export class DocumentService {
    */
   private getFileType(filename: string): DocumentFileType {
     const ext = filename.toLowerCase().split('.').pop();
-    
+
     switch (ext) {
       case 'pdf':
         return 'pdf';
@@ -1001,6 +1001,16 @@ export class DocumentService {
         return 'txt';
       case 'md':
         return 'md';
+      case 'ts':
+        return 'ts';
+      case 'tsx':
+        return 'tsx';
+      case 'js':
+        return 'js';
+      case 'jsx':
+        return 'jsx';
+      case 'py':
+        return 'py';
       default:
         throw new Error(`Unsupported file extension: ${ext}`);
     }

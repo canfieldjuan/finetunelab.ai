@@ -26,10 +26,15 @@ export class ParserFactory {
 
     if (file instanceof Buffer) {
       buffer = file;
+    } else if (typeof File !== 'undefined' && file instanceof File) {
+      try {
+        buffer = Buffer.from(await file.arrayBuffer());
+        filename = file.name || 'unknown';
+      } catch (error) {
+        throw new Error(`Failed to read file ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     } else {
-      // file is File type
-      buffer = Buffer.from(await (file as File).arrayBuffer());
-      filename = (file as File).name || 'unknown';
+      throw new TypeError('Invalid file type provided to parser. Expected Buffer or File.');
     }
 
     // NEW: Handle code files
@@ -45,8 +50,9 @@ export class ParserFactory {
         return this.parseDOCX(buffer);
 
       case 'txt':
+        return this.parseText(buffer, 'txt');
       case 'md':
-        return this.parseText(buffer, fileType);
+        return this.parseText(buffer, 'md');
 
       default:
         throw new Error(`Unsupported file type: ${fileType}`);
@@ -153,23 +159,38 @@ export class ParserFactory {
       `Lines: ${metadata.lineCount}`,
       '',
       '=== IMPORTS ===',
-      ...astResult.entities.filter(e => e.type === 'import').map(e => e.name),
       '',
       '=== FUNCTIONS ===',
-      ...astResult.entities.filter(e => e.type === 'function').map(e =>
-        `${e.name} (lines ${e.startLine}-${e.endLine}): ${e.signature || ''}`
-      ),
       '',
       '=== CLASSES ===',
-      ...astResult.entities.filter(e => e.type === 'class').map(e =>
-        `${e.name} (lines ${e.startLine}-${e.endLine}): ${e.properties?.join(', ') || ''}`
-      ),
       '',
       '=== INTERFACES/TYPES ===',
-      ...astResult.entities.filter(e => e.type === 'interface' || e.type === 'type').map(e =>
-        `${e.name} (lines ${e.startLine}-${e.endLine})`
-      ),
     ];
+
+    const importSection: string[] = [];
+    const functionSection: string[] = [];
+    const classSection: string[] = [];
+    const interfaceTypeSection: string[] = [];
+
+    for (const e of astResult.entities) {
+      switch (e.type) {
+        case 'import':
+          importSection.push(e.name);
+          break;
+        case 'function':
+          functionSection.push(`${e.name} (lines ${e.startLine}-${e.endLine}): ${e.signature || ''}`);
+          break;
+        case 'class':
+          classSection.push(`${e.name} (lines ${e.startLine}-${e.endLine}): ${e.properties?.join(', ') || ''}`);
+          break;
+        case 'interface':
+        case 'type':
+          interfaceTypeSection.push(`${e.name} (lines ${e.startLine}-${e.endLine})`);
+          break;
+      }
+    }
+
+    sections.push(...importSection, '', ...functionSection, '', ...classSection, '', ...interfaceTypeSection);
 
     return sections.join('\n');
   }
@@ -178,7 +199,12 @@ export class ParserFactory {
    * Detect file type from filename extension
    */
   detectFileType(filename: string): DocumentFileType | null {
-    const extension = filename.split('.').pop()?.toLowerCase();
+    const lastDotIndex = filename.lastIndexOf('.');
+    if (lastDotIndex === -1 || lastDotIndex === filename.length - 1) {
+      return null;
+    }
+
+    const extension = filename.substring(lastDotIndex + 1).toLowerCase();
 
     switch (extension) {
       case 'pdf':
@@ -190,7 +216,6 @@ export class ParserFactory {
       case 'md':
       case 'markdown':
         return 'md';
-      // NEW: Code file types
       case 'ts':
         return 'ts';
       case 'tsx':
@@ -242,11 +267,12 @@ export async function parseDocument(
   filename: string
 ): Promise<ParseResult> {
   const factory = new ParserFactory();
-  
+
   // Detect file type from filename
   const fileType = factory.detectFileType(filename);
   if (!fileType) {
-    throw new Error(`Unable to detect file type from filename: ${filename}`);
+    const extension = filename.includes('.') ? filename.substring(filename.lastIndexOf('.')) : 'none';
+    throw new Error(`Unable to detect file type from filename: ${filename} (extension: ${extension})`);
   }
 
   // Validate file type
@@ -254,14 +280,19 @@ export async function parseDocument(
   if (file instanceof Buffer) {
     buffer = file;
   } else {
-    buffer = Buffer.from(await (file as File).arrayBuffer());
-  }
-  
-  const isValid = factory.validateFileType(buffer, fileType);
-  if (!isValid) {
-    throw new Error(`File validation failed: ${filename} is not a valid ${fileType} file`);
+    const fileObj = file as File;
+    try {
+      buffer = Buffer.from(await fileObj.arrayBuffer());
+    } catch (error) {
+      throw new Error(`Failed to read file ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
-  // Parse document
-  return factory.parse(buffer, fileType);
+  const isValid = factory.validateFileType(buffer, fileType);
+  if (!isValid) {
+    throw new Error(`File validation failed: ${filename} is not a valid ${fileType.toUpperCase()} file. The file may be corrupted or have an incorrect extension.`);
+  }
+
+  // Parse document (pass original file object, not buffer, to preserve filename)
+  return factory.parse(file, fileType);
 }
