@@ -6,12 +6,14 @@
 import { pdfParser, type PDFParseResult } from './pdf-parser';
 import { docxParser, type DOCXParseResult } from './docx-parser';
 import { textParser, type TextParseResult } from './text-parser';
+import { codeParser, type CodeParseResult } from './code-parser';
 import type { DocumentFileType } from '../types';
 
 export interface ParseResult {
   text: string;
   metadata: Record<string, unknown>;
   fileType: DocumentFileType;
+  codeResult?: CodeParseResult; // NEW: Optional code parse result
 }
 
 export class ParserFactory {
@@ -20,25 +22,32 @@ export class ParserFactory {
    */
   async parse(file: File | Buffer, fileType: DocumentFileType): Promise<ParseResult> {
     let buffer: Buffer;
-    
+    let filename = 'unknown';
+
     if (file instanceof Buffer) {
       buffer = file;
     } else {
       // file is File type
       buffer = Buffer.from(await (file as File).arrayBuffer());
+      filename = (file as File).name || 'unknown';
+    }
+
+    // NEW: Handle code files
+    if (this.isCodeFile(fileType)) {
+      return this.parseCode(buffer, fileType, filename);
     }
 
     switch (fileType) {
       case 'pdf':
         return this.parsePDF(buffer);
-      
+
       case 'docx':
         return this.parseDOCX(buffer);
-      
+
       case 'txt':
       case 'md':
         return this.parseText(buffer, fileType);
-      
+
       default:
         throw new Error(`Unsupported file type: ${fileType}`);
     }
@@ -85,7 +94,7 @@ export class ParserFactory {
   private async parseText(buffer: Buffer, fileType: 'txt' | 'md'): Promise<ParseResult> {
     const result: TextParseResult = await textParser.parseWithAutoEncoding(buffer);
     const cleanedText = textParser.cleanText(result.text);
-    
+
     return {
       text: cleanedText,
       fileType,
@@ -99,11 +108,78 @@ export class ParserFactory {
   }
 
   /**
+   * NEW: Check if file type is code
+   */
+  private isCodeFile(fileType: DocumentFileType): boolean {
+    return ['ts', 'tsx', 'js', 'jsx', 'py'].includes(fileType);
+  }
+
+  /**
+   * NEW: Parse code files using AST
+   */
+  private async parseCode(
+    buffer: Buffer,
+    fileType: DocumentFileType,
+    filename: string
+  ): Promise<ParseResult> {
+    const codeResult = await codeParser.parse(buffer, filename);
+
+    // Convert AST result to text for backward compatibility
+    const text = this.formatCodeAsText(codeResult);
+
+    return {
+      text,
+      fileType,
+      codeResult, // Include full AST result
+      metadata: {
+        ...codeResult.metadata,
+        astParsed: true,
+        entityCount: codeResult.astResult.entities.length,
+        relationCount: codeResult.astResult.relations.length,
+        chunkCount: codeResult.astResult.chunks.length,
+      },
+    };
+  }
+
+  /**
+   * Format code parse result as structured text
+   */
+  private formatCodeAsText(codeResult: CodeParseResult): string {
+    const { astResult, metadata } = codeResult;
+
+    const sections = [
+      `File: ${metadata.filePath}`,
+      `Language: ${metadata.language}`,
+      `Lines: ${metadata.lineCount}`,
+      '',
+      '=== IMPORTS ===',
+      ...astResult.entities.filter(e => e.type === 'import').map(e => e.name),
+      '',
+      '=== FUNCTIONS ===',
+      ...astResult.entities.filter(e => e.type === 'function').map(e =>
+        `${e.name} (lines ${e.startLine}-${e.endLine}): ${e.signature || ''}`
+      ),
+      '',
+      '=== CLASSES ===',
+      ...astResult.entities.filter(e => e.type === 'class').map(e =>
+        `${e.name} (lines ${e.startLine}-${e.endLine}): ${e.properties?.join(', ') || ''}`
+      ),
+      '',
+      '=== INTERFACES/TYPES ===',
+      ...astResult.entities.filter(e => e.type === 'interface' || e.type === 'type').map(e =>
+        `${e.name} (lines ${e.startLine}-${e.endLine})`
+      ),
+    ];
+
+    return sections.join('\n');
+  }
+
+  /**
    * Detect file type from filename extension
    */
   detectFileType(filename: string): DocumentFileType | null {
     const extension = filename.split('.').pop()?.toLowerCase();
-    
+
     switch (extension) {
       case 'pdf':
         return 'pdf';
@@ -114,6 +190,17 @@ export class ParserFactory {
       case 'md':
       case 'markdown':
         return 'md';
+      // NEW: Code file types
+      case 'ts':
+        return 'ts';
+      case 'tsx':
+        return 'tsx';
+      case 'js':
+        return 'js';
+      case 'jsx':
+        return 'jsx';
+      case 'py':
+        return 'py';
       default:
         return null;
     }
@@ -132,6 +219,13 @@ export class ParserFactory {
       case 'md':
         // Text files don't have a magic number, assume valid
         return true;
+      // NEW: Code validation
+      case 'ts':
+      case 'tsx':
+      case 'js':
+      case 'jsx':
+      case 'py':
+        return codeParser.isValidCode(buffer, expectedType);
       default:
         return false;
     }
