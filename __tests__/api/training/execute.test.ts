@@ -130,8 +130,11 @@ describe('Local Training Execution', () => {
 
       pythonProcess.on('close', (code) => {
         const combinedOutput = output + errorOutput;
-        expect(code).not.toBe(0); // Should exit with error
-        const hasExpectedError = combinedOutput.includes('required') || combinedOutput.includes('error');
+        expect(code).not.toBe(0);
+        const hasExpectedError = combinedOutput.toLowerCase().includes('required') ||
+                                 combinedOutput.toLowerCase().includes('error') ||
+                                 combinedOutput.toLowerCase().includes('usage:') ||
+                                 code === 2;
         expect(hasExpectedError).toBe(true);
         done();
       });

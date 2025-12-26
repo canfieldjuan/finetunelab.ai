@@ -15,26 +15,19 @@ const ALLOWED_TYPES = [
   'text/plain',
   'text/markdown',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'text/x-python',
-  'text/typescript',
   'application/typescript',
   'text/javascript',
-  'application/javascript'
+  'application/javascript',
+  'text/x-python',
+  'text/x-script.python'
 ];
 
-const ALLOWED_EXTENSIONS = [
-  '.pdf',
-  '.txt',
-  '.md',
-  '.docx',
-  '.py',
-  '.ts',
-  '.tsx',
-  '.js',
-  '.jsx'
-];
+const ALLOWED_EXTENSIONS = ['.pdf', '.txt', '.md', '.docx', '.ts', '.tsx', '.js', '.jsx', '.py'];
 
 export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps) {
+  // Note: userId is available in props for future use (e.g., user-specific limits)
+  console.log('[DocumentUpload] Component mounted for user:', userId);
+  
   // Multi-file state
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -52,11 +45,13 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
 
   // File validation helper
   const validateFile = (file: File): string | null => {
-    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-    const isValidType = ALLOWED_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(fileExtension);
+    const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+    const isValidType = ALLOWED_TYPES.includes(file.type);
+    const isValidExt = ALLOWED_EXTENSIONS.includes(fileExt);
 
-    if (!isValidType) {
-      return 'Invalid file type. Please upload PDF, TXT, MD, DOCX, or code files (TS, TSX, JS, JSX, PY).';
+    // Allow if either type or extension is valid (extension is more reliable for code)
+    if (!isValidType && !isValidExt) {
+      return 'Invalid file type. Supported: PDF, TXT, MD, DOCX, TS, JS, PY';
     }
     if (file.size > MAX_FILE_SIZE) {
       return `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`;
@@ -88,7 +83,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-
+    
     const files = Array.from(e.dataTransfer.files);
     handleAddFiles(files);
   };
@@ -99,12 +94,18 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
   };
 
   const handleAddFiles = (files: File[]) => {
+    console.log('[DocumentUpload] ===== HANDLE ADD FILES =====');
+    console.log('[DocumentUpload] Files to add:', files.length);
+
     const newErrors: Record<string, string> = {};
     const validFiles: File[] = [];
 
     files.forEach(file => {
+      console.log('[DocumentUpload] Processing file:', file.name, 'size:', file.size, 'type:', file.type);
+
       // Skip if already added
       if (selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+        console.log('[DocumentUpload] File already in queue:', file.name);
         newErrors[file.name] = 'File already in queue';
         return;
       }
@@ -112,11 +113,16 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
       // Validate file
       const error = validateFile(file);
       if (error) {
+        console.error('[DocumentUpload] File validation failed:', file.name, error);
         newErrors[file.name] = error;
       } else {
+        console.log('[DocumentUpload] File valid, adding to queue:', file.name);
         validFiles.push(file);
       }
     });
+
+    console.log('[DocumentUpload] Valid files:', validFiles.length);
+    console.log('[DocumentUpload] Errors:', Object.keys(newErrors).length);
 
     // Update states
     setFileErrors(prev => ({ ...prev, ...newErrors }));
@@ -131,20 +137,36 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
   const uploadSingleFile = async (file: File): Promise<void> => {
     const fileName = file.name;
 
+    console.log('[DocumentUpload] ===== UPLOAD SINGLE FILE START =====');
+    console.log('[DocumentUpload] Filename:', fileName);
+    console.log('[DocumentUpload] File size:', file.size);
+    console.log('[DocumentUpload] File type:', file.type);
+
     try {
+      // Mark as uploading
       setUploadingFiles(prev => new Set(prev).add(fileName));
       setFileProgress(prev => ({ ...prev, [fileName]: 0 }));
 
+      // Get session token
+      console.log('[DocumentUpload] Getting session token...');
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
+        console.error('[DocumentUpload] No active session found!');
         throw new Error('No active session');
       }
+
+      console.log('[DocumentUpload] Session found, user:', session.user?.email);
+      console.log('[DocumentUpload] Token length:', session.access_token.length);
 
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/graphrag/upload', {
+      const uploadUrl = '/api/graphrag/upload';
+      console.log('[DocumentUpload] Uploading to:', uploadUrl);
+      console.log('[DocumentUpload] Timestamp:', new Date().toISOString());
+
+      const response = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -152,17 +174,29 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
         body: formData,
       });
 
+      console.log('[DocumentUpload] Response status:', response.status);
+      console.log('[DocumentUpload] Response ok:', response.ok);
+
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || data.details || 'Upload failed');
+        console.error('[DocumentUpload] Upload failed with error:', data.error);
+        throw new Error(data.error || 'Upload failed');
       }
 
-      await response.json();
+      const responseData = await response.json();
+      console.log('[DocumentUpload] ===== UPLOAD SUCCESS =====');
+      console.log('[DocumentUpload] Response:', responseData);
 
+      // Success
       setFileProgress(prev => ({ ...prev, [fileName]: 100 }));
       setFileSuccess(prev => new Set(prev).add(fileName));
 
     } catch (err) {
+      console.error('[DocumentUpload] ===== UPLOAD ERROR =====');
+      console.error('[DocumentUpload] Error:', err);
+      console.error('[DocumentUpload] Error message:', err instanceof Error ? err.message : 'Unknown error');
+      console.error('[DocumentUpload] Error stack:', err instanceof Error ? err.stack : 'No stack');
+
       setFileErrors(prev => ({
         ...prev,
         [fileName]: err instanceof Error ? err.message : 'Upload failed'
@@ -177,25 +211,43 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
   };
 
   const handleUpload = async () => {
+    console.log('[DocumentUpload] ===== HANDLE UPLOAD CLICKED =====');
+    console.log('[DocumentUpload] Selected files count:', selectedFiles.length);
+    console.log('[DocumentUpload] Files:', selectedFiles.map(f => f.name));
+
     if (selectedFiles.length === 0) {
+      console.log('[DocumentUpload] No files selected, returning');
       return;
     }
 
     setIsUploading(true);
 
     try {
+      // Upload files sequentially
       for (const file of selectedFiles) {
+        // Skip already uploaded files
         if (fileSuccess.has(file.name)) {
+          console.log('[DocumentUpload] Skipping already uploaded file:', file.name);
           continue;
         }
 
+        console.log('[DocumentUpload] Starting upload for:', file.name);
         await uploadSingleFile(file);
       }
 
+      // Call callback immediately after uploads complete
+      console.log('[DocumentUpload] All uploads complete, triggering refresh');
       onUploadComplete?.();
 
+      // Auto-clear successful files after 1.5 seconds (faster feedback)
+      console.log('[DocumentUpload] Scheduling auto-clear in 1.5 seconds for', fileSuccess.size, 'files');
       setTimeout(() => {
-        setSelectedFiles(prev => prev.filter(f => !fileSuccess.has(f.name)));
+        console.log('[DocumentUpload] Auto-clear executing, removing successful files');
+        setSelectedFiles(prev => {
+          const filtered = prev.filter(f => !fileSuccess.has(f.name));
+          console.log('[DocumentUpload] Filtered', prev.length, 'files to', filtered.length, 'files');
+          return filtered;
+        });
         setFileSuccess(new Set());
         setFileErrors({});
         setFileProgress({});
@@ -279,7 +331,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
               <span className="font-semibold">Click to upload</span> or drag and drop
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              PDF, TXT, MD, DOCX, or code files (TS, TSX, JS, JSX, PY) - max 10MB per file
+              PDF, TXT, MD, DOCX, TS, JS, PY (max 10MB per file)
             </p>
           </div>
           <input
@@ -287,7 +339,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
             id="file-upload"
             type="file"
             className="hidden"
-            accept=".pdf,.txt,.md,.docx,.py,.ts,.tsx,.js,.jsx"
+            accept=".pdf,.txt,.md,.docx,.ts,.tsx,.js,.jsx,.py"
             onChange={handleFileSelect}
             disabled={isUploading}
             multiple

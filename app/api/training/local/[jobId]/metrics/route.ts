@@ -126,6 +126,152 @@ if (!supabaseUrl || !supabaseServiceKey) {
   console.error('[LocalTraining Metrics GET] SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? 'SET' : 'MISSING');
 }
 
+/**
+ * PUT /api/training/local/{jobId}/metrics
+ * Report a single metric point during training
+ *
+ * Called by: Python training agent during training loop
+ * Auth: Bearer token (job_token)
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ jobId: string }> }
+) {
+  const resolvedParams = await params;
+  const jobId = resolvedParams.jobId;
+
+  console.log('[LocalTraining Metrics PUT] Reporting metric for job:', jobId);
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return NextResponse.json(
+      { error: 'Server configuration error: Missing Supabase credentials' },
+      { status: 500 }
+    );
+  }
+
+  try {
+    // Extract and validate job_token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[LocalTraining Metrics PUT] Missing or invalid authorization header');
+      return NextResponse.json(
+        { error: 'Unauthorized: Bearer token required' },
+        { status: 401 }
+      );
+    }
+
+    const jobToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    // Parse request body
+    const metric = await request.json();
+
+    if (!metric.step || typeof metric.epoch !== 'number') {
+      return NextResponse.json(
+        { error: 'Invalid metric: step and epoch are required' },
+        { status: 400 }
+      );
+    }
+
+    // Create Supabase client with service role
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verify job exists and token matches
+    const { data: job, error: jobError } = await supabase
+      .from('local_training_jobs')
+      .select('id, job_token, status')
+      .eq('id', jobId)
+      .single();
+
+    if (jobError || !job) {
+      console.error('[LocalTraining Metrics PUT] Job not found:', jobId);
+      return NextResponse.json(
+        { error: 'Job not found' },
+        { status: 404 }
+      );
+    }
+
+    if (job.job_token !== jobToken) {
+      console.error('[LocalTraining Metrics PUT] Invalid job token');
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid token' },
+        { status: 401 }
+      );
+    }
+
+    // Insert metric into time-series table
+    const metricData = {
+      job_id: jobId,
+      step: metric.step,
+      epoch: metric.epoch,
+      train_loss: metric.train_loss ?? null,
+      eval_loss: metric.eval_loss ?? null,
+      learning_rate: metric.learning_rate ?? null,
+      grad_norm: metric.grad_norm ?? null,
+      gpu_memory_allocated_gb: metric.gpu_memory_allocated_gb ?? null,
+      gpu_memory_reserved_gb: metric.gpu_memory_reserved_gb ?? null,
+      gpu_utilization_percent: metric.gpu_utilization_percent ?? null,
+      perplexity: metric.perplexity ?? null,
+      train_perplexity: metric.train_perplexity ?? null,
+      samples_per_second: metric.samples_per_second ?? null,
+      tokens_per_second: metric.tokens_per_second ?? null,
+      timestamp: new Date().toISOString()
+    };
+
+    const { error: insertError } = await supabase
+      .from('local_training_metrics')
+      .insert(metricData);
+
+    if (insertError) {
+      console.error('[LocalTraining Metrics PUT] Failed to insert metric:', insertError);
+      return NextResponse.json(
+        { error: 'Failed to persist metric', details: insertError.message },
+        { status: 500 }
+      );
+    }
+
+    // Update job summary with latest metric
+    const jobUpdate: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+      current_step: metric.step,
+      current_epoch: metric.epoch,
+      loss: metric.train_loss ?? null,
+      eval_loss: metric.eval_loss ?? null,
+      learning_rate: metric.learning_rate ?? null,
+      grad_norm: metric.grad_norm ?? null,
+      samples_per_second: metric.samples_per_second ?? null,
+      gpu_memory_allocated_gb: metric.gpu_memory_allocated_gb ?? null,
+      gpu_memory_reserved_gb: metric.gpu_memory_reserved_gb ?? null,
+      gpu_utilization_percent: metric.gpu_utilization_percent ?? null,
+      perplexity: metric.perplexity ?? null,
+      train_perplexity: metric.train_perplexity ?? null,
+    };
+
+    // Mark job as running on first metric
+    if (job.status === 'pending' || job.status === 'queued') {
+      jobUpdate.status = 'running';
+    }
+
+    await supabase
+      .from('local_training_jobs')
+      .update(jobUpdate)
+      .eq('id', jobId);
+
+    console.log('[LocalTraining Metrics PUT] Metric persisted for step:', metric.step);
+
+    return NextResponse.json({ success: true });
+
+  } catch (error) {
+    console.error('[LocalTraining Metrics PUT] Request error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to process request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }

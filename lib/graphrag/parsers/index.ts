@@ -6,14 +6,12 @@
 import { pdfParser, type PDFParseResult } from './pdf-parser';
 import { docxParser, type DOCXParseResult } from './docx-parser';
 import { textParser, type TextParseResult } from './text-parser';
-import { codeParser, type CodeParseResult } from './code-parser';
 import type { DocumentFileType } from '../types';
 
 export interface ParseResult {
   text: string;
   metadata: Record<string, unknown>;
   fileType: DocumentFileType;
-  codeResult?: CodeParseResult; // NEW: Optional code parse result
 }
 
 export class ParserFactory {
@@ -22,38 +20,30 @@ export class ParserFactory {
    */
   async parse(file: File | Buffer, fileType: DocumentFileType): Promise<ParseResult> {
     let buffer: Buffer;
-    let filename = 'unknown';
-
+    
     if (file instanceof Buffer) {
       buffer = file;
-    } else if (typeof File !== 'undefined' && file instanceof File) {
-      try {
-        buffer = Buffer.from(await file.arrayBuffer());
-        filename = file.name || 'unknown';
-      } catch (error) {
-        throw new Error(`Failed to read file ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
     } else {
-      throw new TypeError('Invalid file type provided to parser. Expected Buffer or File.');
-    }
-
-    // NEW: Handle code files
-    if (this.isCodeFile(fileType)) {
-      return this.parseCode(buffer, fileType, filename);
+      // file is File type
+      buffer = Buffer.from(await (file as File).arrayBuffer());
     }
 
     switch (fileType) {
       case 'pdf':
         return this.parsePDF(buffer);
-
+      
       case 'docx':
         return this.parseDOCX(buffer);
-
+      
       case 'txt':
-        return this.parseText(buffer, 'txt');
       case 'md':
-        return this.parseText(buffer, 'md');
-
+      case 'ts':
+      case 'tsx':
+      case 'js':
+      case 'jsx':
+      case 'py':
+        return this.parseText(buffer, fileType);
+      
       default:
         throw new Error(`Unsupported file type: ${fileType}`);
     }
@@ -95,12 +85,12 @@ export class ParserFactory {
   }
 
   /**
-   * Parse text file (TXT, MD)
+   * Parse Text file (including code files)
    */
-  private async parseText(buffer: Buffer, fileType: 'txt' | 'md'): Promise<ParseResult> {
+  private async parseText(buffer: Buffer, fileType: DocumentFileType): Promise<ParseResult> {
     const result: TextParseResult = await textParser.parseWithAutoEncoding(buffer);
     const cleanedText = textParser.cleanText(result.text);
-
+    
     return {
       text: cleanedText,
       fileType,
@@ -114,98 +104,11 @@ export class ParserFactory {
   }
 
   /**
-   * NEW: Check if file type is code
-   */
-  private isCodeFile(fileType: DocumentFileType): boolean {
-    return ['ts', 'tsx', 'js', 'jsx', 'py'].includes(fileType);
-  }
-
-  /**
-   * NEW: Parse code files using AST
-   */
-  private async parseCode(
-    buffer: Buffer,
-    fileType: DocumentFileType,
-    filename: string
-  ): Promise<ParseResult> {
-    const codeResult = await codeParser.parse(buffer, filename);
-
-    // Convert AST result to text for backward compatibility
-    const text = this.formatCodeAsText(codeResult);
-
-    return {
-      text,
-      fileType,
-      codeResult, // Include full AST result
-      metadata: {
-        ...codeResult.metadata,
-        astParsed: true,
-        entityCount: codeResult.astResult.entities.length,
-        relationCount: codeResult.astResult.relations.length,
-        chunkCount: codeResult.astResult.chunks.length,
-      },
-    };
-  }
-
-  /**
-   * Format code parse result as structured text
-   */
-  private formatCodeAsText(codeResult: CodeParseResult): string {
-    const { astResult, metadata } = codeResult;
-
-    const sections = [
-      `File: ${metadata.filePath}`,
-      `Language: ${metadata.language}`,
-      `Lines: ${metadata.lineCount}`,
-      '',
-      '=== IMPORTS ===',
-      '',
-      '=== FUNCTIONS ===',
-      '',
-      '=== CLASSES ===',
-      '',
-      '=== INTERFACES/TYPES ===',
-    ];
-
-    const importSection: string[] = [];
-    const functionSection: string[] = [];
-    const classSection: string[] = [];
-    const interfaceTypeSection: string[] = [];
-
-    for (const e of astResult.entities) {
-      switch (e.type) {
-        case 'import':
-          importSection.push(e.name);
-          break;
-        case 'function':
-          functionSection.push(`${e.name} (lines ${e.startLine}-${e.endLine}): ${e.signature || ''}`);
-          break;
-        case 'class':
-          classSection.push(`${e.name} (lines ${e.startLine}-${e.endLine}): ${e.properties?.join(', ') || ''}`);
-          break;
-        case 'interface':
-        case 'type':
-          interfaceTypeSection.push(`${e.name} (lines ${e.startLine}-${e.endLine})`);
-          break;
-      }
-    }
-
-    sections.push(...importSection, '', ...functionSection, '', ...classSection, '', ...interfaceTypeSection);
-
-    return sections.join('\n');
-  }
-
-  /**
    * Detect file type from filename extension
    */
   detectFileType(filename: string): DocumentFileType | null {
-    const lastDotIndex = filename.lastIndexOf('.');
-    if (lastDotIndex === -1 || lastDotIndex === filename.length - 1) {
-      return null;
-    }
-
-    const extension = filename.substring(lastDotIndex + 1).toLowerCase();
-
+    const extension = filename.split('.').pop()?.toLowerCase();
+    
     switch (extension) {
       case 'pdf':
         return 'pdf';
@@ -216,16 +119,6 @@ export class ParserFactory {
       case 'md':
       case 'markdown':
         return 'md';
-      case 'ts':
-        return 'ts';
-      case 'tsx':
-        return 'tsx';
-      case 'js':
-        return 'js';
-      case 'jsx':
-        return 'jsx';
-      case 'py':
-        return 'py';
       default:
         return null;
     }
@@ -244,13 +137,6 @@ export class ParserFactory {
       case 'md':
         // Text files don't have a magic number, assume valid
         return true;
-      // NEW: Code validation
-      case 'ts':
-      case 'tsx':
-      case 'js':
-      case 'jsx':
-      case 'py':
-        return codeParser.isValidCode(buffer, expectedType);
       default:
         return false;
     }
@@ -267,12 +153,11 @@ export async function parseDocument(
   filename: string
 ): Promise<ParseResult> {
   const factory = new ParserFactory();
-
+  
   // Detect file type from filename
   const fileType = factory.detectFileType(filename);
   if (!fileType) {
-    const extension = filename.includes('.') ? filename.substring(filename.lastIndexOf('.')) : 'none';
-    throw new Error(`Unable to detect file type from filename: ${filename} (extension: ${extension})`);
+    throw new Error(`Unable to detect file type from filename: ${filename}`);
   }
 
   // Validate file type
@@ -280,19 +165,14 @@ export async function parseDocument(
   if (file instanceof Buffer) {
     buffer = file;
   } else {
-    const fileObj = file as File;
-    try {
-      buffer = Buffer.from(await fileObj.arrayBuffer());
-    } catch (error) {
-      throw new Error(`Failed to read file ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    buffer = Buffer.from(await (file as File).arrayBuffer());
   }
-
+  
   const isValid = factory.validateFileType(buffer, fileType);
   if (!isValid) {
-    throw new Error(`File validation failed: ${filename} is not a valid ${fileType.toUpperCase()} file. The file may be corrupted or have an incorrect extension.`);
+    throw new Error(`File validation failed: ${filename} is not a valid ${fileType} file`);
   }
 
-  // Parse document (pass original file object, not buffer, to preserve filename)
-  return factory.parse(file, fileType);
+  // Parse document
+  return factory.parse(buffer, fileType);
 }

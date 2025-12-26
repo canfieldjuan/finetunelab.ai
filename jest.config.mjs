@@ -6,7 +6,7 @@ const createJestConfig = nextJest({
 
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  testEnvironment: 'node',
+  testEnvironment: 'jsdom',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     // Map vitest to jest globals for compatibility
@@ -24,15 +24,17 @@ const customJestConfig = {
     '/app/api/training/.*/__tests__/',
     '/lib/tools/analytics-export/__tests__/',
     '/lib/alerts/formatters/__tests__/',
+    // Skip manual test scripts (not Jest tests)
+    '/lib/tools/web-search/__tests__/test-storage.ts',
     // Skip E2E and integration tests that require running server/Supabase
     ...(!process.env.RUN_INTEGRATION_TESTS ? [
       '/__tests__/integration/',
       '/tests/integration/',
     ] : []),
   ],
-  // Transform ignore - Skip Vitest tests (we use Jest)
+  // Transform ignore - Allow transforming ES modules from node_modules
   transformIgnorePatterns: [
-    '/node_modules/',
+    '/node_modules/(?!(cheerio|htmlparser2|dom-serializer|domutils|entities)/)',
     '\\.vitest\\.',
   ],
   // Global setup to skip tests importing vitest

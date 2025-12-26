@@ -71,11 +71,6 @@ export const processingConfig = {
   maxFileSize: getEnvNumber('GRAPHRAG_MAX_FILE_SIZE', 10 * 1024 * 1024), // 10MB default
   chunkSize: getEnvNumber('GRAPHRAG_CHUNK_SIZE', 2000), // Characters per section
   supportedTypes: ['pdf', 'txt', 'md', 'docx', 'ts', 'tsx', 'js', 'jsx', 'py'] as ('pdf' | 'txt' | 'md' | 'docx' | 'ts' | 'tsx' | 'js' | 'jsx' | 'py')[],
-
-  // Code-specific configuration
-  codeChunkingStrategy: getEnvVar('GRAPHRAG_CODE_CHUNKING', 'ast-based') as 'ast-based' | 'hybrid',
-  maxCodeChunkLines: getEnvNumber('GRAPHRAG_MAX_CODE_CHUNK_LINES', 100),
-  includeCodeContext: getEnvBoolean('GRAPHRAG_INCLUDE_CODE_CONTEXT', true),
 };
 
 // ============================================================================
