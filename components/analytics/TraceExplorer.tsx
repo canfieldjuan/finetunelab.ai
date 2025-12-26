@@ -151,6 +151,17 @@ export function TraceExplorer() {
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
 
+      // Add advanced filters to API request (server-side filtering)
+      if (minCost !== null) params.append('min_cost', minCost.toString());
+      if (maxCost !== null) params.append('max_cost', maxCost.toString());
+      if (minDuration !== null) params.append('min_duration', minDuration.toString());
+      if (maxDuration !== null) params.append('max_duration', maxDuration.toString());
+      if (minThroughput !== null) params.append('min_throughput', minThroughput.toString());
+      if (maxThroughput !== null) params.append('max_throughput', maxThroughput.toString());
+      if (hasError !== null) params.append('has_error', hasError.toString());
+      if (hasQualityScore !== null) params.append('has_quality_score', hasQualityScore.toString());
+      if (minQualityScore !== null) params.append('min_quality_score', minQualityScore.toString());
+
       const response = await fetch(`/api/analytics/traces/list?${params}`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -176,58 +187,11 @@ export function TraceExplorer() {
         session_tag: t.metadata?.tags?.[0] || t.metadata?.session_id,
         environment: t.metadata?.environment
       }));
-      
-      // Apply client-side advanced filters
-      let filteredTraces = mappedTraces;
-      
-      if (minCost !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          t.cost_usd != null && t.cost_usd >= minCost
-        );
-      }
-      if (maxCost !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          t.cost_usd != null && t.cost_usd <= maxCost
-        );
-      }
-      if (minDuration !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          t.duration_ms != null && t.duration_ms >= minDuration
-        );
-      }
-      if (maxDuration !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          t.duration_ms != null && t.duration_ms <= maxDuration
-        );
-      }
-      if (minThroughput !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          t.tokens_per_second != null && t.tokens_per_second >= minThroughput
-        );
-      }
-      if (maxThroughput !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          t.tokens_per_second != null && t.tokens_per_second <= maxThroughput
-        );
-      }
-      if (hasError !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          hasError ? (t.status === 'failed' || t.error_message) : (t.status !== 'failed' && !t.error_message)
-        );
-      }
-      if (hasQualityScore !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          hasQualityScore ? t.quality_score != null : t.quality_score == null
-        );
-      }
-      if (minQualityScore !== null) {
-        filteredTraces = filteredTraces.filter((t: TraceListItem) => 
-          t.quality_score != null && t.quality_score >= minQualityScore
-        );
-      }
-      
-      setTraces(filteredTraces);
-      setTotalCount(filteredTraces.length);
+
+      // Filters are now applied server-side for better performance
+      // The API returns already-filtered traces with correct pagination count
+      setTraces(mappedTraces);
+      setTotalCount(data.total);
     } catch (err) {
       console.error('[TraceExplorer] Error fetching traces:', err);
       setError(err instanceof Error ? err.message : 'Failed to load traces');

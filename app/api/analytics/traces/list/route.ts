@@ -52,6 +52,16 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search');
     const startDate = searchParams.get('start_date');
 
+    // Advanced filter parameters
+    const minCost = searchParams.get('min_cost');
+    const maxCost = searchParams.get('max_cost');
+    const minDuration = searchParams.get('min_duration');
+    const maxDuration = searchParams.get('max_duration');
+    const minThroughput = searchParams.get('min_throughput');
+    const maxThroughput = searchParams.get('max_throughput');
+    const hasError = searchParams.get('has_error');
+    const hasQualityScore = searchParams.get('has_quality_score');
+
     // 3. Build query
     let query = supabase
       .from('llm_traces')
@@ -98,6 +108,58 @@ export async function GET(req: NextRequest) {
       query = query.gte('start_time', startDate);
     }
 
+    // Advanced filters
+    if (minCost) {
+      const minCostNum = parseFloat(minCost);
+      if (!isNaN(minCostNum)) {
+        query = query.gte('cost_usd', minCostNum);
+      }
+    }
+
+    if (maxCost) {
+      const maxCostNum = parseFloat(maxCost);
+      if (!isNaN(maxCostNum)) {
+        query = query.lte('cost_usd', maxCostNum);
+      }
+    }
+
+    if (minDuration) {
+      const minDurationNum = parseInt(minDuration);
+      if (!isNaN(minDurationNum)) {
+        query = query.gte('duration_ms', minDurationNum);
+      }
+    }
+
+    if (maxDuration) {
+      const maxDurationNum = parseInt(maxDuration);
+      if (!isNaN(maxDurationNum)) {
+        query = query.lte('duration_ms', maxDurationNum);
+      }
+    }
+
+    if (minThroughput) {
+      const minThroughputNum = parseFloat(minThroughput);
+      if (!isNaN(minThroughputNum)) {
+        query = query.gte('tokens_per_second', minThroughputNum);
+      }
+    }
+
+    if (maxThroughput) {
+      const maxThroughputNum = parseFloat(maxThroughput);
+      if (!isNaN(maxThroughputNum)) {
+        query = query.lte('tokens_per_second', maxThroughputNum);
+      }
+    }
+
+    if (hasError === 'true') {
+      query = query.not('error_message', 'is', null);
+    } else if (hasError === 'false') {
+      query = query.is('error_message', null);
+    }
+
+    // Note: hasQualityScore filter will be applied after enrichment
+    // since quality_score is computed from judgments table
+
     // Apply pagination
     query = query.range(offset, offset + limit - 1);
 
@@ -117,11 +179,31 @@ export async function GET(req: NextRequest) {
     }
 
     // 5. Enrich traces with quality metrics
-    const enrichedTraces = await enrichTracesWithQuality(supabase, traces || [], user.id);
+    let enrichedTraces = await enrichTracesWithQuality(supabase, traces || [], user.id);
+
+    // Apply post-enrichment filters (quality_score is computed, not in DB)
+    if (hasQualityScore === 'true') {
+      enrichedTraces = enrichedTraces.filter((t: any) => t.quality_score != null);
+    } else if (hasQualityScore === 'false') {
+      enrichedTraces = enrichedTraces.filter((t: any) => t.quality_score == null);
+    }
+
+    const minQualityScore = searchParams.get('min_quality_score');
+    if (minQualityScore) {
+      const minQualityNum = parseFloat(minQualityScore);
+      if (!isNaN(minQualityNum)) {
+        enrichedTraces = enrichedTraces.filter((t: any) =>
+          t.quality_score != null && t.quality_score >= minQualityNum
+        );
+      }
+    }
+
+    // Update count if post-enrichment filters were applied
+    const finalCount = (hasQualityScore || minQualityScore) ? enrichedTraces.length : (count || 0);
 
     return NextResponse.json({
       traces: enrichedTraces,
-      total: count || 0,
+      total: finalCount,
       limit,
       offset,
     });
