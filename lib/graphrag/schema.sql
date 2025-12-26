@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   filename TEXT NOT NULL,
-  file_type TEXT NOT NULL CHECK (file_type IN ('pdf', 'txt', 'md', 'docx')),
+  file_type TEXT NOT NULL CHECK (file_type IN ('pdf', 'txt', 'md', 'docx', 'ts', 'tsx', 'js', 'jsx', 'py')),
   upload_path TEXT NOT NULL,
   document_hash TEXT,
   content TEXT,

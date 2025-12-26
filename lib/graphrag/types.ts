@@ -23,7 +23,7 @@ export interface Document {
   parentId: string | null;
 }
 
-export type DocumentFileType = 'pdf' | 'txt' | 'md' | 'docx';
+export type DocumentFileType = 'pdf' | 'txt' | 'md' | 'docx' | 'ts' | 'tsx' | 'js' | 'jsx' | 'py';
 
 export interface DocumentMetadata {
   userId: string;
