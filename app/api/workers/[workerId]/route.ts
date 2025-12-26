@@ -32,10 +32,10 @@ async function getAuthenticatedUser(request: NextRequest) {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workerId: string } }
+  { params }: { params: Promise<{ workerId: string }> }
 ) {
   try {
-    const { workerId } = params;
+    const { workerId } = await params;
 
     // Authenticate user
     const user = await getAuthenticatedUser(request);
@@ -107,10 +107,10 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { workerId: string } }
+  { params }: { params: Promise<{ workerId: string }> }
 ) {
   try {
-    const { workerId } = params;
+    const { workerId } = await params;
 
     // Authenticate user
     const user = await getAuthenticatedUser(request);

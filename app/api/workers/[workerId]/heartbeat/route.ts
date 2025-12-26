@@ -37,10 +37,10 @@ interface HeartbeatResponse {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workerId: string } }
+  { params }: { params: Promise<{ workerId: string }> }
 ) {
   try {
-    const { workerId } = params;
+    const { workerId } = await params;
 
     // Authenticate worker using API key
     const auth = await authenticateWorkerApiKey(request);

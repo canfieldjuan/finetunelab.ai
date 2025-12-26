@@ -6,12 +6,14 @@
 import { pdfParser, type PDFParseResult } from './pdf-parser';
 import { docxParser, type DOCXParseResult } from './docx-parser';
 import { textParser, type TextParseResult } from './text-parser';
+import type { CodeParseResult } from './code-parser';
 import type { DocumentFileType } from '../types';
 
 export interface ParseResult {
   text: string;
   metadata: Record<string, unknown>;
   fileType: DocumentFileType;
+  codeResult?: CodeParseResult; // Optional: populated for code files with AST parsing
 }
 
 export class ParserFactory {

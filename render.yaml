@@ -27,6 +27,11 @@ services:
         sync: false
       - key: NODE_OPTIONS
         value: --max-old-space-size=4096
+      # BYOM (Bring Your Own Model) Configuration
+      - key: DEMO_ENCRYPTION_KEY
+        sync: false  # Set via Render Dashboard - generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      - key: CRON_SECRET
+        sync: false  # Set via Render Dashboard - generate with: openssl rand -base64 32
     autoDeploy: false  # Controlled via GitHub Actions
 
   # Staging Web Service
@@ -50,6 +55,11 @@ services:
         sync: false
       - key: NODE_OPTIONS
         value: --max-old-space-size=4096
+      # BYOM Configuration
+      - key: DEMO_ENCRYPTION_KEY
+        sync: false
+      - key: CRON_SECRET
+        sync: false
     autoDeploy: true  # Auto-deploy from develop branch
 
   # Redis Cache (Optional - if using Redis)
@@ -72,6 +82,19 @@ services:
   #       value: production
   #     - fromGroup: finetunelab-env-group
   #   autoDeploy: true
+
+  # BYOM Cron Job - Cleanup Expired Demo Sessions
+  - type: cron
+    name: cleanup-demo-sessions
+    schedule: "0 * * * *"  # Every hour
+    buildCommand: npm ci
+    startCommand: |
+      curl -X DELETE https://finetunelab.ai/api/cron/cleanup-demo-sessions \
+        -H "Authorization: Bearer $CRON_SECRET" \
+        || echo "Cleanup cron failed"
+    envVars:
+      - key: CRON_SECRET
+        sync: false
 
 # Environment Variable Groups
 # Create these in Render Dashboard: Account Settings → Environment Groups

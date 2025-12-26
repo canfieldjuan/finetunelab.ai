@@ -594,7 +594,7 @@ export default function AnomalyFeed({
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-semibold">Anomaly Details</h3>
               <div className="flex items-center gap-2">
-                {selectedAnomaly.statistics?.trace_id && (
+                {selectedAnomaly.statistics?.trace_id ? (
                   <button
                     onClick={() => handleViewTrace(selectedAnomaly.statistics.trace_id as string)}
                     className="text-sm px-3 py-1 bg-blue-600 text-white hover:bg-blue-700 rounded flex items-center gap-1"
@@ -602,7 +602,7 @@ export default function AnomalyFeed({
                     <ExternalLink className="h-3 w-3" />
                     View Trace
                   </button>
-                )}
+                ) : null}
                 <button
                   onClick={() => openResolutionPanel(selectedAnomaly)}
                   className="text-sm px-3 py-1 bg-green-600 text-white hover:bg-green-700 rounded"

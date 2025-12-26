@@ -19,10 +19,10 @@ interface CommandResultRequest {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { commandId: string } }
+  { params }: { params: Promise<{ commandId: string }> }
 ) {
   try {
-    const { commandId } = params;
+    const { commandId } = await params;
 
     // Authenticate worker using API key
     const auth = await authenticateWorkerApiKey(request);
@@ -114,26 +114,15 @@ export async function POST(
       );
     }
 
-    // Update worker stats
-    if (body.status === 'completed') {
-      await supabase
-        .from('worker_agents')
-        .update({
-          total_commands_executed: supabase.sql`total_commands_executed + 1`,
-          last_command_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('worker_id', auth.workerId);
-    } else if (body.status === 'failed') {
-      await supabase
-        .from('worker_agents')
-        .update({
-          total_errors: supabase.sql`total_errors + 1`,
-          last_command_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('worker_id', auth.workerId);
-    }
+    // Update worker stats - just timestamp for now
+    // TODO: Implement atomic counter increment via DB trigger or RPC
+    await supabase
+      .from('worker_agents')
+      .update({
+        last_command_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('worker_id', auth.workerId);
 
     console.log('[Command Result] Updated command result:', {
       command_id: commandId,
