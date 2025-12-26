@@ -35,9 +35,6 @@ const ALLOWED_EXTENSIONS = [
 ];
 
 export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps) {
-  // Note: userId is available in props for future use (e.g., user-specific limits)
-  console.log('[DocumentUpload] Component mounted for user:', userId);
-  
   // Multi-file state
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -92,44 +89,22 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
     e.stopPropagation();
     setIsDragging(false);
 
-    console.log('[DocumentUpload] ===== DROP EVENT =====');
-    console.log('[DocumentUpload] Files dropped:', e.dataTransfer.files.length);
-
     const files = Array.from(e.dataTransfer.files);
-    console.log('[DocumentUpload] Files array:', files.map(f => f.name));
-
     handleAddFiles(files);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('[DocumentUpload] ===== FILE SELECT EVENT =====');
-    console.log('[DocumentUpload] Files selected:', e.target.files?.length || 0);
-
     const files = Array.from(e.target.files || []);
-    console.log('[DocumentUpload] Files array:', files.map(f => f.name));
-
     handleAddFiles(files);
   };
 
   const handleAddFiles = (files: File[]) => {
-    console.log('[DocumentUpload] ===== HANDLE ADD FILES =====');
-    console.log('[DocumentUpload] Files to add:', files.length);
-    console.log('[DocumentUpload] File details:', files.map(f => ({
-      name: f.name,
-      size: f.size,
-      type: f.type,
-      sizeInMB: (f.size / 1024 / 1024).toFixed(2)
-    })));
-
     const newErrors: Record<string, string> = {};
     const validFiles: File[] = [];
 
     files.forEach(file => {
-      console.log('[DocumentUpload] Processing file:', file.name, 'size:', file.size, 'type:', file.type);
-
       // Skip if already added
       if (selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
-        console.log('[DocumentUpload] File already in queue:', file.name);
         newErrors[file.name] = 'File already in queue';
         return;
       }
@@ -137,16 +112,11 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
       // Validate file
       const error = validateFile(file);
       if (error) {
-        console.error('[DocumentUpload] File validation failed:', file.name, error);
         newErrors[file.name] = error;
       } else {
-        console.log('[DocumentUpload] File valid, adding to queue:', file.name);
         validFiles.push(file);
       }
     });
-
-    console.log('[DocumentUpload] Valid files:', validFiles.length);
-    console.log('[DocumentUpload] Errors:', Object.keys(newErrors).length);
 
     // Update states
     setFileErrors(prev => ({ ...prev, ...newErrors }));
@@ -161,36 +131,20 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
   const uploadSingleFile = async (file: File): Promise<void> => {
     const fileName = file.name;
 
-    console.log('[DocumentUpload] ===== UPLOAD SINGLE FILE START =====');
-    console.log('[DocumentUpload] Filename:', fileName);
-    console.log('[DocumentUpload] File size:', file.size);
-    console.log('[DocumentUpload] File type:', file.type);
-
     try {
-      // Mark as uploading
       setUploadingFiles(prev => new Set(prev).add(fileName));
       setFileProgress(prev => ({ ...prev, [fileName]: 0 }));
 
-      // Get session token
-      console.log('[DocumentUpload] Getting session token...');
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
-        console.error('[DocumentUpload] No active session found!');
         throw new Error('No active session');
       }
-
-      console.log('[DocumentUpload] Session found, user:', session.user?.email);
-      console.log('[DocumentUpload] Token length:', session.access_token.length);
 
       const formData = new FormData();
       formData.append('file', file);
 
-      const uploadUrl = '/api/graphrag/upload';
-      console.log('[DocumentUpload] Uploading to:', uploadUrl);
-      console.log('[DocumentUpload] Timestamp:', new Date().toISOString());
-
-      const response = await fetch(uploadUrl, {
+      const response = await fetch('/api/graphrag/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -198,91 +152,56 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
         body: formData,
       });
 
-      console.log('[DocumentUpload] Response status:', response.status);
-      console.log('[DocumentUpload] Response ok:', response.ok);
-
       if (!response.ok) {
         const data = await response.json();
-        console.error('[DocumentUpload] Upload failed with error:', data.error);
-        console.error('[DocumentUpload] Full error response:', JSON.stringify(data, null, 2));
         throw new Error(data.error || data.details || 'Upload failed');
       }
 
-      const responseData = await response.json();
-      console.log('[DocumentUpload] ===== UPLOAD SUCCESS =====');
-      console.log('[DocumentUpload] Response:', responseData);
+      await response.json();
 
-      // Success
       setFileProgress(prev => ({ ...prev, [fileName]: 100 }));
       setFileSuccess(prev => new Set(prev).add(fileName));
 
     } catch (err) {
-      console.error('[DocumentUpload] ===== UPLOAD ERROR =====');
-      console.error('[DocumentUpload] Error:', err);
-      console.error('[DocumentUpload] Error message:', err instanceof Error ? err.message : 'Unknown error');
-      console.error('[DocumentUpload] Error stack:', err instanceof Error ? err.stack : 'No stack');
-
       setFileErrors(prev => ({
         ...prev,
         [fileName]: err instanceof Error ? err.message : 'Upload failed'
       }));
     } finally {
-      console.log('[DocumentUpload] ===== UPLOAD SINGLE FILE COMPLETE =====');
-      console.log('[DocumentUpload] Removing', fileName, 'from uploading set');
       setUploadingFiles(prev => {
         const next = new Set(prev);
         next.delete(fileName);
-        console.log('[DocumentUpload] Uploading files remaining:', next.size);
         return next;
       });
     }
   };
 
   const handleUpload = async () => {
-    console.log('[DocumentUpload] ===== HANDLE UPLOAD CLICKED =====');
-    console.log('[DocumentUpload] Selected files count:', selectedFiles.length);
-    console.log('[DocumentUpload] Files:', selectedFiles.map(f => f.name));
-
     if (selectedFiles.length === 0) {
-      console.log('[DocumentUpload] No files selected, returning');
       return;
     }
 
     setIsUploading(true);
 
     try {
-      // Upload files sequentially
       for (const file of selectedFiles) {
-        // Skip already uploaded files
         if (fileSuccess.has(file.name)) {
-          console.log('[DocumentUpload] Skipping already uploaded file:', file.name);
           continue;
         }
 
-        console.log('[DocumentUpload] Starting upload for:', file.name);
         await uploadSingleFile(file);
       }
 
-      // Call callback immediately after uploads complete
-      console.log('[DocumentUpload] All uploads complete, triggering refresh');
       onUploadComplete?.();
 
-      // Auto-clear successful files after 1.5 seconds (faster feedback)
-      console.log('[DocumentUpload] Scheduling auto-clear in 1.5 seconds for', fileSuccess.size, 'files');
       setTimeout(() => {
-        console.log('[DocumentUpload] Auto-clear executing, removing successful files');
-        setSelectedFiles(prev => {
-          const filtered = prev.filter(f => !fileSuccess.has(f.name));
-          console.log('[DocumentUpload] Filtered', prev.length, 'files to', filtered.length, 'files');
-          return filtered;
-        });
+        setSelectedFiles(prev => prev.filter(f => !fileSuccess.has(f.name)));
         setFileSuccess(new Set());
         setFileErrors({});
         setFileProgress({});
       }, 1500);
 
     } finally {
-      console.log('[DocumentUpload] Finally block executing, setting isUploading to false');
       setIsUploading(false);
     }
   };
