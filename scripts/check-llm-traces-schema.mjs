@@ -8,13 +8,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const { data, error } = await supabase.auth.admin.listUsers();
+const { data, error } = await supabase
+  .from('llm_traces')
+  .select('*')
+  .limit(1);
+
 if (error) {
   console.error('Error:', error);
+} else if (data && data.length > 0) {
+  console.log('llm_traces columns:', Object.keys(data[0]));
 } else {
-  if (data.users.length > 0) {
-    console.log(data.users[0].id);
-  } else {
-    console.log('00000000-0000-0000-0000-000000000001');
-  }
+  console.log('No traces found, checking table info...');
 }

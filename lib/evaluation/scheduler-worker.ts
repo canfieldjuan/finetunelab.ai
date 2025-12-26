@@ -595,7 +595,7 @@ export class EvaluationSchedulerWorker {
 
     switch (metricType) {
       case 'latency':
-        values = traces.map(t => t.latency_ms || 0).filter(v => v > 0);
+        values = traces.map(t => t.duration_ms || 0).filter(v => v > 0);
         break;
       case 'error_rate':
         const errorCount = traces.filter(t => t.status === 'error' || t.status === 'failed').length;

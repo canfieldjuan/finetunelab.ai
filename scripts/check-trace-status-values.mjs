@@ -8,13 +8,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const { data, error } = await supabase.auth.admin.listUsers();
+const { data, error } = await supabase
+  .from('llm_traces')
+  .select('status')
+  .limit(20);
+
 if (error) {
   console.error('Error:', error);
 } else {
-  if (data.users.length > 0) {
-    console.log(data.users[0].id);
-  } else {
-    console.log('00000000-0000-0000-0000-000000000001');
-  }
+  const uniqueStatuses = [...new Set(data.map(t => t.status))];
+  console.log('Unique status values:', uniqueStatuses);
 }
