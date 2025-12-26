@@ -78,6 +78,7 @@ export function TraceExplorer() {
   // Live streaming state
   const [liveStreaming, setLiveStreaming] = useState(false);
   const [streamStatus, setStreamStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const [newTraceCount, setNewTraceCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -119,6 +120,7 @@ export function TraceExplorer() {
 
     setLoading(true);
     setError(null);
+    setNewTraceCount(0); // Reset counter when fetching traces
 
     try {
       // Calculate start date based on time range
@@ -456,7 +458,9 @@ export function TraceExplorer() {
       console.log('[TraceExplorer] Connecting to SSE stream...');
       setStreamStatus('connecting');
 
-      const eventSource = new EventSource(`/api/analytics/traces/stream`);
+      // Pass auth token as query param (EventSource doesn't support headers)
+      const streamUrl = `/api/analytics/traces/stream?token=${encodeURIComponent(session.access_token)}`;
+      const eventSource = new EventSource(streamUrl);
       eventSourceRef.current = eventSource;
 
       eventSource.onopen = () => {
@@ -471,8 +475,9 @@ export function TraceExplorer() {
           console.log('[TraceExplorer] SSE message received:', data.type);
 
           if (data.type === 'trace') {
-            // New trace received - refresh the list
+            // New trace received - increment counter and refresh
             console.log('[TraceExplorer] New trace detected, refreshing list');
+            setNewTraceCount(prev => prev + 1);
             fetchTraces();
           } else if (data.type === 'trace_update') {
             // Trace updated - refresh if it's in the current view
@@ -484,6 +489,7 @@ export function TraceExplorer() {
             // Keep-alive ping, no action needed
           } else if (data.type === 'error') {
             console.error('[TraceExplorer] Stream error:', data.message);
+            setError(data.message);
           }
         } catch (error) {
           console.error('[TraceExplorer] Error parsing SSE message:', error);
@@ -530,11 +536,18 @@ export function TraceExplorer() {
 
   // Toggle live streaming
   const toggleLiveStreaming = () => {
-    setLiveStreaming(prev => !prev);
+    setLiveStreaming(prev => {
+      if (!prev) {
+        // Starting streaming - reset counter
+        setNewTraceCount(0);
+      }
+      return !prev;
+    });
   };
 
   const handleSearch = () => {
     setPage(1);
+    setNewTraceCount(0); // Reset counter when manually searching
     fetchTraces();
   };
 
@@ -691,26 +704,34 @@ export function TraceExplorer() {
           </Button>
 
           {liveStreaming && (
-            <Badge
-              variant={
-                streamStatus === 'connected' ? 'default' :
-                streamStatus === 'connecting' ? 'secondary' :
-                streamStatus === 'error' ? 'destructive' :
-                'outline'
-              }
-              className="flex items-center gap-1"
-            >
-              <span className={`h-2 w-2 rounded-full ${
-                streamStatus === 'connected' ? 'bg-green-500 animate-pulse' :
-                streamStatus === 'connecting' ? 'bg-yellow-500' :
-                streamStatus === 'error' ? 'bg-red-500' :
-                'bg-gray-400'
-              }`} />
-              {streamStatus === 'connected' ? 'Connected' :
-               streamStatus === 'connecting' ? 'Connecting...' :
-               streamStatus === 'error' ? 'Error' :
-               'Disconnected'}
-            </Badge>
+            <>
+              <Badge
+                variant={
+                  streamStatus === 'connected' ? 'default' :
+                  streamStatus === 'connecting' ? 'secondary' :
+                  streamStatus === 'error' ? 'destructive' :
+                  'outline'
+                }
+                className="flex items-center gap-1"
+              >
+                <span className={`h-2 w-2 rounded-full ${
+                  streamStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                  streamStatus === 'connecting' ? 'bg-yellow-500' :
+                  streamStatus === 'error' ? 'bg-red-500' :
+                  'bg-gray-400'
+                }`} />
+                {streamStatus === 'connected' ? 'Connected' :
+                 streamStatus === 'connecting' ? 'Connecting...' :
+                 streamStatus === 'error' ? 'Error' :
+                 'Disconnected'}
+              </Badge>
+
+              {newTraceCount > 0 && (
+                <Badge variant="secondary" className="animate-pulse">
+                  +{newTraceCount} new
+                </Badge>
+              )}
+            </>
           )}
         </div>
       </div>

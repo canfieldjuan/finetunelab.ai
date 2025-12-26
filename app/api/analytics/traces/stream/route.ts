@@ -15,11 +15,16 @@ export async function GET(req: NextRequest) {
   console.log('[Traces Stream] Connection requested');
 
   try {
-    // Authenticate user
+    // Authenticate user - support both header and query param (for SSE compatibility)
     const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      console.error('[Traces Stream] No authorization header');
-      return new Response('Unauthorized', { status: 401 });
+    const { searchParams } = new URL(req.url);
+    const tokenParam = searchParams.get('token');
+
+    const token = authHeader?.replace('Bearer ', '') || tokenParam;
+
+    if (!token) {
+      console.error('[Traces Stream] No authorization token');
+      return new Response('Unauthorized: Missing token', { status: 401 });
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -27,7 +32,7 @@ export async function GET(req: NextRequest) {
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
-          Authorization: authHeader,
+          Authorization: `Bearer ${token}`,
         },
       },
     });
