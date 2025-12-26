@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { DeploymentProvider } from '../deployment-provider.interface';
 import { TrainingConfig } from '../training-config.types';
 import { DeploymentStatus, DeploymentMetrics } from '../deployment.types';
@@ -26,22 +27,62 @@ export class LocalProvider implements DeploymentProvider {
     const jobId = options?.jobId;
     if (!jobId) throw new Error('Job ID is required for Local deployment');
 
+    // Generate secure job_token for metrics authentication
+    const jobToken = crypto.randomBytes(32).toString('base64url');
+    console.log('[LocalProvider] Generated job_token for job:', jobId);
+
+    // Determine backend URL (server-side vs client-side)
+    const backendUrl = typeof window !== 'undefined'
+      ? '' // Client-side: relative URL
+      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+    // Create job record in database with job_token
+    try {
+      const createJobResponse = await fetch(`${backendUrl}/api/training/local/jobs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          job_id: jobId,
+          user_id: options?.userId,
+          model_name: modelName,
+          dataset_path: datasetPath,
+          status: 'pending',
+          config: config,
+          job_token: jobToken,
+        }),
+      });
+
+      if (!createJobResponse.ok) {
+        const errorData = await createJobResponse.json().catch(() => ({ error: createJobResponse.statusText }));
+        throw new Error(`Failed to create job record: ${errorData.error || createJobResponse.statusText}`);
+      }
+
+      console.log('[LocalProvider] Job record created in database');
+    } catch (dbError) {
+      console.error('[LocalProvider] Failed to create job record:', dbError);
+      throw new Error(`Database initialization failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
+    }
+
     // Generate config using ScriptBuilder
     const trainingConfigJson = ScriptBuilder.generateTrainingConfig(modelName, datasetPath, config);
 
+    // Execute training with job_token for metrics authentication
     const result = await this.provider.executeTraining({
         config: trainingConfigJson,
         dataset_path: datasetPath,
         execution_id: jobId,
         name: modelName,
         user_id: options?.userId,
-        access_token: options?.accessToken
+        access_token: options?.accessToken,
+        job_token: jobToken,  // Pass token to agent for metrics reporting
     });
 
     if (!result.success) {
         throw new Error(result.error || 'Failed to start local training job');
     }
-    
+
     return result.job_id;
   }
 

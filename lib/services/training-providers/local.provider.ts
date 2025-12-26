@@ -19,6 +19,7 @@ export interface TrainingJobRequest {
   name?: string;
   user_id?: string;  // User ID for backend persistence
   access_token?: string;  // User access token for authenticated persistence
+  job_token?: string;  // Job-specific token for metrics authentication
 }
 
 export interface TrainingJobStatus {
