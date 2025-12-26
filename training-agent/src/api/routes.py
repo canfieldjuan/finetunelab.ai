@@ -53,6 +53,7 @@ async def execute_training(request: TrainingJobRequest):
             dataset_path=request.dataset_path,
             user_id=request.user_id,
             access_token=request.access_token,
+            job_token=request.job_token,  # Pass job_token for metrics reporting
         )
 
         # Start training

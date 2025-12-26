@@ -165,15 +165,47 @@ class TrainingExecutor:
             logger.info(f"Loading dataset from: {job_state.dataset_path}")
             dataset = load_from_disk(job_state.dataset_path)
 
+            # Tokenize dataset
+            def tokenize_function(examples):
+                text_field = job_state.config.data.get("text_field", "text") if job_state.config.data else "text"
+                max_length = job_state.config.data.get("max_seq_length", 512) if job_state.config.data else 512
+                result = tokenizer(
+                    examples[text_field],
+                    truncation=True,
+                    max_length=max_length,
+                    padding="max_length",
+                )
+                # For causal LM, labels are the same as input_ids
+                result["labels"] = result["input_ids"].copy()
+                return result
+
+            logger.info("Tokenizing dataset...")
+            dataset = dataset.map(tokenize_function, batched=True, remove_columns=dataset.column_names)
+
             # Create training arguments
             training_args = self._create_training_args(job_state)
+
+            # Prepare datasets (handle both Dataset and DatasetDict)
+            from datasets import Dataset as HFDataset, DatasetDict
+
+            if isinstance(dataset, DatasetDict):
+                train_dataset = dataset.get("train")
+                eval_dataset = dataset.get("validation") or dataset.get("test")
+            elif isinstance(dataset, HFDataset):
+                # Single dataset - use 80% for train, 20% for eval
+                split = dataset.train_test_split(test_size=0.2, seed=42)
+                train_dataset = split["train"]
+                eval_dataset = split["test"]
+            else:
+                train_dataset = dataset
+                eval_dataset = None
 
             # Create trainer with pause/resume callback
             trainer = Trainer(
                 model=model,
                 args=training_args,
-                train_dataset=dataset.get("train"),
-                eval_dataset=dataset.get("validation") or dataset.get("test"),
+                train_dataset=train_dataset,
+                eval_dataset=eval_dataset,
                 tokenizer=tokenizer,
                 callbacks=[PauseResumeCallback(job_state, self)],
             )
@@ -278,10 +310,10 @@ class TrainingExecutor:
             logging_steps=settings.metrics_report_interval_steps,
             save_steps=settings.checkpoint_interval_steps,
             eval_steps=config.get("eval_steps", 500),
-            evaluation_strategy="steps" if config.get("eval_steps") else "no",
+            eval_strategy="steps" if config.get("eval_steps") else "no",
             save_strategy="steps",
-            load_best_model_at_end=True,
-            fp16=settings.enable_mixed_precision,
+            load_best_model_at_end=False,  # Disabled to avoid validation errors
+            fp16=settings.enable_mixed_precision,  # Re-enabled for production
             report_to="none",  # Disable default reporting
         )
 

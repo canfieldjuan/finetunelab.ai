@@ -64,6 +64,7 @@ class TrainingJobRequest(BaseModel):
     name: str
     user_id: str
     access_token: str
+    job_token: Optional[str] = None  # Token for metrics reporting to backend
 
 
 class TrainingJobStatus(BaseModel):
