@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { calculateNextRun, isTimeDue } from './schedule-calculator';
 import type { ScheduledEvaluation, ScheduleType } from '../batch-testing/types';
 import { sendScheduledEvaluationAlert } from '../alerts/alert.service';
-import type { MetricAlertRule, MetricType, ComparisonOperator, AggregationMethod } from '../alerts/alert.types';
+import type { MetricAlertRule, MetricType, ComparisonOperator, AggregationMethod, AlertType } from '../alerts/alert.types';
 import { AlertService } from '../alerts/alert.service';
 
 // Configuration
@@ -725,7 +725,7 @@ export class EvaluationSchedulerWorker {
   ): Promise<void> {
     try {
       // Determine alert type based on metric
-      const alertTypeMap: Record<MetricType, string> = {
+      const alertTypeMap: Record<MetricType, 'trace_latency_high' | 'trace_error_rate_high' | 'trace_cost_high' | 'trace_throughput_low' | 'trace_ttft_high' | 'anomaly_critical'> = {
         latency: 'trace_latency_high',
         error_rate: 'trace_error_rate_high',
         cost: 'trace_cost_high',
@@ -735,7 +735,7 @@ export class EvaluationSchedulerWorker {
         anomaly_severity: 'anomaly_critical',
       };
 
-      const alertType = alertTypeMap[rule.metric_type];
+      const alertType = alertTypeMap[rule.metric_type] as AlertType;
 
       // Create alert payload
       const alertPayload = {
