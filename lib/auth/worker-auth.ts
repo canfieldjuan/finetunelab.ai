@@ -199,9 +199,11 @@ export async function authenticateWorkerApiKey(
     return { ok: false, status: 400, error: 'API key not associated with a worker' };
   }
 
-  // Update last_used_at asynchronously
-  supabase.rpc('update_api_key_usage', { p_key_id: keyData.id }).catch((err) => {
-    console.warn('[Worker API Key Auth] Failed to update usage:', err);
+  // Update last_used_at asynchronously (fire and forget)
+  supabase.rpc('update_api_key_usage', { p_key_id: keyData.id }).then(({ error: updateError }) => {
+    if (updateError) {
+      console.warn('[Worker API Key Auth] Failed to update usage:', updateError);
+    }
   });
 
   console.log('[Worker API Key Auth] Authentication successful:', {

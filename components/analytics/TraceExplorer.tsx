@@ -373,6 +373,8 @@ export function TraceExplorer() {
 
   // Load filters from URL on mount
   useEffect(() => {
+    if (!searchParams) return;
+
     const search = searchParams.get('search');
     const operation = searchParams.get('operation');
     const status = searchParams.get('status');
@@ -402,6 +404,7 @@ export function TraceExplorer() {
 
   // Auto-expand trace from URL params (e.g., from anomaly navigation)
   useEffect(() => {
+    if (!searchParams) return;
     const traceIdFromUrl = searchParams.get('trace_id');
     if (traceIdFromUrl && !loading && traces.length > 0) {
       console.log('[TraceExplorer] Auto-expanding trace from URL:', traceIdFromUrl);

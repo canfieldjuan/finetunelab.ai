@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createClient } from '@/lib/supabaseServer';
+import { createClient } from '@supabase/supabase-js';
 
 /**
  * GET - Stream trace updates via SSE
@@ -16,7 +16,22 @@ export async function GET(req: NextRequest) {
 
   try {
     // Authenticate user
-    const supabase = createClient();
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      console.error('[Traces Stream] No authorization header');
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
+
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
@@ -50,7 +65,7 @@ export async function GET(req: NextRequest) {
               table: 'llm_traces',
               filter: `user_id=eq.${user.id}`,
             },
-            (payload) => {
+            (payload: any) => {
               console.log('[Traces Stream] New trace detected:', payload.new.id);
 
               // Send trace data to client
@@ -76,7 +91,7 @@ export async function GET(req: NextRequest) {
               table: 'llm_traces',
               filter: `user_id=eq.${user.id}`,
             },
-            (payload) => {
+            (payload: any) => {
               console.log('[Traces Stream] Trace updated:', payload.new.id);
 
               // Send update event
@@ -93,7 +108,7 @@ export async function GET(req: NextRequest) {
               }
             }
           )
-          .subscribe((status, err) => {
+          .subscribe((status: any, err: any) => {
             if (status === 'SUBSCRIBED') {
               console.log('[Traces Stream] Realtime subscription active');
 
