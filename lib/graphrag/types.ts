@@ -23,7 +23,7 @@ export interface Document {
   parentId: string | null;
 }
 
-export type DocumentFileType = 'pdf' | 'txt' | 'md' | 'docx';
+export type DocumentFileType = 'pdf' | 'txt' | 'md' | 'docx' | 'ts' | 'tsx' | 'js' | 'jsx' | 'py';
 
 export interface DocumentMetadata {
   userId: string;
@@ -200,4 +200,57 @@ export interface ProcessingStatus {
 export interface DeleteResponse {
   success: boolean;
   documentId: string;
+}
+
+// ============================================================================
+// Code-Specific Types
+// ============================================================================
+
+export interface CodeMetadata extends DocumentMetadata {
+  language: 'typescript' | 'javascript' | 'python';
+  fileType: 'ts' | 'tsx' | 'js' | 'jsx' | 'py';
+  filePath?: string;
+  lineCount: number;
+  functionCount: number;
+  classCount: number;
+  importCount: number;
+}
+
+export interface CodeEntity {
+  type: 'file' | 'class' | 'function' | 'interface' | 'type' | 'import' | 'export';
+  name: string;
+  startLine: number;
+  endLine: number;
+  filePath: string;
+  signature?: string;
+  typeParameters?: string[];
+  properties?: string[];
+}
+
+export type CodeRelationType =
+  | 'IMPORTS'
+  | 'EXPORTS'
+  | 'CALLS'
+  | 'EXTENDS'
+  | 'IMPLEMENTS'
+  | 'DEFINES'
+  | 'USES_TYPE';
+
+export interface CodeRelation {
+  type: CodeRelationType;
+  source: CodeEntity;
+  target: CodeEntity;
+  context?: string;
+}
+
+export interface CodeChunk {
+  content: string;
+  entities: CodeEntity[];
+  imports: string[];
+  exports: string[];
+  filePath: string;
+  startLine: number;
+  endLine: number;
+  chunkType: 'function' | 'class' | 'interface' | 'type' | 'module';
+  dependencies: string[];
 }

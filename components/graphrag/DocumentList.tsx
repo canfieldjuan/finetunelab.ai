@@ -192,6 +192,9 @@ export function DocumentList({ userId }: DocumentListProps) {
                         <span>{getStatusText(doc.processed)}</span>
                       </span>
                       <span className="uppercase">{doc.fileType}</span>
+                      {doc.metadata.fileSize && (
+                        <span>{(doc.metadata.fileSize / 1024 / 1024).toFixed(2)} MB</span>
+                      )}
                       <span>{formatDate(doc.createdAt)}</span>
                       {doc.neo4jEpisodeIds.length > 0 && (
                         <span className="text-green-600 dark:text-green-400">

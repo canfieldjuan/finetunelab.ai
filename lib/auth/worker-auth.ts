@@ -1,11 +1,14 @@
 /**
  * Worker Authentication Module
  * Provides HMAC-based authentication for distributed worker endpoints
+ * AND API key-based authentication for downloadable worker agents
  * Date: 2025-12-18
+ * Updated: 2025-12-26 - Added worker agent API key authentication
  */
 
 import { NextRequest } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
 const SIGNATURE_HEADER = 'x-worker-signature';
 const WORKER_ID_HEADER = 'x-worker-id';
@@ -123,6 +126,148 @@ export function validateWorkerSignature(
     return timingSafeEqual(expectedBuffer, providedBuffer);
   } catch (error) {
     console.error('[Worker Auth] Error comparing signatures:', error);
+    return false;
+  }
+}
+
+// ============================================================================
+// Worker Agent API Key Authentication (for downloadable agents)
+// ============================================================================
+
+export type WorkerApiKeyAuthResult =
+  | { ok: true; userId: string; workerId: string; keyId: string }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Authenticates a worker agent using API key with worker scope
+ * Used for downloadable worker agents (Windows/macOS)
+ * @param req - NextRequest object with X-API-Key header
+ * @returns Authentication result with user ID and worker ID
+ */
+export async function authenticateWorkerApiKey(
+  req: NextRequest
+): Promise<WorkerApiKeyAuthResult> {
+  const apiKey = req.headers.get('x-api-key') || req.headers.get('authorization')?.replace('Bearer ', '');
+
+  if (!apiKey) {
+    console.log('[Worker API Key Auth] Missing API key');
+    return { ok: false, status: 401, error: 'Missing API key' };
+  }
+
+  // Validate format (worker API keys start with wak_)
+  if (!apiKey.startsWith('wak_')) {
+    console.log('[Worker API Key Auth] Invalid API key format');
+    return { ok: false, status: 401, error: 'Invalid API key format' };
+  }
+
+  // Get Supabase client with service role
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('[Worker API Key Auth] Missing Supabase environment variables');
+    return { ok: false, status: 500, error: 'Server configuration error' };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Query for API key with worker scope
+  // Note: We store the raw API key for worker keys (not hashed) for simplicity
+  // In production, consider using hashed keys with bcrypt like regular API keys
+  const { data: keyData, error } = await supabase
+    .from('user_api_keys')
+    .select('id, user_id, worker_id, scopes, is_active')
+    .eq('key_value', apiKey)
+    .eq('is_active', true)
+    .single();
+
+  if (error || !keyData) {
+    console.log('[Worker API Key Auth] Invalid API key');
+    return { ok: false, status: 401, error: 'Invalid or inactive API key' };
+  }
+
+  // Check worker scope
+  const scopes = keyData.scopes as string[];
+  if (!scopes.includes('worker') && !scopes.includes('all')) {
+    console.log('[Worker API Key Auth] API key missing worker scope');
+    return { ok: false, status: 403, error: 'API key does not have worker scope' };
+  }
+
+  // Validate worker_id
+  if (!keyData.worker_id) {
+    console.log('[Worker API Key Auth] API key missing worker_id');
+    return { ok: false, status: 400, error: 'API key not associated with a worker' };
+  }
+
+  // Update last_used_at asynchronously
+  supabase.rpc('update_api_key_usage', { p_key_id: keyData.id }).catch((err) => {
+    console.warn('[Worker API Key Auth] Failed to update usage:', err);
+  });
+
+  console.log('[Worker API Key Auth] Authentication successful:', {
+    userId: keyData.user_id,
+    workerId: keyData.worker_id,
+  });
+
+  return {
+    ok: true,
+    userId: keyData.user_id,
+    workerId: keyData.worker_id,
+    keyId: keyData.id,
+  };
+}
+
+/**
+ * Generates HMAC signature for commands sent to workers
+ * Workers verify this signature before executing commands
+ * @param commandId - Unique command ID
+ * @param commandType - Type of command (start_trading, stop_trading, etc.)
+ * @param timestamp - Unix timestamp in milliseconds
+ * @param secret - Worker's API key (used as secret)
+ * @returns HMAC-SHA256 signature as hex string
+ */
+export function generateCommandSignature(
+  commandId: string,
+  commandType: string,
+  timestamp: number,
+  secret: string
+): string {
+  const message = `${commandId}:${commandType}:${timestamp}`;
+  const hmac = createHmac('sha256', secret);
+  hmac.update(message);
+  return hmac.digest('hex');
+}
+
+/**
+ * Verifies command signature using constant-time comparison
+ * Called by worker agents before executing commands
+ * @param commandId - Unique command ID
+ * @param commandType - Type of command
+ * @param timestamp - Unix timestamp in milliseconds
+ * @param signature - Provided signature to validate
+ * @param secret - Worker's API key (used as secret)
+ * @returns True if signature is valid
+ */
+export function verifyCommandSignature(
+  commandId: string,
+  commandType: string,
+  timestamp: number,
+  signature: string,
+  secret: string
+): boolean {
+  const expectedSignature = generateCommandSignature(commandId, commandType, timestamp, secret);
+
+  try {
+    const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+    const providedBuffer = Buffer.from(signature, 'hex');
+
+    if (expectedBuffer.length !== providedBuffer.length) {
+      return false;
+    }
+
+    return timingSafeEqual(expectedBuffer, providedBuffer);
+  } catch (error) {
+    console.error('[Worker Auth] Error verifying command signature:', error);
     return false;
   }
 }

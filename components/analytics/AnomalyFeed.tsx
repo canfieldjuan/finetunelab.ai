@@ -15,10 +15,12 @@ import {
   Info,
   CheckCircle,
   XCircle,
-  Activity
+  Activity,
+  ExternalLink
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 
 interface Anomaly {
   id: string;
@@ -41,6 +43,11 @@ interface Anomaly {
   acknowledged: boolean;
   detected_at: string;
   created_at: string;
+  resolved_at?: string;
+  resolved_by?: string;
+  resolution_notes?: string;
+  root_cause?: string;
+  linked_anomalies?: string[];
 }
 
 interface AnomalyFeedProps {
@@ -54,10 +61,18 @@ export default function AnomalyFeed({
   autoRefresh = true,
   refreshInterval = 30000
 }: AnomalyFeedProps) {
+  const router = useRouter();
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
+
+  // Resolution workflow state
+  const [showResolution, setShowResolution] = useState(false);
+  const [resolutionStatus, setResolutionStatus] = useState<string>('');
+  const [resolutionNotes, setResolutionNotes] = useState('');
+  const [rootCause, setRootCause] = useState('');
+  const [linkedAnomalyIds, setLinkedAnomalyIds] = useState<string[]>([]);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -407,6 +422,77 @@ export default function AnomalyFeed({
     }
   };
 
+  // Navigate to trace
+  const handleViewTrace = (traceId: string) => {
+    console.log('[AnomalyFeed] Navigating to trace:', traceId);
+    router.push(`/analytics/traces?trace_id=${traceId}`);
+  };
+
+  // Update anomaly resolution
+  const handleUpdateResolution = async (anomalyId: string) => {
+    try {
+      console.log('[AnomalyFeed] Updating resolution for anomaly:', anomalyId);
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        throw new Error('Not authenticated');
+      }
+
+      const updateData: Record<string, unknown> = {
+        resolution_status: resolutionStatus,
+      };
+
+      if (resolutionNotes) updateData.resolution_notes = resolutionNotes;
+      if (rootCause) updateData.root_cause = rootCause;
+      if (linkedAnomalyIds.length > 0) updateData.linked_anomalies = linkedAnomalyIds;
+
+      if (resolutionStatus === 'resolved' || resolutionStatus === 'false_positive') {
+        updateData.resolved_at = new Date().toISOString();
+        updateData.resolved_by = session.user.id;
+      }
+
+      const response = await fetch('/api/analytics/anomalies', {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          anomaly_id: anomalyId,
+          ...updateData,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update resolution');
+      }
+
+      console.log('[AnomalyFeed] Resolution updated successfully');
+
+      // Reset form and close
+      setShowResolution(false);
+      setResolutionStatus('');
+      setResolutionNotes('');
+      setRootCause('');
+      setLinkedAnomalyIds([]);
+
+      await fetchAnomalies();
+    } catch (err) {
+      console.error('[AnomalyFeed] Resolution update error:', err);
+      alert(err instanceof Error ? err.message : 'Failed to update resolution');
+    }
+  };
+
+  // Open resolution panel
+  const openResolutionPanel = (anomaly: Anomaly) => {
+    setResolutionStatus(anomaly.resolution_status || 'pending');
+    setResolutionNotes(anomaly.resolution_notes || '');
+    setRootCause(anomaly.root_cause || '');
+    setLinkedAnomalyIds(anomaly.linked_anomalies || []);
+    setShowResolution(true);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -507,12 +593,29 @@ export default function AnomalyFeed({
           >
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-semibold">Anomaly Details</h3>
-              <button
-                onClick={() => setSelectedAnomaly(null)}
-                className="text-sm px-3 py-1 hover:bg-gray-100 rounded"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedAnomaly.statistics?.trace_id && (
+                  <button
+                    onClick={() => handleViewTrace(selectedAnomaly.statistics.trace_id as string)}
+                    className="text-sm px-3 py-1 bg-blue-600 text-white hover:bg-blue-700 rounded flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    View Trace
+                  </button>
+                )}
+                <button
+                  onClick={() => openResolutionPanel(selectedAnomaly)}
+                  className="text-sm px-3 py-1 bg-green-600 text-white hover:bg-green-700 rounded"
+                >
+                  {showResolution ? 'Hide Resolution' : 'Resolve'}
+                </button>
+                <button
+                  onClick={() => setSelectedAnomaly(null)}
+                  className="text-sm px-3 py-1 hover:bg-gray-100 rounded"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="p-4 overflow-y-auto max-h-[70vh] space-y-4">
@@ -567,10 +670,121 @@ export default function AnomalyFeed({
                 </div>
               )}
 
+              {/* Resolution Panel */}
+              {showResolution && (
+                <div className="border border-green-200 bg-green-50 rounded-lg p-4 space-y-3">
+                  <h4 className="font-semibold text-sm text-green-900">Resolution Workflow</h4>
+
+                  {/* Status Dropdown */}
+                  <div>
+                    <label className="text-xs text-gray-700 font-medium mb-1 block">Status</label>
+                    <select
+                      value={resolutionStatus}
+                      onChange={(e) => setResolutionStatus(e.target.value)}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="investigating">Investigating</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="false_positive">False Positive</option>
+                    </select>
+                  </div>
+
+                  {/* Root Cause */}
+                  <div>
+                    <label className="text-xs text-gray-700 font-medium mb-1 block">Root Cause</label>
+                    <input
+                      type="text"
+                      value={rootCause}
+                      onChange={(e) => setRootCause(e.target.value)}
+                      placeholder="e.g., Model timeout, High load, Configuration issue"
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+                    />
+                  </div>
+
+                  {/* Resolution Notes */}
+                  <div>
+                    <label className="text-xs text-gray-700 font-medium mb-1 block">Resolution Notes</label>
+                    <textarea
+                      value={resolutionNotes}
+                      onChange={(e) => setResolutionNotes(e.target.value)}
+                      placeholder="Describe the investigation, actions taken, and outcome..."
+                      rows={3}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+                    />
+                  </div>
+
+                  {/* Linked Anomalies */}
+                  <div>
+                    <label className="text-xs text-gray-700 font-medium mb-1 block">
+                      Linked Anomalies (comma-separated IDs)
+                    </label>
+                    <input
+                      type="text"
+                      value={linkedAnomalyIds.join(', ')}
+                      onChange={(e) => setLinkedAnomalyIds(e.target.value.split(',').map(id => id.trim()).filter(Boolean))}
+                      placeholder="e.g., 123, 456, 789"
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Link related anomalies with the same root cause</p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => handleUpdateResolution(selectedAnomaly.id)}
+                      className="flex-1 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium"
+                    >
+                      Save Resolution
+                    </button>
+                    <button
+                      onClick={() => setShowResolution(false)}
+                      className="px-3 py-2 border border-gray-300 rounded hover:bg-gray-50 text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Current Resolution Info */}
+              {(selectedAnomaly.resolved_at || selectedAnomaly.resolution_notes || selectedAnomaly.root_cause) && !showResolution && (
+                <div className="border border-blue-200 bg-blue-50 rounded-lg p-3 space-y-2">
+                  <h4 className="font-semibold text-sm text-blue-900">Resolution History</h4>
+
+                  {selectedAnomaly.root_cause && (
+                    <div>
+                      <div className="text-xs text-gray-600 font-medium">Root Cause:</div>
+                      <div className="text-sm text-gray-900">{selectedAnomaly.root_cause}</div>
+                    </div>
+                  )}
+
+                  {selectedAnomaly.resolution_notes && (
+                    <div>
+                      <div className="text-xs text-gray-600 font-medium">Notes:</div>
+                      <div className="text-sm text-gray-900">{selectedAnomaly.resolution_notes}</div>
+                    </div>
+                  )}
+
+                  {selectedAnomaly.resolved_at && (
+                    <div className="text-xs text-gray-600">
+                      Resolved: {new Date(selectedAnomaly.resolved_at).toLocaleString()}
+                    </div>
+                  )}
+
+                  {selectedAnomaly.linked_anomalies && selectedAnomaly.linked_anomalies.length > 0 && (
+                    <div>
+                      <div className="text-xs text-gray-600 font-medium">Linked Anomalies:</div>
+                      <div className="text-sm text-gray-900">{selectedAnomaly.linked_anomalies.join(', ')}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
                   <span className="text-gray-500">Status:</span>{' '}
-                  <span className="font-medium">{selectedAnomaly.resolution_status}</span>
+                  <span className="font-medium capitalize">{selectedAnomaly.resolution_status}</span>
                 </div>
                 <div>
                   <span className="text-gray-500">Acknowledged:</span>{' '}

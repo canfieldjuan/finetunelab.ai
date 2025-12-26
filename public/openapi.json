@@ -615,6 +615,119 @@
             "format": "date-time"
           }
         }
+      },
+      "MetricAlertRule": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Alert rule ID",
+            "example": "rule_abc123"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID who owns this rule"
+          },
+          "rule_name": {
+            "type": "string",
+            "description": "Name of the alert rule",
+            "example": "High P95 Latency Alert"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of what this rule monitors",
+            "example": "Alert when P95 latency exceeds 500ms"
+          },
+          "metric_type": {
+            "type": "string",
+            "enum": ["latency", "error_rate", "cost", "throughput", "ttft", "token_usage", "anomaly_severity"],
+            "description": "Type of metric to monitor",
+            "example": "latency"
+          },
+          "threshold_value": {
+            "type": "number",
+            "description": "Threshold value to compare against",
+            "example": 500
+          },
+          "comparison_operator": {
+            "type": "string",
+            "enum": [">", "<", ">=", "<=", "==", "!="],
+            "description": "Comparison operator",
+            "example": ">"
+          },
+          "time_window_minutes": {
+            "type": "integer",
+            "description": "Time window for metric aggregation in minutes",
+            "example": 5,
+            "default": 5
+          },
+          "aggregation_method": {
+            "type": "string",
+            "enum": ["p50", "p95", "p99", "avg", "max", "min", "count", "sum"],
+            "description": "How to aggregate the metric",
+            "example": "p95"
+          },
+          "model_filter": {
+            "type": "string",
+            "description": "Optional filter by model name",
+            "example": "gpt-4"
+          },
+          "operation_filter": {
+            "type": "string",
+            "description": "Optional filter by operation type",
+            "example": "chat_completion"
+          },
+          "status_filter": {
+            "type": "string",
+            "description": "Optional filter by status",
+            "example": "completed"
+          },
+          "notify_email": {
+            "type": "boolean",
+            "description": "Send email notifications",
+            "default": true
+          },
+          "notify_webhooks": {
+            "type": "boolean",
+            "description": "Send webhook notifications",
+            "default": false
+          },
+          "notify_integrations": {
+            "type": "boolean",
+            "description": "Send integration notifications (Slack, Discord, etc)",
+            "default": false
+          },
+          "cooldown_minutes": {
+            "type": "integer",
+            "description": "Cooldown period between alerts in minutes",
+            "example": 30,
+            "default": 30
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the rule is enabled",
+            "default": true
+          },
+          "last_triggered_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of last trigger"
+          },
+          "trigger_count": {
+            "type": "integer",
+            "description": "Number of times this rule has triggered",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["rule_name", "metric_type", "threshold_value", "comparison_operator", "time_window_minutes", "aggregation_method"]
       }
     }
   },
@@ -3607,6 +3720,383 @@
                       "type": "string"
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/alert-rules": {
+      "get": {
+        "summary": "List metric alert rules",
+        "description": "Retrieve all metric-based alert rules for the authenticated user.\n\nMetric alert rules enable continuous monitoring of:\n- Latency (P50, P95, P99, avg, max, min)\n- Error rates\n- Cost thresholds\n- Throughput (requests per time window)\n- Time to first token (TTFT)\n- Token usage\n- Anomaly severity scores\n\n**Use Cases:**\n- Monitor production SLAs (P95 latency < 500ms)\n- Track cost budgets (daily spend < $100)\n- Detect error rate spikes (error_rate > 5%)\n- Alert on anomaly detection (severity > 0.8)\n",
+        "tags": ["Analytics"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Alert rules retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MetricAlertRule"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create metric alert rule",
+        "description": "Create a new metric-based alert rule to monitor trace metrics continuously.\n\n**Example:** Alert when P95 latency exceeds 500ms over 5-minute window\n\n```json\n{\n  \"rule_name\": \"High P95 Latency\",\n  \"metric_type\": \"latency\",\n  \"threshold_value\": 500,\n  \"comparison_operator\": \">\",\n  \"time_window_minutes\": 5,\n  \"aggregation_method\": \"p95\",\n  \"cooldown_minutes\": 30,\n  \"notify_email\": true\n}\n```\n\nThe rule will be evaluated every 60 seconds by the background worker.\n",
+        "tags": ["Analytics"],
+        "security": [{"bearerAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rule_name": {
+                    "type": "string",
+                    "description": "Name for the alert rule",
+                    "example": "High P95 Latency Alert"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Optional description",
+                    "example": "Alert when P95 latency exceeds 500ms"
+                  },
+                  "metric_type": {
+                    "type": "string",
+                    "enum": ["latency", "error_rate", "cost", "throughput", "ttft", "token_usage", "anomaly_severity"],
+                    "description": "Metric to monitor",
+                    "example": "latency"
+                  },
+                  "threshold_value": {
+                    "type": "number",
+                    "description": "Threshold to trigger alert",
+                    "example": 500
+                  },
+                  "comparison_operator": {
+                    "type": "string",
+                    "enum": [">", "<", ">=", "<=", "==", "!="],
+                    "description": "How to compare metric against threshold",
+                    "example": ">"
+                  },
+                  "time_window_minutes": {
+                    "type": "integer",
+                    "description": "Time window for aggregation (minutes)",
+                    "example": 5,
+                    "default": 5
+                  },
+                  "aggregation_method": {
+                    "type": "string",
+                    "enum": ["p50", "p95", "p99", "avg", "max", "min", "count", "sum"],
+                    "description": "Aggregation method",
+                    "example": "p95"
+                  },
+                  "model_filter": {
+                    "type": "string",
+                    "description": "Optional: filter by model name",
+                    "example": "gpt-4"
+                  },
+                  "operation_filter": {
+                    "type": "string",
+                    "description": "Optional: filter by operation",
+                    "example": "chat_completion"
+                  },
+                  "status_filter": {
+                    "type": "string",
+                    "description": "Optional: filter by status",
+                    "example": "completed"
+                  },
+                  "notify_email": {
+                    "type": "boolean",
+                    "description": "Send email alerts",
+                    "default": true
+                  },
+                  "notify_webhooks": {
+                    "type": "boolean",
+                    "description": "Send webhook alerts",
+                    "default": false
+                  },
+                  "notify_integrations": {
+                    "type": "boolean",
+                    "description": "Send integration alerts",
+                    "default": false
+                  },
+                  "cooldown_minutes": {
+                    "type": "integer",
+                    "description": "Cooldown between alerts (minutes)",
+                    "example": 30,
+                    "default": 30
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Enable the rule",
+                    "default": true
+                  }
+                },
+                "required": ["rule_name", "metric_type", "threshold_value", "comparison_operator", "time_window_minutes", "aggregation_method"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Alert rule created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "rule": {
+                      "$ref": "#/components/schemas/MetricAlertRule"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update metric alert rule",
+        "description": "Update an existing metric alert rule. Provide the rule ID and fields to update.\n\n**Updatable fields:**\n- rule_name, description\n- threshold_value, comparison_operator\n- time_window_minutes, aggregation_method\n- Filters (model, operation, status)\n- Notification preferences\n- enabled status\n",
+        "tags": ["Analytics"],
+        "security": [{"bearerAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Rule ID to update",
+                    "example": "rule_abc123"
+                  },
+                  "rule_name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "threshold_value": {
+                    "type": "number"
+                  },
+                  "comparison_operator": {
+                    "type": "string",
+                    "enum": [">", "<", ">=", "<=", "==", "!="]
+                  },
+                  "time_window_minutes": {
+                    "type": "integer"
+                  },
+                  "aggregation_method": {
+                    "type": "string",
+                    "enum": ["p50", "p95", "p99", "avg", "max", "min", "count", "sum"]
+                  },
+                  "model_filter": {
+                    "type": "string"
+                  },
+                  "operation_filter": {
+                    "type": "string"
+                  },
+                  "status_filter": {
+                    "type": "string"
+                  },
+                  "notify_email": {
+                    "type": "boolean"
+                  },
+                  "notify_webhooks": {
+                    "type": "boolean"
+                  },
+                  "notify_integrations": {
+                    "type": "boolean"
+                  },
+                  "cooldown_minutes": {
+                    "type": "integer"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Alert rule updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "rule": {
+                      "$ref": "#/components/schemas/MetricAlertRule"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Rule not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete metric alert rule",
+        "description": "Delete a metric alert rule by ID. This action is irreversible.\n\nThe rule will stop being evaluated immediately and all associated evaluation history will remain in the database for audit purposes.\n",
+        "tags": ["Analytics"],
+        "security": [{"bearerAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Rule ID to delete",
+                    "example": "rule_abc123"
+                  }
+                },
+                "required": ["id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Alert rule deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Alert rule deleted successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Rule not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }

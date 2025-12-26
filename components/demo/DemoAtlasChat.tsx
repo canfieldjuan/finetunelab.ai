@@ -58,7 +58,7 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
       setMessages([
         {
           role: 'assistant',
-          content: `Hi! I'm Atlas, your analytics assistant. I can help you understand your batch test results for ${modelName || 'your model'}.\n\nTry asking me about your success rate, latency percentiles, or which prompts performed best or worst. What would you like to know?`,
+          content: `Hi! I can help you analyze your batch test results for ${modelName || 'your model'}.\n\nTry asking me about your success rate, latency percentiles, or which prompts performed best or worst. What would you like to know?`,
         },
       ]);
     }
@@ -168,7 +168,7 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-500" />
-            Atlas Analytics
+            Results Analysis
           </CardTitle>
           {modelName && (
             <Badge variant="outline" className="text-xs">

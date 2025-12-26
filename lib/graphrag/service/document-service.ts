@@ -15,6 +15,7 @@ import type {
   UploadResponse,
   ProcessingStatus,
 } from '../types';
+import type { CodeParseResult } from '../parsers/code-parser';
 
 // ============================================================================
 // Types
@@ -331,19 +332,36 @@ export class DocumentService {
         throw new Error('Parsed document has no text content');
       }
 
-      // Process with Graphiti using single episode (like promote conversation)
-      console.log(`[GraphRAG] Processing document ${document.id}: "${document.filename}"`);
-      console.log(`[GraphRAG] Content length: ${parseResult.text.length} characters`);
-      console.log(`[GraphRAG] Using single episode method (like promote conversation)`);
+      // NEW: Check if it's a code file with AST parsing
+      console.log(`[DocumentService] File type: ${document.fileType}`);
+      const isCodeFile = ['ts', 'tsx', 'js', 'jsx', 'py'].includes(document.fileType);
 
-      const episodeIds = await this.processAsSingleEpisode(
-        parseResult.text,
-        document.userId,
-        document.filename,
-        maxRetries
-      );
+      let episodeIds: string[];
 
-      console.log(`[GraphRAG] Successfully created episode: ${episodeIds[0]}`);
+      if (isCodeFile && parseResult.codeResult) {
+        // Use code-aware chunking
+        console.log(`[DocumentService] Processing as code file`);
+        episodeIds = await this.processCodeFile(
+          parseResult.codeResult,
+          document.userId,
+          document.filename,
+          maxRetries
+        );
+      } else {
+        // Use existing text-based processing
+        console.log(`[GraphRAG] Processing document ${document.id}: "${document.filename}"`);
+        console.log(`[GraphRAG] Content length: ${parseResult.text.length} characters`);
+        console.log(`[GraphRAG] Using single episode method (like promote conversation)`);
+
+        episodeIds = await this.processAsSingleEpisode(
+          parseResult.text,
+          document.userId,
+          document.filename,
+          maxRetries
+        );
+      }
+
+      console.log(`[GraphRAG] Successfully processed: ${episodeIds.length} episode(s)`);
 
       // Update status
       await documentStorage.updateProcessingStatus(supabase, document.id, true, episodeIds);
@@ -845,6 +863,61 @@ export class DocumentService {
   }
 
   /**
+   * NEW: Process code file using AST chunks
+   */
+  private async processCodeFile(
+    codeResult: CodeParseResult,
+    userId: string,
+    filename: string,
+    maxRetries: number
+  ): Promise<string[]> {
+    console.log(`[DocumentService] ===== PROCESSING CODE FILE =====`);
+    console.log(`[DocumentService] File: ${filename}`);
+    console.log(`[DocumentService] Language: ${codeResult.metadata.language}`);
+    console.log(`[DocumentService] AST entities: ${codeResult.astResult.entities.length}`);
+    console.log(`[DocumentService] Code chunks: ${codeResult.astResult.chunks.length}`);
+
+    const chunks = codeResult.astResult.chunks;
+
+    if (chunks.length === 0) {
+      // Fallback to text-based processing
+      console.warn(`[DocumentService] No AST chunks, falling back to text processing`);
+      return this.processAsSingleEpisode(
+        codeResult.rawContent,
+        userId,
+        filename,
+        maxRetries
+      );
+    }
+
+    // Use code-specific episode creation
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[DocumentService] Attempt ${attempt}/${maxRetries}: Processing code chunks`);
+
+        const episodeIds = await episodeService.addCodeChunks(chunks, userId, filename);
+
+        console.log(`[DocumentService] ===== CODE PROCESSING COMPLETE =====`);
+        console.log(`[DocumentService] Episodes created: ${episodeIds.length}`);
+
+        return episodeIds;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        console.error(`[DocumentService] Attempt ${attempt}/${maxRetries} failed:`, lastError.message);
+
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          console.log(`[DocumentService] Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    throw lastError || new Error('Code processing failed');
+  }
+
+  /**
    * Process a single chunk of text as an episode
    */
   private async processChunk(
@@ -918,7 +991,7 @@ export class DocumentService {
    */
   private getFileType(filename: string): DocumentFileType {
     const ext = filename.toLowerCase().split('.').pop();
-    
+
     switch (ext) {
       case 'pdf':
         return 'pdf';
@@ -928,6 +1001,16 @@ export class DocumentService {
         return 'txt';
       case 'md':
         return 'md';
+      case 'ts':
+        return 'ts';
+      case 'tsx':
+        return 'tsx';
+      case 'js':
+        return 'js';
+      case 'jsx':
+        return 'jsx';
+      case 'py':
+        return 'py';
       default:
         throw new Error(`Unsupported file extension: ${ext}`);
     }

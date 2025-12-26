@@ -14,8 +14,15 @@ const ALLOWED_TYPES = [
   'application/pdf',
   'text/plain',
   'text/markdown',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/typescript',
+  'text/javascript',
+  'application/javascript',
+  'text/x-python',
+  'text/x-script.python'
 ];
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.txt', '.md', '.docx', '.ts', '.tsx', '.js', '.jsx', '.py'];
 
 export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps) {
   // Note: userId is available in props for future use (e.g., user-specific limits)
@@ -38,8 +45,13 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
 
   // File validation helper
   const validateFile = (file: File): string | null => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return 'Invalid file type. Please upload PDF, TXT, MD, or DOCX files.';
+    const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+    const isValidType = ALLOWED_TYPES.includes(file.type);
+    const isValidExt = ALLOWED_EXTENSIONS.includes(fileExt);
+
+    // Allow if either type or extension is valid (extension is more reliable for code)
+    if (!isValidType && !isValidExt) {
+      return 'Invalid file type. Supported: PDF, TXT, MD, DOCX, TS, JS, PY';
     }
     if (file.size > MAX_FILE_SIZE) {
       return `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`;
@@ -319,7 +331,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
               <span className="font-semibold">Click to upload</span> or drag and drop
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              PDF, TXT, MD, or DOCX (max 10MB per file)
+              PDF, TXT, MD, DOCX, TS, JS, PY (max 10MB per file)
             </p>
           </div>
           <input
@@ -327,7 +339,7 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
             id="file-upload"
             type="file"
             className="hidden"
-            accept=".pdf,.txt,.md,.docx"
+            accept=".pdf,.txt,.md,.docx,.ts,.tsx,.js,.jsx,.py"
             onChange={handleFileSelect}
             disabled={isUploading}
             multiple

@@ -170,7 +170,7 @@ export default function DemoTestModelPage() {
               </div>
               <CardTitle className="text-2xl">Test Your Fine-Tuned Model</CardTitle>
               <CardDescription className="text-base mt-2">
-                Connect your model, run batch tests, and analyze results with Atlas
+                Connect your model, run batch tests, and analyze results with your own AI
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -199,8 +199,8 @@ export default function DemoTestModelPage() {
                 <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
                   <Badge className="mt-0.5">4</Badge>
                   <div>
-                    <p className="font-medium">Analyze with Atlas</p>
-                    <p className="text-sm text-muted-foreground">Query your results using natural language</p>
+                    <p className="font-medium">Analyze Results</p>
+                    <p className="text-sm text-muted-foreground">Chat with your model to analyze test results</p>
                   </div>
                 </div>
               </div>
@@ -299,7 +299,7 @@ export default function DemoTestModelPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center max-w-3xl mx-auto">
               <p className="text-sm text-muted-foreground">
-                Ask Atlas about your batch test results
+                Chat with your model to analyze batch test results
               </p>
               <Button variant="outline" size="sm" onClick={() => setStep('export')}>
                 Continue to Export
@@ -411,7 +411,7 @@ export default function DemoTestModelPage() {
     { key: 'task_selection', label: 'Domain' },
     { key: 'model_config', label: 'Connect' },
     { key: 'batch_test', label: 'Test' },
-    { key: 'atlas_chat', label: 'Atlas' },
+    { key: 'atlas_chat', label: 'Chat' },
     { key: 'export', label: 'Export' },
   ];
 
@@ -423,7 +423,7 @@ export default function DemoTestModelPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">FineTuneLab Demo</h1>
-          <p className="text-muted-foreground">Bring Your Own Model - Batch Testing with Atlas Analytics</p>
+          <p className="text-muted-foreground">Bring Your Own Model - Batch Testing & AI Analysis</p>
         </div>
 
         {/* Step indicator */}

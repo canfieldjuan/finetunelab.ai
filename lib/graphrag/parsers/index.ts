@@ -37,6 +37,11 @@ export class ParserFactory {
       
       case 'txt':
       case 'md':
+      case 'ts':
+      case 'tsx':
+      case 'js':
+      case 'jsx':
+      case 'py':
         return this.parseText(buffer, fileType);
       
       default:
@@ -80,9 +85,9 @@ export class ParserFactory {
   }
 
   /**
-   * Parse text file (TXT, MD)
+   * Parse Text file (including code files)
    */
-  private async parseText(buffer: Buffer, fileType: 'txt' | 'md'): Promise<ParseResult> {
+  private async parseText(buffer: Buffer, fileType: DocumentFileType): Promise<ParseResult> {
     const result: TextParseResult = await textParser.parseWithAutoEncoding(buffer);
     const cleanedText = textParser.cleanText(result.text);
     

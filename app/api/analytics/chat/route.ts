@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { executeTrainingMetrics } from '@/lib/tools/analytics/training-metrics.handler';
 import { executeTrainingPredictions } from '@/lib/tools/analytics/training-predictions.handler';
 import { executeAdvancedAnalytics } from '@/lib/tools/analytics/advanced-analytics.handler';
+import { executeGetTraces } from '@/lib/tools/analytics/traces.handler';
 
 export const runtime = 'nodejs';
 
@@ -535,6 +536,134 @@ const analyticsTools: ToolDefinition[] = [
           }
         },
         required: ['query']
+      }
+    }
+  },
+  // Tool 18: Get Traces
+  {
+    type: 'function',
+    function: {
+      name: 'get_traces',
+      description: `Retrieve and analyze execution traces of LLM operations. Traces provide detailed insights into:
+- Request/response cycles and latency
+- Tool calls and their execution
+- Model invocations and performance
+- RAG retrieval metrics and groundedness
+- Token usage and costs
+- Error information and debugging data
+
+Use this to:
+- Debug production issues
+- Compare model performance across runs
+- Track multi-step agent operations
+- Analyze RAG effectiveness
+- Investigate latency and performance bottlenecks
+- Audit model behavior`,
+      parameters: {
+        type: 'object',
+        properties: {
+          operation: {
+            type: 'string',
+            enum: ['get_traces', 'get_trace_details', 'compare_traces', 'get_trace_summary', 'get_rag_metrics', 'get_performance_stats'],
+            description: 'Operation to perform'
+          },
+          conversation_id: {
+            type: 'string',
+            description: 'Filter traces by conversation ID'
+          },
+          trace_id: {
+            type: 'string',
+            description: 'Get specific trace (required for get_trace_details)'
+          },
+          message_id: {
+            type: 'string',
+            description: 'Filter traces by message ID'
+          },
+          session_tag: {
+            type: 'string',
+            description: 'Filter traces by session tag (experiment tracking)'
+          },
+          operation_type: {
+            type: 'string',
+            description: 'Filter by operation type (llm_call, tool_call, rag_query, etc.)'
+          },
+          model_name: {
+            type: 'string',
+            description: 'Filter by model name'
+          },
+          model_provider: {
+            type: 'string',
+            description: 'Filter by provider (openai, anthropic, etc.)'
+          },
+          status: {
+            type: 'string',
+            enum: ['pending', 'completed', 'error'],
+            description: 'Filter by trace status'
+          },
+          start_date: {
+            type: 'string',
+            description: 'Filter traces after this date (ISO 8601 format)'
+          },
+          end_date: {
+            type: 'string',
+            description: 'Filter traces before this date (ISO 8601 format)'
+          },
+          min_duration_ms: {
+            type: 'number',
+            description: 'Minimum duration in milliseconds'
+          },
+          max_duration_ms: {
+            type: 'number',
+            description: 'Maximum duration in milliseconds'
+          },
+          min_cost_usd: {
+            type: 'number',
+            description: 'Minimum cost in USD'
+          },
+          streaming_only: {
+            type: 'boolean',
+            description: 'Only return streaming traces'
+          },
+          rag_used: {
+            type: 'boolean',
+            description: 'Filter traces that used RAG'
+          },
+          min_groundedness_score: {
+            type: 'number',
+            description: 'Minimum groundedness score (0-1)'
+          },
+          trace_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of trace IDs to compare (for compare_traces operation)'
+          },
+          compare_by: {
+            type: 'string',
+            enum: ['duration', 'tokens', 'cost', 'quality', 'rag_performance'],
+            description: 'Metric to compare traces by (for compare_traces operation)'
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of traces to return (default: 50, max: 500)'
+          },
+          offset: {
+            type: 'number',
+            description: 'Number of traces to skip for pagination (default: 0)'
+          },
+          include_hierarchy: {
+            type: 'boolean',
+            description: 'Include child traces in hierarchical structure (default: false)'
+          },
+          include_quality_data: {
+            type: 'boolean',
+            description: 'Include judgments and user ratings (default: true)'
+          },
+          include_input_output: {
+            type: 'boolean',
+            description: 'Include full input/output data - can be large (default: false)'
+          }
+        },
+        required: ['operation']
       }
     }
   }
@@ -1121,6 +1250,9 @@ async function executeAnalyticsTool(toolName: string, args: Record<string, unkno
           return { error: graphResult.error };
         }
         return graphResult.data;
+
+      case 'get_traces':
+        return await executeGetTraces(args, userId, authHeader, authClient);
 
       default:
         return { error: `Unknown tool: ${toolName}` };

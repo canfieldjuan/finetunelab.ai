@@ -11,7 +11,7 @@ import { apiConfig } from '@/lib/config/api';
 // TYPE DEFINITIONS
 // ============================================================================
 
-export type ApiKeyScope = 'training' | 'production' | 'testing' | 'all';
+export type ApiKeyScope = 'training' | 'production' | 'testing' | 'worker' | 'all';
 
 export const API_KEY_SCOPES: Record<ApiKeyScope, { label: string; description: string; endpoints: string[] }> = {
   all: {
@@ -49,6 +49,15 @@ export const API_KEY_SCOPES: Record<ApiKeyScope, { label: string; description: s
       '/api/batch-testing/*',
       '/api/evaluation/*',
       '/api/test-suites/*',
+    ],
+  },
+  worker: {
+    label: 'Worker Agent',
+    description: 'Worker agent registration, heartbeat, commands, and metrics',
+    endpoints: [
+      '/api/workers/register',
+      '/api/workers/*/heartbeat',
+      '/api/workers/commands/*/result',
     ],
   },
 };
