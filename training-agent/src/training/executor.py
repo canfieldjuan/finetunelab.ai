@@ -2,9 +2,10 @@
 Training job executor with pause/resume/cancel support
 """
 import asyncio
+import sys
 import traceback
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from datetime import datetime
 from loguru import logger
 
@@ -28,6 +29,32 @@ from src.models.training import (
 )
 from src.monitoring.gpu_monitor import gpu_monitor
 from src.config import settings
+
+
+class LogCapture:
+    """Captures stdout/stderr to both console and list"""
+
+    def __init__(self, log_list: List[str], max_lines: int = 10000):
+        self.log_list = log_list
+        self.max_lines = max_lines
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+
+    def write(self, text: str):
+        """Write to both original stream and capture list"""
+        self.original_stdout.write(text)
+        self.original_stdout.flush()
+
+        if text.strip():
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            line = f"[{timestamp}] {text.strip()}"
+            self.log_list.append(line)
+
+            if len(self.log_list) > self.max_lines:
+                self.log_list.pop(0)
+
+    def flush(self):
+        self.original_stdout.flush()
 
 
 class PauseResumeCallback(TrainerCallback):
@@ -158,6 +185,10 @@ class TrainingExecutor:
 
     async def _run_training(self, job_state: TrainingJobState):
         """Execute the actual training (runs in background)"""
+        log_capture = LogCapture(job_state.logs)
+        sys.stdout = log_capture
+        sys.stderr = log_capture
+
         try:
             # Load model and tokenizer
             logger.info(f"Loading model: {job_state.config.model.get('name')}")
@@ -266,6 +297,21 @@ class TrainingExecutor:
             await self._update_backend_status(job_state.job_id, job_state.job_token, "failed", error=str(e))
 
         finally:
+            # Restore original streams
+            sys.stdout = log_capture.original_stdout
+            sys.stderr = log_capture.original_stderr
+
+            # Send final logs to backend
+            if job_state.job_token and len(job_state.logs) > 0:
+                try:
+                    await self._send_logs_to_backend(
+                        job_state.job_id,
+                        job_state.job_token,
+                        job_state.logs
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send final logs: {e}")
+
             # Cleanup
             if job_state.job_id in self.trainers:
                 del self.trainers[job_state.job_id]
@@ -447,6 +493,24 @@ class TrainingExecutor:
             logger.info(f"Backend status updated: {job_id} -> {status}")
         except Exception as e:
             logger.error(f"Failed to update backend status: {e}")
+
+    async def _send_logs_to_backend(
+        self,
+        job_id: str,
+        job_token: str,
+        logs: List[str],
+        batch_size: int = 100
+    ):
+        """Send logs to backend in batches"""
+        from src.api.backend_client import backend_client
+
+        for i in range(0, len(logs), batch_size):
+            batch = logs[i:i + batch_size]
+            try:
+                await backend_client.send_logs(job_id, job_token, batch)
+                logger.debug(f"Sent {len(batch)} log lines to backend")
+            except Exception as e:
+                logger.error(f"Failed to send log batch: {e}")
 
 
 # Global executor instance
