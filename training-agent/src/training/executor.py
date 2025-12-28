@@ -141,6 +141,9 @@ class TrainingExecutor:
             job_state.status = JobStatus.RUNNING
             job_state.started_at = datetime.utcnow()
 
+            # Report RUNNING status to backend
+            await self._update_backend_status(job_state.job_id, job_state.job_token, "running")
+
             # Run training in background task
             asyncio.create_task(self._run_training(job_state))
 
@@ -247,6 +250,9 @@ class TrainingExecutor:
 
                 logger.info(f"Training completed successfully: {job_state.job_id}")
 
+                # Report COMPLETED status to backend
+                await self._update_backend_status(job_state.job_id, job_state.job_token, "completed")
+
         except Exception as e:
             logger.error(f"Training failed for job {job_state.job_id}: {e}")
             logger.error(traceback.format_exc())
@@ -255,6 +261,9 @@ class TrainingExecutor:
             job_state.error = str(e)
             job_state.error_traceback = traceback.format_exc()
             job_state.completed_at = datetime.utcnow()
+
+            # Report FAILED status to backend
+            await self._update_backend_status(job_state.job_id, job_state.job_token, "failed", error=str(e))
 
         finally:
             # Cleanup
@@ -418,6 +427,26 @@ class TrainingExecutor:
 
         # Send metrics to backend
         await backend_client.report_metrics(job_id, job_state.job_token, metrics)
+
+    async def _update_backend_status(
+        self,
+        job_id: str,
+        job_token: Optional[str],
+        status: str,
+        error: Optional[str] = None
+    ):
+        """Update job status in backend"""
+        from src.api.backend_client import backend_client
+
+        if not job_token:
+            logger.warning(f"Cannot update status - job_token not set for {job_id}")
+            return
+
+        try:
+            await backend_client.update_job_status(job_id, job_token, status, error)
+            logger.info(f"Backend status updated: {job_id} -> {status}")
+        except Exception as e:
+            logger.error(f"Failed to update backend status: {e}")
 
 
 # Global executor instance
