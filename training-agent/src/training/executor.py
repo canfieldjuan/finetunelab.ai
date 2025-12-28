@@ -161,6 +161,16 @@ class TrainingExecutor:
         try:
             logger.info(f"Starting training job {job_state.job_id}")
 
+            running_jobs = sum(1 for j in self.jobs.values() if j.status == JobStatus.RUNNING)
+            if running_jobs >= settings.max_concurrent_jobs:
+                logger.error(
+                    f"Cannot start job {job_state.job_id}: "
+                    f"Already running {running_jobs}/{settings.max_concurrent_jobs} jobs"
+                )
+                job_state.status = JobStatus.FAILED
+                job_state.error = f"Concurrent job limit reached ({settings.max_concurrent_jobs})"
+                return False
+
             # Store job state
             self.jobs[job_state.job_id] = job_state
 
@@ -197,7 +207,7 @@ class TrainingExecutor:
 
             # Load dataset
             logger.info(f"Loading dataset from: {job_state.dataset_path}")
-            dataset = load_from_disk(job_state.dataset_path)
+            dataset = self._load_dataset_flexible(job_state.dataset_path)
 
             # Tokenize dataset
             def tokenize_function(examples):
@@ -373,6 +383,45 @@ class TrainingExecutor:
         )
 
         return args
+
+    def _load_dataset_flexible(self, dataset_path: str):
+        """Load dataset from various formats"""
+        from pathlib import Path
+        import pandas as pd
+        from datasets import Dataset, load_dataset
+
+        path = Path(dataset_path)
+
+        if path.is_dir() and (path / "dataset_info.json").exists():
+            logger.info(f"Loading HuggingFace dataset from: {dataset_path}")
+            return load_from_disk(dataset_path)
+
+        if path.is_file():
+            suffix = path.suffix.lower()
+
+            if suffix == '.csv':
+                logger.info(f"Loading CSV dataset: {dataset_path}")
+                df = pd.read_csv(dataset_path)
+                return Dataset.from_pandas(df)
+
+            elif suffix in ['.json', '.jsonl']:
+                logger.info(f"Loading JSON dataset: {dataset_path}")
+                df = pd.read_json(dataset_path, lines=(suffix == '.jsonl'))
+                return Dataset.from_pandas(df)
+
+            elif suffix == '.parquet':
+                logger.info(f"Loading Parquet dataset: {dataset_path}")
+                df = pd.read_parquet(dataset_path)
+                return Dataset.from_pandas(df)
+
+        if dataset_path.startswith(('http://', 'https://', 's3://', 'hf://')):
+            logger.info(f"Loading dataset from URL: {dataset_path}")
+            return load_dataset(dataset_path, split='train')
+
+        raise ValueError(
+            f"Unsupported dataset format: {dataset_path}\n"
+            f"Supported formats: HuggingFace (directory), CSV, JSON, JSONL, Parquet, URLs"
+        )
 
     async def pause_training(self, job_id: str) -> bool:
         """Request pause for a training job"""
