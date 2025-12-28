@@ -142,7 +142,11 @@ async function executeSchedule(
     });
 
     // Trigger batch test via API
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/batch-testing/run`, {
+    // Use NEXT_PUBLIC_BASE_URL (defined in render.yaml) for worker-to-web communication
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    console.log(`[Scheduler] Calling batch test API at: ${baseUrl}/api/batch-testing/run`);
+
+    const response = await fetch(`${baseUrl}/api/batch-testing/run`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
