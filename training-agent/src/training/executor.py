@@ -147,6 +147,7 @@ class TrainingExecutor:
     def __init__(self):
         self.jobs: Dict[str, TrainingJobState] = {}
         self.trainers: Dict[str, Trainer] = {}
+        self.training_tasks: Dict[str, asyncio.Task] = {}
 
     async def start_training(self, job_state: TrainingJobState) -> bool:
         """
@@ -182,7 +183,8 @@ class TrainingExecutor:
             await self._update_backend_status(job_state.job_id, job_state.job_token, "running")
 
             # Run training in background task
-            asyncio.create_task(self._run_training(job_state))
+            task = asyncio.create_task(self._run_training(job_state))
+            self.training_tasks[job_state.job_id] = task
 
             return True
 
@@ -326,6 +328,9 @@ class TrainingExecutor:
             if job_state.job_id in self.trainers:
                 del self.trainers[job_state.job_id]
 
+            if job_state.job_id in self.training_tasks:
+                del self.training_tasks[job_state.job_id]
+
             # Clear GPU cache
             gpu_monitor.clear_cache()
 
@@ -449,15 +454,22 @@ class TrainingExecutor:
             logger.warning(f"Job is not paused: {job_id}")
             return False
 
-        logger.info(f"Resuming job: {job_id}")
+        checkpoint = checkpoint_path or job_state.checkpoint_path
+        if not checkpoint or not Path(checkpoint).exists():
+            logger.error(f"No valid checkpoint found for resume: {checkpoint}")
+            return False
 
-        # Set checkpoint to resume from
-        job_state.resume_from_checkpoint = checkpoint_path or job_state.checkpoint_path
+        logger.info(f"Resuming job {job_id} from checkpoint: {checkpoint}")
+
+        job_state.resume_from_checkpoint = checkpoint
         job_state.pause_requested = False
+        job_state.paused_at = None
         job_state.status = JobStatus.RUNNING
 
-        # Restart training
-        asyncio.create_task(self._run_training(job_state))
+        await self._update_backend_status(job_state.job_id, job_state.job_token, "running")
+
+        task = asyncio.create_task(self._run_training(job_state))
+        self.training_tasks[job_state.job_id] = task
 
         return True
 
@@ -474,6 +486,21 @@ class TrainingExecutor:
 
         logger.info(f"Requesting cancel for job: {job_id}")
         job_state.cancel_requested = True
+
+        if job_id in self.training_tasks:
+            task = self.training_tasks[job_id]
+            if not task.done():
+                logger.warning(f"Forcefully cancelling hung training task: {job_id}")
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    logger.info(f"Task cancelled successfully: {job_id}")
+                finally:
+                    del self.training_tasks[job_id]
+
+        await self._update_backend_status(job_state.job_id, job_state.job_token, "cancelled")
+
         return True
 
     def get_job_status(self, job_id: str) -> Optional[TrainingJobStatus]:
