@@ -555,7 +555,7 @@ export async function PATCH(
     // Verify job exists and token matches
     const { data: job, error: jobError } = await supabase
       .from('local_training_jobs')
-      .select('id, job_token, status')
+      .select('id, job_token, status, completed_at')
       .eq('id', jobId)
       .single();
 
