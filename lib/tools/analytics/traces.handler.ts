@@ -17,6 +17,25 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+interface Trace {
+  id: string;
+  conversation_id?: string;
+  session_tag?: string;
+  model_name?: string;
+  model_provider?: string;
+  status?: 'pending' | 'completed' | 'error';
+  start_time?: string;
+  duration_ms?: number;
+  cost_usd?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  rag_metrics?: Record<string, unknown>;
+  performance?: Record<string, unknown>;
+  quality?: Record<string, unknown>;
+  [key: string]: any;
+}
+
 interface GetTracesArgs {
   operation: 'get_traces' | 'get_trace_details' | 'compare_traces' |
              'get_trace_summary' | 'get_rag_metrics' | 'get_performance_stats';
@@ -63,8 +82,8 @@ export async function executeGetTraces(
   args: Record<string, unknown>,
   userId: string,
   authHeader?: string,
-  authClient?: any
-): Promise<any> {
+  authClient?: unknown
+): Promise<unknown> {
   console.log('[GetTraces] Executing:', args.operation);
 
   const typedArgs = args as unknown as GetTracesArgs;
@@ -103,7 +122,7 @@ export async function executeGetTraces(
 /**
  * Get filtered traces
  */
-async function getTraces(args: GetTracesArgs, userId: string, authHeader: string): Promise<any> {
+async function getTraces(args: GetTracesArgs, userId: string, authHeader: string): Promise<Trace[] | { error: string; details?: string }> {
   console.log('[GetTraces] Fetching traces with filters:', {
     conversation_id: args.conversation_id,
     operation_type: args.operation_type,
@@ -141,24 +160,24 @@ async function getTraces(args: GetTracesArgs, userId: string, authHeader: string
     const traces = data.data || [];
 
     // Additional filtering (not supported by API)
-    let filteredTraces = traces;
+    let filteredTraces: Trace[] = traces;
 
     // Filter by session_tag
     if (args.session_tag) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: Trace) =>
         t.session_tag === args.session_tag
       );
     }
 
     // Filter by model
     if (args.model_name) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: Trace) =>
         t.model_name?.includes(args.model_name!)
       );
     }
 
     if (args.model_provider) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: Trace) =>
         t.model_provider === args.model_provider
       );
     }
@@ -166,34 +185,34 @@ async function getTraces(args: GetTracesArgs, userId: string, authHeader: string
     // Filter by time range
     if (args.start_date) {
       const startTime = new Date(args.start_date).getTime();
-      filteredTraces = filteredTraces.filter((t: any) =>
-        new Date(t.start_time).getTime() >= startTime
+      filteredTraces = filteredTraces.filter((t: Trace) =>
+        new Date(t.start_time ?? 0).getTime() >= startTime
       );
     }
 
     if (args.end_date) {
       const endTime = new Date(args.end_date).getTime();
-      filteredTraces = filteredTraces.filter((t: any) =>
-        new Date(t.start_time).getTime() <= endTime
+      filteredTraces = filteredTraces.filter((t: Trace) =>
+        new Date(t.start_time ?? 0).getTime() <= endTime
       );
     }
 
     // Filter by performance
     if (args.min_duration_ms !== undefined) {
-      filteredTraces = filteredTraces.filter((t: any) =>
-        t.duration_ms && t.duration_ms >= args.min_duration_ms!
+      filteredTraces = filteredTraces.filter((t: Trace) =>
+        t.duration_ms !== undefined && t.duration_ms >= args.min_duration_ms!
       );
     }
 
     if (args.max_duration_ms !== undefined) {
-      filteredTraces = filteredTraces.filter((t: any) =>
-        t.duration_ms && t.duration_ms <= args.max_duration_ms!
+      filteredTraces = filteredTraces.filter((t: Trace) =>
+        t.duration_ms !== undefined && t.duration_ms <= args.max_duration_ms!
       );
     }
 
     if (args.min_cost_usd !== undefined) {
-      filteredTraces = filteredTraces.filter((t: any) =>
-        t.cost_usd && t.cost_usd >= args.min_cost_usd!
+      filteredTraces = filteredTraces.filter((t: Trace) =>
+        t.cost_usd !== undefined && t.cost_usd >= args.min_cost_usd!
       );
     }
 
@@ -297,23 +316,7 @@ async function getTraces(args: GetTracesArgs, userId: string, authHeader: string
       return formatted;
     });
 
-    return {
-      success: true,
-      traces: formattedTraces,
-      total_count: filteredTraces.length,
-      filters_applied: {
-        conversation_id: args.conversation_id,
-        session_tag: args.session_tag,
-        operation_type: args.operation_type,
-        model_name: args.model_name,
-        status: args.status,
-        rag_used: args.rag_used
-      },
-      pagination: {
-        limit: args.limit || 50,
-        offset: args.offset || 0
-      }
-    };
+    return formattedTraces;
 
   } catch (error) {
     console.error('[GetTraces] getTraces error:', error);
@@ -526,11 +529,11 @@ async function getTraceSummary(args: GetTracesArgs, userId: string, authHeader: 
     // Get traces with same filters as get_traces
     const tracesResult = await getTraces(args, userId, authHeader);
 
-    if (!tracesResult.success) {
+    if ('error' in tracesResult) {
       return tracesResult;
     }
 
-    const traces = tracesResult.traces;
+    const traces = tracesResult;
 
     if (traces.length === 0) {
       return {
@@ -621,7 +624,14 @@ async function getTraceSummary(args: GetTracesArgs, userId: string, authHeader: 
     return {
       success: true,
       summary,
-      filters_applied: tracesResult.filters_applied
+      filters_applied: {
+        conversation_id: args.conversation_id,
+        session_tag: args.session_tag,
+        operation_type: args.operation_type,
+        model_name: args.model_name,
+        status: args.status,
+        rag_used: args.rag_used
+      }
     };
 
   } catch (error) {
@@ -643,11 +653,11 @@ async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: st
     const ragArgs = { ...args, rag_used: true };
     const tracesResult = await getTraces(ragArgs, userId, authHeader);
 
-    if (!tracesResult.success) {
+    if ('error' in tracesResult) {
       return tracesResult;
     }
 
-    const ragTraces = tracesResult.traces.filter((t: any) => t.rag_metrics);
+    const ragTraces = tracesResult.filter((t: any) => t.rag_metrics);
 
     if (ragTraces.length === 0) {
       return {
@@ -722,7 +732,9 @@ async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: st
     return {
       success: true,
       rag_metrics: ragMetrics,
-      filters_applied: tracesResult.filters_applied
+      filters_applied: {
+        rag_used: true
+      }
     };
 
   } catch (error) {
@@ -742,11 +754,11 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
   try {
     const tracesResult = await getTraces(args, userId, authHeader);
 
-    if (!tracesResult.success) {
+    if ('error' in tracesResult) {
       return tracesResult;
     }
 
-    const traces = tracesResult.traces;
+    const traces = tracesResult;
 
     if (traces.length === 0) {
       return {
@@ -859,7 +871,13 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
     return {
       success: true,
       performance_stats: performanceStats,
-      filters_applied: tracesResult.filters_applied
+      filters_applied: {
+        conversation_id: args.conversation_id,
+        session_tag: args.session_tag,
+        operation_type: args.operation_type,
+        model_name: args.model_name,
+        status: args.status
+      }
     };
 
   } catch (error) {
