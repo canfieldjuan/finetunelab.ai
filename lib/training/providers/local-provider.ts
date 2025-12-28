@@ -34,9 +34,9 @@ export class LocalProvider implements DeploymentProvider {
     // Determine backend URL (server-side vs client-side)
     const backendUrl = typeof window !== 'undefined'
       ? '' // Client-side: relative URL
-      : process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000';
+      : process.env.NEXT_PUBLIC_BASE_URL
+        || process.env.NEXT_PUBLIC_APP_URL
+        || (process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000');
 
     if (typeof window === 'undefined' && backendUrl === 'http://localhost:3000' && process.env.NODE_ENV === 'production') {
       console.error('[LocalProvider] CRITICAL: NEXT_PUBLIC_BASE_URL not set in production! Database operations may fail.');
