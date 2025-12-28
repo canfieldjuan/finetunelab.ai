@@ -25,7 +25,7 @@ A Python-based local training agent that runs AI model fine-tuning jobs on users
 
 ```bash
 # Clone the repository
-git clone https://github.com/finetunelab/training-agent.git
+git clone https://github.com/FineTune-Lab/training-agent.git
 cd training-agent
 
 # Create virtual environment
@@ -35,6 +35,30 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 ```
+
+### One-line install (recommended)
+
+Use the packaged tar/zip from the latest release (includes installer + service setup):
+
+**Linux (systemd user) / macOS (launchd)**
+
+```bash
+curl -sSL https://github.com/FineTune-Lab/training-agent/releases/latest/download/training-agent-linux-amd64.tar.gz \
+	| tar -xz
+cd training-agent
+./scripts/install.sh
+```
+
+**Windows (Task Scheduler)**
+
+```powershell
+Invoke-WebRequest https://github.com/FineTune-Lab/training-agent/releases/latest/download/training-agent-windows-amd64.zip -OutFile agent.zip
+Expand-Archive agent.zip -DestinationPath training-agent
+cd training-agent\
+scripts\install.ps1
+```
+
+After install, edit `~/.finetunelab/training-agent/.env` (Linux/macOS) or `%LOCALAPPDATA%\FineTuneLab\training-agent\.env` (Windows) to set `BACKEND_URL` and `API_KEY`, then restart the service (see `scripts/agentctl`).
 
 ## Configuration
 
