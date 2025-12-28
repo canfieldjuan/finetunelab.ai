@@ -39,13 +39,9 @@ interface BatchTestRun {
   error?: string;
 }
 
-interface BatchTestProgressProps {
-  testRunId: string;
-  onComplete: (results: BatchTestResult[]) => void;
-  onError?: (error: string) => void;
-}
+import type { DemoSessionMetrics } from '@/lib/demo/demo-analytics.service';
 
-const POLL_INTERVAL = 1000; // 1 second
+// ... (other code)
 
 export function BatchTestProgress({
   testRunId,
@@ -53,6 +49,7 @@ export function BatchTestProgress({
   onError,
 }: BatchTestProgressProps) {
   const [testRun, setTestRun] = useState<BatchTestRun | null>(null);
+  const [metrics, setMetrics] = useState<DemoSessionMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
@@ -68,6 +65,16 @@ export function BatchTestProgress({
 
       const data: BatchTestRun = await response.json();
       setTestRun(data);
+
+      // Fetch metrics
+      const metricsResponse = await fetch(
+        `/api/demo/v2/metrics?session_id=${data.id}`
+      );
+      if (metricsResponse.ok) {
+        const metricsData = await metricsResponse.json();
+        setMetrics(metricsData);
+      }
+
 
       // Check if complete
       if (data.status === 'completed' || data.status === 'failed') {
@@ -183,26 +190,35 @@ export function BatchTestProgress({
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-2 gap-4 text-center">
           <div className="p-3 bg-muted rounded-lg">
             <p className="text-2xl font-bold text-green-600">
-              {testRun.completed_prompts}
+              {metrics?.successRate?.toFixed(1) || 0}%
             </p>
-            <p className="text-xs text-muted-foreground">Successful</p>
-          </div>
-          <div className="p-3 bg-muted rounded-lg">
-            <p className="text-2xl font-bold text-red-600">
-              {testRun.failed_prompts}
-            </p>
-            <p className="text-xs text-muted-foreground">Failed</p>
+            <p className="text-xs text-muted-foreground">Success Rate</p>
           </div>
           <div className="p-3 bg-muted rounded-lg">
             <p className="text-2xl font-bold">
-              {testRun.total_prompts - completedCount}
+              {metrics?.avgLatencyMs?.toFixed(0) || 0}ms
             </p>
-            <p className="text-xs text-muted-foreground">Remaining</p>
+            <p className="text-xs text-muted-foreground">Avg Latency</p>
           </div>
         </div>
+
+        {/* Error Breakdown */}
+        {metrics && metrics.failedPrompts > 0 && (
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm">Error Breakdown</h4>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {Object.entries(metrics.errorCounts).map(([error, count]) => (
+                <div key={error} className="flex justify-between">
+                  <span>{error}</span>
+                  <span>{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Results List */}
         {testRun.results && testRun.results.length > 0 && (

@@ -25,7 +25,7 @@ const DEFAULT_DELAY_MS = 500; // Delay between prompts to avoid rate limiting
  */
 export async function POST(req: NextRequest) {
   try {
-    const { session_id, test_suite_id, prompt_limit } = await req.json();
+    const { session_id, test_suite_id, prompt_limit, concurrency } = await req.json();
 
     if (!session_id || !test_suite_id) {
       return NextResponse.json(
@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
           test_suite_id: test_suite_id,
           test_suite_name: suite.name,
           prompt_limit: limit,
+          concurrency: concurrency || 1,
         },
       })
       .select()
@@ -122,7 +123,8 @@ export async function POST(req: NextRequest) {
       testRun.id,
       session_id,
       config,
-      prompts
+      prompts,
+      concurrency || 1
     ).catch(err => {
       console.error('[API/demo/v2/batch-test] Background processing error:', err);
     });
@@ -145,6 +147,11 @@ export async function POST(req: NextRequest) {
 /**
  * Background batch test processor
  */
+const BATCH_TEST_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Background batch test processor
+ */
 async function processBackgroundBatchTest(
   testRunId: string,
   sessionId: string,
@@ -154,121 +161,246 @@ async function processBackgroundBatchTest(
     model_id: string;
     model_name?: string;
   },
-  prompts: Array<{ prompt: string; expected_answer?: string; category?: string }>
+  prompts: Array<{ prompt: string; expected_answer?: string; category?: string }>,
+  concurrency: number
 ) {
-  console.log(`[Background Batch] Starting test run ${testRunId} with ${prompts.length} prompts`);
+  console.log(`[Background Batch] Starting test run ${testRunId} with ${prompts.length} prompts and concurrency ${concurrency}`);
 
   // Create fresh supabase client for background processing
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Decrypt API key
-  let apiKey: string;
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Batch test timed out')), BATCH_TEST_TIMEOUT_MS)
+  );
+
+  const batchPromise = async () => {
+    // Decrypt API key
+    let apiKey: string;
+    try {
+      apiKey = decryptApiKey(config.api_key_encrypted);
+    } catch (error) {
+      console.error('[Background Batch] Failed to decrypt API key:', error);
+      await supabase
+        .from('demo_batch_test_runs')
+        .update({
+          status: 'failed',
+          error: 'Failed to decrypt API key',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', testRunId);
+      return;
+    }
+
+    const endpoint: DemoModelEndpoint = {
+      url: config.endpoint_url,
+      apiKey,
+      modelId: config.model_id,
+    };
+
+    let completed = 0;
+    let failed = 0;
+    
+    const limit = pLimit(concurrency);
+
+    const promises = prompts.map((promptObj, i) =>
+      limit(async () => {
+        // Check for cancellation
+        const { data: runData, error: runError } = await supabase
+          .from('demo_batch_test_runs')
+          .select('is_cancelled')
+          .eq('id', testRunId)
+          .single();
+
+        if (runError) {
+          console.error('[Background Batch] Failed to check cancellation status:', runError);
+        }
+
+        if (runData?.is_cancelled) {
+          console.log(`[Background Batch] Test run ${testRunId} cancelled`);
+          return;
+        }
+
+        console.log(`[Background Batch] Processing prompt ${i + 1}/${prompts.length}`);
+
+        try {
+          const result = await callDemoModelSimple(endpoint, promptObj.prompt, {
+            maxTokens: 1024,
+            timeout: 60000,
+          });
+
+          // Store result
+          await supabase.from('demo_batch_test_results').insert({
+            test_run_id: testRunId,
+            demo_session_id: sessionId,
+            prompt: promptObj.prompt,
+            response: result.response || null,
+            latency_ms: result.latency_ms,
+            success: result.success,
+            error: result.error || null,
+            model_id: config.model_id,
+            input_tokens: result.input_tokens,
+            output_tokens: result.output_tokens,
+          });
+
+          if (result.success) {
+            completed++;
+          } else {
+            failed++;
+          }
+        } catch (error) {
+          console.error(`[Background Batch] Error on prompt ${i + 1}:`, error);
+          failed++;
+
+          // Store error result
+          await supabase.from('demo_batch_test_results').insert({
+            test_run_id: testRunId,
+            demo_session_id: sessionId,
+            prompt: promptObj.prompt,
+            response: null,
+            latency_ms: 0,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            model_id: config.model_id,
+          });
+        } finally {
+          // Update progress
+          await supabase
+            .from('demo_batch_test_runs')
+            .update({
+              completed_prompts: completed,
+              failed_prompts: failed,
+            })
+            .eq('id', testRunId);
+        }
+      })
+    );
+
+    await Promise.all(promises);
+
+    // Mark as completed
+    const { data: runData } = await supabase
+      .from('demo_batch_test_runs')
+      .select('is_cancelled')
+      .eq('id', testRunId)
+      .single();
+
+    if (runData?.is_cancelled) {
+      await supabase
+        .from('demo_batch_test_runs')
+        .update({
+          status: 'cancelled',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', testRunId);
+      return;
+    }
+
+    const finalStatus = failed === prompts.length ? 'failed' : 'completed';
+
+    await supabase
+      .from('demo_batch_test_runs')
+      .update({
+        status: finalStatus,
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', testRunId);
+
+    console.log(`[Background Batch] Test run ${testRunId} completed: ${completed} succeeded, ${failed} failed`);
+  };
+
   try {
-    apiKey = decryptApiKey(config.api_key_encrypted);
+    await Promise.race([batchPromise(), timeoutPromise]);
   } catch (error) {
-    console.error('[Background Batch] Failed to decrypt API key:', error);
+    console.error(`[Background Batch] Test run ${testRunId} failed:`, error);
     await supabase
       .from('demo_batch_test_runs')
       .update({
         status: 'failed',
-        error: 'Failed to decrypt API key',
+        error: error instanceof Error ? error.message : 'An unknown error occurred',
         completed_at: new Date().toISOString(),
       })
       .eq('id', testRunId);
-    return;
   }
+}
 
-  const endpoint: DemoModelEndpoint = {
-    url: config.endpoint_url,
-    apiKey,
-    modelId: config.model_id,
+function pLimit(concurrency: number) {
+  const queue: (() => void)[] = [];
+  let activeCount = 0;
+
+  const next = () => {
+    activeCount--;
+    if (queue.length > 0) {
+      queue.shift()!();
+    }
   };
 
-  let completed = 0;
-  let failed = 0;
+  const run = async <T>(fn: () => Promise<T>): Promise<T> => {
+    return new Promise<T>((resolve, reject) => {
+      const task = () => {
+        activeCount++;
+        fn().then(
+          (res: T) => {
+            resolve(res);
+            next();
+          },
+          (err: any) => {
+            reject(err);
+            next();
+          }
+        );
+      };
 
-  for (let i = 0; i < prompts.length; i++) {
-    const promptObj = prompts[i];
-    console.log(`[Background Batch] Processing prompt ${i + 1}/${prompts.length}`);
-
-    try {
-      const result = await callDemoModelSimple(endpoint, promptObj.prompt, {
-        maxTokens: 1024,
-        timeout: 60000,
-      });
-
-      // Store result
-      await supabase.from('demo_batch_test_results').insert({
-        test_run_id: testRunId,
-        demo_session_id: sessionId,
-        prompt: promptObj.prompt,
-        response: result.response || null,
-        latency_ms: result.latency_ms,
-        success: result.success,
-        error: result.error || null,
-        model_id: config.model_id,
-        input_tokens: result.input_tokens,
-        output_tokens: result.output_tokens,
-      });
-
-      if (result.success) {
-        completed++;
+      if (activeCount < concurrency) {
+        task();
       } else {
-        failed++;
+        queue.push(task);
       }
+    });
+  };
 
-      // Update progress
-      await supabase
-        .from('demo_batch_test_runs')
-        .update({
-          completed_prompts: completed,
-          failed_prompts: failed,
-        })
-        .eq('id', testRunId);
+  return run;
+}
 
-      // Add delay between prompts to avoid rate limiting
-      if (i < prompts.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, DEFAULT_DELAY_MS));
-      }
-    } catch (error) {
-      console.error(`[Background Batch] Error on prompt ${i + 1}:`, error);
-      failed++;
+/**
+ * DELETE /api/demo/v2/batch-test
+ * Cancel a running batch test
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const test_run_id = searchParams.get('test_run_id');
 
-      // Store error result
-      await supabase.from('demo_batch_test_results').insert({
-        test_run_id: testRunId,
-        demo_session_id: sessionId,
-        prompt: promptObj.prompt,
-        response: null,
-        latency_ms: 0,
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        model_id: config.model_id,
-      });
-
-      // Update progress
-      await supabase
-        .from('demo_batch_test_runs')
-        .update({
-          completed_prompts: completed,
-          failed_prompts: failed,
-        })
-        .eq('id', testRunId);
+    if (!test_run_id) {
+      return NextResponse.json(
+        { error: 'Missing test_run_id parameter' },
+        { status: 400 }
+      );
     }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data, error } = await supabase
+      .from('demo_batch_test_runs')
+      .update({ status: 'cancelled', is_cancelled: true })
+      .eq('id', test_run_id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json(
+        { error: 'Failed to cancel test run or test run not found' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, message: 'Test run cancelled' });
+  } catch (error) {
+    console.error('[API/demo/v2/batch-test] Cancel error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
-
-  // Mark as completed
-  const finalStatus = failed === prompts.length ? 'failed' : 'completed';
-
-  await supabase
-    .from('demo_batch_test_runs')
-    .update({
-      status: finalStatus,
-      completed_at: new Date().toISOString(),
-    })
-    .eq('id', testRunId);
-
-  console.log(`[Background Batch] Test run ${testRunId} completed: ${completed} succeeded, ${failed} failed`);
 }
 
 /**

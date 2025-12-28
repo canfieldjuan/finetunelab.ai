@@ -12,12 +12,9 @@ import {
   getDemoTestRunSummary,
   validateDemoSession,
 } from '@/lib/demo/demo-analytics.service';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export async function POST(req: NextRequest) {
   try {
@@ -79,7 +76,7 @@ If the user asks for detailed breakdowns or specific examples, let them know the
     const enhancedMessages = [systemMessage, ...messages];
 
     // Load user's model configuration from session
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = await createClient();
     const { data: modelConfig, error: configError } = await supabase
       .from('demo_model_configs')
       .select('endpoint_url, api_key_encrypted, model_id, model_name')
@@ -92,10 +89,10 @@ If the user asks for detailed breakdowns or specific examples, let them know the
     }
 
     // Decrypt API key
-    const { decryptApiKey } = await import('@/lib/demo/encryption');
+    const { decrypt } = await import('@/lib/encryption');
     let apiKey: string;
     try {
-      apiKey = decryptApiKey(modelConfig.api_key_encrypted);
+      apiKey = decrypt(modelConfig.api_key_encrypted);
     } catch (decryptError) {
       console.error('[DemoAtlas] Failed to decrypt API key:', decryptError);
       return NextResponse.json({ error: 'Invalid session configuration' }, { status: 400 });

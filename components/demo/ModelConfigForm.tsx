@@ -51,6 +51,7 @@ export function ModelConfigForm({ onConfigured, onCancel }: ModelConfigFormProps
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
 
   // Handle provider preset selection
   const handleProviderChange = (value: string) => {
@@ -93,6 +94,7 @@ export function ModelConfigForm({ onConfigured, onCancel }: ModelConfigFormProps
       }
 
       setSessionId(data.session_id);
+      setExpiresAt(data.expires_at);
       // Don't call onConfigured yet - wait for connection test
     } catch (err) {
       setError('Network error. Please try again.');
@@ -132,10 +134,10 @@ export function ModelConfigForm({ onConfigured, onCancel }: ModelConfigFormProps
 
   // Continue to batch testing
   const handleContinue = () => {
-    if (sessionId) {
+    if (sessionId && connectionStatus === 'success' && expiresAt) {
       onConfigured({
         session_id: sessionId,
-        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        expires_at: expiresAt,
         model_id: modelId,
         model_name: modelName || modelId,
       });

@@ -17,14 +17,12 @@ import type {
   ConfigureModelResponse,
 } from '@/lib/demo/types';
 import crypto from 'crypto';
+import dns from 'dns/promises';
 
 export const runtime = 'nodejs';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// Rate limiting: 1 active session per IP
-const activeSessions = new Map<string, { session_id: string; expires_at: number }>();
 
 // Session TTL: 1 hour
 const SESSION_TTL_MS = 60 * 60 * 1000;
@@ -33,13 +31,23 @@ const SESSION_TTL_MS = 60 * 60 * 1000;
  * Validate endpoint URL for security
  * Blocks internal IPs to prevent SSRF attacks
  */
-function validateEndpointUrl(url: string): { valid: boolean; error?: string } {
+async function validateEndpointUrl(url: string): Promise<{ valid: boolean; error?: string }> {
   try {
     const parsed = new URL(url);
+
+    // Enforce HTTPS in production
+    if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+      return { valid: false, error: 'URL must use HTTPS protocol in production' };
+    }
 
     // Must be HTTP or HTTPS
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       return { valid: false, error: 'URL must use HTTP or HTTPS protocol' };
+    }
+
+    // Restrict to standard ports
+    if (parsed.port && !['80', '443'].includes(parsed.port)) {
+      return { valid: false, error: 'Only standard ports (80 and 443) are allowed' };
     }
 
     const hostname = parsed.hostname.toLowerCase();
@@ -52,20 +60,31 @@ function validateEndpointUrl(url: string): { valid: boolean; error?: string } {
       }
     }
 
-    // Block private IP ranges
-    const privateRanges = [
-      /^10\./,                    // 10.0.0.0/8
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // 172.16.0.0/12
-      /^192\.168\./,              // 192.168.0.0/16
-      /^169\.254\./,              // Link-local
-      /^0\./,                     // 0.0.0.0/8
-    ];
+    // Resolve DNS to check for private IPs
+    try {
+      const addresses = await dns.lookup(hostname, { all: true });
+      for (const address of addresses) {
+        // Block private IP ranges
+        const privateRanges = [
+          /^10\./,                    // 10.0.0.0/8
+          /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // 172.16.0.0/12
+          /^192\.168\./,              // 192.168.0.0/16
+          /^169\.254\./,              // Link-local
+          /^0\./,                     // 0.0.0.0/8
+          /^fd[0-9a-f]{2}:/,           // ULA IPv6
+          /^fe80:/,                   // Link-local IPv6
+        ];
 
-    for (const range of privateRanges) {
-      if (range.test(hostname)) {
-        return { valid: false, error: 'Private IP addresses are not allowed' };
+        for (const range of privateRanges) {
+          if (range.test(address.address)) {
+            return { valid: false, error: 'Private IP addresses are not allowed' };
+          }
+        }
       }
+    } catch (e) {
+      return { valid: false, error: 'Failed to resolve hostname' };
     }
+
 
     // URL looks valid
     return { valid: true };
@@ -83,18 +102,23 @@ function getClientIp(req: NextRequest): string {
 }
 
 /**
- * Check if IP already has an active session
+ * Check if IP already has an active session in the database
  */
-function checkActiveSession(ip: string): { hasSession: boolean; session_id?: string } {
-  const existing = activeSessions.get(ip);
-  if (existing && existing.expires_at > Date.now()) {
-    return { hasSession: true, session_id: existing.session_id };
+async function checkActiveSession(ip: string): Promise<{ hasSession: boolean; session_id?: string }> {
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const { data, error } = await supabase
+    .from('demo_model_configs')
+    .select('session_id')
+    .eq('ip_address', ip)
+    .gt('expires_at', new Date().toISOString())
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') { // Ignore "No rows found" error
+    console.error('[checkActiveSession] Supabase error:', error);
   }
-  // Clean up expired session
-  if (existing) {
-    activeSessions.delete(ip);
-  }
-  return { hasSession: false };
+
+  return { hasSession: !!data, session_id: data?.session_id };
 }
 
 /**
@@ -106,7 +130,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // Check for existing active session
-    const { hasSession, session_id: existingSessionId } = checkActiveSession(clientIp);
+    const { hasSession, session_id: existingSessionId } = await checkActiveSession(clientIp);
     if (hasSession) {
       return NextResponse.json(
         {
@@ -131,7 +155,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate endpoint URL
-    const urlValidation = validateEndpointUrl(endpoint_url);
+    const urlValidation = await validateEndpointUrl(endpoint_url);
     if (!urlValidation.valid) {
       return NextResponse.json(
         { error: urlValidation.error },
@@ -161,6 +185,7 @@ export async function POST(req: NextRequest) {
         model_name: model_name || model_id,
         expires_at,
         connection_tested: false,
+        ip_address: clientIp,
       });
 
     if (insertError) {
@@ -182,12 +207,6 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
-
-    // Track active session for rate limiting
-    activeSessions.set(clientIp, {
-      session_id,
-      expires_at: Date.now() + SESSION_TTL_MS,
-    });
 
     // Return success response (never expose encrypted key)
     const response: ConfigureModelResponse = {
@@ -215,6 +234,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const session_id = searchParams.get('session_id');
+    const clientIp = getClientIp(req);
 
     if (!session_id) {
       return NextResponse.json(
@@ -224,6 +244,21 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get session to verify IP
+    const { data: session, error: sessionError } = await supabase
+      .from('demo_model_configs')
+      .select('ip_address')
+      .eq('session_id', session_id)
+      .single();
+
+    if (sessionError || !session) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+
+    if (session.ip_address !== clientIp) {
+      return NextResponse.json({ error: 'IP address does not match session' }, { status: 403 });
+    }
 
     // Delete batch test results for this session
     await supabase
@@ -251,13 +286,6 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Clean up rate limiting
-    const clientIp = getClientIp(req);
-    const existing = activeSessions.get(clientIp);
-    if (existing?.session_id === session_id) {
-      activeSessions.delete(clientIp);
-    }
-
     return NextResponse.json({
       success: true,
       message: 'Session and all associated data deleted',
@@ -279,6 +307,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const session_id = searchParams.get('session_id');
+    const clientIp = getClientIp(req);
 
     if (!session_id) {
       return NextResponse.json(
@@ -291,7 +320,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('demo_model_configs')
-      .select('session_id, endpoint_url, model_id, model_name, created_at, expires_at, connection_tested, connection_latency_ms, last_error')
+      .select('session_id, endpoint_url, model_id, model_name, created_at, expires_at, connection_tested, connection_latency_ms, last_error, ip_address')
       .eq('session_id', session_id)
       .single();
 
@@ -300,6 +329,10 @@ export async function GET(req: NextRequest) {
         { error: 'Session not found' },
         { status: 404 }
       );
+    }
+    
+    if (data.ip_address !== clientIp) {
+      return NextResponse.json({ error: 'IP address does not match session' }, { status: 403 });
     }
 
     // Check if expired
@@ -310,7 +343,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(data);
+    // Omit ip_address from the response
+    const { ip_address, ...returnData } = data;
+
+    return NextResponse.json(returnData);
   } catch (error) {
     console.error('[API/demo/v2/configure] Get error:', error);
     return NextResponse.json(
