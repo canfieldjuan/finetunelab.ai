@@ -1,0 +1,17 @@
+[
+  {
+    "key": "ctrl+shift+r",
+    "command": "workbench.action.tasks.runTask",
+    "args": "AI Code Review: Current File"
+  },
+  {
+    "key": "ctrl+shift+f",
+    "command": "workbench.action.tasks.runTask",
+    "args": "AI Code Review: Current File (Interactive Auto-Fix)"
+  },
+  {
+    "key": "ctrl+shift+w",
+    "command": "workbench.action.tasks.runTask",
+    "args": "AI Code Review: Start Real-time Watcher"
+  }
+]

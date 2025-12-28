@@ -1,0 +1,120 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AI Code Review: Current File",
+      "type": "shell",
+      "command": "npx tsx scripts/ollama-code-review.ts ${file}",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "AI Code Review: Current File (Interactive Auto-Fix)",
+      "type": "shell",
+      "command": "npx tsx scripts/ollama-code-review-interactive.ts ${file}",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "AI Code Review: Current File (Auto-Fix All)",
+      "type": "shell",
+      "command": "npx tsx scripts/ollama-code-review-interactive.ts ${file} --auto-fix-all",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "AI Code Review: Staged Files",
+      "type": "shell",
+      "command": "npx tsx scripts/ollama-code-review.ts",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "AI Code Review: Workspace (All Files)",
+      "type": "shell",
+      "command": "find . -name '*.ts' -o -name '*.tsx' | grep -v node_modules | xargs npx tsx scripts/ollama-code-review.ts",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "AI Code Review: Start Real-time Watcher",
+      "type": "shell",
+      "command": "npx tsx scripts/watch-and-review.ts",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "AI Code Review: Start Watcher (Specific Directory)",
+      "type": "shell",
+      "command": "npx tsx scripts/watch-and-review.ts ${input:watchDirectory}",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "watchDirectory",
+      "type": "promptString",
+      "description": "Directory to watch (e.g., app/api, lib, components)",
+      "default": "app"
+    }
+  ]
+}

@@ -1,0 +1,543 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { secretsManager } from '@/lib/secrets-manager';
+import { decrypt } from '@/lib/crypto';
+import { fireworksDeploymentService } from '@/lib/fireworks-deployment-service';
+import { inferenceServerManager } from '@/lib/inference-server-manager';
+
+const STATUS = {
+  RUNNING: 'RUNNING',
+  STARTING: 'STARTING',
+  ERROR: 'ERROR',
+};
+
+/**
+ * POST /api/training/deploy
+ *
+ * Deploy a model to an inference server
+ */
+export async function POST(req) {
+  try {
+    const body = await req.json();
+    const { server_id, job_id, model_path, checkpoint_path } = body;
+
+    if (!server_id || !job_id || !model_path) {
+      return NextResponse.json(
+        { error: 'Missing required parameters' },
+        { status: 400 }
+      );
+    }
+
+    // Get Authorization header and create authenticated Supabase client
+    const authHeader = req.headers.get('authorization');
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[DeployAPI POST] No authorization header provided');
+      return NextResponse.json(
+        { error: 'Unauthorized - Authorization header required' },
+        { status: 401 }
+      );
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
+
+    // Get authenticated user from Supabase session
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('[DeployAPI POST] Authentication failed:', authError);
+      return NextResponse.json(
+        { error: 'Unauthorized - please login' },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    // Check if it's a Fireworks.ai deployment
+    const { data: jobRecord, error: jobError } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('id', job_id)
+      .single();
+
+    if (jobError) {
+      console.error('[DeployAPI POST] Error fetching job record:', jobError);
+      return NextResponse.json(
+        { error: 'Failed to retrieve job record', details: jobError.message },
+        { status: 500 }
+      );
+    }
+
+    const serverType = jobRecord.server_type;
+
+    if (serverType === 'fireworks') {
+      console.log(`[DeployAPI POST] Deploying model to Fireworks.ai for job: ${job_id}`);
+      try {
+        const fireworksSecret = await secretsManager.getSecret(userId, 'fireworks', supabase);
+        if (!fireworksSecret) {
+          throw new Error('Fireworks.ai API key not configured.');
+        }
+        const fireworksApiKey = decrypt(fireworksSecret.api_key_encrypted);
+
+        const modelId = jobRecord.model_id;
+        const modelName = `model-${job_id}-${Date.now()}`;
+
+        const deploymentResponse = await fireworksDeploymentService.createDeployment(
+          modelId,
+          modelName,
+          fireworksApiKey
+        );
+
+        if (!deploymentResponse.success) {
+          throw new Error(deploymentResponse.error);
+        }
+
+        const { deployment_id, endpoint_url } = deploymentResponse;
+
+        // Save deployment record to Supabase
+        const { data: deploymentRecord, error: insertError } = await supabase
+          .from('inference_deployments')
+          .insert([
+            {
+              provider: 'fireworks',
+              deployment_id,
+              job_id,
+              model_path,
+              checkpoint_path,
+              fireworks_deployment_id: deploymentResponse.deployment_id,
+              fireworks_model_id: modelId,
+              endpoint_url,
+            },
+          ])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('[DeployAPI POST] Error saving deployment record:', insertError);
+          return NextResponse.json(
+            { error: 'Failed to save deployment record', details: insertError.message },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          server_id: deploymentRecord.deployment_id,
+          status: STATUS.STARTING,
+          message: 'Fireworks.ai deployment started',
+          model_id: deploymentRecord.fireworks_model_id, // The full model ID
+          endpoint_url: deploymentRecord.endpoint_url,
+        });
+
+      } catch (error) {
+        console.error('[DeployAPI POST] Error deploying to Fireworks.ai:', error);
+        return NextResponse.json(
+          {
+            error: 'Failed to deploy to Fireworks.ai',
+            details: error instanceof Error ? error.message : String(error),
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Existing logic for local servers (vLLM, Ollama) or Runpod deployments
+      const serverInfo = await inferenceServerManager.startServer(server_id, userId, model_path, checkpoint_path);
+
+      if (!serverInfo) {
+        return NextResponse.json(
+          { error: 'Failed to start server' },
+          { status: 500 }
+        );
+      }
+
+      // Save deployment record to Supabase
+      const { data: deploymentRecord, error: insertError } = await supabase
+        .from('inference_deployments')
+        .insert([
+          {
+            provider: serverType,
+            deployment_id: serverInfo.serverId,
+            job_id,
+            model_path,
+            checkpoint_path,
+            endpoint_url: serverInfo.baseUrl,
+          },
+        ])
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('[DeployAPI POST] Error saving deployment record:', insertError);
+        return NextResponse.json(
+          { error: 'Failed to save deployment record', details: insertError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        server_id: deploymentRecord.deployment_id,
+        status: STATUS.STARTING,
+        message: 'Server started successfully',
+        model_id: deploymentRecord.model_path, // The full model ID
+        endpoint_url: deploymentRecord.endpoint_url,
+      });
+    }
+  } catch (error) {
+    console.error('[DeployAPI] Deployment error:', error);
+    console.error('[DeployAPI] Error stack:', error instanceof Error ? error.stack : 'N/A');
+    console.error('[DeployAPI] Error type:', error?.constructor?.name || typeof error);
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    return NextResponse.json(
+      {
+        error: 'Deployment failed',
+        details: errorMessage,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/training/deploy?server_id=<id>
+ *
+ * Get deployment status
+ */
+export async function GET(req) {
+  try {
+    const serverId = req.nextUrl.searchParams.get('server_id');
+
+    if (!serverId) {
+      return NextResponse.json(
+        { error: 'Missing required parameter: server_id' },
+        { status: 400 }
+      );
+    }
+
+    // Get Authorization header and create authenticated Supabase client
+    const authHeader = req.headers.get('authorization');
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[DeployAPI GET] No authorization header provided');
+      return NextResponse.json(
+        { error: 'Unauthorized - Authorization header required' },
+        { status: 401 }
+      );
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
+
+    // Get authenticated user from Supabase session
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('[DeployAPI GET] Authentication failed:', authError);
+      return NextResponse.json(
+        { error: 'Unauthorized - please login' },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    // Check if it's a Fireworks.ai deployment
+    const { data: deploymentRecord, error: deploymentError } = await supabase
+      .from('inference_deployments')
+      .select('provider, fireworks_deployment_id, fireworks_model_id')
+      .eq('deployment_id', serverId)
+      .single();
+
+    if (deploymentError && deploymentError.code !== 'PGRST116') { // PGRST116 means no rows found
+      console.error('[DeployAPI GET] Error fetching deployment record:', deploymentError);
+      return NextResponse.json(
+        { error: 'Failed to retrieve deployment record', details: deploymentError.message },
+        { status: 500 }
+      );
+    }
+
+    if (deploymentRecord?.provider === 'fireworks') {
+      console.log(`[DeployAPI GET] Checking Fireworks.ai deployment status for: ${serverId}`);
+      try {
+        const fireworksSecret = await secretsManager.getSecret(userId, 'fireworks', supabase);
+        if (!fireworksSecret) {
+          throw new Error('Fireworks.ai API key not configured.');
+        }
+        const fireworksApiKey = decrypt(fireworksSecret.api_key_encrypted);
+
+        const deploymentResponse = await fireworksDeploymentService.getDeploymentStatus(
+          deploymentRecord.fireworks_deployment_id,
+          fireworksApiKey
+        );
+
+        if (!deploymentResponse.success) {
+          throw new Error(deploymentResponse.error);
+        }
+
+        let status;
+        switch (deploymentResponse.status) {
+          case 'running':
+            status = STATUS.RUNNING;
+            break;
+          case 'pending':
+          case 'creating':
+            status = STATUS.STARTING;
+            break;
+          default:
+            status = STATUS.ERROR;
+        }
+
+        return NextResponse.json({
+          success: true,
+          server_id: deploymentRecord.deployment_id,
+          status,
+          message: `Fireworks.ai deployment ${status}`,
+          model_id: deploymentRecord.fireworks_model_id, // The full model ID
+          endpoint_url: deploymentRecord.endpoint_url,
+        });
+
+      } catch (error) {
+        console.error('[DeployAPI GET] Error checking Fireworks.ai deployment status:', error);
+        return NextResponse.json(
+          {
+            error: 'Failed to check Fireworks.ai deployment status',
+            details: error instanceof Error ? error.message : String(error),
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Existing logic for local servers (vLLM, Ollama) or Runpod deployments
+      const serverInfo = await inferenceServerManager.getServerStatus(serverId);
+
+      if (!serverInfo) {
+        return NextResponse.json(
+          { error: 'Failed to get server status' },
+          { status: 500 }
+        );
+      }
+
+      let status;
+      switch (serverInfo.status) {
+        case 'running':
+          status = STATUS.RUNNING;
+          break;
+        case 'pending':
+        case 'starting':
+          status = STATUS.STARTING;
+          break;
+        default:
+          status = STATUS.ERROR;
+      }
+
+      return NextResponse.json({
+        success: true,
+        server_id: serverInfo.serverId,
+        status,
+        message: `Server ${status}`,
+        model_id: serverInfo.modelPath, // The full model ID
+        endpoint_url: serverInfo.baseUrl,
+      });
+    }
+  } catch (error) {
+    console.error('[DeployAPI] Deployment error:', error);
+    console.error('[DeployAPI] Error stack:', error instanceof Error ? error.stack : 'N/A');
+    console.error('[DeployAPI] Error type:', error?.constructor?.name || typeof error);
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    return NextResponse.json(
+      {
+        error: 'Deployment failed',
+        details: errorMessage,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/training/deploy?server_id=<id>
+ *
+ * Delete a deployment
+ */
+export async function DELETE(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const serverId = searchParams.get('server_id');
+
+    if (!serverId) {
+      return NextResponse.json(
+        { error: 'Missing required parameter' },
+        { status: 400 }
+      );
+    }
+
+    // Get Authorization header and create authenticated Supabase client
+    const authHeader = req.headers.get('authorization');
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[DeployAPI DELETE] No authorization header provided');
+      return NextResponse.json(
+        { error: 'Unauthorized - Authorization header required' },
+        { status: 401 }
+      );
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
+
+    // Get authenticated user from Supabase session
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('[DeployAPI DELETE] Authentication failed:', authError);
+      return NextResponse.json(
+        { error: 'Unauthorized - please login' },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    // Check if it's a Fireworks.ai deployment
+    const { data: deploymentRecord, error: deploymentError } = await supabase
+      .from('inference_deployments')
+      .select('provider, fireworks_deployment_id, fireworks_model_id')
+      .eq('deployment_id', serverId)
+      .single();
+
+    if (deploymentError && deploymentError.code !== 'PGRST116') { // PGRST116 means no rows found
+      console.error('[DeployAPI DELETE] Error fetching deployment record:', deploymentError);
+      return NextResponse.json(
+        { error: 'Failed to retrieve deployment record', details: deploymentError.message },
+        { status: 500 }
+      );
+    }
+
+    if (deploymentRecord?.provider === 'fireworks') {
+      console.log(`[DeployAPI DELETE] Deleting Fireworks.ai deployment for: ${serverId}`);
+      try {
+        const fireworksSecret = await secretsManager.getSecret(userId, 'fireworks', supabase);
+        if (!fireworksSecret) {
+          throw new Error('Fireworks.ai API key not configured.');
+        }
+        const fireworksApiKey = decrypt(fireworksSecret.api_key_encrypted);
+
+        const deleteResponse = await fireworksDeploymentService.deleteDeployment(
+          deploymentRecord.fireworks_deployment_id,
+          fireworksApiKey
+        );
+
+        if (!deleteResponse.success) {
+          throw new Error(deleteResponse.error);
+        }
+
+        // Delete deployment record from Supabase
+        const { error: deleteError } = await supabase
+          .from('inference_deployments')
+          .delete()
+          .eq('deployment_id', serverId);
+
+        if (deleteError) {
+          console.error('[DeployAPI DELETE] Error deleting deployment record:', deleteError);
+          return NextResponse.json(
+            { error: 'Failed to delete deployment record', details: deleteError.message },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          server_id: deploymentRecord.deployment_id,
+          message: 'Fireworks.ai deployment deleted',
+        });
+
+      } catch (error) {
+        console.error('[DeployAPI DELETE] Error deleting Fireworks.ai deployment:', error);
+        return NextResponse.json(
+          {
+            error: 'Failed to delete Fireworks.ai deployment',
+            details: error instanceof Error ? error.message : String(error),
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Existing logic for local servers (vLLM, Ollama) or Runpod deployments
+      const deleteResponse = await inferenceServerManager.deleteServer(serverId);
+
+      if (!deleteResponse.success) {
+        return NextResponse.json(
+          { error: 'Failed to delete server', details: deleteResponse.error },
+          { status: 500 }
+        );
+      }
+
+      // Delete deployment record from Supabase
+      const { error: deleteError } = await supabase
+        .from('inference_deployments')
+        .delete()
+        .eq('deployment_id', serverId);
+
+      if (deleteError) {
+        console.error('[DeployAPI DELETE] Error deleting deployment record:', deleteError);
+        return NextResponse.json(
+          { error: 'Failed to delete deployment record', details: deleteError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        server_id: deleteResponse.serverId,
+        message: 'Server deleted',
+      });
+    }
+  } catch (error) {
+    console.error('[DeployAPI] Deployment error:', error);
+    console.error('[DeployAPI] Error stack:', error instanceof Error ? error.stack : 'N/A');
+    console.error('[DeployAPI] Error type:', error?.constructor?.name || typeof error);
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    return NextResponse.json(
+      {
+        error: 'Deployment failed',
+        details: errorMessage,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined,
+      },
+      { status: 500 }
+    );
+  }
+}

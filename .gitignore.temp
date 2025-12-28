@@ -1,0 +1,13 @@
+# Keep these diagnostic files - they provide value
+!check-qwen-model-provider.mjs
+!check-secrets-full.mjs
+!test-ilike-query.mjs
+!check-trace-status.mjs
+!verify-provider-fix.mjs
+
+# Ignore all other .mjs and diagnostic .md files
+*.mjs
+*_TEST_*.md
+*_DIAGNOSTIC_*.md
+*_INVESTIGATION_*.md
+*_FIX_*.md
