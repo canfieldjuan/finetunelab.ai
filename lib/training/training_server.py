@@ -139,7 +139,15 @@ except ImportError:
     supabase = None
 
 # Next.js API endpoints for metrics persistence
-NEXTJS_BASE_URL = os.getenv("NEXTJS_BASE_URL", "http://localhost:3000")
+# Try multiple env vars for flexibility (NEXTJS_BASE_URL, NEXT_PUBLIC_BASE_URL, NEXT_PUBLIC_APP_URL)
+# This allows the Python worker to connect whether running locally or in cloud
+NEXTJS_BASE_URL = (
+    os.getenv("NEXTJS_BASE_URL")  # Primary: explicit Python worker config
+    or os.getenv("NEXT_PUBLIC_BASE_URL")  # Fallback: from Next.js env
+    or os.getenv("NEXT_PUBLIC_APP_URL")  # Fallback: alternate Next.js env
+    or os.getenv("RENDER_EXTERNAL_URL")  # Fallback: Render deployment URL
+    or "http://localhost:3000"  # Final fallback: local development
+)
 JOBS_ENDPOINT = f"{NEXTJS_BASE_URL}/api/training/local/jobs"
 METRICS_ENDPOINT = f"{NEXTJS_BASE_URL}/api/training/local/metrics"
 logger.info(f"[Persistence] Configured endpoints: jobs={JOBS_ENDPOINT}, metrics={METRICS_ENDPOINT}")
