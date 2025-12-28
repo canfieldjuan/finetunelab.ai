@@ -11,7 +11,6 @@ class Settings(BaseSettings):
 
     # Backend Configuration
     backend_url: str = "http://localhost:3000"
-    api_key: Optional[str] = None
 
     # Server Configuration
     host: str = "0.0.0.0"
