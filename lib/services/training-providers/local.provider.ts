@@ -184,8 +184,24 @@ export class LocalTrainingProvider {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(errorData.error || `Training failed with status ${response.status}`);
+        // Try to parse error response body
+        let errorMessage = `Training failed with status ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error('[LocalProvider] Error response from backend:', errorData);
+          // Try multiple possible error field names
+          errorMessage = errorData.error || errorData.message || errorData.detail || errorMessage;
+        } catch (parseError) {
+          // If JSON parsing fails, try to get text
+          try {
+            const errorText = await response.text();
+            console.error('[LocalProvider] Error response text:', errorText);
+            if (errorText) errorMessage = `${errorMessage}: ${errorText}`;
+          } catch {
+            console.error('[LocalProvider] Could not parse error response');
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
