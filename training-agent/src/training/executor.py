@@ -2,9 +2,10 @@
 Training job executor with pause/resume/cancel support
 """
 import asyncio
+import sys
 import traceback
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from datetime import datetime
 from loguru import logger
 
@@ -28,6 +29,32 @@ from src.models.training import (
 )
 from src.monitoring.gpu_monitor import gpu_monitor
 from src.config import settings
+
+
+class LogCapture:
+    """Captures stdout/stderr to both console and list"""
+
+    def __init__(self, log_list: List[str], max_lines: int = 10000):
+        self.log_list = log_list
+        self.max_lines = max_lines
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+
+    def write(self, text: str):
+        """Write to both original stream and capture list"""
+        self.original_stdout.write(text)
+        self.original_stdout.flush()
+
+        if text.strip():
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            line = f"[{timestamp}] {text.strip()}"
+            self.log_list.append(line)
+
+            if len(self.log_list) > self.max_lines:
+                self.log_list.pop(0)
+
+    def flush(self):
+        self.original_stdout.flush()
 
 
 class PauseResumeCallback(TrainerCallback):
@@ -120,6 +147,7 @@ class TrainingExecutor:
     def __init__(self):
         self.jobs: Dict[str, TrainingJobState] = {}
         self.trainers: Dict[str, Trainer] = {}
+        self.training_tasks: Dict[str, asyncio.Task] = {}
 
     async def start_training(self, job_state: TrainingJobState) -> bool:
         """
@@ -134,6 +162,16 @@ class TrainingExecutor:
         try:
             logger.info(f"Starting training job {job_state.job_id}")
 
+            running_jobs = sum(1 for j in self.jobs.values() if j.status == JobStatus.RUNNING)
+            if running_jobs >= settings.max_concurrent_jobs:
+                logger.error(
+                    f"Cannot start job {job_state.job_id}: "
+                    f"Already running {running_jobs}/{settings.max_concurrent_jobs} jobs"
+                )
+                job_state.status = JobStatus.FAILED
+                job_state.error = f"Concurrent job limit reached ({settings.max_concurrent_jobs})"
+                return False
+
             # Store job state
             self.jobs[job_state.job_id] = job_state
 
@@ -141,8 +179,12 @@ class TrainingExecutor:
             job_state.status = JobStatus.RUNNING
             job_state.started_at = datetime.utcnow()
 
+            # Report RUNNING status to backend
+            await self._update_backend_status(job_state.job_id, job_state.job_token, "running")
+
             # Run training in background task
-            asyncio.create_task(self._run_training(job_state))
+            task = asyncio.create_task(self._run_training(job_state))
+            self.training_tasks[job_state.job_id] = task
 
             return True
 
@@ -155,6 +197,10 @@ class TrainingExecutor:
 
     async def _run_training(self, job_state: TrainingJobState):
         """Execute the actual training (runs in background)"""
+        log_capture = LogCapture(job_state.logs)
+        sys.stdout = log_capture
+        sys.stderr = log_capture
+
         try:
             # Load model and tokenizer
             logger.info(f"Loading model: {job_state.config.model.get('name')}")
@@ -163,7 +209,7 @@ class TrainingExecutor:
 
             # Load dataset
             logger.info(f"Loading dataset from: {job_state.dataset_path}")
-            dataset = load_from_disk(job_state.dataset_path)
+            dataset = self._load_dataset_flexible(job_state.dataset_path)
 
             # Tokenize dataset
             def tokenize_function(examples):
@@ -247,6 +293,9 @@ class TrainingExecutor:
 
                 logger.info(f"Training completed successfully: {job_state.job_id}")
 
+                # Report COMPLETED status to backend
+                await self._update_backend_status(job_state.job_id, job_state.job_token, "completed")
+
         except Exception as e:
             logger.error(f"Training failed for job {job_state.job_id}: {e}")
             logger.error(traceback.format_exc())
@@ -256,10 +305,31 @@ class TrainingExecutor:
             job_state.error_traceback = traceback.format_exc()
             job_state.completed_at = datetime.utcnow()
 
+            # Report FAILED status to backend
+            await self._update_backend_status(job_state.job_id, job_state.job_token, "failed", error=str(e))
+
         finally:
+            # Restore original streams
+            sys.stdout = log_capture.original_stdout
+            sys.stderr = log_capture.original_stderr
+
+            # Send final logs to backend
+            if job_state.job_token and len(job_state.logs) > 0:
+                try:
+                    await self._send_logs_to_backend(
+                        job_state.job_id,
+                        job_state.job_token,
+                        job_state.logs
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send final logs: {e}")
+
             # Cleanup
             if job_state.job_id in self.trainers:
                 del self.trainers[job_state.job_id]
+
+            if job_state.job_id in self.training_tasks:
+                del self.training_tasks[job_state.job_id]
 
             # Clear GPU cache
             gpu_monitor.clear_cache()
@@ -319,6 +389,45 @@ class TrainingExecutor:
 
         return args
 
+    def _load_dataset_flexible(self, dataset_path: str):
+        """Load dataset from various formats"""
+        from pathlib import Path
+        import pandas as pd
+        from datasets import Dataset, load_dataset
+
+        path = Path(dataset_path)
+
+        if path.is_dir() and (path / "dataset_info.json").exists():
+            logger.info(f"Loading HuggingFace dataset from: {dataset_path}")
+            return load_from_disk(dataset_path)
+
+        if path.is_file():
+            suffix = path.suffix.lower()
+
+            if suffix == '.csv':
+                logger.info(f"Loading CSV dataset: {dataset_path}")
+                df = pd.read_csv(dataset_path)
+                return Dataset.from_pandas(df)
+
+            elif suffix in ['.json', '.jsonl']:
+                logger.info(f"Loading JSON dataset: {dataset_path}")
+                df = pd.read_json(dataset_path, lines=(suffix == '.jsonl'))
+                return Dataset.from_pandas(df)
+
+            elif suffix == '.parquet':
+                logger.info(f"Loading Parquet dataset: {dataset_path}")
+                df = pd.read_parquet(dataset_path)
+                return Dataset.from_pandas(df)
+
+        if dataset_path.startswith(('http://', 'https://', 's3://', 'hf://')):
+            logger.info(f"Loading dataset from URL: {dataset_path}")
+            return load_dataset(dataset_path, split='train')
+
+        raise ValueError(
+            f"Unsupported dataset format: {dataset_path}\n"
+            f"Supported formats: HuggingFace (directory), CSV, JSON, JSONL, Parquet, URLs"
+        )
+
     async def pause_training(self, job_id: str) -> bool:
         """Request pause for a training job"""
         job_state = self.jobs.get(job_id)
@@ -345,15 +454,22 @@ class TrainingExecutor:
             logger.warning(f"Job is not paused: {job_id}")
             return False
 
-        logger.info(f"Resuming job: {job_id}")
+        checkpoint = checkpoint_path or job_state.checkpoint_path
+        if not checkpoint or not Path(checkpoint).exists():
+            logger.error(f"No valid checkpoint found for resume: {checkpoint}")
+            return False
 
-        # Set checkpoint to resume from
-        job_state.resume_from_checkpoint = checkpoint_path or job_state.checkpoint_path
+        logger.info(f"Resuming job {job_id} from checkpoint: {checkpoint}")
+
+        job_state.resume_from_checkpoint = checkpoint
         job_state.pause_requested = False
+        job_state.paused_at = None
         job_state.status = JobStatus.RUNNING
 
-        # Restart training
-        asyncio.create_task(self._run_training(job_state))
+        await self._update_backend_status(job_state.job_id, job_state.job_token, "running")
+
+        task = asyncio.create_task(self._run_training(job_state))
+        self.training_tasks[job_state.job_id] = task
 
         return True
 
@@ -370,6 +486,21 @@ class TrainingExecutor:
 
         logger.info(f"Requesting cancel for job: {job_id}")
         job_state.cancel_requested = True
+
+        if job_id in self.training_tasks:
+            task = self.training_tasks[job_id]
+            if not task.done():
+                logger.warning(f"Forcefully cancelling hung training task: {job_id}")
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    logger.info(f"Task cancelled successfully: {job_id}")
+                finally:
+                    del self.training_tasks[job_id]
+
+        await self._update_backend_status(job_state.job_id, job_state.job_token, "cancelled")
+
         return True
 
     def get_job_status(self, job_id: str) -> Optional[TrainingJobStatus]:
@@ -418,6 +549,44 @@ class TrainingExecutor:
 
         # Send metrics to backend
         await backend_client.report_metrics(job_id, job_state.job_token, metrics)
+
+    async def _update_backend_status(
+        self,
+        job_id: str,
+        job_token: Optional[str],
+        status: str,
+        error: Optional[str] = None
+    ):
+        """Update job status in backend"""
+        from src.api.backend_client import backend_client
+
+        if not job_token:
+            logger.warning(f"Cannot update status - job_token not set for {job_id}")
+            return
+
+        try:
+            await backend_client.update_job_status(job_id, job_token, status, error)
+            logger.info(f"Backend status updated: {job_id} -> {status}")
+        except Exception as e:
+            logger.error(f"Failed to update backend status: {e}")
+
+    async def _send_logs_to_backend(
+        self,
+        job_id: str,
+        job_token: str,
+        logs: List[str],
+        batch_size: int = 100
+    ):
+        """Send logs to backend in batches"""
+        from src.api.backend_client import backend_client
+
+        for i in range(0, len(logs), batch_size):
+            batch = logs[i:i + batch_size]
+            try:
+                await backend_client.send_logs(job_id, job_token, batch)
+                logger.debug(f"Sent {len(batch)} log lines to backend")
+            except Exception as e:
+                logger.error(f"Failed to send log batch: {e}")
 
 
 # Global executor instance

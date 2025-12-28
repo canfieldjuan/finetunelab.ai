@@ -494,3 +494,144 @@ export async function GET(
     );
   }
 }
+
+/**
+ * PATCH /api/training/local/{jobId}/status
+ * Update job status from Python worker
+ *
+ * Request body:
+ * {
+ *   status: "running" | "completed" | "failed" | "cancelled" | "paused",
+ *   error?: string
+ * }
+ *
+ * Authentication: Bearer token (job_token)
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ jobId: string }> }
+) {
+  const resolvedParams = await params;
+  const jobId = resolvedParams.jobId;
+
+  console.log('[LocalTraining Status PATCH] Updating status for job:', jobId);
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return NextResponse.json(
+      { error: 'Server configuration error: Missing Supabase credentials' },
+      { status: 500 }
+    );
+  }
+
+  try {
+    // Extract and validate job_token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[LocalTraining Status PATCH] Missing or invalid authorization header');
+      return NextResponse.json(
+        { error: 'Unauthorized: Bearer token required' },
+        { status: 401 }
+      );
+    }
+
+    const jobToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    // Parse request body
+    const body = await request.json();
+    const { status, error } = body;
+
+    // Validate status
+    const validStatuses = ['running', 'completed', 'failed', 'cancelled', 'paused'];
+    if (!status || !validStatuses.includes(status)) {
+      return NextResponse.json(
+        { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Create Supabase client with service role
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verify job exists and token matches
+    const { data: job, error: jobError } = await supabase
+      .from('local_training_jobs')
+      .select('id, job_token, status, completed_at')
+      .eq('id', jobId)
+      .single();
+
+    if (jobError || !job) {
+      console.error('[LocalTraining Status PATCH] Job not found:', jobId);
+      return NextResponse.json(
+        { error: 'Job not found' },
+        { status: 404 }
+      );
+    }
+
+    if (job.job_token !== jobToken) {
+      console.error('[LocalTraining Status PATCH] Invalid job token');
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid token' },
+        { status: 401 }
+      );
+    }
+
+    // Prepare update
+    const updateData: Record<string, unknown> = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Set completion timestamp for terminal statuses
+    if (['completed', 'failed', 'cancelled'].includes(status) && !job.completed_at) {
+      updateData.completed_at = new Date().toISOString();
+    }
+
+    // Update error in config if provided
+    if (error && status === 'failed') {
+      // Get existing config or create new one
+      const { data: currentJob } = await supabase
+        .from('local_training_jobs')
+        .select('config')
+        .eq('id', jobId)
+        .single();
+
+      const existingConfig = currentJob?.config || {};
+      updateData.config = {
+        ...existingConfig,
+        error
+      };
+    }
+
+    // Update job status
+    const { error: updateError } = await supabase
+      .from('local_training_jobs')
+      .update(updateData)
+      .eq('id', jobId);
+
+    if (updateError) {
+      console.error('[LocalTraining Status PATCH] Failed to update status:', updateError);
+      return NextResponse.json(
+        { error: 'Failed to update status', details: updateError.message },
+        { status: 500 }
+      );
+    }
+
+    console.log('[LocalTraining Status PATCH] Status updated successfully:', { jobId, status, hasError: !!error });
+
+    return NextResponse.json({
+      success: true,
+      status,
+      updated_at: updateData.updated_at
+    });
+
+  } catch (error) {
+    console.error('[LocalTraining Status PATCH] Request error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to process request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
+}
