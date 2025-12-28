@@ -89,10 +89,10 @@ If the user asks for detailed breakdowns or specific examples, let them know the
     }
 
     // Decrypt API key
-    const { decrypt } = await import('@/lib/encryption');
+    const { decryptApiKey } = await import('@/lib/demo/encryption');
     let apiKey: string;
     try {
-      apiKey = decrypt(modelConfig.api_key_encrypted);
+      apiKey = decryptApiKey(modelConfig.api_key_encrypted);
     } catch (decryptError) {
       console.error('[DemoAtlas] Failed to decrypt API key:', decryptError);
       return NextResponse.json({ error: 'Invalid session configuration' }, { status: 400 });

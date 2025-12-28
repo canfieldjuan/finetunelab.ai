@@ -288,7 +288,7 @@ export default function DemoTestModelPage() {
               <BatchTestProgress
                 testRunId={testRunId}
                 onComplete={handleTestComplete}
-                onError={(error) => console.error('Test error:', error)}
+                onError={(error: string) => console.error('Test error:', error)}
               />
             )}
           </div>

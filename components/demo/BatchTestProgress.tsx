@@ -41,7 +41,13 @@ interface BatchTestRun {
 
 import type { DemoSessionMetrics } from '@/lib/demo/demo-analytics.service';
 
-// ... (other code)
+const POLL_INTERVAL = 2000;
+
+interface BatchTestProgressProps {
+  testRunId: string;
+  onComplete?: (testRun: BatchTestRun) => void;
+  onError?: (error: string) => void;
+}
 
 export function BatchTestProgress({
   testRunId,
@@ -78,7 +84,7 @@ export function BatchTestProgress({
 
       // Check if complete
       if (data.status === 'completed' || data.status === 'failed') {
-        onComplete(data.results || []);
+        onComplete?.(data);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
