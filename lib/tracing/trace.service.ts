@@ -363,13 +363,15 @@ async function sendTraceStart(
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return;
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    || process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000');
 
   if (baseUrl === 'http://localhost:3000' && process.env.NODE_ENV === 'production') {
     console.error('[Trace Service] CRITICAL: NEXT_PUBLIC_BASE_URL not set in production! Traces will fail.');
   }
+
+  console.log(`[Trace Service] sendTraceStart - Using baseUrl: ${baseUrl}`);
 
   await fetch(`${baseUrl}/api/analytics/traces`, {
     method: 'POST',
@@ -452,14 +454,15 @@ async function flushTraceBatch(accessToken: string): Promise<void> {
     duplicates: batch.length - dedupedBatch.length
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    || process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000');
 
   if (baseUrl === 'http://localhost:3000' && process.env.NODE_ENV === 'production') {
     console.error('[Trace Service] CRITICAL: NEXT_PUBLIC_BASE_URL not set in production! Traces will fail.');
   }
 
+  console.log(`[TRACE DEBUG] flushTraceBatch - Using baseUrl: ${baseUrl}`);
   console.log(`[TRACE DEBUG] Sending traces to: ${baseUrl}/api/analytics/traces`);
 
   // Send each trace in the batch
