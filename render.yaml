@@ -77,19 +77,28 @@ services:
   #   maxmemoryPolicy: allkeys-lru
   #   ipAllowList: []  # Empty = allow all
 
-  # Background Worker (Optional - if using BullMQ)
-  # - type: worker
-  #   name: finetunelab-worker
-  #   env: node
-  #   region: oregon
-  #   plan: starter
-  #   buildCommand: npm ci
-  #   startCommand: npm run scheduler:start
-  #   envVars:
-  #     - key: NODE_ENV
-  #       value: production
-  #     - fromGroup: finetunelab-env-group
-  #   autoDeploy: true
+  # Background Worker - Evaluation Scheduler
+  - type: worker
+    name: finetunelab-scheduler-worker
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm run scheduler:start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://finetunelab.ai
+      - key: NEXT_PUBLIC_BASE_URL
+        value: https://finetunelab.ai
+    autoDeploy: true
 
   # BYOM Cron Job - Cleanup Expired Demo Sessions
   - type: cron
