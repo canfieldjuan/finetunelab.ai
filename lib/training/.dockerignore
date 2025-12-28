@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+trainer_venv/
+.venv/
+ENV/
+env/
+
+# Training outputs (will be mounted as volume)
+outputs/
+logs/
+checkpoints/
+models/
+*.bin
+*.safetensors
+*.gguf
+
+# Datasets (will be mounted as volume)
+datasets/
+*.jsonl
+*.json
+*.csv
+*.parquet
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README_WORKER.md
+
+# Testing
+test_*.py
+*_test.py
+__tests__/
+
+# Misc
+*.log
+.env
+.env.local
+*.bak
+tmp/
+
+# Llama.cpp (not needed for training)
+llama.cpp/
+
+# Unnecessary Python files for Docker
+generate_*.py
+assess_*.py
+analyze_*.py
+check_*.py
+build_*.py
+call_*.py
+chunk_*.py
+combine_*.py
+compare_*.py
+extract_*.py
+fix_*.py
+inspect_*.py
+test_*.py
+validate_*.py

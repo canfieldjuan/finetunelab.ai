@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  finetunelab-worker:
+    build: .
+    container_name: finetunelab-training-worker
+    runtime: nvidia  # Requires NVIDIA Container Toolkit
+    environment:
+      # Next.js API endpoints (change to your production URL)
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-https://finetunelab.ai}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://finetunelab.ai}
+      
+      # Supabase configuration      
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      
+      # Worker configuration
+      - WORKER_ID=${WORKER_ID:-worker_$(hostname)}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # GPU configuration
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+      
+    ports:
+      - "8000:8000"  # Training API port
+      
+    volumes:
+      # Mount for training outputs (models, checkpoints)
+      - ./outputs:/app/outputs
+      # Mount for logs
+      - ./logs:/app/logs
+      # Mount for local datasets (optional)
+      - ./datasets:/app/datasets
+      
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all  # Use all GPUs, or specify count: 1
+              capabilities: [gpu]
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
