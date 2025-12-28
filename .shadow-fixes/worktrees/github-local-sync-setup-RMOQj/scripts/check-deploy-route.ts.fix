@@ -1,2 +1,0 @@
-import '@/app/api/training/deploy/route';
-console.log('Deploy route syntax check passed');

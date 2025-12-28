@@ -1,9 +1,0 @@
-import { VLLMPodDeploymentRequest } from '@/lib/inference/runpod-serverless-service';
-
-const test: VLLMPodDeploymentRequest = {
-    deployment_name: 'test',
-    model_id: 'test',
-    data_center_id: 'US-NJ'
-};
-
-console.log(test);
