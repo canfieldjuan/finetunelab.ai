@@ -152,7 +152,7 @@ if git tag -l | grep -q "^${VERSION}$"; then
   log "Tag $VERSION already exists"
 else
   git tag -a "$VERSION" -m "Release $VERSION"
-  git push origin "$VERSION"
+  git push finetune-lab "$VERSION"
 fi
 
 # Create GitHub release
