@@ -21,26 +21,31 @@ interface LossChartProps {
   autoRefresh?: boolean; // Deprecated
 }
 
+
 interface MetricDataPoint {
   step: number;
   train_loss: number | null;
   eval_loss: number | null;
-  [key: string]: any;
+  [key: string]: number | null | undefined;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+import type { TooltipProps } from 'recharts';
+
+const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
   if (!active || !payload || !label) return null;
 
   // Aggregate all train_loss and eval_loss values for this step
   let trainLoss: number | null = null;
   let evalLoss: number | null = null;
 
-  payload.forEach((entry: any) => {
-    if (entry.dataKey === 'train_loss' && entry.value != null) {
-      trainLoss = entry.value as number;
-    }
-    if (entry.dataKey === 'eval_loss' && entry.value != null) {
-      evalLoss = entry.value as number;
+  payload.forEach((entry) => {
+    if (entry && typeof entry === 'object' && 'dataKey' in entry && 'value' in entry) {
+      if (entry.dataKey === 'train_loss' && entry.value != null) {
+        trainLoss = entry.value as number;
+      }
+      if (entry.dataKey === 'eval_loss' && entry.value != null) {
+        evalLoss = entry.value as number;
+      }
     }
   });
 
