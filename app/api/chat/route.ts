@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
       console.log('[API] Batch test mode: Session validated, user_id:', userId);
       
       // Use service role for RLS bypass (same as widget mode)
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgyMCwiZXhwIjoxOTYwNzY4ODIwfQ.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
       supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     } else {
       // Normal mode: Get user ID from request body
