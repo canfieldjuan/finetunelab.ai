@@ -35,7 +35,7 @@ async function getAuthenticatedUser(request: NextRequest) {
   return { user, error: null };
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const { user, error } = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json({ error }, { status: 401 });

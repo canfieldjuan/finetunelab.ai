@@ -49,7 +49,7 @@ export function ModelSelectionCard({
   const [selectedModel, setSelectedModel] = useState<SelectedModel | null>(null);
 
   // Local models state - UI removed, preserved for future use
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const [localQuery, setLocalQuery] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [localResults, setLocalResults] = useState<LocalModelInfo[]>([]);

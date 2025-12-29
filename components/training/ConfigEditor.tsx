@@ -42,7 +42,7 @@ export function ConfigEditor({
   // Provider state (Phase 2.3: Local Training Connection) - UI removed, preserved for future use
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [selectedProvider, setSelectedProvider] = useState<TrainingProvider>('local');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const [localUrl, setLocalUrl] = useState(servicesConfig.training.serverUrl);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [testingConnection, setTestingConnection] = useState(false);
