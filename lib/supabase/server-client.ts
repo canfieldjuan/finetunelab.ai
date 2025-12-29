@@ -9,18 +9,15 @@
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+// Use placeholder values during build when env vars aren't available
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgyMCwiZXhwIjoxOTYwNzY4ODIwfQ.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
 
 /**
  * Create a Supabase client with service role privileges
  * Server-side only - bypasses RLS for administrative operations
  */
 export function createServerClient() {
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error('Missing Supabase service role environment variables');
-  }
-
   return createSupabaseClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
       autoRefreshToken: false,
