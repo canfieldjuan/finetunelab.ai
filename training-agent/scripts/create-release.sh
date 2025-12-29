@@ -162,7 +162,7 @@ gh release create "$VERSION" \
   --notes-file "$RELEASE_NOTES" \
   "$BUILD_DIR/training-agent-linux-amd64.tar.gz" \
   "$BUILD_DIR/training-agent-darwin-amd64.tar.gz" \
-  "$BUILD_DIR/training-agent-windows-amd64.zip"*
+  "$BUILD_DIR/training-agent-windows-amd64.zip"
 
 log "✅ Release $VERSION created successfully!"
 log "View at: https://github.com/FineTune-Lab/training-agent/releases/tag/$VERSION"
