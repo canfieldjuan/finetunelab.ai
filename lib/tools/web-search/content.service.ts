@@ -29,7 +29,7 @@ export class ContentService {
    * @returns The HTML content as a string.
    */
   private async fetchHtml(url: string, retries = 3): Promise<string> {
-    let lastError: any;
+    let lastError: unknown;
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -65,7 +65,7 @@ export class ContentService {
         console.log(`[ContentService] Successfully fetched URL: ${url}`);
         return text;
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         lastError = error;
         const isRetryable = error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.message.includes('429') || (error.response && error.response.status >= 500);
         

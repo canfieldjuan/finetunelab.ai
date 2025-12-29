@@ -143,7 +143,7 @@ export default function ContactPage() {
             Get in Touch
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Whether you need technical support, want to discuss enterprise solutions, or just have questions about fine-tuning, we're here to help.
+            Whether you need technical support, want to discuss enterprise solutions, or just have questions about fine-tuning, we&apos;re here to help.
           </p>
         </div>
       </section>

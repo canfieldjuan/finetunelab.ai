@@ -16,11 +16,11 @@ interface TraceReplayPanelProps {
 
 export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
   const [replaying, setReplaying] = useState(false);
-  const [replayResult, setReplayResult] = useState<any>(null);
+  const [replayResult, setReplayResult] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const inputData = trace.input_data as Record<string, any> || {};
-  const originalParams = inputData.parameters as Record<string, any> || {};
+  const inputData = trace.input_data as Record<string, unknown> || {};
+  const originalParams = inputData.parameters as Record<string, unknown> || {};
 
   const [modelName, setModelName] = useState(trace.model_name || '');
   const [modelProvider, setModelProvider] = useState(trace.model_provider || '');
@@ -34,7 +34,7 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
     setReplaying(true);
 
     try {
-      const overrides: Record<string, any> = {};
+      const overrides: Record<string, unknown> = {};
 
       if (modelName !== trace.model_name) overrides.modelName = modelName;
       if (modelProvider !== trace.model_provider) overrides.modelProvider = modelProvider;

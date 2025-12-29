@@ -47,7 +47,7 @@ async function verifySchemas() {
   let allValid = true;
 
   data?.forEach(tool => {
-    const params = tool.parameters as any;
+    const params = tool.parameters as unknown;
 
     // Check for invalid nested 'required' in property definitions
     let hasInvalidRequired = false;

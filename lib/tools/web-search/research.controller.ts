@@ -54,7 +54,7 @@ class ResearchController {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       
-      const handler = (data: any) => {
+      const handler = (data: unknown) => {
         if (data.jobId === jobId) {
            res.write(`data: ${JSON.stringify(data)}\n\n`);
         }

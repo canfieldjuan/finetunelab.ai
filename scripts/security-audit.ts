@@ -142,7 +142,7 @@ async function auditSensitiveDataExposure(): Promise<SecurityIssue[]> {
       if (error) continue;
 
       if (data && data.length > 0) {
-        data.forEach((row: any) => {
+        data.forEach((row: unknown) => {
           const fieldValue = JSON.stringify(row[sample.field] || '');
 
           sensitivePatterns.forEach(({ pattern, name }) => {

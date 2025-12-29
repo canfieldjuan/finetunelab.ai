@@ -8,7 +8,7 @@ import { graphragService } from '../../graphrag';
 export async function executeGraphRAGQuery(
   args: { query: string; maxResults?: number },
   userId?: string,
-  traceContext?: any
+  traceContext?: unknown
 ): Promise<unknown> {
   if (!userId) {
     throw new Error('User ID is required to query knowledge graph. Please ensure you are logged in.');

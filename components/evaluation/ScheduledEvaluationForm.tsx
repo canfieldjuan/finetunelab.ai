@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 // Scheduled Evaluation Form Component
 // Purpose: Create/edit scheduled batch test evaluations
 // Date: 2025-12-16

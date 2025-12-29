@@ -68,7 +68,7 @@ const intelligentEmailTool: ToolDefinition = {
   /**
    * Execute email sending operation
    */
-  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: unknown) {
     console.log('[IntelligentEmail] Executing email send');
 
     const to = params.to as string;

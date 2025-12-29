@@ -15,8 +15,8 @@ jest.mock('@supabase/supabase-js', () => ({
 
 describe('ApprovalManager', () => {
   let approvalManager: ApprovalManager;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockSupabase: any;
+   
+  let mockSupabase: unknown;
 
   beforeEach(() => {
     // Reset mocks

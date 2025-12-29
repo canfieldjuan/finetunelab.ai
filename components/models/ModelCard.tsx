@@ -24,7 +24,7 @@ interface ModelCardProps {
   onEdit?: (model: LLMModelDisplay) => void;
   onDelete?: (model: LLMModelDisplay) => void;
   currentUserId?: string;
-  serverInfo?: any;
+  serverInfo?: unknown;
   sessionToken?: string;
   onServerChanged?: () => void;
 }
@@ -136,7 +136,7 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
     if (!canDeploy || !sessionToken) return;
 
     // Check if model has deployment metadata
-    const metadata = model.metadata as any;
+    const metadata = model.metadata as unknown;
     if (!metadata?.model_path) {
       toast.error('No model path found. This model cannot be deployed.');
       return;
@@ -147,7 +147,7 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
 
     try {
       // Construct payload matching /api/training/deploy expectations
-      const payload: any = {
+      const payload: unknown = {
         server_type: model.provider === 'ollama' ? 'ollama' : 'vllm',
         name: model.name,
         config: {

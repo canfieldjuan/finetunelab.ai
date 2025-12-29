@@ -44,7 +44,7 @@ const emailSecurityTool: ToolDefinition = {
     },
   },
 
-  execute: async (params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) => {
+  execute: async (params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: unknown) => {
     const action = params.action as 'detect_pii' | 'detect_spam' | 'analyze_sentiment';
     const emailParam = params.email;
 

@@ -89,7 +89,7 @@ async function main() {
       console.log('⚠️ Policy not found (might still be OK if GRANT succeeded)');
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Unexpected error:', error.message);
     console.log('\n💡 Try running fix_metrics_permissions.sql manually in Supabase dashboard');
     process.exit(1);

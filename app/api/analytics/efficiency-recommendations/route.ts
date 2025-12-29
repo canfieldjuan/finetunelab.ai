@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function analyzeModelCosts(traces: any[], recommendations: Recommendation[]) {
+function analyzeModelCosts(traces: unknown[], recommendations: Recommendation[]) {
   const modelStats: Record<string, { cost: number; count: number }> = {};
 
   traces.forEach(t => {
@@ -132,7 +132,7 @@ function analyzeModelCosts(traces: any[], recommendations: Recommendation[]) {
   });
 }
 
-function analyzeCacheUsage(traces: any[], recommendations: Recommendation[]) {
+function analyzeCacheUsage(traces: unknown[], recommendations: Recommendation[]) {
   const anthropicTraces = traces.filter(t =>
     t.model_provider === 'anthropic' ||
     (t.model_name && t.model_name.includes('claude'))
@@ -164,7 +164,7 @@ function analyzeCacheUsage(traces: any[], recommendations: Recommendation[]) {
   }
 }
 
-function analyzeOperationCosts(traces: any[], recommendations: Recommendation[]) {
+function analyzeOperationCosts(traces: unknown[], recommendations: Recommendation[]) {
   const opStats: Record<string, { cost: number; count: number }> = {};
 
   traces.forEach(t => {
@@ -194,7 +194,7 @@ function analyzeOperationCosts(traces: any[], recommendations: Recommendation[])
   });
 }
 
-function analyzeTokenUsage(traces: any[], recommendations: Recommendation[]) {
+function analyzeTokenUsage(traces: unknown[], recommendations: Recommendation[]) {
   const highTokenTraces = traces.filter(t =>
     (t.input_tokens || 0) + (t.output_tokens || 0) > 10000
   );

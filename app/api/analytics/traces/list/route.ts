@@ -183,16 +183,16 @@ export async function GET(req: NextRequest) {
 
     // Apply post-enrichment filters (quality_score is computed, not in DB)
     if (hasQualityScore === 'true') {
-      enrichedTraces = enrichedTraces.filter((t: any) => t.quality_score != null);
+      enrichedTraces = enrichedTraces.filter((t: Record<string, unknown>) => t.quality_score != null);
     } else if (hasQualityScore === 'false') {
-      enrichedTraces = enrichedTraces.filter((t: any) => t.quality_score == null);
+      enrichedTraces = enrichedTraces.filter((t: Record<string, unknown>) => t.quality_score == null);
     }
 
     const minQualityScore = searchParams.get('min_quality_score');
     if (minQualityScore) {
       const minQualityNum = parseFloat(minQualityScore);
       if (!isNaN(minQualityNum)) {
-        enrichedTraces = enrichedTraces.filter((t: any) =>
+        enrichedTraces = enrichedTraces.filter((t: Record<string, unknown>) =>
           t.quality_score != null && t.quality_score >= minQualityNum
         );
       }
@@ -217,7 +217,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-async function enrichTracesWithQuality(supabase: any, traces: any[], userId: string) {
+async function enrichTracesWithQuality(supabase: unknown, traces: unknown[], userId: string) {
   if (!traces || traces.length === 0) return traces;
 
   const traceIds = traces.map(t => t.trace_id);
@@ -322,7 +322,7 @@ async function enrichTracesWithQuality(supabase: any, traces: any[], userId: str
     const evaluation = evaluationMap.get(trace.trace_id);
     const traceJudgments = judgmentsMap.get(trace.trace_id);
 
-    const enriched: any = { ...trace };
+    const enriched: Record<string, unknown> = { ...trace };
 
     if (quality) {
       const avgScore = quality.scores.length > 0

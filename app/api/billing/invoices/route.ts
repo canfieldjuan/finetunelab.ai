@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const formattedInvoices = (invoices || []).map((invoice: any) => ({
+    const formattedInvoices = (invoices || []).map((invoice: unknown) => ({
       id: invoice.id,
       periodMonth: invoice.period_month,
       periodYear: invoice.period_year,

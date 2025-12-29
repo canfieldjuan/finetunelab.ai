@@ -60,7 +60,7 @@ async function checkAvailability() {
     console.log('│ GPU Type                │ VRAM     │ Secure $/hr│ Community $/hr│');
     console.log('├─────────────────────────┼──────────┼────────────┼──────────────┤');
 
-    gpuTypes.forEach((gpu: any) => {
+    gpuTypes.forEach((gpu: unknown) => {
       const name = gpu.displayName.padEnd(23);
       const vram = `${gpu.memoryInGb}GB`.padEnd(8);
       const securePrice = gpu.securePrice ? `$${gpu.securePrice}`.padEnd(10) : 'N/A'.padEnd(10);
@@ -76,7 +76,7 @@ async function checkAvailability() {
     console.log('   2. Community cloud (cheaper but may be slower)');
     console.log('   3. Lambda Labs (simpler and often cheaper)');
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }

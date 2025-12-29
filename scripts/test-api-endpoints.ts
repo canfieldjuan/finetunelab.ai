@@ -48,7 +48,7 @@ let testApiKeyId: string | null = null;
 async function apiRequest(
   endpoint: string,
   options: RequestInit = {}
-): Promise<{ status: number; data: any }> {
+): Promise<{ status: number; data: unknown }> {
   const url = `${API_BASE}${endpoint}`;
   console.log(`[API] ${options.method || 'GET'} ${endpoint}`);
   
@@ -175,7 +175,7 @@ async function test3_ListApiKeys() {
   
   console.log(`\nFound ${result.data.count} API keys`);
   
-  const ourKey = result.data.apiKeys.find((k: any) => k.id === testApiKeyId);
+  const ourKey = result.data.apiKeys.find((k: unknown) => k.id === testApiKeyId);
   if (!ourKey) {
     throw new Error('Our test key not found in list');
   }

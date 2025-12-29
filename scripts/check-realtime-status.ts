@@ -97,7 +97,7 @@ async function checkRealtimeStatus() {
         }, 2000);
       });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }

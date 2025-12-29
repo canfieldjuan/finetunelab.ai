@@ -79,9 +79,9 @@ export function truncateArray<T>(arr: T[], maxItems: number): T[] {
  * @returns Truncated chunks array
  */
 export function truncateRAGChunks(
-  chunks: Array<{ fact: string; score: number; [key: string]: any }>,
+  chunks: Array<{ fact: string; score: number; [key: string]: unknown }>,
   maxChunks: number = 5
-): Array<{ fact: string; score: number; [key: string]: any }> {
+): Array<{ fact: string; score: number; [key: string]: unknown }> {
   return chunks
     .slice(0, maxChunks)
     .map(chunk => ({

@@ -27,8 +27,8 @@ export async function executeTrainingPredictions(
   args: Record<string, unknown>,
   userId: string,
   authHeader?: string,
-  authClient?: any
-): Promise<any> {
+  authClient?: unknown
+): Promise<unknown> {
   console.log('[TrainingPredictions] Executing:', args.operation);
 
   const { operation, jobId, epoch, epochs, limit, offset } = args as unknown as TrainingPredictionsArgs;
@@ -77,7 +77,7 @@ async function getPredictions(
   authHeader: string,
   limit: number = 50,
   offset: number = 0
-): Promise<any> {
+): Promise<unknown> {
   console.log('[TrainingPredictions] Getting predictions for job:', jobId);
 
   try {
@@ -131,7 +131,7 @@ async function getPredictionsByEpoch(
   authHeader: string,
   limit: number = 50,
   offset: number = 0
-): Promise<any> {
+): Promise<unknown> {
   console.log('[TrainingPredictions] Getting predictions for job:', jobId, 'epoch:', epoch);
 
   try {
@@ -183,7 +183,7 @@ async function compareEpochs(
   epochs: number[],
   userId: string,
   authHeader: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[TrainingPredictions] Comparing epochs:', epochs, 'for job:', jobId);
 
   try {
@@ -206,7 +206,7 @@ async function compareEpochs(
     }
 
     // Get predictions for each epoch
-    const epochData: Record<number, any[]> = {};
+    const epochData: Record<number, unknown[]> = {};
 
     for (const epoch of epochs) {
       const { data: predictions, error } = await supabase
@@ -231,7 +231,7 @@ async function compareEpochs(
       job_id: jobId,
       epochs: epochs.sort((a, b) => a - b),
       epoch_data: epochData,
-      statistics: {} as Record<number, any>,
+      statistics: {} as Record<number, unknown>,
     };
 
     // Add statistics for each epoch
@@ -265,7 +265,7 @@ async function listAvailableEpochs(
   jobId: string,
   userId: string,
   authHeader: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[TrainingPredictions] Listing available epochs for job:', jobId);
 
   try {

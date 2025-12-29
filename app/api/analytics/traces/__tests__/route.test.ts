@@ -13,7 +13,7 @@ function makeRequest(url: string, body?: unknown, headers?: Record<string, strin
     url,
     headers: new Headers(baseHeaders),
     json: async () => body,
-  } as any;
+  } as unknown;
 }
 
 describe('app/api/analytics/traces', () => {
@@ -64,7 +64,7 @@ describe('app/api/analytics/traces', () => {
 
     expect(response.status).toBe(200);
     expect(insert).toHaveBeenCalledTimes(1);
-    const insertArg = (insert.mock.calls[0] as any[])?.[0];
+    const insertArg = (insert.mock.calls[0] as unknown[])?.[0];
     expect(insertArg.user_id).toBe('user-123');
   });
 
@@ -74,7 +74,7 @@ describe('app/api/analytics/traces', () => {
     }));
 
     const range = vi.fn(async () => ({ data: [], error: null }));
-    const builder: any = {};
+    const builder: unknown = {};
     builder.select = vi.fn(() => builder);
     builder.eq = vi.fn(() => builder);
     builder.order = vi.fn(() => builder);

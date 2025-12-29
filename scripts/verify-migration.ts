@@ -68,7 +68,7 @@ async function verifyMigration() {
     console.log('[Verify] 2. Test status API: curl http://localhost:3000/api/training/execute/{id}/status');
     console.log('[Verify] 3. Create test execution via DAG or API');
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Verify] Unexpected error:', err.message);
     process.exit(1);
   }

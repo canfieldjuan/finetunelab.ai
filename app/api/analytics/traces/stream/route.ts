@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
               table: 'llm_traces',
               filter: `user_id=eq.${user.id}`,
             },
-            (payload: any) => {
+            (payload: unknown) => {
               console.log('[Traces Stream] New trace detected:', payload.new.id);
 
               // Send trace data to client
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
               table: 'llm_traces',
               filter: `user_id=eq.${user.id}`,
             },
-            (payload: any) => {
+            (payload: unknown) => {
               console.log('[Traces Stream] Trace updated:', payload.new.id);
 
               // Send update event
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
               }
             }
           )
-          .subscribe((status: any, err: any) => {
+          .subscribe((status: unknown, err: unknown) => {
             if (status === 'SUBSCRIBED') {
               console.log('[Traces Stream] Realtime subscription active');
 

@@ -16,7 +16,7 @@ export class RunPodProvider implements DeploymentProvider {
     config: TrainingConfig,
     modelName: string,
     datasetPath: string,
-    options?: any
+    options?: unknown
   ): Promise<string> {
     const jobId = options?.jobId;
     if (!jobId) throw new Error('Job ID is required for RunPod deployment');

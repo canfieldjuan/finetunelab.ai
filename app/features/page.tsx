@@ -301,7 +301,7 @@ export default function FeaturesPage() {
                 <div className="mt-8 p-4 bg-muted/50 rounded-lg border-l-4 border-green-500">
                   <p className="text-sm font-medium mb-2">💡 Use Case</p>
                   <p className="text-sm text-muted-foreground">
-                    Upload your customer support conversations in JSONL format, select Llama 3.3 as the base model, enable 4-bit quantization to reduce memory, and click train. In under 2 minutes, you'll have a custom model that understands your product and responds like your best support agent.
+                    Upload your customer support conversations in JSONL format, select Llama 3.3 as the base model, enable 4-bit quantization to reduce memory, and click train. In under 2 minutes, you&apos;ll have a custom model that understands your product and responds like your best support agent.
                   </p>
                 </div>
               </div>
@@ -541,7 +541,7 @@ export default function FeaturesPage() {
                 <div className="mt-8 p-4 bg-muted/50 rounded-lg border-l-4 border-orange-500">
                   <p className="text-sm font-medium mb-2">💡 Use Case</p>
                   <p className="text-sm text-muted-foreground">
-                    Configure predictions to generate every 100 steps during training. Watch the Prediction Evolution view to see actual responses improving from vague to accurate. If predictions aren't improving even though loss is decreasing, you've caught overfitting in real-time.
+                    Configure predictions to generate every 100 steps during training. Watch the Prediction Evolution view to see actual responses improving from vague to accurate. If predictions aren&apos;t improving even though loss is decreasing, you&apos;ve caught overfitting in real-time.
                   </p>
                 </div>
               </div>
@@ -634,7 +634,7 @@ export default function FeaturesPage() {
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <p className="mt-4 text-muted-foreground">
-                  Training costs depend on GPU type (A4000 to H100) and duration. FineTune Lab shows a live cost counter and projected total as you train. You can configure hard limits like "stop at $50" or "stop after 10 hours". When the limit is reached, training stops automatically and saves the latest checkpoint. Resume later with a higher budget.
+                  Training costs depend on GPU type (A4000 to H100) and duration. FineTune Lab shows a live cost counter and projected total as you train. You can configure hard limits like &quot;stop at $50&quot; or &quot;stop after 10 hours&quot;. When the limit is reached, training stops automatically and saves the latest checkpoint. Resume later with a higher budget.
                 </p>
               </details>
 
@@ -644,7 +644,7 @@ export default function FeaturesPage() {
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <p className="mt-4 text-muted-foreground">
-                  FineTune Lab provides real-time analytics, intelligent testing with GraphRAG, and automated evaluation that local training doesn't offer. Instead of staring at terminal logs, you get live loss curves, GPU monitoring, and instant overfitting detection. Plus, one-click deployment to production with automatic scaling on RunPod Serverless.
+                  FineTune Lab provides real-time analytics, intelligent testing with GraphRAG, and automated evaluation that local training doesn&apos;t offer. Instead of staring at terminal logs, you get live loss curves, GPU monitoring, and instant overfitting detection. Plus, one-click deployment to production with automatic scaling on RunPod Serverless.
                 </p>
               </details>
 
@@ -660,7 +660,7 @@ export default function FeaturesPage() {
 
               <details className="bg-card border rounded-lg p-6 group">
                 <summary className="font-semibold cursor-pointer list-none flex items-center justify-between">
-                  What's the difference between Monitor Training and Training Analytics?
+                  What&apos;s the difference between Monitor Training and Training Analytics?
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <p className="mt-4 text-muted-foreground">
@@ -694,7 +694,7 @@ export default function FeaturesPage() {
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <p className="mt-4 text-muted-foreground">
-                  GraphRAG is primarily designed for testing and evaluation during model development. It helps you validate context usage and response accuracy with citation-backed answers. For production RAG, you'd typically integrate your own vector database or knowledge graph with deployed model endpoints.
+                  GraphRAG is primarily designed for testing and evaluation during model development. It helps you validate context usage and response accuracy with citation-backed answers. For production RAG, you&apos;d typically integrate your own vector database or knowledge graph with deployed model endpoints.
                 </p>
               </details>
             </div>

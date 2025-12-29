@@ -928,8 +928,8 @@ export async function POST(req: NextRequest) {
     // ========================================================================
     function getDisplayModelId(
       modelPath: string,
-      job: any,
-      config: any
+      job: unknown,
+      config: unknown
     ): string {
       // Priority 1: Training job's base model (best for analytics)
       if (job?.model_name) {
@@ -965,8 +965,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Use UPDATE if model exists, INSERT if new
-    let modelEntry: any;
-    let modelError: any;
+    let modelEntry: unknown;
+    let modelError: unknown;
 
     if (shouldUpdateModel && existingModel) {
       // UPDATE existing model entry

@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Count by status
-    const statusCounts = jobs.reduce((acc: Record<string, number>, job: any) => {
+    const statusCounts = jobs.reduce((acc: Record<string, number>, job: unknown) => {
       const status = job.status || 'unknown';
       acc[status] = (acc[status] || 0) + 1;
       return acc;

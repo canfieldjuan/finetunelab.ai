@@ -144,7 +144,7 @@ export default function AboutPage() {
             <span className="text-primary">Accessible to Everyone</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            We believe enterprise-grade LLM fine-tuning shouldn't require a PhD, a dedicated ML team, or a six-figure budget.
+            We believe enterprise-grade LLM fine-tuning shouldn&apos;t require a PhD, a dedicated ML team, or a six-figure budget.
           </p>
         </div>
       </section>
@@ -179,7 +179,7 @@ export default function AboutPage() {
             </p>
             <ul className="space-y-3 text-muted-foreground mb-6">
               <li>❌ Scattered documentation across 10+ different tools</li>
-              <li>❌ No visibility into what's happening during training</li>
+              <li>❌ No visibility into what&apos;s happening during training</li>
               <li>❌ Days spent debugging NaN loss and OOM errors</li>
               <li>❌ Manual deployment scripts that break every other week</li>
               <li>❌ Testing models by manually copying API keys around</li>
@@ -199,7 +199,7 @@ export default function AboutPage() {
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-center">Our Values</h2>
           <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
-            These aren't just words on a page. They guide every decision we make, from feature design to customer support.
+            These aren&apos;t just words on a page. They guide every decision we make, from feature design to customer support.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {values.map((value, index) => {
@@ -246,10 +246,10 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Why We're Different */}
+      {/* Why We&apos;re Different */}
       <section className="py-20 px-4 border-b bg-muted/30">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6 text-center">Why We're Different</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-6 text-center">Why We&apos;re Different</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-12">
             <div className="bg-background p-6 rounded-lg border">
               <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
@@ -286,7 +286,7 @@ export default function AboutPage() {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Built by Developers, for Everyone</h2>
           <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-            We're a small, focused team obsessed with developer experience. Every feature goes through the "would I use this?" test.
+            We&apos;re a small, focused team obsessed with developer experience. Every feature goes through the &quot;would I use this?&quot; test.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
             <div className="p-6 border rounded-lg bg-muted/30">

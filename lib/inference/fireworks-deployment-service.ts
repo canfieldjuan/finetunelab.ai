@@ -79,7 +79,7 @@ export class FireworksDeploymentService {
     const options: RequestInit = {
       method,
       headers,
-      body: (body instanceof FormData || body instanceof Buffer) ? (body as any) : JSON.stringify(body),
+      body: (body instanceof FormData || body instanceof Buffer) ? (body as unknown) : JSON.stringify(body),
     };
 
     if (body instanceof Buffer) {

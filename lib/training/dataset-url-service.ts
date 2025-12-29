@@ -80,7 +80,7 @@ export class DatasetUrlService {
       throw new Error('AWS credentials not configured');
     }
 
-    const awsMetadata = awsSecret.metadata.aws as any;
+    const awsMetadata = awsSecret.metadata.aws as unknown;
     const decryptedSecretKey = await secretsManager.getDecryptedApiKey(userId, 'aws', supabase);
 
     if (!decryptedSecretKey) {

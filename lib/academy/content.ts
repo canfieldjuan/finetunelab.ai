@@ -664,9 +664,9 @@ Output JSON:
 
       <h2>8) Try it: minimal validator + router</h2>
       <pre><code class="language-ts">// Minimal JSON schema validator (runtime)
-type JSONSchema = { type: string; properties?: Record<string, any>; required?: string[] };
+type JSONSchema = { type: string; properties?: Record<string, unknown>; required?: string[] };
 
-function validate(schema: JSONSchema, data: any) {
+function validate(schema: JSONSchema, data: unknown) {
   if (schema.type !== typeof data && !(schema.type === 'object' && typeof data === 'object')) {
     return { ok: false, error: 'Expected ' + String(schema.type) };
   }
@@ -710,7 +710,7 @@ function routeIntent(userQuery: string) {
 }
 
 // Execute tool with validation
-async function callTool(name: keyof typeof tools, args: any) {
+async function callTool(name: keyof typeof tools, args: unknown) {
   const tool = tools[name];
   const v = validate(tool.schema as any, args);
   if (!v.ok) throw new Error('Invalid args for ' + String(name) + ': ' + String(v.error));
@@ -758,7 +758,7 @@ const update_user_email = {
   }
 };
 
-async function callSideEffectTool(userId: string, name: string, args: any) {
+async function callSideEffectTool(userId: string, name: string, args: unknown) {
   if (!isAllowed(userId, name)) throw new Error('Tool not allowed for this user');
   const tool = name === 'update_user_email' ? update_user_email : null;
   if (!tool) throw new Error('Unknown tool');
@@ -903,8 +903,8 @@ async function exampleSideEffect() {
       </ul>
 
       <h2>8) Try it: minimal ETL runner (idempotent + manifest)</h2>
-      <pre><code class="language-ts">type Manifest = { version: string; sources: string[]; filters: Record<string, any>; hash: string; count: number };
-type JobState = { id: string; step: 'ingest'|'normalize'|'pii'|'dedupe'|'label'|'validate'|'done'; outputs: Record<string, any> };
+      <pre><code class="language-ts">type Manifest = { version: string; sources: string[]; filters: Record<string, unknown>; hash: string; count: number };
+type JobState = { id: string; step: 'ingest'|'normalize'|'pii'|'dedupe'|'label'|'validate'|'done'; outputs: Record<string, unknown> };
 
 const jobStore: Record<string, JobState> = {};
 

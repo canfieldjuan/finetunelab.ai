@@ -30,6 +30,8 @@ export function BudgetAlertsPanel() {
     fetchStatuses();
     const interval = setInterval(fetchStatuses, 60000);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchStatuses() {

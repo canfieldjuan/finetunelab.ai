@@ -17,7 +17,7 @@ function makeRequest(body: unknown, headers?: Record<string, string>) {
     }),
   };
 
-  return request as any;
+  return request as unknown;
 }
 
 describe('POST app/api/training/local/metrics', () => {
@@ -183,7 +183,7 @@ describe('POST app/api/training/local/metrics', () => {
     expect(metricsInsertQuery.insert).toHaveBeenCalledTimes(1);
     expect(jobsUpdate).toHaveBeenCalledTimes(1);
 
-    const updateArg = (jobsUpdate.mock.calls[0] as any[])?.[0];
+    const updateArg = (jobsUpdate.mock.calls[0] as unknown[])?.[0];
     expect(updateArg).toMatchObject({
       current_step: 2,
       current_epoch: 0,

@@ -1084,12 +1084,12 @@ async function evaluateMessages(
     // Calculate summary statistics
     const evaluations = judgeData.evaluations || [];
     const totalEvaluations = evaluations.length;
-    const passedCount = evaluations.filter((e: any) => e.passed).length;
+    const passedCount = evaluations.filter((e: Record<string, unknown>) => e.passed).length;
     const passRate = totalEvaluations > 0 ? (passedCount / totalEvaluations) * 100 : 0;
 
     // Calculate average scores per criterion
     const criterionScores: Record<string, number[]> = {};
-    evaluations.forEach((evaluation: any) => {
+    evaluations.forEach((evaluation: Record<string, unknown>) => {
       if (!criterionScores[evaluation.criterion]) {
         criterionScores[evaluation.criterion] = [];
       }
@@ -1103,7 +1103,7 @@ async function evaluateMessages(
     });
 
     // Identify failed evaluations
-    const failedEvaluations = evaluations.filter((e: any) => !e.passed);
+    const failedEvaluations = evaluations.filter((e: Record<string, unknown>) => !e.passed);
 
     // Return structured summary for the assistant
     return {
@@ -1117,7 +1117,7 @@ async function evaluateMessages(
         judge_model: judgeModel,
       },
       average_scores: averageScores,
-      failed_evaluations: failedEvaluations.map((e: any) => ({
+      failed_evaluations: failedEvaluations.map((e: Record<string, unknown>) => ({
         message_id: e.message_id,
         criterion: e.criterion,
         score: e.score,
@@ -1125,7 +1125,7 @@ async function evaluateMessages(
       })),
       criteria_evaluated: actualCriteria,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AnalyticsAPI] Error in evaluateMessages:', error);
     return {
       error: true,
@@ -1135,7 +1135,7 @@ async function evaluateMessages(
 }
 
 // Tool call handler
-async function executeAnalyticsTool(toolName: string, args: Record<string, unknown>, userId: string, authHeader?: string, authClient?: any) {
+async function executeAnalyticsTool(toolName: string, args: Record<string, unknown>, userId: string, authHeader?: string, authClient?: unknown) {
   console.log('[AnalyticsAPI] Executing tool:', toolName, 'with args:', JSON.stringify(args).slice(0, 100));
 
   try {
