@@ -158,6 +158,7 @@ fi
 # Create GitHub release
 log "Creating GitHub release..."
 gh release create "$VERSION" \
+  --repo FineTune-Lab/training-agent \
   --title "Training Agent $VERSION" \
   --notes-file "$RELEASE_NOTES" \
   "$BUILD_DIR/training-agent-linux-amd64.tar.gz" \
