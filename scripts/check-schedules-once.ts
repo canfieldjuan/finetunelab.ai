@@ -150,7 +150,8 @@ async function executeSchedule(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'x-service-role-key': supabaseServiceKey,
+        'x-user-id': schedule.user_id,
       },
       body: JSON.stringify({
         config: schedule.batch_test_config,
