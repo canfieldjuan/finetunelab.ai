@@ -9,7 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateApiKey } from '@/lib/auth/api-key-generator';
 import type { ApiKeyScope } from '@/lib/auth/api-key-validator';
 
-const VALID_SCOPES: ApiKeyScope[] = ['all', 'training', 'production', 'testing'];
+const VALID_SCOPES: ApiKeyScope[] = ['all', 'training', 'production', 'testing', 'worker'];
 
 export const runtime = 'nodejs';
 
