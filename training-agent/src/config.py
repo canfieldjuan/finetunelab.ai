@@ -11,6 +11,13 @@ class Settings(BaseSettings):
 
     # Backend Configuration
     backend_url: str = "http://localhost:3000"
+    api_key: str  # Worker API key (required, starts with wak_)
+
+    # Worker Identification
+    worker_hostname: Optional[str] = None  # Auto-detect if None
+    worker_platform: Optional[str] = None  # Auto-detect if None (linux/darwin/windows)
+    worker_version: str = "0.1.0"
+    worker_capabilities: list[str] = ["training"]
 
     # Server Configuration
     host: str = "0.0.0.0"

@@ -6,9 +6,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { nanoid } from 'nanoid';
+import { customAlphabet } from 'nanoid';
+import { validateApiKey } from '@/lib/auth/api-key-validator';
 
 export const runtime = 'nodejs';
+
+// Generate worker_id with lowercase alphanumeric characters only (matches DB constraint)
+const generateWorkerId = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 24);
 
 interface RegisterWorkerRequest {
   api_key: string;
@@ -68,15 +72,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Step 1: Validate API key and check worker scope
-    const { data: keyData, error: keyError } = await supabase
-      .from('user_api_keys')
-      .select('id, user_id, worker_id, scopes, is_active')
-      .eq('key_value', body.api_key)
-      .eq('is_active', true)
-      .single();
+    // Step 1: Validate API key using proper hash verification
+    console.log('[Worker Register] Validating API key');
+    const validation = await validateApiKey(body.api_key);
 
-    if (keyError || !keyData) {
+    if (!validation.isValid || !validation.userId || !validation.keyId) {
       console.log('[Worker Register] Invalid API key');
       return NextResponse.json(
         { error: 'Invalid or inactive API key' },
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check worker scope
-    const scopes = keyData.scopes as string[];
+    const scopes = validation.scopes || [];
     if (!scopes.includes('worker') && !scopes.includes('all')) {
       console.log('[Worker Register] API key missing worker scope');
       return NextResponse.json(
@@ -94,12 +94,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Fetch worker_id from the API key record
+    const { data: keyData, error: keyError } = await supabase
+      .from('user_api_keys')
+      .select('worker_id')
+      .eq('id', validation.keyId)
+      .single();
+
+    if (keyError) {
+      console.error('[Worker Register] Failed to fetch API key data:', keyError);
+      return NextResponse.json(
+        { error: 'Failed to fetch API key data' },
+        { status: 500 }
+      );
+    }
+
     // Step 2: Generate worker_id if not already associated
     let workerId = keyData.worker_id;
 
     if (!workerId) {
-      // Generate new worker_id
-      workerId = `wkr_${nanoid(24)}`;
+      // Generate new worker_id (lowercase alphanumeric only, matches DB constraint)
+      workerId = `wkr_${generateWorkerId()}`;
 
       // Update API key with worker_id
       const { error: updateError } = await supabase
@@ -113,7 +128,7 @@ export async function POST(request: NextRequest) {
             registered_at: new Date().toISOString(),
           },
         })
-        .eq('id', keyData.id);
+        .eq('id', validation.keyId);
 
       if (updateError) {
         console.error('[Worker Register] Failed to update API key:', updateError);
@@ -162,8 +177,8 @@ export async function POST(request: NextRequest) {
         .from('worker_agents')
         .insert({
           worker_id: workerId,
-          user_id: keyData.user_id,
-          api_key_id: keyData.id,
+          user_id: validation.userId,
+          api_key_id: validation.keyId,
           hostname: body.hostname,
           platform: body.platform,
           version: body.version,

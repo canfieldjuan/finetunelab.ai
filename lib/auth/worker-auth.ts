@@ -9,6 +9,7 @@
 import { NextRequest } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { validateApiKey } from './api-key-validator';
 
 const SIGNATURE_HEADER = 'x-worker-signature';
 const WORKER_ID_HEADER = 'x-worker-id';
@@ -171,26 +172,32 @@ export async function authenticateWorkerApiKey(
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Query for API key with worker scope
-  // Note: We store the raw API key for worker keys (not hashed) for simplicity
-  // In production, consider using hashed keys with bcrypt like regular API keys
-  const { data: keyData, error } = await supabase
-    .from('user_api_keys')
-    .select('id, user_id, worker_id, scopes, is_active')
-    .eq('key_value', apiKey)
-    .eq('is_active', true)
-    .single();
+  // Validate API key using proper hash verification
+  console.log('[Worker API Key Auth] Validating API key');
+  const validation = await validateApiKey(apiKey);
 
-  if (error || !keyData) {
+  if (!validation.isValid || !validation.userId || !validation.keyId) {
     console.log('[Worker API Key Auth] Invalid API key');
     return { ok: false, status: 401, error: 'Invalid or inactive API key' };
   }
 
   // Check worker scope
-  const scopes = keyData.scopes as string[];
+  const scopes = validation.scopes || [];
   if (!scopes.includes('worker') && !scopes.includes('all')) {
     console.log('[Worker API Key Auth] API key missing worker scope');
     return { ok: false, status: 403, error: 'API key does not have worker scope' };
+  }
+
+  // Fetch worker_id from the API key record
+  const { data: keyData, error: keyError } = await supabase
+    .from('user_api_keys')
+    .select('worker_id')
+    .eq('id', validation.keyId)
+    .single();
+
+  if (keyError || !keyData) {
+    console.error('[Worker API Key Auth] Failed to fetch API key data:', keyError);
+    return { ok: false, status: 500, error: 'Failed to fetch API key data' };
   }
 
   // Validate worker_id
@@ -200,22 +207,22 @@ export async function authenticateWorkerApiKey(
   }
 
   // Update last_used_at asynchronously (fire and forget)
-  supabase.rpc('update_api_key_usage', { p_key_id: keyData.id }).then(({ error: updateError }) => {
+  supabase.rpc('update_api_key_usage', { p_key_id: validation.keyId }).then(({ error: updateError }) => {
     if (updateError) {
       console.warn('[Worker API Key Auth] Failed to update usage:', updateError);
     }
   });
 
   console.log('[Worker API Key Auth] Authentication successful:', {
-    userId: keyData.user_id,
+    userId: validation.userId,
     workerId: keyData.worker_id,
   });
 
   return {
     ok: true,
-    userId: keyData.user_id,
+    userId: validation.userId,
     workerId: keyData.worker_id,
-    keyId: keyData.id,
+    keyId: validation.keyId,
   };
 }
 
