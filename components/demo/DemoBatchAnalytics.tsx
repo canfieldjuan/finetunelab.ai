@@ -125,7 +125,10 @@ export function DemoBatchAnalytics({ sessionId, modelName, onExportClick }: Demo
           <AlertCircle className="h-12 w-12 text-destructive mb-4" />
           <p className="text-lg font-medium mb-2">Failed to Load Results</p>
           <p className="text-sm text-muted-foreground mb-4">{error}</p>
-          <Button onClick={onExportClick} variant="outline">
+          <Button
+            onClick={onExportClick}
+            className="bg-green-400 hover:bg-green-500 text-white border border-green-300"
+          >
             Continue to Export
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
@@ -146,7 +149,10 @@ export function DemoBatchAnalytics({ sessionId, modelName, onExportClick }: Demo
               {modelName && ` • ${modelName}`}
             </p>
           </div>
-          <Button onClick={onExportClick}>
+          <Button
+            onClick={onExportClick}
+            className="bg-green-400 hover:bg-green-500 text-white border border-green-300"
+          >
             Continue to Export
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
