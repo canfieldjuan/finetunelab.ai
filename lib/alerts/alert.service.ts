@@ -342,7 +342,7 @@ export class AlertService {
     userId: string,
     limit: number = 50,
     offset: number = 0
-  ): Promise<{ alerts: unknown[]; total: number }> {
+  ): Promise<{ alerts: any[]; total: number }> {
     const { data, error, count } = await this.supabase
       .from('alert_history')
       .select('*', { count: 'exact' })

@@ -77,6 +77,8 @@ export interface DemoBatchTestResult {
   success: boolean;
   error?: string;
   model_id?: string;
+  input_tokens?: number;
+  output_tokens?: number;
   created_at: string;
 }
 
@@ -397,8 +399,6 @@ export interface DemoV2Session {
  */
 export interface DemoV2BatchTestResult extends DemoBatchTestResult {
   demo_session_id: string;
-  input_tokens?: number;
-  output_tokens?: number;
 }
 
 /**

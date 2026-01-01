@@ -20,9 +20,10 @@ import {
 import { ModelConfigForm } from '@/components/demo/ModelConfigForm';
 import { BatchTestProgress } from '@/components/demo/BatchTestProgress';
 import { DemoAtlasChat } from '@/components/demo/DemoAtlasChat';
+import { DemoBatchAnalytics } from '@/components/demo/DemoBatchAnalytics';
 import type { DemoTestSuite, TaskDomain, ConfigureModelResponse } from '@/lib/demo/types';
 
-type DemoStep = 'welcome' | 'task_selection' | 'model_config' | 'batch_test' | 'atlas_chat' | 'export';
+type DemoStep = 'welcome' | 'task_selection' | 'model_config' | 'batch_test' | 'atlas_chat' | 'analytics' | 'export';
 
 const TASK_DOMAINS: { domain: TaskDomain; label: string; description: string; icon: React.ElementType }[] = [
   { domain: 'customer_support', label: 'Customer Support', description: 'Help desk and support queries', icon: MessageSquare },
@@ -138,7 +139,7 @@ export default function DemoTestModelPage() {
   };
 
   // Navigation helpers
-  const canGoBack = step !== 'welcome' && step !== 'export';
+  const canGoBack = step !== 'welcome' && step !== 'analytics' && step !== 'export';
   const goBack = () => {
     switch (step) {
       case 'task_selection':
@@ -152,6 +153,9 @@ export default function DemoTestModelPage() {
         break;
       case 'atlas_chat':
         setStep('batch_test');
+        break;
+      case 'analytics':
+        setStep('atlas_chat');
         break;
     }
   };
@@ -299,10 +303,10 @@ export default function DemoTestModelPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center max-w-3xl mx-auto">
               <p className="text-sm text-muted-foreground">
-                Chat with your model to analyze batch test results
+                Chat with Atlas to analyze batch test results
               </p>
-              <Button variant="outline" size="sm" onClick={() => setStep('export')}>
-                Continue to Export
+              <Button variant="outline" size="sm" onClick={() => setStep('analytics')}>
+                View Full Analysis
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -310,7 +314,20 @@ export default function DemoTestModelPage() {
               <DemoAtlasChat
                 sessionId={sessionConfig.session_id}
                 modelName={sessionConfig.model_name}
-                onExportRequest={() => setStep('export')}
+                onExportRequest={() => setStep('analytics')}
+              />
+            )}
+          </div>
+        );
+
+      case 'analytics':
+        return (
+          <div className="space-y-6">
+            {sessionConfig && (
+              <DemoBatchAnalytics
+                sessionId={sessionConfig.session_id}
+                modelName={sessionConfig.model_name}
+                onExportClick={() => setStep('export')}
               />
             )}
           </div>
@@ -412,6 +429,7 @@ export default function DemoTestModelPage() {
     { key: 'model_config', label: 'Connect' },
     { key: 'batch_test', label: 'Test' },
     { key: 'atlas_chat', label: 'Chat' },
+    { key: 'analytics', label: 'Analytics' },
     { key: 'export', label: 'Export' },
   ];
 
