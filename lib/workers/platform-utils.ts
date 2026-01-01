@@ -22,29 +22,30 @@ export function detectPlatform(): Platform {
 
 /**
  * Get download information for all platforms
+ * @param version - Training agent version (defaults to env var or 'v0.1.2')
  */
-export function getPlatformDownloads(version: string = 'v0.1.0'): PlatformDownload[] {
-  const baseUrl = `https://github.com/FineTune-Lab/training-agent/releases/download/${version}`;
-
+export function getPlatformDownloads(
+  version: string = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.1.3'
+): PlatformDownload[] {
   return [
     {
       platform: 'linux',
       label: 'Linux (AMD64)',
-      url: `${baseUrl}/training-agent-linux-amd64.tar.gz`,
+      url: '/api/workers/download/linux',
       filename: 'training-agent-linux-amd64.tar.gz',
       icon: 'Terminal',
     },
     {
       platform: 'darwin',
       label: 'macOS (AMD64)',
-      url: `${baseUrl}/training-agent-darwin-amd64.tar.gz`,
+      url: '/api/workers/download/darwin',
       filename: 'training-agent-darwin-amd64.tar.gz',
       icon: 'Apple',
     },
     {
       platform: 'windows',
       label: 'Windows (AMD64)',
-      url: `${baseUrl}/training-agent-windows-amd64.zip`,
+      url: '/api/workers/download/windows',
       filename: 'training-agent-windows-amd64.zip',
       icon: 'MonitorSmartphone',
     },
@@ -58,33 +59,34 @@ export function getSetupInstructions(platform: Platform, apiKey: string): string
   const instructions = {
     linux: `# Step 1: Extract the downloaded file
 cd ~/Downloads
-tar -xzf training-agent-linux-amd64.tar.gz
+mkdir -p training-agent
+tar -xzf training-agent-linux-amd64.tar.gz -C training-agent
 cd training-agent
 
 # Step 2: Run installer with API key
 chmod +x scripts/install.sh
 API_KEY="${apiKey}" ./scripts/install.sh
 
-# Step 3: Fix permissions and start the agent
-chmod +x ~/.finetunelab/training-agent/scripts/agentctl
+# Step 3: Start the agent
 ~/.finetunelab/training-agent/scripts/agentctl start`,
 
     darwin: `# Step 1: Extract the downloaded file
 cd ~/Downloads
-tar -xzf training-agent-darwin-amd64.tar.gz
+mkdir -p training-agent
+tar -xzf training-agent-darwin-amd64.tar.gz -C training-agent
 cd training-agent
 
 # Step 2: Run installer with API key
 chmod +x scripts/install.sh
 API_KEY="${apiKey}" ./scripts/install.sh
 
-# Step 3: Fix permissions and start the agent
-chmod +x ~/.finetunelab/training-agent/scripts/agentctl
+# Step 3: Start the agent
 ~/.finetunelab/training-agent/scripts/agentctl start`,
 
     windows: `# Step 1: Extract the downloaded file (PowerShell)
 cd $env:USERPROFILE\\Downloads
-Expand-Archive -Path training-agent-windows-amd64.zip -DestinationPath .
+New-Item -ItemType Directory -Force -Path training-agent
+Expand-Archive -Path training-agent-windows-amd64.zip -DestinationPath training-agent
 cd training-agent
 
 # Step 2: Run installer with API key
