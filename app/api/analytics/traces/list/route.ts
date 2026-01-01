@@ -183,17 +183,17 @@ export async function GET(req: NextRequest) {
 
     // Apply post-enrichment filters (quality_score is computed, not in DB)
     if (hasQualityScore === 'true') {
-      enrichedTraces = enrichedTraces.filter((t: Record<string, unknown>) => t.quality_score != null);
+      enrichedTraces = (enrichedTraces as Record<string, unknown>[]).filter((t) => t.quality_score != null);
     } else if (hasQualityScore === 'false') {
-      enrichedTraces = enrichedTraces.filter((t: Record<string, unknown>) => t.quality_score == null);
+      enrichedTraces = (enrichedTraces as Record<string, unknown>[]).filter((t) => t.quality_score == null);
     }
 
     const minQualityScore = searchParams.get('min_quality_score');
     if (minQualityScore) {
       const minQualityNum = parseFloat(minQualityScore);
       if (!isNaN(minQualityNum)) {
-        enrichedTraces = enrichedTraces.filter((t: Record<string, unknown>) =>
-          t.quality_score != null && t.quality_score >= minQualityNum
+        enrichedTraces = (enrichedTraces as Record<string, unknown>[]).filter((t) =>
+          t.quality_score != null && (t.quality_score as number) >= minQualityNum
         );
       }
     }
