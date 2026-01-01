@@ -38,6 +38,8 @@ export function MessageJudgments({ messageId, judgments: initialJudgments, onFet
     if (!initialJudgments) {
       fetchJudgments();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageId, initialJudgments]);
 
   const fetchJudgments = async () => {

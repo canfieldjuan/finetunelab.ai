@@ -47,7 +47,7 @@ function getDateRange(timeRange: TimeRange): { startDate: Date; endDate: Date } 
  * Aggregate success rate by day from evaluations
  */
 async function aggregateSuccessRateByDay(
-  supabase: any,
+  supabase: unknown,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -97,7 +97,7 @@ async function aggregateSuccessRateByDay(
  * Aggregate average rating by day from evaluations
  */
 async function aggregateAvgRatingByDay(
-  supabase: any,
+  supabase: unknown,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -144,7 +144,7 @@ async function aggregateAvgRatingByDay(
  * Aggregate P95 response time by day from messages
  */
 async function aggregateResponseTimeP95ByDay(
-  supabase: any,
+  supabase: unknown,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -197,7 +197,7 @@ async function aggregateResponseTimeP95ByDay(
  * Aggregate SLA breach rate by day (% of responses > 2000ms)
  */
 async function aggregateSLABreachRateByDay(
-  supabase: any,
+  supabase: unknown,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -307,8 +307,8 @@ export async function GET(req: NextRequest) {
     // Fetch appropriate metric data
     let historical: HistoricalDataPoint[] = [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabaseAny = supabase as any;
+     
+    const supabaseAny = supabase as unknown;
 
     switch (metric) {
       case 'success_rate':

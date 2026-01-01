@@ -223,7 +223,7 @@ async function fixToolSchemas() {
 
   console.log('\n[FixToolSchemas] Verification Results:');
   data?.forEach(tool => {
-    const params = tool.parameters as any;
+    const params = tool.parameters as unknown;
     const hasInvalidRequired = params?.properties?.operation?.required !== undefined;
     const hasValidRequired = Array.isArray(params?.required);
 

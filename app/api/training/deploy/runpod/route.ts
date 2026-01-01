@@ -266,7 +266,7 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   let jobId: string | undefined;
-  let supabase: any;
+  let supabase: unknown;
 
   try {
     console.log('[RunPod API] Received deployment request');
@@ -366,7 +366,7 @@ export async function POST(request: NextRequest) {
         let hfUsername =
           hfSecret.metadata?.huggingface?.username ||  // Expected path
           hfSecret.metadata?.username ||                // Alternative path
-          (hfSecret.metadata as any)?.hf_username;      // Another alternative
+          (hfSecret.metadata as unknown)?.hf_username;      // Another alternative
 
         console.log('[RunPod API] Extracted username:', hfUsername);
 

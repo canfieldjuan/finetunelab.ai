@@ -145,7 +145,7 @@ async function main() {
     
     console.log('\n✓ All tests passed!');
     process.exit(0);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('\n✗ Execution failed:', error.message);
     process.exit(1);
   }

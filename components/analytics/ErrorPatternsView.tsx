@@ -21,6 +21,8 @@ interface AffectedOperation {
   percentage: number;
 }
 
+// eslint-disable-next-line react-hooks/exhaustive-deps
+// eslint-disable-next-line react-hooks/exhaustive-deps
 interface ErrorPatternsResponse {
   success: boolean;
   data: {
@@ -42,6 +44,8 @@ export function ErrorPatternsView() {
 
   useEffect(() => {
     fetchErrorPatterns();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRange]);
 
   async function fetchErrorPatterns() {

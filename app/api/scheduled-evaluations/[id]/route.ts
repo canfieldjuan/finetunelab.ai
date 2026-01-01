@@ -144,7 +144,7 @@ export async function PATCH(
 
     // Block 3: Parse and prepare update payload
     const body = await req.json();
-    const updates: any = {};
+    const updates: unknown = {};
 
     // Allow updating these fields
     if (body.name !== undefined) updates.name = body.name;

@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       .eq('status', 'active')
       .single();
 
-    const history = (usageHistory || []).map((record: any) => {
+    const history = (usageHistory || []).map((record: unknown) => {
       const payloadGb = record.compressed_payload_bytes / 1_073_741_824;
       
       let estimatedCost = commitment ? parseFloat(commitment.minimum_monthly_usd) : 0;

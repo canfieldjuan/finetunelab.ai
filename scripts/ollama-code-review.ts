@@ -128,11 +128,11 @@ async function checkModelExists(): Promise<void> {
     const data = await response.json();
     const models = data.models || [];
 
-    const modelExists = models.some((m: any) => m.name === MODEL);
+    const modelExists = models.some((m: unknown) => m.name === MODEL);
 
     if (!modelExists) {
       console.error(`\n❌ Error: Model "${MODEL}" not found`);
-      console.error(`   Available models: ${models.map((m: any) => m.name).join(', ')}`);
+      console.error(`   Available models: ${models.map((m: unknown) => m.name).join(', ')}`);
       console.error(`\n   Pull the model with: ollama pull ${MODEL}\n`);
       process.exit(1);
     }
@@ -162,7 +162,7 @@ async function main() {
         stdio: 'pipe'
       });
       console.log(`  ✅ ${file}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log(`\n${'='.repeat(80)}`);
       console.log(`❌ SYNTAX ERROR IN: ${file}`);
       console.log('='.repeat(80));

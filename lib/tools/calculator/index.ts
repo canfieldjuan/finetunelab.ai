@@ -35,7 +35,7 @@ const calculatorTool: ToolDefinition = {
   /**
    * Execute calculator operation
    */
-  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: unknown) {
     const { expression } = params;
 
     if (!expression || typeof expression !== 'string') {

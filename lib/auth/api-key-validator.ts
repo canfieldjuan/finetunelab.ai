@@ -412,8 +412,8 @@ export async function validateRequestWithScope(
  * @param keyId - The API key ID to update
  */
 async function updateApiKeyUsage(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+   
+  supabase: unknown,
   keyId: string
 ): Promise<void> {
   try {

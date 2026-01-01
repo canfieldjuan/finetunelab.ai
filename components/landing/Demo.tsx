@@ -15,7 +15,7 @@ export function Demo() {
           </h2>
           <p className="text-xl text-gray-600 dark:text-gray-300">
             Try our chat interface right now. Ask questions about Fine Tune Lab, model training,
-            or anything else. This is powered by the same technology you'll use in production.
+            or anything else. This is powered by the same technology you&apos;ll use in production.
           </p>
         </div>
 

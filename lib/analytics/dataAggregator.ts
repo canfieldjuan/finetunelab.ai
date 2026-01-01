@@ -248,7 +248,7 @@ export async function aggregateQualityMetrics(
     console.log('[DataAggregator] Querying message_evaluations in', batches.length, 'batches');
 
     // Query each batch and combine results
-    const allEvaluations: any[] = [];
+    const allEvaluations: unknown[] = [];
     for (const batch of batches) {
       const { data, error } = await supabase
         .from('message_evaluations')

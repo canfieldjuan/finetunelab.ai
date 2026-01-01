@@ -665,7 +665,7 @@ async function processBackgroundBatch(
   // HuggingFace Inference API doesn't support OpenAI-style function calling
   const providerSupportsTools = modelProvider && !['huggingface', 'replicate'].includes(modelProvider.toLowerCase());
 
-  let tools: any[] = [];
+  let tools: unknown[] = [];
   if (providerSupportsTools) {
     console.log('[Background Batch] Fetching enabled tools (provider supports function calling)');
     const { data: userTools, error: toolsError } = await supabaseAdmin
@@ -963,7 +963,7 @@ async function processSinglePrompt(
 
         if (judgeResponse.ok) {
           const judgeData = await judgeResponse.json();
-          const avgScore = judgeData.evaluations?.reduce((sum: number, e: any) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);
+          const avgScore = judgeData.evaluations?.reduce((sum: number, e: unknown) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);
           console.log(`[Process Prompt] ${promptIndex + 1}: Judge evaluation complete, avg score: ${avgScore.toFixed(1)}/10 (${(avgScore / 10 * 100).toFixed(0)}%)`);
         } else {
           const judgeError = await judgeResponse.text();

@@ -36,7 +36,7 @@ async function verifyTable(tableName: string): Promise<boolean> {
     console.log(`[Verify] Current row count: ${data?.length || 0}`);
     return true;
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[Verify] Unexpected error for ${tableName}:`, err.message);
     return false;
   }

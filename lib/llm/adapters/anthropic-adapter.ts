@@ -229,8 +229,8 @@ export class AnthropicAdapter extends BaseProviderAdapter {
       ? {
           input_tokens: body.usage.input_tokens || 0,
           output_tokens: body.usage.output_tokens || 0,
-          cache_creation_input_tokens: (body.usage as any).cache_creation_input_tokens,
-          cache_read_input_tokens: (body.usage as any).cache_read_input_tokens,
+          cache_creation_input_tokens: (body.usage as unknown).cache_creation_input_tokens,
+          cache_read_input_tokens: (body.usage as unknown).cache_read_input_tokens,
         }
       : undefined;
 

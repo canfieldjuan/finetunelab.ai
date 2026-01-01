@@ -6,39 +6,29 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getAlertService } from '@/lib/alerts';
 
 export const runtime = 'nodejs';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-async function getAuthenticatedUser(request: NextRequest) {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return { user: null, error: 'Server configuration error' };
-  }
-
+export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   if (!authHeader) {
-    return { user: null, error: 'Unauthorized' };
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) {
-    return { user: null, error: 'Unauthorized' };
-  }
-
-  return { user, error: null };
-}
-
-export async function GET(request: NextRequest): Promise<NextResponse> {
-  const { user, error } = await getAuthenticatedUser(request);
-  if (!user) {
-    return NextResponse.json({ error }, { status: 401 });
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const searchParams = request.nextUrl.searchParams;
@@ -46,17 +36,30 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const offset = parseInt(searchParams.get('offset') || '0', 10);
 
   try {
-    const alertService = getAlertService();
-    const { alerts, total } = await alertService.getAlertHistory(user.id, limit, offset);
+    const supabase = createClient(supabaseUrl!, supabaseAnonKey!, {
+      global: { headers: { Authorization: request.headers.get('authorization')! } },
+    });
+
+    const { data, error, count } = await supabase
+      .from('alert_history')
+      .select('*', { count: 'exact' })
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      console.error('[AlertHistoryAPI] Error:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     return NextResponse.json({
-      alerts,
-      total,
+      alerts: data || [],
+      total: count || 0,
       limit,
       offset,
     });
   } catch (err) {
-    console.error('[AlertHistoryAPI] Error:', err);
+    console.error('[AlertHistoryAPI] Exception:', err);
     return NextResponse.json(
       { error: 'Failed to fetch alert history' },
       { status: 500 }

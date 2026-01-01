@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Get current commitment/tier
-    let { data: commitment, error: commitmentError } = await supabase
+    const { data: commitment, error: commitmentError } = await supabase
       .from('usage_commitments')
       .select('*')
       .eq('user_id', user.id)

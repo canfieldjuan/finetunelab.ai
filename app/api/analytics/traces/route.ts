@@ -366,8 +366,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Block 3: Upsert trace into database (use upsert to handle race conditions)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: trace, error: insertError } = await (supabase as any)
+     
+    const { data: trace, error: insertError } = await (supabase as unknown)
       .from('llm_traces')
       .upsert({
         user_id: userId,
@@ -537,8 +537,8 @@ export async function GET(req: NextRequest) {
     });
 
     // Block 3: Build query
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
+     
+    let query = (supabase as unknown)
       .from('llm_traces')
       .select('*')
       .eq('user_id', userId)
@@ -619,7 +619,7 @@ export async function GET(req: NextRequest) {
 /**
  * Enrich traces with quality data (judgments and user ratings)
  */
-async function enrichTracesWithQualityData(supabase: any, traces: TraceRecord[]): Promise<TraceRecord[]> {
+async function enrichTracesWithQualityData(supabase: unknown, traces: TraceRecord[]): Promise<TraceRecord[]> {
   if (!traces || traces.length === 0) return traces;
 
   const traceIds = traces.map(t => t.trace_id).filter(Boolean);
@@ -656,7 +656,7 @@ async function enrichTracesWithQualityData(supabase: any, traces: TraceRecord[])
   }
 
   return traces.map(trace => {
-    const enriched: any = { ...trace };
+    const enriched: unknown = { ...trace };
     const traceJudgments = judgmentsByTraceId.get(trace.trace_id);
     const traceEval = evaluationsByTraceId.get(trace.trace_id);
 

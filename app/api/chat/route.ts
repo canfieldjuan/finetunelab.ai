@@ -660,7 +660,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             console.log('[API] generateSessionTag returned:', sessionTag);
 
             if (sessionTag) {
-              const updateData: Record<string, any> = {
+              const updateData: Record<string, unknown> = {
                 session_id: sessionTag.session_id,
                 experiment_name: sessionTag.experiment_name
               };

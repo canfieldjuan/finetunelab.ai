@@ -40,7 +40,7 @@ export function Pricing() {
         </div>
 
         <PricingTiers
-          currentPlan={null as any}
+          currentPlan={null as unknown}
           onUpgrade={handleUpgrade}
           onContactSales={handleContactSales}
         />

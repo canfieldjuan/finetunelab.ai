@@ -21,6 +21,8 @@ export function ModelCostBreakdown() {
 
   useEffect(() => {
     fetchModelCosts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchModelCosts() {

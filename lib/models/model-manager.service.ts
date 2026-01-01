@@ -301,8 +301,8 @@ class ModelManagerService {
       // Passing a client from the caller ensures proper access to user-specific models
       const supabaseClient = client || supabaseAdmin || defaultSupabase;
 
-      let data: any | null = null;
-      let error: any | null = null;
+      let data: unknown | null = null;
+      let error: unknown | null = null;
 
       if (isUUID) {
         ({ data, error } = await supabaseClient

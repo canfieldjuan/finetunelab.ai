@@ -113,7 +113,7 @@ const emailAnalysisTool: ToolDefinition = {
   /**
    * Execute email analysis operation
    */
-  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: any) {
+  async execute(params: Record<string, unknown>, _conversationId?: string, _userId?: string, _supabaseClient?: unknown, _traceContext?: unknown) {
     const action = params.action as string;
 
     console.log('[EmailAnalysis] Executing action:', action);

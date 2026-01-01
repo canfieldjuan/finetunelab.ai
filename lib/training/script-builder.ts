@@ -11,7 +11,7 @@ export class ScriptBuilder {
     modelName: string,
     datasetPath: string,
     trainingConfig: TrainingConfig
-  ): any {
+  ): unknown {
     const training = trainingConfig.training as AdvancedTrainingConfig;
     const data = trainingConfig.data;
     const model = trainingConfig.model;
@@ -108,7 +108,7 @@ export class ScriptBuilder {
    * Generate the bash script for RunPod execution
    */
   static generateRunPodScript(
-    config: any,
+    config: unknown,
     huggingFaceToken: string,
     wandbKey: string | undefined,
     jobId: string
@@ -317,7 +317,7 @@ fi
    */
   /*
   static generateLocalScript(
-    config: any,
+    config: unknown,
     outputPath: string
   ): string {
     return "";

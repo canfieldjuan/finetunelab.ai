@@ -19,7 +19,7 @@ interface PromptVersion {
   tags?: string[];
   success_rate?: number | null;
   avg_rating?: number | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_at?: string;
   updated_at?: string;
 }

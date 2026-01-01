@@ -125,7 +125,7 @@ function extractModelName(dirName: string, relativePath: string): string {
   const lowercaseAuthorPattern = /^([a-z][a-z0-9-]*?)-([A-Z].+)$/;
   const lowercaseMatch = dirName.match(lowercaseAuthorPattern);
   if (lowercaseMatch) {
-    let [, author, modelName] = lowercaseMatch;
+    const [, author, modelName] = lowercaseMatch;
 
     // Clean up version suffixes from modelName
     modelName = modelName

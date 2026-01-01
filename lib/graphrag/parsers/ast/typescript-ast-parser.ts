@@ -9,8 +9,13 @@ import * as t from '@babel/types';
 import type { CodeEntity, CodeRelation, CodeChunk } from '../../types';
 import { BaseASTParser, type ASTParseResult } from './base-ast-parser';
 
+
+// Type definitions for Babel AST nodes
+type BabelAST = t.File;
+type BabelPath = unknown; // Babel traverse path type
+type BabelNode = t.Node;
 export class TypeScriptASTParser extends BaseASTParser {
-  private ast: any;
+  private ast: BabelAST;
   private language: 'typescript' | 'javascript';
 
   constructor(filePath: string, content: string, language: 'typescript' | 'javascript') {
@@ -175,7 +180,7 @@ export class TypeScriptASTParser extends BaseASTParser {
   }
 
   // Helper methods
-  private extractFunction(path: any): CodeEntity | null {
+  private extractFunction(path: BabelPath): CodeEntity | null {
     const node = path.node;
     const loc = node.loc;
 
@@ -191,7 +196,7 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private extractFunctionFromVariable(path: any, decl: any): CodeEntity | null {
+  private extractFunctionFromVariable(path: BabelPath, decl: BabelNode): CodeEntity | null {
     const loc = path.node.loc;
     if (!loc || !t.isIdentifier(decl.id)) return null;
 
@@ -205,7 +210,7 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private extractClass(path: any): CodeEntity | null {
+  private extractClass(path: BabelPath): CodeEntity | null {
     const node = path.node;
     const loc = node.loc;
 
@@ -221,7 +226,7 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private extractInterface(path: any): CodeEntity | null {
+  private extractInterface(path: BabelPath): CodeEntity | null {
     const node = path.node;
     const loc = node.loc;
 
@@ -237,7 +242,7 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private extractTypeAlias(path: any): CodeEntity | null {
+  private extractTypeAlias(path: BabelPath): CodeEntity | null {
     const node = path.node;
     const loc = node.loc;
 
@@ -252,7 +257,7 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private createFunctionChunk(path: any): CodeChunk {
+  private createFunctionChunk(path: BabelPath): CodeChunk {
     const node = path.node;
     const loc = node.loc;
 
@@ -269,7 +274,7 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private createClassChunk(path: any): CodeChunk {
+  private createClassChunk(path: BabelPath): CodeChunk {
     const node = path.node;
     const loc = node.loc;
 
@@ -286,7 +291,7 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private createInterfaceChunk(path: any): CodeChunk {
+  private createInterfaceChunk(path: BabelPath): CodeChunk {
     const node = path.node;
     const loc = node.loc;
 
@@ -303,7 +308,7 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private createTypeChunk(path: any): CodeChunk {
+  private createTypeChunk(path: BabelPath): CodeChunk {
     const node = path.node;
     const loc = node.loc;
 
@@ -320,8 +325,8 @@ export class TypeScriptASTParser extends BaseASTParser {
     };
   }
 
-  private generateFunctionSignature(node: any): string {
-    const params = node.params.map((p: any) => {
+  private generateFunctionSignature(node: BabelNode): string {
+    const params = node.params.map((p: BabelNode) => {
       if (t.isIdentifier(p)) {
         return p.name;
       } else if (t.isObjectPattern(p)) {
@@ -335,8 +340,8 @@ export class TypeScriptASTParser extends BaseASTParser {
     return `${node.id?.name || 'anonymous'}(${params})`;
   }
 
-  private extractClassMembers(node: any): string[] {
-    return node.body.body.map((member: any) => {
+  private extractClassMembers(node: BabelNode): string[] {
+    return node.body.body.map((member: BabelNode) => {
       if ((t.isClassMethod(member) || t.isClassProperty(member)) && t.isIdentifier(member.key)) {
         return member.key.name;
       }
@@ -344,10 +349,10 @@ export class TypeScriptASTParser extends BaseASTParser {
     }).filter((name: string) => name !== 'unknown');
   }
 
-  private extractInterfaceProperties(node: any): string[] {
+  private extractInterfaceProperties(node: BabelNode): string[] {
     if (!node.body || !node.body.body) return [];
 
-    return node.body.body.map((prop: any) => {
+    return node.body.body.map((prop: BabelNode) => {
       if (prop.key && t.isIdentifier(prop.key)) {
         return prop.key.name;
       }
@@ -355,12 +360,12 @@ export class TypeScriptASTParser extends BaseASTParser {
     }).filter((name: string) => name !== 'unknown');
   }
 
-  private extractDependencies(path: any): string[] {
+  private extractDependencies(path: BabelPath): string[] {
     const deps: string[] = [];
 
     // Traverse the node to find function calls
     path.traverse({
-      CallExpression: (callPath: any) => {
+      CallExpression: (callPath: BabelPath) => {
         if (t.isIdentifier(callPath.node.callee)) {
           deps.push(callPath.node.callee.name);
         } else if (t.isMemberExpression(callPath.node.callee) && t.isIdentifier(callPath.node.callee.property)) {

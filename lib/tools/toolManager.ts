@@ -81,7 +81,7 @@ export async function executeTool(
   messageId?: string,
   userId?: string,
   supabaseClient?: unknown,
-  traceContext?: any
+  traceContext?: unknown
 ): Promise<{ data: unknown; error: string | null; executionTimeMs: number }> {
   console.log('[ToolManager] Executing tool:', toolName, 'with params:', params);
 

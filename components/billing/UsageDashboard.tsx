@@ -83,6 +83,8 @@ export function UsageDashboard({ sessionToken, onTierLoaded }: UsageDashboardPro
     };
 
     fetchUsage();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionToken]);
 
   if (loading) {

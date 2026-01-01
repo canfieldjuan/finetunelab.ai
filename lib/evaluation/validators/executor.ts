@@ -54,7 +54,7 @@ export async function executeValidators(
   benchmarkId: string,
   messageId: string,
   responseContent: string,
-  contentJson: any,
+  contentJson: unknown,
   userId: string,
   supabaseClient?: SupabaseClient | null
 ): Promise<ExecutorResult[]> {

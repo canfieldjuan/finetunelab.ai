@@ -37,7 +37,7 @@ export function ModelComparisonPanel() {
     }
   };
 
-  const updateModel = (index: number, field: keyof ModelConfig, value: any) => {
+  const updateModel = (index: number, field: keyof ModelConfig, value: unknown) => {
     const updated = [...models];
     updated[index] = { ...updated[index], [field]: value };
     setModels(updated);

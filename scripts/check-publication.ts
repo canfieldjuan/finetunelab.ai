@@ -52,7 +52,7 @@ async function checkPublication() {
 
     if (result && result.length > 0) {
       console.log('✅ Tables in supabase_realtime publication:');
-      result.forEach((row: any) => {
+      result.forEach((row: unknown) => {
         console.log(`   - ${row.tablename} (schema: ${row.schemaname})`);
       });
     } else {
@@ -91,12 +91,12 @@ async function checkPublication() {
     if (replicaResponse.ok) {
       const replicaResult = await replicaResponse.json();
       console.log('\n📊 Replica Identity:');
-      replicaResult.forEach((row: any) => {
+      replicaResult.forEach((row: unknown) => {
         console.log(`   - ${row.tablename}: ${row.replica_identity}`);
       });
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }

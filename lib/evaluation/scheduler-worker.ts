@@ -236,7 +236,7 @@ export class EvaluationSchedulerWorker {
    */
   private async callBatchTestAPI(
     userId: string,
-    batchTestConfig: any,
+    batchTestConfig: unknown,
     scheduledEvalId: string
   ): Promise<Response> {
     const url = `${this.appUrl}/api/batch-testing/run`;
@@ -284,7 +284,7 @@ export class EvaluationSchedulerWorker {
       );
 
       // Update schedule
-      const updates: any = {
+      const updates: unknown = {
         last_run_at: new Date().toISOString(),
         last_run_status: status,
         last_run_id: batchTestRunId,
@@ -341,7 +341,7 @@ export class EvaluationSchedulerWorker {
     console.log('[EvalScheduler] Handling failure:', evaluation.id);
     console.log('[EvalScheduler] Consecutive failures:', newConsecutiveFailures);
 
-    const updates: any = {
+    const updates: unknown = {
       last_run_at: new Date().toISOString(),
       last_run_status: 'failed',
       consecutive_failures: newConsecutiveFailures,
@@ -586,7 +586,7 @@ export class EvaluationSchedulerWorker {
    * Calculate metric value from traces
    */
   private calculateMetricValue(
-    traces: any[],
+    traces: unknown[],
     metricType: MetricType,
     aggregationMethod: AggregationMethod
   ): number {

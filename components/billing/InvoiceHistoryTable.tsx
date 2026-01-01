@@ -91,7 +91,7 @@ export function InvoiceHistoryTable({ invoices, loading }: InvoiceHistoryTablePr
   };
 
   const getStatusBadge = (status: Invoice["status"]) => {
-    const variants: Record<Invoice["status"], any> = {
+    const variants: Record<Invoice["status"], unknown> = {
       paid: "default",
       pending: "secondary",
       draft: "outline",

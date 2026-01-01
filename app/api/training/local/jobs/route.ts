@@ -361,7 +361,7 @@ export async function POST(request: NextRequest) {
       console.log('[LocalTrainingJobs] Job persisted successfully:', job_id);
 
       // Extract job_token from persisted data
-      const persistedData = (result as { data: any }).data;
+      const persistedData = (result as { data: unknown }).data;
       const returnedJobToken = persistedData?.job_token;
 
       return NextResponse.json({

@@ -12,7 +12,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const domain = searchParams.get('domain');
+    // Support both 'task_domain' (test-model page) and 'domain' (comparison page)
+    const domain = searchParams.get('task_domain') || searchParams.get('domain');
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
       if (error.code === '42P01') {
         return NextResponse.json({
           testSuites: [],
+          test_suites: [], // Support both naming conventions
           message: 'Demo test suites table not yet created. Run the migration first.',
         });
       }
@@ -46,7 +48,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      testSuites: data || [],
+      testSuites: data || [],      // For comparison page (camelCase)
+      test_suites: data || [],     // For test-model page (snake_case)
       count: data?.length || 0,
     });
   } catch (error) {

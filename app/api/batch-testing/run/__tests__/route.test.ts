@@ -11,7 +11,7 @@ function makeRequest(body: unknown, headers?: Record<string, string>) {
   return {
     headers: new Headers(baseHeaders),
     json: async () => body,
-  } as any;
+  } as unknown;
 }
 
 describe('POST app/api/batch-testing/run', () => {
@@ -25,12 +25,12 @@ describe('POST app/api/batch-testing/run', () => {
   });
 
   it('accepts X-API-Key auth and calls /api/chat with X-API-Key', async () => {
-    const fetchMock = vi.fn(async (_url: string, init?: any) => {
+    const fetchMock = vi.fn(async (_url: string, init?: unknown) => {
       // Ensure the background prompt processing uses API key auth.
       if (typeof _url === 'string' && _url.endsWith('/api/chat')) {
         expect(init?.headers?.['X-API-Key']).toBe('wak_testkey');
       }
-      return { ok: true, text: async () => '' } as any;
+      return { ok: true, text: async () => '' } as unknown;
     });
     // @ts-expect-error - vitest global patching
     globalThis.fetch = fetchMock;
