@@ -50,7 +50,7 @@ export const FineTuneLabFullLogoV2: React.FC<FineTuneLabFullLogoV2Props> = ({
         fontFamily="'Inter', sans-serif"
         fontSize="40"
         fontWeight="600"
-        fill="#000000"
+        fill="currentColor"
       >
         ineTuneLab
       </text>

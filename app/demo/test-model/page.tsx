@@ -21,6 +21,7 @@ import { ModelConfigForm } from '@/components/demo/ModelConfigForm';
 import { BatchTestProgress } from '@/components/demo/BatchTestProgress';
 import { DemoAtlasChat } from '@/components/demo/DemoAtlasChat';
 import { DemoBatchAnalytics } from '@/components/demo/DemoBatchAnalytics';
+import { FineTuneLabFullLogoV2 } from '@/components/branding/FineTuneLabFullLogoV2';
 import type { DemoTestSuite, TaskDomain, ConfigureModelResponse } from '@/lib/demo/types';
 
 type DemoStep = 'welcome' | 'task_selection' | 'model_config' | 'batch_test' | 'atlas_chat' | 'analytics' | 'export';
@@ -168,48 +169,66 @@ export default function DemoTestModelPage() {
           <Card className="w-full max-w-2xl mx-auto">
             <CardHeader className="text-center">
               <div className="flex justify-center mb-4">
-                <div className="p-4 bg-purple-100 dark:bg-purple-900 rounded-full">
-                  <Beaker className="h-12 w-12 text-purple-600" />
+                <div className="p-4 bg-orange-100 dark:bg-orange-900/50 rounded-full">
+                  <Zap className="h-12 w-12 text-orange-600 dark:text-orange-500" />
                 </div>
               </div>
               <CardTitle className="text-2xl">Test Your Fine-Tuned Model</CardTitle>
               <CardDescription className="text-base mt-2">
-                Connect your model, run batch tests, and analyze results with your own AI
+                Connect your model, run test suites, and analyze your model's results using our tracing and analytics systems
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4">
-                <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                  <Badge className="mt-0.5">1</Badge>
+                <div className="flex items-start gap-3 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-100 dark:border-orange-900/30">
+                  <Badge className="mt-0.5 bg-orange-500">1</Badge>
                   <div>
                     <p className="font-medium">Select Test Domain</p>
-                    <p className="text-sm text-muted-foreground">Choose from coding, reasoning, creative, or general tasks</p>
+                    <p className="text-sm text-muted-foreground">Choose from customer support, code generation, Q&A, or creative writing</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                  <Badge className="mt-0.5">2</Badge>
+                <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                  <Badge className="mt-0.5 bg-blue-500">2</Badge>
                   <div>
                     <p className="font-medium">Connect Your Model</p>
                     <p className="text-sm text-muted-foreground">Enter your OpenAI-compatible endpoint and API key</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                  <Badge className="mt-0.5">3</Badge>
+                <div className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-100 dark:border-green-900/30">
+                  <Badge className="mt-0.5 bg-green-500">3</Badge>
                   <div>
-                    <p className="font-medium">Run Batch Test</p>
-                    <p className="text-sm text-muted-foreground">Test against 10 curated prompts and track performance</p>
+                    <p className="font-medium">Run Test Suite</p>
+                    <p className="text-sm text-muted-foreground">Execute 10 curated prompts and watch real-time progress</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                  <Badge className="mt-0.5">4</Badge>
+                <div className="flex items-start gap-3 p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                  <Badge className="mt-0.5 bg-purple-500">4</Badge>
                   <div>
-                    <p className="font-medium">Analyze Results</p>
-                    <p className="text-sm text-muted-foreground">Chat with your model to analyze test results</p>
+                    <p className="font-medium">Chat with Atlas AI</p>
+                    <p className="text-sm text-muted-foreground">Ask Atlas questions about your test results</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-cyan-50 dark:bg-cyan-950/20 rounded-lg border border-cyan-100 dark:border-cyan-900/30">
+                  <Badge className="mt-0.5 bg-cyan-500">5</Badge>
+                  <div>
+                    <p className="font-medium">View Full Analytics</p>
+                    <p className="text-sm text-muted-foreground">Review detailed execution traces and performance metrics</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-pink-50 dark:bg-pink-950/20 rounded-lg border border-pink-100 dark:border-pink-900/30">
+                  <Badge className="mt-0.5 bg-pink-500">6</Badge>
+                  <div>
+                    <p className="font-medium">Export & Clean Up</p>
+                    <p className="text-sm text-muted-foreground">Download results in CSV or JSON and securely delete your data</p>
                   </div>
                 </div>
               </div>
 
-              <Button onClick={() => setStep('task_selection')} className="w-full" size="lg">
+              <Button
+                onClick={() => setStep('task_selection')}
+                className="w-full bg-green-400 hover:bg-green-500 text-white border border-green-300"
+                size="lg"
+              >
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -261,7 +280,11 @@ export default function DemoTestModelPage() {
                 <Button
                   onClick={() => setStep('model_config')}
                   disabled={!selectedDomain || !selectedSuite}
-                  className="flex-1"
+                  className={`flex-1 ${
+                    selectedDomain && selectedSuite
+                      ? 'bg-green-400 hover:bg-green-500 text-white border border-green-300'
+                      : ''
+                  }`}
                 >
                   Continue
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -305,7 +328,11 @@ export default function DemoTestModelPage() {
               <p className="text-sm text-muted-foreground">
                 Chat with Atlas to analyze batch test results
               </p>
-              <Button variant="outline" size="sm" onClick={() => setStep('analytics')}>
+              <Button
+                size="sm"
+                onClick={() => setStep('analytics')}
+                className="bg-green-400 hover:bg-green-500 text-white border border-green-300"
+              >
                 View Full Analysis
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -424,7 +451,6 @@ export default function DemoTestModelPage() {
 
   // Step indicator
   const steps = [
-    { key: 'welcome', label: 'Welcome' },
     { key: 'task_selection', label: 'Domain' },
     { key: 'model_config', label: 'Connect' },
     { key: 'batch_test', label: 'Test' },
@@ -440,33 +466,41 @@ export default function DemoTestModelPage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">FineTuneLab Demo</h1>
-          <p className="text-muted-foreground">Bring Your Own Model - Batch Testing & AI Analysis</p>
+          <div className="flex justify-center mb-4">
+            <FineTuneLabFullLogoV2
+              width={280}
+              height={84}
+              className="text-foreground dark:text-foreground"
+            />
+          </div>
+          <p className="text-lg text-muted-foreground font-medium">Model Testing & Analysis for Production Ops</p>
         </div>
 
-        {/* Step indicator */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-2">
-            {steps.map((s, i) => (
-              <React.Fragment key={s.key}>
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    i < currentStepIndex
-                      ? 'bg-primary text-primary-foreground'
-                      : i === currentStepIndex
-                      ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {i < currentStepIndex ? <CheckCircle className="h-4 w-4" /> : i + 1}
-                </div>
-                {i < steps.length - 1 && (
-                  <div className={`w-8 h-0.5 ${i < currentStepIndex ? 'bg-primary' : 'bg-muted'}`} />
-                )}
-              </React.Fragment>
-            ))}
+        {/* Step indicator - hide on welcome screen */}
+        {step !== 'welcome' && (
+          <div className="flex justify-center mb-8">
+            <div className="flex items-center gap-2">
+              {steps.map((s, i) => (
+                <React.Fragment key={s.key}>
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      i < currentStepIndex
+                        ? 'bg-orange-500 text-white'
+                        : i === currentStepIndex
+                        ? 'bg-orange-500 text-white ring-2 ring-orange-400 ring-offset-2'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {i < currentStepIndex ? <CheckCircle className="h-4 w-4" /> : i + 1}
+                  </div>
+                  {i < steps.length - 1 && (
+                    <div className={`w-8 h-0.5 ${i < currentStepIndex ? 'bg-orange-500' : 'bg-muted'}`} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Step content */}
         {renderStep()}
