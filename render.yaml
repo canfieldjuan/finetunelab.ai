@@ -68,7 +68,7 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
-    autoDeploy: true  # Auto-deploy from develop branch
+    autoDeploy: false  # Manual deploy to save build minutes
 
   # Redis Cache (Optional - if using Redis)
   # - type: redis
@@ -98,7 +98,7 @@ services:
         value: https://finetunelab.ai
       - key: NEXT_PUBLIC_BASE_URL
         value: https://finetunelab.ai
-    autoDeploy: true
+    autoDeploy: false  # Manual deploy to save build minutes
 
   # BYOM Cron Job - Cleanup Expired Demo Sessions
   - type: cron
