@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Play, RefreshCw, ArrowRight } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import type { Trace } from './TraceView';
 
 interface TraceReplayPanelProps {
@@ -44,9 +44,7 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
       if (disableCache) overrides.disableCache = true;
 
       // Get session token for authentication
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
@@ -144,7 +142,7 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
           <Label htmlFor="disable-cache" className="text-sm font-normal">Disable Cache</Label>
         </div>
 
-        <Button onClick={replayTrace} disabled={replaying} size="sm" className="w-auto px-6">
+        <Button type="button" onClick={replayTrace} disabled={replaying} size="sm" className="w-auto px-6">
           <Play className="h-3.5 w-3.5 mr-2" />
           {replaying ? 'Replaying...' : 'Run Replay'}
         </Button>
