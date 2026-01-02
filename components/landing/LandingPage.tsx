@@ -3,6 +3,7 @@
 import React from "react";
 import {
   HeroDemo,
+  LiveTraceDemo,
   ValidateInfrastructure,
   FragmentationProblem,
   UnifiedPlatform,
@@ -33,28 +34,31 @@ export function LandingPage() {
       {/* Section 1: Hero - Demo-First Approach */}
       <HeroDemo />
 
-      {/* Section 2: Validate Your Infrastructure (Traces First!) */}
+      {/* Section 2: Live Trace Demo - Show What Users Get */}
+      <LiveTraceDemo />
+
+      {/* Section 3: Validate Your Infrastructure (Traces First!) */}
       <ValidateInfrastructure />
 
-      {/* Section 3: The Fragmentation Problem */}
+      {/* Section 4: The Fragmentation Problem */}
       <FragmentationProblem />
 
-      {/* Section 4: One Platform, Entire Lifecycle */}
+      {/* Section 5: One Platform, Entire Lifecycle */}
       <UnifiedPlatform />
 
-      {/* Section 5: Test Like Users, Not Developers */}
+      {/* Section 6: Test Like Users, Not Developers */}
       <TestLikeUsers />
 
-      {/* Section 6: The 2-Minute Model Health Check */}
+      {/* Section 7: The 2-Minute Model Health Check */}
       <TwoMinuteCheck />
 
-      {/* Section 7: From Testing to Production */}
+      {/* Section 8: From Testing to Production */}
       <FullPlatform />
 
-      {/* Section 8: Democratizing Production-Quality LLMs */}
+      {/* Section 9: Democratizing Production-Quality LLMs */}
       <Democratization />
 
-      {/* Section 9: No Migration Needed */}
+      {/* Section 10: No Migration Needed */}
       <NoMigration />
 
       {/* Existing Sections (Additional Content) */}
@@ -67,7 +71,7 @@ export function LandingPage() {
       <Pricing />
       <FAQ />
 
-      {/* Section 9: Final CTA */}
+      {/* Section 11: Final CTA */}
       <FinalCTA />
 
       {/* Footer */}
