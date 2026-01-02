@@ -16,6 +16,8 @@ import {
   FileText,
   Sparkles,
   Zap,
+  TrendingUp,
+  Users,
 } from 'lucide-react';
 import { ModelConfigForm } from '@/components/demo/ModelConfigForm';
 import { BatchTestProgress } from '@/components/demo/BatchTestProgress';
@@ -44,6 +46,7 @@ export default function DemoTestModelPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [cleanupComplete, setCleanupComplete] = useState(false);
+  const [showSignupNudge, setShowSignupNudge] = useState(true);
 
   // Fetch test suites when domain is selected
   useEffect(() => {
@@ -407,6 +410,39 @@ export default function DemoTestModelPage() {
                     </Button>
                   </div>
 
+                  {/* Pre-Cleanup Signup Nudge */}
+                  {showSignupNudge && (
+                    <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border-2 border-green-200 dark:border-green-800">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-green-500 rounded-full shrink-0">
+                          <Sparkles className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-base mb-1">Save Your Results</h4>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Sign up to preserve your test data, run unlimited tests, and unlock historical analytics
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => window.location.href = '/signup'}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              Sign Up Free - Keep Data
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => setShowSignupNudge(false)}
+                              className="text-sm"
+                            >
+                              No thanks
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="border-t pt-6">
                     <p className="text-sm text-muted-foreground mb-4">
                       Ready to finish? Clean up your session to delete your API key and test data.
@@ -434,13 +470,66 @@ export default function DemoTestModelPage() {
               )}
 
               {cleanupComplete && (
-                <div className="text-center space-y-4">
-                  <p className="text-muted-foreground">
-                    Your API key and test data have been securely deleted.
-                  </p>
-                  <Button onClick={() => window.location.reload()} className="w-full">
-                    Start New Test
-                  </Button>
+                <div className="space-y-6">
+                  {/* Success Message */}
+                  <div className="text-center">
+                    <div className="inline-block p-3 bg-green-100 dark:bg-green-900/30 rounded-full mb-3">
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                    </div>
+                    <p className="text-muted-foreground">
+                      Your API key and test data have been securely deleted.
+                    </p>
+                  </div>
+
+                  {/* Conversion Offer */}
+                  <div className="border-t pt-6">
+                    <h3 className="text-lg font-semibold text-center mb-4">
+                      Liked what you saw?
+                    </h3>
+
+                    {/* 3-Column Benefits */}
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <Zap className="h-6 w-6 mx-auto mb-2 text-orange-500" />
+                        <p className="text-sm font-medium">Unlimited Tests</p>
+                        <p className="text-xs text-muted-foreground">No 10-prompt limit</p>
+                      </div>
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <TrendingUp className="h-6 w-6 mx-auto mb-2 text-blue-500" />
+                        <p className="text-sm font-medium">Historical Analytics</p>
+                        <p className="text-xs text-muted-foreground">Track trends over time</p>
+                      </div>
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <Users className="h-6 w-6 mx-auto mb-2 text-purple-500" />
+                        <p className="text-sm font-medium">Team Collaboration</p>
+                        <p className="text-xs text-muted-foreground">Share with your team</p>
+                      </div>
+                    </div>
+
+                    {/* CTA Buttons */}
+                    <div className="space-y-3">
+                      <Button
+                        onClick={() => window.location.href = '/signup'}
+                        className="w-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-semibold h-12"
+                        size="lg"
+                      >
+                        Start Free Trial
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                      </Button>
+                      <Button
+                        onClick={() => window.location.reload()}
+                        variant="ghost"
+                        className="w-full"
+                      >
+                        No thanks, test again
+                      </Button>
+                    </div>
+
+                    {/* Trust Indicators */}
+                    <p className="text-xs text-center text-muted-foreground mt-4">
+                      ✓ No credit card required  •  ✓ 14-day free trial  •  ✓ Cancel anytime
+                    </p>
+                  </div>
                 </div>
               )}
             </CardContent>

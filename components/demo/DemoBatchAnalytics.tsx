@@ -1,18 +1,20 @@
 /**
  * DemoBatchAnalytics Component
- * Step 6: Display full traces + locked historical charts
- * Strategy: Traces = hook, Charts = depth teaser
+ * Step 6: Display full traces + real analytics charts
+ * Strategy: Show real value through live metrics
  */
 
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import TraceView, { Trace } from '@/components/analytics/TraceView';
-import { LockedChartPlaceholder } from './LockedChartPlaceholder';
+import { DemoLatencyChart } from './DemoLatencyChart';
+import { DemoSuccessChart } from './DemoSuccessChart';
+import { DemoCostChart } from './DemoCostChart';
 import { ContactSalesModal } from '@/components/pricing/ContactSalesModal';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, TrendingDown, Brain, DollarSign, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 interface DemoBatchAnalyticsProps {
   sessionId: string;
@@ -184,60 +186,51 @@ export function DemoBatchAnalytics({ sessionId, modelName, onExportClick }: Demo
           </div>
           <div className="relative flex justify-center text-xs uppercase">
             <span className="bg-background px-2 text-muted-foreground">
-              Historical Analytics
+              Batch Test Analytics
             </span>
           </div>
         </div>
 
-        {/* Locked Charts Section */}
-        <div>
-          <div className="text-center mb-6">
-            <h3 className="text-lg font-semibold mb-2">Unlock Advanced Analytics</h3>
-            <p className="text-sm text-muted-foreground">
-              These features require historical data (7+ days) and are available with a full account
-            </p>
-          </div>
-
+        {/* Real Charts Section */}
+        <div className="relative">
+          {/* Charts Grid */}
           <div className="grid md:grid-cols-3 gap-4">
-            {/* Chart 1: Performance Degradation */}
-            <LockedChartPlaceholder
-              title="Performance Trends"
-              description="Track latency over time"
-              benefit="Detect SLA violations before they impact users"
-              icon={TrendingDown}
-              onUpgradeClick={() => setShowContactModal(true)}
+            {/* Chart 1: Latency Distribution */}
+            <DemoLatencyChart
+              latencies={results.map(r => r.latency_ms).filter((l): l is number => l !== undefined)}
             />
 
-            {/* Chart 2: Quality Forecast */}
-            <LockedChartPlaceholder
-              title="Quality Forecasting"
-              description="Predict quality drift with ML"
-              benefit="Get alerts 3 days before quality degrades"
-              icon={Brain}
-              onUpgradeClick={() => setShowContactModal(true)}
+            {/* Chart 2: Success Rate */}
+            <DemoSuccessChart
+              successCount={results.filter(r => r.success).length}
+              failureCount={results.filter(r => !r.success).length}
             />
 
-            {/* Chart 3: Cost Tracking */}
-            <LockedChartPlaceholder
-              title="Cost Monitoring"
-              description="Track burn rate and budgets"
-              benefit="Catch runaway costs before month-end"
-              icon={DollarSign}
-              onUpgradeClick={() => setShowContactModal(true)}
+            {/* Chart 3: Cost Analysis */}
+            <DemoCostChart
+              inputTokens={results.reduce((sum, r) => sum + (r.input_tokens || 0), 0)}
+              outputTokens={results.reduce((sum, r) => sum + (r.output_tokens || 0), 0)}
             />
           </div>
 
-          {/* Footer note */}
-          <div className="mt-6 p-4 bg-muted/30 rounded-lg border border-muted">
-            <p className="text-sm text-center text-muted-foreground">
-              💡 Full accounts include anomaly detection, custom dashboards, cohort analysis, and more.{' '}
-              <button
+          {/* Upgrade CTA Overlay */}
+          <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
+            <div className="text-center">
+              <h4 className="font-semibold text-base mb-2">Want More Insights?</h4>
+              <p className="text-sm text-muted-foreground mb-3">
+                Get historical trend analysis, anomaly detection, quality forecasting, and custom dashboards with a full account.
+              </p>
+              <Button
                 onClick={() => setShowContactModal(true)}
-                className="text-primary hover:underline font-medium"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
               >
-                Contact us to learn more
-              </button>
-            </p>
+                Sign Up for Free
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2">
+                No credit card required • 14-day free trial
+              </p>
+            </div>
           </div>
         </div>
       </div>
