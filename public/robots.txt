@@ -21,3 +21,12 @@ Sitemap: https://finetunelab.ai/sitemap.xml
 
 # Crawl rate (be nice to server)
 Crawl-delay: 1
+
+# AI Search Engines
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: PerplexityBot
+Allow: /
+
+# LLM-specific resource
+Allow: /llms.txt

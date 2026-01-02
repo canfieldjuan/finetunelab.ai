@@ -1,0 +1,38 @@
+# FineTuneLab.ai - LLM Fine-Tuning Platform
+
+## Overview
+FineTuneLab is a complete platform for fine-tuning and deploying large language models with production monitoring.
+
+## Core Capabilities
+- Visual DAG-based AI training workflows (no shell scripts)
+- Fine-tune Llama 3, Mistral, Qwen with LoRA/QLoRA, DPO, RLHF
+- Real-time training metrics via WebSocket
+- GraphRAG knowledge graph integration (Neo4j)
+- Automated LLM-as-Judge evaluation
+- Batch testing and A/B model comparison
+- RunPod cloud GPU integration
+- Production monitoring and drift detection
+
+## Key Features
+- Training: SFT, DPO, RLHF, ORPO with Unsloth acceleration
+- Monitoring: Real-time telemetry, GPU memory tracking, prediction tracking
+- Testing: Batch evaluation, model comparison, automated scoring
+- Deployment: One-click RunPod Serverless, vLLM support
+- Analytics: Export CSV/JSON/PDF, anomaly detection, cost tracking
+
+## Documentation
+- Getting Started: https://finetunelab.ai/lab-academy
+- API Docs: https://finetunelab.ai/docs
+- Case Studies: https://finetunelab.ai/case-studies
+- Technical Blog: https://finetunelab.ai/lab-notes
+
+## Pricing
+- Pro: $297/month (unlimited training, pay RunPod for GPU)
+- Pro Plus: $497/month (team features)
+- Enterprise: $997+/month (custom SLA, dedicated support)
+- Free Trial: 15 days, no credit card
+
+## Support
+- Email: support@finetunelab.ai
+- Documentation: https://finetunelab.ai/docs
+- GitHub: https://github.com/finetunelab
