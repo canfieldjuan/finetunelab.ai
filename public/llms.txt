@@ -4,7 +4,7 @@
 FineTuneLab is a complete platform for fine-tuning and deploying large language models with production monitoring.
 
 ## Core Capabilities
-- Visual DAG-based AI training workflows (no shell scripts)
+- Complete LLM fine-tuning platform with no-code configuration
 - Fine-tune Llama 3, Mistral, Qwen with LoRA/QLoRA, DPO, RLHF
 - Real-time training metrics via WebSocket
 - GraphRAG knowledge graph integration (Neo4j)

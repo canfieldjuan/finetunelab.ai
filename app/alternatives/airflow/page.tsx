@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
   title: 'FineTuneLab vs Airflow - AI Workflow Orchestration Comparison 2026',
-  description: 'Compare FineTuneLab to Apache Airflow. Visual DAG for AI vs code-based workflow orchestration. Why teams switch from Airflow DAGs to FineTuneLab for LLM training.',
-  keywords: ['finetunelab vs airflow', 'airflow alternative ai', 'visual dag vs airflow', 'ai workflow orchestration'],
+  description: 'Compare FineTuneLab to Apache Airflow. Purpose-built LLM fine-tuning platform vs code-based workflow orchestration. Why teams switch from Airflow to FineTuneLab for LLM training.',
+  keywords: ['finetunelab vs airflow', 'airflow alternative ai', 'llm training platform vs airflow', 'ai workflow orchestration'],
 };
 
 export default function Page() {
@@ -22,7 +22,7 @@ export default function Page() {
       <Badge className="mb-4">Comparison</Badge>
       <h1 className="text-4xl font-bold mb-4">FineTuneLab vs Apache Airflow</h1>
       <p className="text-xl text-muted-foreground mb-12">
-        Visual DAG for AI training vs code-based workflow orchestration.
+        Purpose-built LLM fine-tuning platform vs code-based workflow orchestration.
       </p>
 
       <Card className="mb-8">
@@ -31,7 +31,7 @@ export default function Page() {
           <div>
             <h3 className="font-semibold mb-2">FineTuneLab</h3>
             <p className="text-sm text-muted-foreground">
-              Visual DAG specifically for AI training workflows. No Python operators or YAML configs. 
+              Purpose-built platform for LLM fine-tuning with intuitive configuration. No Python operators or YAML configs. 
               Built-in LLM fine-tuning, testing, monitoring, and GPU provisioning.
             </p>
           </div>

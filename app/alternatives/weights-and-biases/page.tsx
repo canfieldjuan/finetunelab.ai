@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
   title: 'FineTuneLab vs Weights & Biases - LLM Fine-Tuning Comparison 2026',
-  description: 'Compare FineTuneLab to Weights & Biases. Visual DAG workflows vs code-based tracking. See why teams choose FineTuneLab for production LLM fine-tuning.',
+  description: 'Compare FineTuneLab to Weights & Biases. Purpose-built LLM fine-tuning platform vs code-based tracking. See why teams choose FineTuneLab for production LLM fine-tuning.',
   keywords: ['finetunelab vs wandb', 'weights and biases alternative', 'llm fine-tuning platform'],
 };
 
@@ -22,7 +22,7 @@ export default function Page() {
       <Badge className="mb-4">Comparison</Badge>
       <h1 className="text-4xl font-bold mb-4">FineTuneLab vs Weights & Biases</h1>
       <p className="text-xl text-muted-foreground mb-12">
-        Visual DAG workflows for LLM fine-tuning vs general ML experiment tracking.
+        Purpose-built LLM fine-tuning platform vs general ML experiment tracking.
       </p>
 
       <Card className="mb-8">

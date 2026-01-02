@@ -193,7 +193,7 @@ export default async function ArticlePage({ params }: PageProps) {
         <div className="mt-16 p-8 bg-muted/30 rounded-2xl text-center">
           <h3 className="text-2xl font-bold mb-4">Ready to put this into practice?</h3>
           <p className="text-muted-foreground mb-6">
-            Start building your AI pipeline with our visual DAG builder today.
+            Start building your AI pipeline with FineTuneLab today.
           </p>
           <Link href="/signup">
             <Button size="lg">Get Started for Free</Button>
