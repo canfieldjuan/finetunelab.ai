@@ -29,7 +29,7 @@
     "scheduler:check": "npx tsx scripts/check-schedules-once.ts",
     "review:ai": "npx tsx scripts/ollama-code-review.ts",
     "review:cloud": "npx tsx scripts/replicate-code-review.ts",
-    "prepare": "husky || true"
+    "prepare": "test -d .git && husky || true"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
