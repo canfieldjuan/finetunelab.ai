@@ -46,6 +46,14 @@ interface TraceListItem {
   has_user_feedback?: boolean;
 }
 
+interface RawTraceWithMetadata extends TraceListItem {
+  metadata?: {
+    tags?: string[];
+    session_id?: string;
+    environment?: string;
+  };
+}
+
 interface SavedPreset {
   id: string;
   name: string;
@@ -182,7 +190,7 @@ export function TraceExplorer() {
       });
       
       // Map metadata to top-level fields
-      const mappedTraces = (data.traces || []).map((t: unknown) => ({
+      const mappedTraces = (data.traces || []).map((t: RawTraceWithMetadata): TraceListItem => ({
         ...t,
         session_tag: t.metadata?.tags?.[0] || t.metadata?.session_id,
         environment: t.metadata?.environment
@@ -863,7 +871,7 @@ export function TraceExplorer() {
             </div>
 
             {/* Time Range */}
-            <Select value={timeRange} onValueChange={(v) => setTimeRange(v as unknown)}>
+            <Select value={timeRange} onValueChange={(v) => setTimeRange(v as '1h' | '24h' | '7d' | '30d')}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
