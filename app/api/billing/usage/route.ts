@@ -13,9 +13,38 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getCurrentUsage, getEstimatedCost, checkUsageWarnings } from '@/lib/billing/usage-meter.service';
+import {
+  getCurrentUsage,
+  getEstimatedCost,
+  checkUsageWarnings,
+  type UsageStats,
+  type CostEstimate,
+  type UsageWarning
+} from '@/lib/billing/usage-meter.service';
 
 export const runtime = 'nodejs';
+
+// Type for usage_commitments table
+interface UsageCommitment {
+  id: string;
+  user_id: string;
+  tier: 'starter' | 'growth' | 'business' | 'enterprise';
+  minimum_monthly_usd: string;
+  price_per_thousand_traces: string;
+  included_traces: number;
+  included_kb_per_trace: number;
+  overage_price_per_gb: string;
+  base_retention_days: number;
+  trace_commitment?: number;
+  discount_percent?: string;
+  stripe_subscription_id?: string;
+  stripe_price_id?: string;
+  starts_at: string;
+  ends_at?: string;
+  status: 'active' | 'cancelled' | 'expired';
+  created_at?: string;
+  updated_at?: string;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -43,12 +72,12 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Get current commitment/tier
-    const { data: commitment, error: commitmentError } = await supabase
+    let { data: commitment, error: commitmentError } = await supabase
       .from('usage_commitments')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .single();
+      .single() as { data: UsageCommitment | null; error: any };
 
     // If no active commitment exists, create a default "starter" tier
     if (commitmentError || !commitment) {
@@ -107,9 +136,15 @@ export async function GET(req: NextRequest) {
     }
 
     // 3. Get current usage
-    const usage = await getCurrentUsage(user.id);
+    const usage: UsageStats | null = await getCurrentUsage(user.id);
     if (!usage) {
       // No usage this period - return zeros
+      console.log('[Usage API] No usage data for current period', {
+        userId: user.id,
+        tier: commitment!.tier,
+        periodMonth: new Date().getMonth() + 1,
+        periodYear: new Date().getFullYear(),
+      });
       return NextResponse.json({
         period: {
           month: new Date().getMonth() + 1,
@@ -142,34 +177,34 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Calculate costs
-    let cost;
+    let cost: CostEstimate | null;
     try {
       cost = await getEstimatedCost(user.id);
     } catch (costError) {
       console.error('[Usage API] getEstimatedCost error:', costError);
       // If cost calculation fails, use defaults from commitment
       cost = {
-        baseMinimum: parseFloat(commitment.minimum_monthly_usd),
+        baseMinimum: parseFloat(commitment!.minimum_monthly_usd),
         traceOverage: 0,
         payloadOverage: 0,
         retentionMultiplier: 1.0,
-        estimatedTotal: parseFloat(commitment.minimum_monthly_usd),
+        estimatedTotal: parseFloat(commitment!.minimum_monthly_usd),
       };
     }
 
     if (!cost) {
       // Fallback to defaults if still null
       cost = {
-        baseMinimum: parseFloat(commitment.minimum_monthly_usd),
+        baseMinimum: parseFloat(commitment!.minimum_monthly_usd),
         traceOverage: 0,
         payloadOverage: 0,
         retentionMultiplier: 1.0,
-        estimatedTotal: parseFloat(commitment.minimum_monthly_usd),
+        estimatedTotal: parseFloat(commitment!.minimum_monthly_usd),
       };
     }
 
     // 5. Check usage warnings
-    const warnings = await checkUsageWarnings(user.id);
+    const warnings: UsageWarning | null = await checkUsageWarnings(user.id);
 
     // 6. Calculate overage amounts
     const overageTraces = Math.max(0, usage.rootTraces - commitment.included_traces);
