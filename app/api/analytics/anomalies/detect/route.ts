@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { detectAnomalies } from '@/lib/services/anomaly-detection.service';
+import { recordUsageEvent } from '@/lib/usage/checker';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -291,6 +292,20 @@ export async function POST(req: NextRequest) {
         savedAnomalies.push(data);
       }
     }
+
+    // Record usage event for anomaly detection
+    await recordUsageEvent({
+      userId: user.id,
+      metricType: 'anomaly_detection',
+      value: traces?.length || 0,
+      resourceType: 'trace_batch',
+      metadata: {
+        anomaliesDetected: allAnomalies.length,
+        anomaliesSaved: savedAnomalies.length,
+        timeRange: '24h',
+        anomalyTypes: 10,
+      },
+    });
 
     return NextResponse.json({
       success: true,

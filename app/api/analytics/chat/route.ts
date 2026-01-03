@@ -11,6 +11,7 @@ import { executeGetTraces } from '@/lib/tools/analytics/traces.handler';
 import { startToolLog, completeToolLog, failToolLog, categorizeError } from '@/lib/analytics/tool-logger';
 import { checkRateLimit } from '@/lib/rate-limiting/rate-limiter';
 import { RATE_LIMITS } from '@/lib/rate-limiting/types';
+import { recordUsageEvent } from '@/lib/usage/checker';
 
 export const runtime = 'nodejs';
 
@@ -2087,6 +2088,19 @@ Now, help the user analyze their session. If they're starting fresh, offer: "I c
     } else {
       finalResponse = llmResponse as string;
     }
+
+    // Record usage event for analytics assistant
+    await recordUsageEvent({
+      userId: user.id,
+      metricType: 'analytics_assistant',
+      value: 1,
+      resourceType: 'analytics_session',
+      metadata: {
+        toolsUsed: toolsCalled?.map((t: any) => t.name) || [],
+        inputTokens: tokenUsage?.input_tokens || 0,
+        outputTokens: tokenUsage?.output_tokens || 0,
+      },
+    });
 
     // Create streaming response
     const encoder = new TextEncoder();

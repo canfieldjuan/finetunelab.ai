@@ -10,6 +10,7 @@ import type { ScheduledEvaluation, ScheduleType } from '../batch-testing/types';
 import { sendScheduledEvaluationAlert } from '../alerts/alert.service';
 import type { MetricAlertRule, MetricType, ComparisonOperator, AggregationMethod, AlertType } from '../alerts/alert.types';
 import { AlertService } from '../alerts/alert.service';
+import { recordUsageEvent } from '../usage/checker';
 
 // Configuration
 const WORKER_INTERVAL_MS = 60000; // Check every minute
@@ -215,6 +216,20 @@ export class EvaluationSchedulerWorker {
       const batchTestRunId = result.test_run_id || null;
 
       console.log('[EvalScheduler] Batch test started:', batchTestRunId);
+
+      // Record usage event for scheduled evaluation run
+      await recordUsageEvent({
+        userId: evaluation.user_id,
+        metricType: 'scheduled_eval_run',
+        value: 1,
+        resourceType: 'scheduled_evaluation',
+        resourceId: evalId,
+        metadata: {
+          batchTestRunId,
+          scheduleType: evaluation.schedule_type,
+          testSuiteId: evaluation.test_suite_id,
+        },
+      });
 
       // Schedule next run and update status
       await this.scheduleNextRun(evaluation, 'success', batchTestRunId);

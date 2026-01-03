@@ -1,6 +1,7 @@
 import { researchService } from '@/lib/tools/web-search/research.service';
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
+import { recordUsageEvent } from '@/lib/usage/checker';
 
 export async function POST(request: Request) {
   try {
@@ -25,6 +26,20 @@ export async function POST(request: Request) {
     }
 
     const job = await researchService.startResearch(query, userId);
+
+    // Record usage event for research job creation (only if user is authenticated)
+    if (userId) {
+      await recordUsageEvent({
+        userId,
+        metricType: 'research_job',
+        value: 1,
+        resourceType: 'research_job',
+        resourceId: job.id,
+        metadata: {
+          queryLength: query.length,
+        },
+      });
+    }
 
     // Execute research asynchronously (v2 format with SSE streaming)
     // Note: executeStructuredResearch not yet implemented, using executeResearch
