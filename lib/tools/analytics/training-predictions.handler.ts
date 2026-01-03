@@ -23,6 +23,12 @@ interface TrainingPredictionsArgs {
   offset?: number;
 }
 
+interface PredictionRecord {
+  prediction?: string;
+  sample_index?: number;
+  [key: string]: unknown;
+}
+
 export async function executeTrainingPredictions(
   args: Record<string, unknown>,
   userId: string,
@@ -206,7 +212,7 @@ async function compareEpochs(
     }
 
     // Get predictions for each epoch
-    const epochData: Record<number, unknown[]> = {};
+    const epochData: Record<number, PredictionRecord[]> = {};
 
     for (const epoch of epochs) {
       const { data: predictions, error } = await supabase

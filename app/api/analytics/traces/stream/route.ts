@@ -8,6 +8,16 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+interface RealtimePayload {
+  new: {
+    id: string;
+    [key: string]: unknown;
+  };
+  old?: {
+    [key: string]: unknown;
+  };
+}
+
 /**
  * GET - Stream trace updates via SSE
  */
@@ -70,7 +80,7 @@ export async function GET(req: NextRequest) {
               table: 'llm_traces',
               filter: `user_id=eq.${user.id}`,
             },
-            (payload: unknown) => {
+            (payload: RealtimePayload) => {
               console.log('[Traces Stream] New trace detected:', payload.new.id);
 
               // Send trace data to client
@@ -96,7 +106,7 @@ export async function GET(req: NextRequest) {
               table: 'llm_traces',
               filter: `user_id=eq.${user.id}`,
             },
-            (payload: unknown) => {
+            (payload: RealtimePayload) => {
               console.log('[Traces Stream] Trace updated:', payload.new.id);
 
               // Send update event

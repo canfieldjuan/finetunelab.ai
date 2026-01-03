@@ -365,7 +365,7 @@ async function enrichTracesWithQuality(
       if (!judgmentsMap.has(traceId)) {
         judgmentsMap.set(traceId, []);
       }
-      judgmentsMap.get(traceId).push({
+      judgmentsMap.get(traceId)!.push({
         criterion: j.criterion,
         score: j.score,
         passed: j.passed,
@@ -381,7 +381,7 @@ async function enrichTracesWithQuality(
           total: 0,
         });
       }
-      const metrics = qualityMap.get(traceId);
+      const metrics = qualityMap.get(traceId)!;
       metrics.scores.push(j.score || 0);
       metrics.total++;
       if (j.passed) metrics.passed++;
