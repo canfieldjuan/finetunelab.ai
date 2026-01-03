@@ -164,9 +164,6 @@ export function AppSidebar({
   // Playground is separated for visual hierarchy
   const playgroundItem: NavItem = { id: 'chat', href: '/chat', icon: MessageSquare, label: 'Playground' };
 
-  // Worker Agents - standalone item for worker management
-  const workerAgentsItem: NavItem = { id: 'workers', href: '/workers', icon: HardDrive, label: 'Worker Agents' };
-
   // Training group items
   const trainingItems: NavItem[] = [
     { id: 'training', href: '/training', icon: GraduationCap, label: 'Training Lab' },
@@ -263,31 +260,6 @@ export function AppSidebar({
                     >
                       <ItemIcon className="w-3.5 h-3.5" />
                       <span>{playgroundItem.label}</span>
-                    </button>
-                  </Link>
-                );
-              })()}
-            </div>
-
-            {/* Worker Agents - Separated for visual hierarchy */}
-            <div className="mb-4">
-              {(() => {
-                const ItemIcon = workerAgentsItem.icon;
-                const isActive = workerAgentsItem.id === currentPage;
-
-                return (
-                  <Link href={workerAgentsItem.href} className="block">
-                    <button
-                      type="button"
-                      className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                        isActive
-                          ? 'bg-accent text-accent-foreground font-medium'
-                          : 'hover:bg-muted'
-                      }`}
-                      aria-current={isActive ? 'page' : undefined}
-                    >
-                      <ItemIcon className="w-3.5 h-3.5" />
-                      <span>{workerAgentsItem.label}</span>
                     </button>
                   </Link>
                 );
@@ -437,6 +409,13 @@ export function AppSidebar({
                 >
                   <FolderKanban className="w-3.5 h-3.5 mr-2" />
                   <span>Manage Workspaces</span>
+                </DropdownMenuItem>
+                {/* Worker Agents Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/workers" className="flex items-center gap-2 cursor-pointer">
+                    <HardDrive className="w-3.5 h-3.5" />
+                    <span>Worker Agents</span>
+                  </Link>
                 </DropdownMenuItem>
                 {/* Log Out Button */}
                 <DropdownMenuItem
