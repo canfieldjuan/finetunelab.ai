@@ -13,9 +13,79 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
+
+// Type definitions
+interface TraceData {
+  id: string;
+  trace_id: string;
+  span_name: string;
+  operation_type: string;
+  status: string;
+  start_time: string;
+  duration_ms: number | null;
+  model_name: string | null;
+  model_provider: string | null;
+  conversation_id: string | null;
+  message_id: string | null;
+  session_tag: string | null;
+  error_message: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
+  cost_usd: number | null;
+  ttft_ms: number | null;
+  tokens_per_second: number | null;
+  api_endpoint: string | null;
+  api_base_url: string | null;
+  request_headers_sanitized: unknown;
+  provider_request_id: string | null;
+  queue_time_ms: number | null;
+  inference_time_ms: number | null;
+  network_time_ms: number | null;
+  streaming_enabled: boolean | null;
+  chunk_usage: unknown;
+  context_tokens: number | null;
+  retrieval_latency_ms: number | null;
+  rag_graph_used: boolean | null;
+  rag_nodes_retrieved: number | null;
+  rag_chunks_used: number | null;
+  rag_relevance_score: number | null;
+  rag_answer_grounded: boolean | null;
+  rag_retrieval_method: string | null;
+  groundedness_score: number | null;
+  response_quality_breakdown: unknown;
+  warning_flags: unknown;
+  reasoning: string | null;
+}
+
+interface Judgment {
+  trace_id: string | null;
+  message_id: string | null;
+  criterion: string;
+  score: number | null;
+  passed: boolean;
+  judge_type: string;
+}
+
+interface Evaluation {
+  trace_id: string | null;
+  rating: number | null;
+  success: boolean | null;
+}
+
+interface QualityMetrics {
+  scores: number[];
+  passed: number;
+  total: number;
+}
+
+interface EvaluationData {
+  user_rating: number | null;
+  has_user_feedback: boolean;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -34,7 +104,10 @@ export async function GET(req: NextRequest) {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    }: { data: { user: any }; error: any } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -164,7 +237,11 @@ export async function GET(req: NextRequest) {
     query = query.range(offset, offset + limit - 1);
 
     // 4. Execute query
-    const { data: traces, error: tracesError, count } = await query;
+    const {
+      data: traces,
+      error: tracesError,
+      count,
+    }: { data: TraceData[] | null; error: any; count: number | null } = await query;
 
     if (tracesError) {
       console.error('[Traces List API] Error fetching traces:', tracesError);
@@ -217,11 +294,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-async function enrichTracesWithQuality(supabase: unknown, traces: unknown[], userId: string) {
-  if (!traces || traces.length === 0) return traces;
+async function enrichTracesWithQuality(
+  supabase: SupabaseClient,
+  traces: TraceData[],
+  userId: string
+): Promise<Array<Record<string, unknown>>> {
+  if (!traces || traces.length === 0) return [];
 
-  const traceIds = traces.map(t => t.trace_id);
-  const messageIds = traces.map(t => t.message_id).filter(Boolean);
+  const traceIds: string[] = traces.map((t) => t.trace_id);
+  const messageIds: string[] = traces.map((t) => t.message_id).filter(Boolean) as string[];
 
   console.log('[Traces List] enrichTracesWithQuality - traceIds:', traceIds.length, 'messageIds:', messageIds.length);
 
@@ -237,7 +318,10 @@ async function enrichTracesWithQuality(supabase: unknown, traces: unknown[], use
     judgmentsQuery = judgmentsQuery.in('trace_id', traceIds);
   }
 
-  const { data: judgments, error: judgmentsError } = await judgmentsQuery;
+  const {
+    data: judgments,
+    error: judgmentsError,
+  }: { data: Judgment[] | null; error: any } = await judgmentsQuery;
 
   if (judgmentsError) {
     console.error('[Traces List] Error fetching judgments:', judgmentsError);
@@ -246,15 +330,15 @@ async function enrichTracesWithQuality(supabase: unknown, traces: unknown[], use
   console.log('[Traces List] Found judgments:', judgments?.length || 0, judgments);
 
   // Fetch user ratings from message_evaluations
-  const { data: evaluations } = await supabase
+  const { data: evaluations }: { data: Evaluation[] | null } = await supabase
     .from('message_evaluations')
     .select('trace_id, rating, success')
     .in('trace_id', traceIds)
     .eq('user_id', userId);
 
   // Aggregate quality metrics by trace_id
-  const qualityMap = new Map();
-  const judgmentsMap = new Map();
+  const qualityMap = new Map<string, QualityMetrics>();
+  const judgmentsMap = new Map<string, Array<Omit<Judgment, 'trace_id' | 'message_id'>>>();
 
   // Process judgments
   if (judgments) {
@@ -305,7 +389,7 @@ async function enrichTracesWithQuality(supabase: unknown, traces: unknown[], use
   }
 
   // Process evaluations
-  const evaluationMap = new Map();
+  const evaluationMap = new Map<string, EvaluationData>();
   if (evaluations) {
     for (const e of evaluations) {
       if (!e.trace_id) continue;
