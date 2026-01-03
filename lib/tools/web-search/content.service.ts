@@ -67,7 +67,8 @@ export class ContentService {
 
       } catch (error: unknown) {
         lastError = error;
-        const isRetryable = error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.message.includes('429') || (error.response && error.response.status >= 500);
+        const err = error as { code?: string; message?: string; response?: { status?: number } };
+        const isRetryable = err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.message?.includes('429') || (err.response && err.response.status && err.response.status >= 500);
         
         if (!isRetryable || attempt === retries) {
           break;

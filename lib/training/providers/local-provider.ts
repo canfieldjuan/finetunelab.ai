@@ -5,6 +5,12 @@ import { DeploymentStatus, DeploymentMetrics } from '../deployment.types';
 import { LocalTrainingProvider } from '../../services/training-providers/local.provider';
 import { ScriptBuilder } from '../script-builder';
 
+interface LocalDeployOptions {
+  jobId: string;
+  userId?: string;
+  accessToken?: string;
+}
+
 export class LocalProvider implements DeploymentProvider {
   name = 'local';
   private provider: LocalTrainingProvider;
@@ -22,10 +28,10 @@ export class LocalProvider implements DeploymentProvider {
     config: TrainingConfig,
     modelName: string,
     datasetPath: string,
-    options?: unknown
+    options?: LocalDeployOptions
   ): Promise<string> {
-    const jobId = options?.jobId;
-    if (!jobId) throw new Error('Job ID is required for Local deployment');
+    if (!options?.jobId) throw new Error('Job ID is required for Local deployment');
+    const jobId = options.jobId;
 
     // Generate secure job_token for metrics authentication
     const jobToken = crypto.randomBytes(32).toString('base64url');
@@ -76,12 +82,12 @@ export class LocalProvider implements DeploymentProvider {
 
     // Execute training with job_token for metrics authentication
     const result = await this.provider.executeTraining({
-        config: trainingConfigJson,
+        config: trainingConfigJson as Record<string, unknown>,
         dataset_path: datasetPath,
         execution_id: jobId,
         name: modelName,
-        user_id: options?.userId,
-        access_token: options?.accessToken,
+        user_id: options.userId,
+        access_token: options.accessToken,
         job_token: jobToken,  // Pass token to agent for metrics reporting
     });
 
