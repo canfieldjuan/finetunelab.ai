@@ -142,12 +142,30 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Calculate costs
-    const cost = await getEstimatedCost(user.id);
+    let cost;
+    try {
+      cost = await getEstimatedCost(user.id);
+    } catch (costError) {
+      console.error('[Usage API] getEstimatedCost error:', costError);
+      // If cost calculation fails, use defaults from commitment
+      cost = {
+        baseMinimum: parseFloat(commitment.minimum_monthly_usd),
+        traceOverage: 0,
+        payloadOverage: 0,
+        retentionMultiplier: 1.0,
+        estimatedTotal: parseFloat(commitment.minimum_monthly_usd),
+      };
+    }
+
     if (!cost) {
-      return NextResponse.json(
-        { error: 'Failed to calculate cost' },
-        { status: 500 }
-      );
+      // Fallback to defaults if still null
+      cost = {
+        baseMinimum: parseFloat(commitment.minimum_monthly_usd),
+        traceOverage: 0,
+        payloadOverage: 0,
+        retentionMultiplier: 1.0,
+        estimatedTotal: parseFloat(commitment.minimum_monthly_usd),
+      };
     }
 
     // 5. Check usage warnings
@@ -192,8 +210,13 @@ export async function GET(req: NextRequest) {
 
   } catch (error) {
     console.error('[Billing Usage API] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[Billing Usage API] Error details:', errorMessage);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        error: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
       { status: 500 }
     );
   }
