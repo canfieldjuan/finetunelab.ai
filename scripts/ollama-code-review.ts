@@ -3,20 +3,20 @@
 /**
  * Local Ollama Code Review Script
  *
- * Uses DeepSeek-R1 running LOCALLY on your GPU
+ * Uses Command-R running LOCALLY on your GPU
  * Cost: $0 (runs on your RTX 3090)
- * Speed: 5-30 seconds (reasoning model)
+ * Speed: 10-30 seconds (fast and accurate)
  * Privacy: 100% (never leaves your machine)
  *
  * Usage:
- *   # Review staged files
+ *   # Review staged files (uses command-r:latest by default)
  *   npx tsx scripts/ollama-code-review.ts
  *
  *   # Review specific files
  *   npx tsx scripts/ollama-code-review.ts app/api/chat/route.ts lib/tracing/types.ts
  *
- *   # Use different model
- *   MODEL=command-r:latest npx tsx scripts/ollama-code-review.ts
+ *   # Use DeepSeek-R1 for deeper analysis (SLOW: 5-15 minutes per file)
+ *   MODEL=deepseek-r1:70b npx tsx scripts/ollama-code-review.ts app/api/chat/route.ts
  *
  *   # Skip syntax check (useful when project has unrelated TS errors)
  *   npx tsx scripts/ollama-code-review.ts --skip-syntax app/api/chat/route.ts
@@ -26,7 +26,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 
 // Model selection (can override with MODEL env var)
-const DEFAULT_MODEL = 'deepseek-r1:latest'; // DeepSeek-R1 reasoning model
+const DEFAULT_MODEL = 'command-r:latest'; // Fast and accurate (10-30s per review)
 const MODEL = process.env.MODEL || DEFAULT_MODEL;
 
 interface OllamaResponse {
@@ -50,13 +50,20 @@ async function callOllama(prompt: string): Promise<string> {
   };
 
   try {
+    // Create AbortController with 5 minute timeout for large reasoning models like DeepSeek-R1
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+
     const response = await fetch('http://localhost:11434/api/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`Ollama API error: ${response.statusText}`);
