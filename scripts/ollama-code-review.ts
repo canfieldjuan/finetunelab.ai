@@ -3,9 +3,9 @@
 /**
  * Local Ollama Code Review Script
  *
- * Uses Qwen 2.5 Coder 32B running LOCALLY on your GPU
+ * Uses DeepSeek-R1 running LOCALLY on your GPU
  * Cost: $0 (runs on your RTX 3090)
- * Speed: 2-5 seconds (local GPU is FAST)
+ * Speed: 5-30 seconds (reasoning model)
  * Privacy: 100% (never leaves your machine)
  *
  * Usage:
@@ -16,7 +16,7 @@
  *   npx tsx scripts/ollama-code-review.ts app/api/chat/route.ts lib/tracing/types.ts
  *
  *   # Use different model
- *   MODEL=qwen2.5-coder:7b npx tsx scripts/ollama-code-review.ts
+ *   MODEL=command-r:latest npx tsx scripts/ollama-code-review.ts
  *
  *   # Skip syntax check (useful when project has unrelated TS errors)
  *   npx tsx scripts/ollama-code-review.ts --skip-syntax app/api/chat/route.ts
@@ -26,7 +26,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 
 // Model selection (can override with MODEL env var)
-const DEFAULT_MODEL = 'qwen2.5-coder:32b'; // Your 24GB VRAM can handle this!
+const DEFAULT_MODEL = 'deepseek-r1:latest'; // DeepSeek-R1 reasoning model
 const MODEL = process.env.MODEL || DEFAULT_MODEL;
 
 interface OllamaResponse {
