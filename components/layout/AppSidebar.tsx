@@ -34,7 +34,6 @@ import {
   TestTube2,
   Database,
   TrendingUp,
-  FlaskConical,
   Network,
   HardDrive
 } from 'lucide-react';
@@ -185,21 +184,19 @@ export function AppSidebar({
     { id: 'docs-troubleshooting', href: '/docs/troubleshooting', icon: AlertCircle, label: 'Troubleshooting' },
   ];
 
-  // Lab Notes - standalone item for research & insights
-  const labNotesItem: NavItem = { id: 'lab-notes', href: '/lab-notes', icon: FlaskConical, label: 'Lab Notes' };
-  const labAcademyItem: NavItem = { id: 'lab-academy', href: '/lab-academy', icon: BookOpen, label: 'Lab Academy' };
-  const caseStudiesItem: NavItem = { id: 'case-studies', href: '/case-studies', icon: TrendingUp, label: 'Case Studies' };
 
   return (
     <>
-      <aside className="w-64 h-screen bg-secondary border-r flex flex-col p-4">
-        {/* Brand/Logo Section */}
-        <div className="mb-2">
+      <aside className="w-64 h-screen bg-secondary border-r flex flex-col">
+        {/* Brand/Logo Section - FIXED, NO SCROLL */}
+        <div className="p-4 pb-2 flex-shrink-0">
           <Link href="/chat" className="hover:opacity-80 transition-opacity">
             <FineTuneLabFullLogoV2 width={180} height={54} />
           </Link>
         </div>
 
+        {/* SCROLLABLE CONTENT AREA */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
       {/* Workspace Selector - Only show when user has multiple workspaces */}
       {workspaces.length > 1 && (
         <div className="mb-4 pb-4 border-b">
@@ -319,72 +316,6 @@ export function AppSidebar({
                 onToggle={() => toggleGroup('evaluation')}
                 collapsible={false}
               />
-
-              {/* Lab Notes & Case Studies - Hidden on Chat page */}
-              {currentPage !== 'chat' && (
-                <div className="pt-2 border-t space-y-1">
-                  {(() => {
-                    const ItemIcon = labNotesItem.icon;
-                    const isActive = labNotesItem.id === currentPage || currentPage.startsWith('lab-notes');
-                    return (
-                      <Link href={labNotesItem.href} className="block">
-                        <button
-                          type="button"
-                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                            isActive
-                              ? 'bg-accent text-accent-foreground font-medium'
-                              : 'hover:bg-muted'
-                          }`}
-                          aria-current={isActive ? 'page' : undefined}
-                        >
-                          <ItemIcon className="w-3.5 h-3.5" />
-                          <span>🧪 {labNotesItem.label}</span>
-                        </button>
-                      </Link>
-                    );
-                  })()}
-                  {(() => {
-                    const ItemIcon = labAcademyItem.icon;
-                    const isActive = labAcademyItem.id === currentPage || currentPage.startsWith('lab-academy');
-                    return (
-                      <Link href={labAcademyItem.href} className="block">
-                        <button
-                          type="button"
-                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                            isActive
-                              ? 'bg-accent text-accent-foreground font-medium'
-                              : 'hover:bg-muted'
-                          }`}
-                          aria-current={isActive ? 'page' : undefined}
-                        >
-                          <ItemIcon className="w-3.5 h-3.5" />
-                          <span>📚 {labAcademyItem.label}</span>
-                        </button>
-                      </Link>
-                    );
-                  })()}
-                  {(() => {
-                    const ItemIcon = caseStudiesItem.icon;
-                    const isActive = caseStudiesItem.id === currentPage || currentPage.startsWith('case-studies');
-                    return (
-                      <Link href={caseStudiesItem.href} className="block">
-                        <button
-                          type="button"
-                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                            isActive
-                              ? 'bg-accent text-accent-foreground font-medium'
-                              : 'hover:bg-muted'
-                          }`}
-                          aria-current={isActive ? 'page' : undefined}
-                        >
-                          <ItemIcon className="w-3.5 h-3.5" />
-                          <span>🎯 {caseStudiesItem.label}</span>
-                        </button>
-                      </Link>
-                    );
-                  })()}
-                </div>
-              )}
             </div>
           </>
         )}
@@ -418,19 +349,15 @@ export function AppSidebar({
       </div>
 
       {/* Children Slot - For Chat's conversations list */}
-      {children ? (
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-            {children}
-          </div>
+      {children && (
+        <div className="mb-4">
+          {children}
         </div>
-      ) : (
-        <div className="flex-1" />
       )}
 
       {/* User Settings Section */}
       {user && (
-        <div className="mt-auto pt-4 border-t">
+        <div className="mt-4 pt-4 border-t">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -506,6 +433,8 @@ export function AppSidebar({
           </DropdownMenu>
         </div>
       )}
+        </div>
+        {/* END SCROLLABLE CONTENT AREA */}
       </aside>
 
       {/* Manage Workspaces Dialog */}
