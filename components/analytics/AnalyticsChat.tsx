@@ -135,10 +135,15 @@ export function AnalyticsChat() {
 
   // Save messages to session storage whenever they change
   useEffect(() => {
-    if (selectedSession && messages.length > 0) {
-      const sessionKey = `${selectedSession.session_id}-${selectedSession.experiment_name}`;
-      sessionMessagesRef.current.set(sessionKey, messages);
-      console.log(`[AnalyticsChat] Auto-saved ${messages.length} messages for session:`, sessionKey);
+    if (messages.length > 0) {
+      if (selectedSession) {
+        const sessionKey = `${selectedSession.session_id}-${selectedSession.experiment_name}`;
+        sessionMessagesRef.current.set(sessionKey, messages);
+        console.log(`[AnalyticsChat] Auto-saved ${messages.length} messages for session:`, sessionKey);
+      } else {
+        sessionMessagesRef.current.set('no-session', messages);
+        console.log(`[AnalyticsChat] Auto-saved ${messages.length} messages for no-session mode`);
+      }
     }
   }, [messages, selectedSession]);
 
@@ -468,20 +473,36 @@ export function AnalyticsChat() {
               <div
                 key={`${s.session_id}-${s.experiment_name}`}
                 onClick={() => {
-                  // Save current session's messages before switching
-                  if (selectedSession) {
+                  const isCurrentlySelected = selectedSession?.session_id === s.session_id &&
+                                             selectedSession?.experiment_name === s.experiment_name;
+
+                  if (isCurrentlySelected) {
+                    console.log(`[AnalyticsChat] Deselecting session:`, s.experiment_name);
                     const currentKey = `${selectedSession.session_id}-${selectedSession.experiment_name}`;
                     sessionMessagesRef.current.set(currentKey, messages);
                     console.log(`[AnalyticsChat] Saved ${messages.length} messages for session:`, currentKey);
+
+                    const noSessionMessages = sessionMessagesRef.current.get('no-session') || [];
+                    setSelectedSession(null);
+                    setMessages(noSessionMessages);
+                    console.log(`[AnalyticsChat] Loaded ${noSessionMessages.length} messages for no-session mode`);
+                  } else {
+                    if (selectedSession) {
+                      const currentKey = `${selectedSession.session_id}-${selectedSession.experiment_name}`;
+                      sessionMessagesRef.current.set(currentKey, messages);
+                      console.log(`[AnalyticsChat] Saved ${messages.length} messages for session:`, currentKey);
+                    } else {
+                      sessionMessagesRef.current.set('no-session', messages);
+                      console.log(`[AnalyticsChat] Saved ${messages.length} messages for no-session mode`);
+                    }
+
+                    const newKey = `${s.session_id}-${s.experiment_name}`;
+                    const savedMessages = sessionMessagesRef.current.get(newKey) || [];
+                    console.log(`[AnalyticsChat] Loading ${savedMessages.length} messages for session:`, newKey);
+
+                    setSelectedSession(s);
+                    setMessages(savedMessages);
                   }
-
-                  // Load messages for the new session
-                  const newKey = `${s.session_id}-${s.experiment_name}`;
-                  const savedMessages = sessionMessagesRef.current.get(newKey) || [];
-                  console.log(`[AnalyticsChat] Loading ${savedMessages.length} messages for session:`, newKey);
-
-                  setSelectedSession(s);
-                  setMessages(savedMessages);
                 }}
                 className={`p-2.5 rounded-lg cursor-pointer transition-colors overflow-hidden ${
                   selectedSession?.session_id === s.session_id &&
