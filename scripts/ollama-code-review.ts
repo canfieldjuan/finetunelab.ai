@@ -17,6 +17,9 @@
  *
  *   # Use different model
  *   MODEL=qwen2.5-coder:7b npx tsx scripts/ollama-code-review.ts
+ *
+ *   # Skip syntax check (useful when project has unrelated TS errors)
+ *   npx tsx scripts/ollama-code-review.ts --skip-syntax app/api/chat/route.ts
  */
 
 import { execSync } from 'child_process';
@@ -76,9 +79,12 @@ async function callOllama(prompt: string): Promise<string> {
 async function getFilesToReview(): Promise<string[]> {
   const args = process.argv.slice(2);
 
+  // Filter out flags from arguments
+  const files = args.filter(arg => !arg.startsWith('--'));
+
   // If files specified on command line, use those
-  if (args.length > 0 && !args[0].startsWith('--')) {
-    return args;
+  if (files.length > 0) {
+    return files;
   }
 
   // Otherwise, get staged files
@@ -153,26 +159,33 @@ async function main() {
   const files = await getFilesToReview();
   console.log(`📂 Reviewing ${files.length} file(s):\n   ${files.join('\n   ')}\n`);
 
-  // Check syntax first (fast!)
-  console.log('⚡ Checking syntax first...');
-  for (const file of files) {
-    try {
-      execSync(`npx tsx scripts/check-syntax.ts "${file}"`, {
-        encoding: 'utf-8',
-        stdio: 'pipe'
-      });
-      console.log(`  ✅ ${file}`);
-    } catch (error: unknown) {
-      console.log(`\n${'='.repeat(80)}`);
-      console.log(`❌ SYNTAX ERROR IN: ${file}`);
-      console.log('='.repeat(80));
-      console.log(error.stdout || error.message);
-      console.log('='.repeat(80));
-      console.log('\n💡 Fix syntax errors before running AI review\n');
-      process.exit(1);
+  // Check for --skip-syntax flag
+  const skipSyntax = process.argv.includes('--skip-syntax');
+
+  if (skipSyntax) {
+    console.log('⚠️  Skipping syntax check (--skip-syntax flag detected)\n');
+  } else {
+    // Check syntax first (fast!)
+    console.log('⚡ Checking syntax first...');
+    for (const file of files) {
+      try {
+        execSync(`npx tsx scripts/check-syntax.ts "${file}"`, {
+          encoding: 'utf-8',
+          stdio: 'pipe'
+        });
+        console.log(`  ✅ ${file}`);
+      } catch (error: unknown) {
+        console.log(`\n${'='.repeat(80)}`);
+        console.log(`❌ SYNTAX ERROR IN: ${file}`);
+        console.log('='.repeat(80));
+        console.log(error.stdout || error.message);
+        console.log('='.repeat(80));
+        console.log('\n💡 Fix syntax errors before running AI review\n');
+        process.exit(1);
+      }
     }
+    console.log('');
   }
-  console.log('');
 
   // Build review prompt
   let prompt = `You are an expert code reviewer. Analyze the following files for:
