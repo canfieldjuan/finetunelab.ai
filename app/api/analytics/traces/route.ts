@@ -139,7 +139,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
 
 // Supabase configuration
@@ -211,6 +211,9 @@ interface TraceRecord extends TracePayload {
   id: string;
   user_id: string;
   created_at: string;
+  judgments?: unknown[];
+  user_rating?: number;
+  user_notes?: string;
 }
 
 interface TraceHierarchyEntry extends TraceRecord {
@@ -366,9 +369,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Block 3: Upsert trace into database (use upsert to handle race conditions)
-     
-    const { data: trace, error: insertError } = await (supabase as unknown)
-      .from('llm_traces')
+
+    const { data: trace, error: insertError } = (await (supabase
+      .from('llm_traces') as any)
       .upsert({
         user_id: userId,
         conversation_id,
@@ -427,13 +430,13 @@ export async function POST(req: NextRequest) {
         ignoreDuplicates: false
       })
       .select()
-      .single();
+      .single()) as { data: TraceRecord | null; error: any };
 
-    if (insertError) {
-      debugLog('POST', `Insert error: ${insertError.message}`);
+    if (insertError || !trace) {
+      debugLog('POST', `Insert error: ${insertError?.message || 'No trace data returned'}`);
       console.error(`[Traces API - POST] Upsert error for span ${span_id}:`, insertError);
       return NextResponse.json(
-        { error: `Failed to capture trace: ${insertError.message}` },
+        { error: `Failed to capture trace: ${insertError?.message || 'No trace data returned'}` },
         { status: 500 }
       );
     }
@@ -537,8 +540,8 @@ export async function GET(req: NextRequest) {
     });
 
     // Block 3: Build query
-     
-    let query = (supabase as unknown)
+
+    let query = supabase
       .from('llm_traces')
       .select('*')
       .eq('user_id', userId)
@@ -619,7 +622,7 @@ export async function GET(req: NextRequest) {
 /**
  * Enrich traces with quality data (judgments and user ratings)
  */
-async function enrichTracesWithQualityData(supabase: unknown, traces: TraceRecord[]): Promise<TraceRecord[]> {
+async function enrichTracesWithQualityData(supabase: SupabaseClient<any>, traces: TraceRecord[]): Promise<TraceRecord[]> {
   if (!traces || traces.length === 0) return traces;
 
   const traceIds = traces.map(t => t.trace_id).filter(Boolean);
@@ -656,7 +659,7 @@ async function enrichTracesWithQualityData(supabase: unknown, traces: TraceRecor
   }
 
   return traces.map(trace => {
-    const enriched: unknown = { ...trace };
+    const enriched: TraceRecord = { ...trace };
     const traceJudgments = judgmentsByTraceId.get(trace.trace_id);
     const traceEval = evaluationsByTraceId.get(trace.trace_id);
 

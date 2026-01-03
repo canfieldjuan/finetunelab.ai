@@ -13,6 +13,13 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
+interface UsageMeterRecord {
+  period_month: number;
+  period_year: number;
+  root_traces_count: number;
+  compressed_payload_bytes: number;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get('authorization');
@@ -63,7 +70,7 @@ export async function GET(req: NextRequest) {
       .eq('status', 'active')
       .single();
 
-    const history = (usageHistory || []).map((record: unknown) => {
+    const history = (usageHistory || []).map((record: UsageMeterRecord) => {
       const payloadGb = record.compressed_payload_bytes / 1_073_741_824;
       
       let estimatedCost = commitment ? parseFloat(commitment.minimum_monthly_usd) : 0;
