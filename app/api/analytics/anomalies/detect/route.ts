@@ -319,19 +319,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Record usage event for anomaly detection
-    await recordUsageEvent({
-      userId: user.id,
-      metricType: 'anomaly_detection',
-      value: traces?.length || 0,
-      resourceType: 'trace_batch',
-      metadata: {
-        anomaliesDetected: allAnomalies.length,
-        anomaliesSaved: savedAnomalies.length,
-        timeRange: '24h',
-        anomalyTypes: 10,
-      },
-    });
+    // DEPRECATED: OLD usage tracking system
+    // Now using usage_meters table via increment_root_trace_count()
+    // await recordUsageEvent({
+    //   userId: user.id,
+    //   metricType: 'anomaly_detection',
+    //   value: traces?.length || 0,
+    //   resourceType: 'trace_batch',
+    //   metadata: {
+    //     anomaliesDetected: allAnomalies.length,
+    //     anomaliesSaved: savedAnomalies.length,
+    //     timeRange: '24h',
+    //     anomalyTypes: 10,
+    //   },
+    // });
 
     return NextResponse.json({
       success: true,

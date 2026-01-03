@@ -1283,22 +1283,23 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             } else {
               console.log('[API] Widget mode: User message saved');
 
-              // Record chat message usage (fire-and-forget, only for user messages)
-              recordUsageEvent({
-                userId: userId,
-                metricType: 'chat_message',
-                value: 1,
-                resourceType: 'message',
-                resourceId: widgetConversationId,
-                metadata: {
-                  conversation_id: widgetConversationId,
-                  is_widget_mode: isWidgetMode || false,
-                  is_batch_test_mode: isBatchTestMode || false,
-                }
-              }).catch(err => {
-                console.error('[API] Failed to record chat usage:', err);
-                // Don't fail the request if usage recording fails
-              });
+              // DEPRECATED: OLD usage tracking system
+              // Now using usage_meters table via increment_root_trace_count()
+              // recordUsageEvent({
+              //   userId: userId,
+              //   metricType: 'chat_message',
+              //   value: 1,
+              //   resourceType: 'message',
+              //   resourceId: widgetConversationId,
+              //   metadata: {
+              //     conversation_id: widgetConversationId,
+              //     is_widget_mode: isWidgetMode || false,
+              //     is_batch_test_mode: isBatchTestMode || false,
+              //   }
+              // }).catch(err => {
+              //   console.error('[API] Failed to record chat usage:', err);
+              //   // Don't fail the request if usage recording fails
+              // });
             }
           }
 
@@ -1933,23 +1934,24 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     });
                   console.log('[API] Widget mode (streaming): User message saved');
 
-                  // Record chat message usage (fire-and-forget, only for user messages)
-                  recordUsageEvent({
-                    userId: userId,
-                    metricType: 'chat_message',
-                    value: 1,
-                    resourceType: 'message',
-                    resourceId: widgetConversationId,
-                    metadata: {
-                      conversation_id: widgetConversationId,
-                      is_widget_mode: isWidgetMode || false,
-                      is_batch_test_mode: isBatchTestMode || false,
-                      is_streaming: true,
-                    }
-                  }).catch(err => {
-                    console.error('[API] Failed to record chat usage (streaming):', err);
-                    // Don't fail the request if usage recording fails
-                  });
+                  // DEPRECATED: OLD usage tracking system
+                  // Now using usage_meters table via increment_root_trace_count()
+                  // recordUsageEvent({
+                  //   userId: userId,
+                  //   metricType: 'chat_message',
+                  //   value: 1,
+                  //   resourceType: 'message',
+                  //   resourceId: widgetConversationId,
+                  //   metadata: {
+                  //     conversation_id: widgetConversationId,
+                  //     is_widget_mode: isWidgetMode || false,
+                  //     is_batch_test_mode: isBatchTestMode || false,
+                  //     is_streaming: true,
+                  //   }
+                  // }).catch(err => {
+                  //   console.error('[API] Failed to record chat usage (streaming):', err);
+                  //   // Don't fail the request if usage recording fails
+                  // });
                 }
 
                 // Save assistant message with latency and token estimates

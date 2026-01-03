@@ -486,23 +486,24 @@ export async function POST(req: NextRequest) {
 
     console.log('[Batch Testing Run] Created batch test run:', batchTestRun.id);
 
-    // Record batch test usage (fire-and-forget)
-    recordUsageEvent({
-      userId: auth.userId,
-      metricType: 'batch_test_run',
-      value: 1,
-      resourceType: 'batch_test',
-      resourceId: batchTestRun.id,
-      metadata: {
-        model_name: batchConfig.model_name,
-        test_suite_id: config.test_suite_id || null,
-        dataset_id: config.dataset_id || null,
-        total_prompts: extractionResult.total,
-      }
-    }).catch(err => {
-      console.error('[Batch Testing Run] Failed to record usage:', err);
-      // Don't fail the request if usage recording fails
-    });
+    // DEPRECATED: OLD usage tracking system
+    // Now using usage_meters table via increment_root_trace_count()
+    // recordUsageEvent({
+    //   userId: auth.userId,
+    //   metricType: 'batch_test_run',
+    //   value: 1,
+    //   resourceType: 'batch_test',
+    //   resourceId: batchTestRun.id,
+    //   metadata: {
+    //     model_name: batchConfig.model_name,
+    //     test_suite_id: config.test_suite_id || null,
+    //     dataset_id: config.dataset_id || null,
+    //     total_prompts: extractionResult.total,
+    //   }
+    // }).catch(err => {
+    //   console.error('[Batch Testing Run] Failed to record usage:', err);
+    //   // Don't fail the request if usage recording fails
+    // });
 
     // Step 2.5: Create experiment run for tracking
     console.log('[Batch Testing Run] Attempting to create experiment run...');
@@ -795,19 +796,21 @@ async function processBackgroundBatch(
         const durationMs = endTime - startTime;
         const durationMinutes = Math.ceil(durationMs / 60000);
 
-        await recordUsageEvent({
-          userId: batchRun.user_id,
-          metricType: 'compute_minutes',
-          value: durationMinutes,
-          resourceType: 'batch_test',
-          resourceId: testRunId,
-          metadata: {
-            model_name: config.model_name,
-            total_prompts: prompts.length,
-            duration_ms: durationMs,
-            job_type: 'batch_test',
-          }
-        });
+        // DEPRECATED: OLD usage tracking system
+        // Now using usage_meters table via increment_root_trace_count()
+        // await recordUsageEvent({
+        //   userId: batchRun.user_id,
+        //   metricType: 'compute_minutes',
+        //   value: durationMinutes,
+        //   resourceType: 'batch_test',
+        //   resourceId: testRunId,
+        //   metadata: {
+        //     model_name: config.model_name,
+        //     total_prompts: prompts.length,
+        //     duration_ms: durationMs,
+        //     job_type: 'batch_test',
+        //   }
+        // });
         console.log('[Background Batch] Compute time recorded:', durationMinutes, 'minutes');
       }
     } catch (usageErr) {

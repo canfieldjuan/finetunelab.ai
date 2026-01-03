@@ -2096,18 +2096,19 @@ Now, help the user analyze their session. If they're starting fresh, offer: "I c
       finalResponse = llmResponse as string;
     }
 
-    // Record usage event for analytics assistant
-    await recordUsageEvent({
-      userId: user.id,
-      metricType: 'analytics_assistant',
-      value: 1,
-      resourceType: 'analytics_session',
-      metadata: {
-        toolsUsed: toolsCalled?.map((t: any) => t.name) || [],
-        inputTokens: tokenUsage?.input_tokens || 0,
-        outputTokens: tokenUsage?.output_tokens || 0,
-      },
-    });
+    // DEPRECATED: OLD usage tracking system
+    // Now using usage_meters table via increment_root_trace_count()
+    // await recordUsageEvent({
+    //   userId: user.id,
+    //   metricType: 'analytics_assistant',
+    //   value: 1,
+    //   resourceType: 'analytics_session',
+    //   metadata: {
+    //     toolsUsed: toolsCalled?.map((t: any) => t.name) || [],
+    //     inputTokens: tokenUsage?.input_tokens || 0,
+    //     outputTokens: tokenUsage?.output_tokens || 0,
+    //   },
+    // });
 
     // Create streaming response
     const encoder = new TextEncoder();
