@@ -18,7 +18,10 @@ export async function POST(req: NextRequest) {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    }: { data: { user: any }; error: any } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -27,7 +30,7 @@ export async function POST(req: NextRequest) {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     // Fetch trace data for the last 24 hours
-    const { data: traces, error: traceError } = await supabase
+    const { data: traces, error: traceError }: { data: any; error: any } = await supabase
       .from('llm_traces')
       .select(`
         id,
@@ -87,29 +90,126 @@ export async function POST(req: NextRequest) {
     };
     const typedTraces = (traces as TraceData[]) || [];
 
-    // 1. Duration Analysis (replaces latency_ms)
-    const durationPoints = typedTraces
-      .filter(t => t.duration_ms)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.duration_ms || 0,
-        metadata: { trace_id: t.trace_id, span_id: t.span_id, operation_type: t.operation_type }
-      }));
+    // OPTIMIZED: Single-pass data collection for all 10 anomaly types
+    // Before: O(10n) - 10 separate filter/map iterations
+    // After: O(n) - single loop through traces
+    type DataPoint = {
+      timestamp: string;
+      value: number;
+      metadata: Record<string, any>;
+    };
 
+    const durationPoints: DataPoint[] = [];
+    const ttftPoints: DataPoint[] = [];
+    const throughputPoints: DataPoint[] = [];
+    const tokenPoints: DataPoint[] = [];
+    const cachePoints: DataPoint[] = [];
+    const costPoints: DataPoint[] = [];
+    const ragLatencyPoints: DataPoint[] = [];
+    const relevancePoints: DataPoint[] = [];
+    const contextPoints: DataPoint[] = [];
+    const queueTimePoints: DataPoint[] = [];
+
+    for (const t of typedTraces) {
+      // 1. Duration Analysis
+      if (t.duration_ms) {
+        durationPoints.push({
+          timestamp: t.start_time,
+          value: t.duration_ms,
+          metadata: { trace_id: t.trace_id, span_id: t.span_id, operation_type: t.operation_type }
+        });
+      }
+
+      // 2. TTFT Analysis (streaming first token delay)
+      if (t.ttft_ms) {
+        ttftPoints.push({
+          timestamp: t.start_time,
+          value: t.ttft_ms,
+          metadata: { trace_id: t.trace_id, model_name: t.model_name }
+        });
+      }
+
+      // 3. Throughput Analysis (tokens/second degradation)
+      if (t.tokens_per_second) {
+        throughputPoints.push({
+          timestamp: t.start_time,
+          value: t.tokens_per_second,
+          metadata: { trace_id: t.trace_id, model_name: t.model_name }
+        });
+      }
+
+      // 4. Token Usage Analysis (always add - enhanced with cache awareness)
+      tokenPoints.push({
+        timestamp: t.start_time,
+        value: (t.input_tokens || 0) + (t.output_tokens || 0),
+        metadata: {
+          trace_id: t.trace_id,
+          cache_read: t.cache_read_input_tokens || 0,
+          model_name: t.model_name
+        }
+      });
+
+      // 5. Cache Miss Analysis (cache_read_input_tokens drops)
+      if (t.cache_read_input_tokens !== null && t.cache_read_input_tokens !== undefined) {
+        cachePoints.push({
+          timestamp: t.start_time,
+          value: t.cache_read_input_tokens,
+          metadata: { trace_id: t.trace_id, model_name: t.model_name }
+        });
+      }
+
+      // 6. Cost Analysis (cost spikes)
+      if (t.cost_usd) {
+        costPoints.push({
+          timestamp: t.start_time,
+          value: t.cost_usd,
+          metadata: { trace_id: t.trace_id, model_name: t.model_name }
+        });
+      }
+
+      // 7. RAG Retrieval Latency Analysis
+      if (t.retrieval_latency_ms) {
+        ragLatencyPoints.push({
+          timestamp: t.start_time,
+          value: t.retrieval_latency_ms,
+          metadata: { trace_id: t.trace_id, rag_relevance: t.rag_relevance_score }
+        });
+      }
+
+      // 8. RAG Relevance Score Analysis (low relevance detection)
+      if (t.rag_relevance_score !== null && t.rag_relevance_score !== undefined) {
+        relevancePoints.push({
+          timestamp: t.start_time,
+          value: t.rag_relevance_score,
+          metadata: { trace_id: t.trace_id }
+        });
+      }
+
+      // 9. Context Token Bloat Analysis
+      if (t.context_tokens) {
+        contextPoints.push({
+          timestamp: t.start_time,
+          value: t.context_tokens,
+          metadata: { trace_id: t.trace_id }
+        });
+      }
+
+      // 10. Provider Queue Time Analysis
+      if (t.queue_time_ms) {
+        queueTimePoints.push({
+          timestamp: t.start_time,
+          value: t.queue_time_ms,
+          metadata: { trace_id: t.trace_id, model_provider: t.model_provider }
+        });
+      }
+    }
+
+    // Run anomaly detection on all collected data points
     const durationAnomalies = await detectAnomalies(
       durationPoints,
       'duration_ms',
       { zScoreThreshold: 3 }
     );
-
-    // 2. TTFT Analysis (NEW - streaming first token delay)
-    const ttftPoints = typedTraces
-      .filter(t => t.ttft_ms)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.ttft_ms || 0,
-        metadata: { trace_id: t.trace_id, model_name: t.model_name }
-      }));
 
     const ttftAnomalies = await detectAnomalies(
       ttftPoints,
@@ -117,31 +217,11 @@ export async function POST(req: NextRequest) {
       { zScoreThreshold: 3 }
     );
 
-    // 3. Throughput Analysis (NEW - tokens/second degradation)
-    const throughputPoints = typedTraces
-      .filter(t => t.tokens_per_second)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.tokens_per_second || 0,
-        metadata: { trace_id: t.trace_id, model_name: t.model_name }
-      }));
-
     const throughputAnomalies = await detectAnomalies(
       throughputPoints,
       'tokens_per_second',
       { zScoreThreshold: 3 }
     );
-
-    // 4. Token Usage Analysis (enhanced with cache awareness)
-    const tokenPoints = typedTraces.map(t => ({
-      timestamp: t.start_time,
-      value: (t.input_tokens || 0) + (t.output_tokens || 0),
-      metadata: {
-        trace_id: t.trace_id,
-        cache_read: t.cache_read_input_tokens || 0,
-        model_name: t.model_name
-      }
-    }));
 
     const tokenAnomalies = await detectAnomalies(
       tokenPoints,
@@ -149,29 +229,11 @@ export async function POST(req: NextRequest) {
       { zScoreThreshold: 3 }
     );
 
-    // 5. Cache Miss Analysis (NEW - cache_read_input_tokens drops)
-    const cachePoints = typedTraces
-      .filter(t => t.cache_read_input_tokens !== null && t.cache_read_input_tokens !== undefined)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.cache_read_input_tokens || 0,
-        metadata: { trace_id: t.trace_id, model_name: t.model_name }
-      }));
-
     const cacheMissAnomalies = await detectAnomalies(
       cachePoints,
       'cache_hit_rate',
       { zScoreThreshold: 2 }
     );
-
-    // 6. Cost Analysis (NEW - cost spikes)
-    const costPoints = typedTraces
-      .filter(t => t.cost_usd)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.cost_usd || 0,
-        metadata: { trace_id: t.trace_id, model_name: t.model_name }
-      }));
 
     const costAnomalies = await detectAnomalies(
       costPoints,
@@ -179,29 +241,11 @@ export async function POST(req: NextRequest) {
       { zScoreThreshold: 3 }
     );
 
-    // 7. RAG Retrieval Latency Analysis (NEW)
-    const ragLatencyPoints = typedTraces
-      .filter(t => t.retrieval_latency_ms)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.retrieval_latency_ms || 0,
-        metadata: { trace_id: t.trace_id, rag_relevance: t.rag_relevance_score }
-      }));
-
     const ragLatencyAnomalies = await detectAnomalies(
       ragLatencyPoints,
       'retrieval_latency_ms',
       { zScoreThreshold: 3 }
     );
-
-    // 8. RAG Relevance Score Analysis (NEW - low relevance detection)
-    const relevancePoints = typedTraces
-      .filter(t => t.rag_relevance_score !== null && t.rag_relevance_score !== undefined)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.rag_relevance_score || 0,
-        metadata: { trace_id: t.trace_id }
-      }));
 
     const lowRelevanceAnomalies = await detectAnomalies(
       relevancePoints,
@@ -209,29 +253,11 @@ export async function POST(req: NextRequest) {
       { zScoreThreshold: 2 }
     );
 
-    // 9. Context Token Bloat Analysis (NEW)
-    const contextPoints = typedTraces
-      .filter(t => t.context_tokens)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.context_tokens || 0,
-        metadata: { trace_id: t.trace_id }
-      }));
-
     const contextBloatAnomalies = await detectAnomalies(
       contextPoints,
       'context_tokens',
       { zScoreThreshold: 3 }
     );
-
-    // 10. Provider Queue Time Analysis (NEW)
-    const queueTimePoints = typedTraces
-      .filter(t => t.queue_time_ms)
-      .map(t => ({
-        timestamp: t.start_time,
-        value: t.queue_time_ms || 0,
-        metadata: { trace_id: t.trace_id, model_provider: t.model_provider }
-      }));
 
     const queueTimeAnomalies = await detectAnomalies(
       queueTimePoints,
@@ -252,14 +278,14 @@ export async function POST(req: NextRequest) {
       ...contextBloatAnomalies,
       ...queueTimeAnomalies
     ];
-    const savedAnomalies = [];
+    const savedAnomalies: any[] = [];
 
     for (const anomaly of allAnomalies) {
-      const traceId = anomaly.metadata?.trace_id;
-      const modelName = anomaly.metadata?.model_name;
-      const operationType = anomaly.metadata?.operation_type;
+      const traceId: string | undefined = anomaly.metadata?.trace_id;
+      const modelName: string | undefined = anomaly.metadata?.model_name;
+      const operationType: string | undefined = anomaly.metadata?.operation_type;
 
-      const { data, error } = await supabase
+      const { data, error }: { data: any; error: any } = await supabase
         .from('anomaly_detections')
         .insert({
           user_id: user.id,
