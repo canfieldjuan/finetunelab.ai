@@ -102,8 +102,8 @@ export default function AccountPage() {
   // Usage-based pricing state
   const [currentTier, setCurrentTier] = useState<string | undefined>(undefined);
   const [showTierSelector, setShowTierSelector] = useState(false);
-  const [usageHistory, setUsageHistory] = useState<unknown[]>([]);
-  const [invoices, setInvoices] = useState<unknown[]>([]);
+  const [usageHistory, setUsageHistory] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
 
@@ -192,7 +192,10 @@ export default function AccountPage() {
 
         if (response.ok) {
           const data = await safeJsonParse(response, { history: [] });
+          console.log('[AccountPage] Usage history received:', data.history?.length || 0, 'months');
           setUsageHistory(data.history);
+        } else {
+          console.error('[AccountPage] Failed to fetch usage history:', response.status);
         }
       } catch (error) {
         console.error('[AccountPage] Error fetching usage history:', error);
@@ -360,7 +363,7 @@ export default function AccountPage() {
               {showTierSelector && (
                 <div className="mt-8 pt-8 border-t border-border">
                   <TierSelector
-                    currentTier={currentTier as unknown}
+                    currentTier={currentTier as any}
                     sessionToken={session.access_token}
                     onTierSelect={(tier) => {
                       console.log('[AccountPage] Tier selected:', tier);

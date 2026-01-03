@@ -28,6 +28,12 @@ interface UsageHistoryChartProps {
 }
 
 export function UsageHistoryChart({ data, loading }: UsageHistoryChartProps) {
+  console.log('[UsageHistoryChart] Rendering with:', {
+    dataLength: data?.length || 0,
+    loading,
+    hasData: !!data,
+  });
+
   if (loading) {
     return (
       <Card>
@@ -43,6 +49,7 @@ export function UsageHistoryChart({ data, loading }: UsageHistoryChartProps) {
   }
 
   if (!data || data.length === 0) {
+    console.log('[UsageHistoryChart] No data available');
     return (
       <Card>
         <CardHeader>
@@ -58,8 +65,8 @@ export function UsageHistoryChart({ data, loading }: UsageHistoryChartProps) {
     );
   }
 
-  const maxTraces = Math.max(...data.map((d) => d.rootTraces));
-  const maxCost = Math.max(...data.map((d) => d.cost));
+  const maxTraces = Math.max(...data.map((d) => d.rootTraces), 1);
+  const maxCost = Math.max(...data.map((d) => d.cost), 1);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
