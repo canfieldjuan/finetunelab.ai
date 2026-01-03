@@ -12,6 +12,26 @@ import type { MetricAlertRule, MetricType, ComparisonOperator, AggregationMethod
 import { AlertService } from '../alerts/alert.service';
 import { recordUsageEvent } from '../usage/checker';
 
+interface ScheduleUpdatePayload {
+  last_run_at?: string;
+  last_run_status?: string;
+  last_run_id?: string | null;
+  next_run_at?: string;
+  consecutive_failures?: number;
+  is_active?: boolean;
+}
+
+interface TraceData {
+  duration_ms?: number;
+  status?: string;
+  cost?: number;
+  ttft_ms?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  is_anomaly?: boolean;
+  anomaly_score?: number;
+}
+
 // Configuration
 const WORKER_INTERVAL_MS = 60000; // Check every minute
 const MAX_CONCURRENT_EVALS = 3; // Concurrency limit to avoid overwhelming the system
@@ -299,7 +319,7 @@ export class EvaluationSchedulerWorker {
       );
 
       // Update schedule
-      const updates: unknown = {
+      const updates: ScheduleUpdatePayload = {
         last_run_at: new Date().toISOString(),
         last_run_status: status,
         last_run_id: batchTestRunId,
@@ -356,7 +376,7 @@ export class EvaluationSchedulerWorker {
     console.log('[EvalScheduler] Handling failure:', evaluation.id);
     console.log('[EvalScheduler] Consecutive failures:', newConsecutiveFailures);
 
-    const updates: unknown = {
+    const updates: ScheduleUpdatePayload = {
       last_run_at: new Date().toISOString(),
       last_run_status: 'failed',
       consecutive_failures: newConsecutiveFailures,
@@ -601,7 +621,7 @@ export class EvaluationSchedulerWorker {
    * Calculate metric value from traces
    */
   private calculateMetricValue(
-    traces: unknown[],
+    traces: TraceData[],
     metricType: MetricType,
     aggregationMethod: AggregationMethod
   ): number {

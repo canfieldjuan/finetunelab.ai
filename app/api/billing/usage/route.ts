@@ -135,6 +135,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Ensure commitment is not null after fetch/create logic
+    if (!commitment) {
+      return NextResponse.json(
+        { error: 'Failed to load subscription data' },
+        { status: 500 }
+      );
+    }
+
     // 3. Get current usage
     const usage: UsageStats | null = await getCurrentUsage(user.id);
     if (!usage) {

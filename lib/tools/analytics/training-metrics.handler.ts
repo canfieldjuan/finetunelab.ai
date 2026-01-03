@@ -22,6 +22,18 @@ interface TrainingMetricsArgs {
   offset?: number;
 }
 
+interface JobConfigMetadata {
+  job_name?: string;
+  jobName?: string;
+}
+
+interface JobConfig {
+  metadata?: JobConfigMetadata;
+  job_name?: string;
+  jobName?: string;
+  [key: string]: unknown;
+}
+
 export async function executeTrainingMetrics(
   args: Record<string, unknown>,
   userId: string,
@@ -281,7 +293,7 @@ async function listJobs(
       success: true,
       jobs: jobs?.map(job => {
         // Extract job_name from config if available
-        const config = job.config as unknown;
+        const config = job.config as JobConfig;
         const job_name = config?.metadata?.job_name ||
                         config?.metadata?.jobName ||
                         config?.job_name ||
@@ -352,7 +364,7 @@ async function getJobDetails(jobId: string, userId: string, authHeader: string):
     }
 
     // Extract job_name from config if available
-    const config = job.config as unknown;
+    const config = job.config as JobConfig;
     const job_name = config?.metadata?.job_name ||
                     config?.metadata?.jobName ||
                     config?.job_name ||

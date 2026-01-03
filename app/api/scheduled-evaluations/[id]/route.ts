@@ -11,6 +11,21 @@ import { createClient } from '@supabase/supabase-js';
 import { calculateNextRun } from '@/lib/evaluation/schedule-calculator';
 import type { ScheduledEvaluation, ScheduleType } from '@/lib/batch-testing/types';
 
+interface ScheduleUpdatePayload {
+  name?: string;
+  description?: string;
+  schedule_type?: ScheduleType;
+  cron_expression?: string;
+  timezone?: string;
+  model_id?: string;
+  batch_test_config?: unknown;
+  is_active?: boolean;
+  alert_on_failure?: boolean;
+  alert_on_regression?: boolean;
+  regression_threshold_percent?: number;
+  next_run_at?: string;
+}
+
 // Supabase configuration
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -144,7 +159,7 @@ export async function PATCH(
 
     // Block 3: Parse and prepare update payload
     const body = await req.json();
-    const updates: unknown = {};
+    const updates: ScheduleUpdatePayload = {};
 
     // Allow updating these fields
     if (body.name !== undefined) updates.name = body.name;

@@ -13,6 +13,18 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
+interface InvoiceData {
+  id: string;
+  period_month: number;
+  period_year: number;
+  period_start_date: string;
+  period_end_date: string;
+  total_cost: string;
+  status: string;
+  paid_at?: string | null;
+  stripe_invoice_id?: string | null;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get('authorization');
@@ -53,7 +65,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const formattedInvoices = (invoices || []).map((invoice: unknown) => ({
+    const formattedInvoices = (invoices || []).map((invoice: InvoiceData) => ({
       id: invoice.id,
       periodMonth: invoice.period_month,
       periodYear: invoice.period_year,

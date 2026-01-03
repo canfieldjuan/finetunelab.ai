@@ -10,13 +10,25 @@ import { Play, RefreshCw, ArrowRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Trace } from './TraceView';
 
+interface TraceData {
+  model_name: string;
+  total_tokens?: number;
+  cost_usd?: number;
+  duration_ms: number;
+}
+
+interface ReplayResult {
+  originalTrace: TraceData;
+  replayTrace: TraceData;
+}
+
 interface TraceReplayPanelProps {
   trace: Trace;
 }
 
 export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
   const [replaying, setReplaying] = useState(false);
-  const [replayResult, setReplayResult] = useState<unknown>(null);
+  const [replayResult, setReplayResult] = useState<ReplayResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const inputData = trace.input_data as Record<string, unknown> || {};
@@ -24,9 +36,15 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
 
   const [modelName, setModelName] = useState(trace.model_name || '');
   const [modelProvider, setModelProvider] = useState(trace.model_provider || '');
-  const [temperature, setTemperature] = useState(originalParams.temperature ?? 0.7);
-  const [maxTokens, setMaxTokens] = useState(originalParams.maxTokens ?? 1000);
-  const [systemPrompt, setSystemPrompt] = useState(inputData.systemPrompt || '');
+  const [temperature, setTemperature] = useState<number>(
+    typeof originalParams.temperature === 'number' ? originalParams.temperature : 0.7
+  );
+  const [maxTokens, setMaxTokens] = useState<number>(
+    typeof originalParams.maxTokens === 'number' ? originalParams.maxTokens : 1000
+  );
+  const [systemPrompt, setSystemPrompt] = useState<string>(
+    typeof inputData.systemPrompt === 'string' ? inputData.systemPrompt : ''
+  );
   const [disableCache, setDisableCache] = useState(false);
 
   async function replayTrace() {
@@ -67,7 +85,7 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
         return;
       }
 
-      setReplayResult(data);
+      setReplayResult(data as ReplayResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to replay trace');
     } finally {
@@ -197,13 +215,13 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tokens</span>
-                  <span className={`font-mono ${replayResult.replayTrace.total_tokens < replayResult.originalTrace.total_tokens ? 'text-green-600' : ''}`}>
+                  <span className={`font-mono ${(replayResult.replayTrace.total_tokens && replayResult.originalTrace.total_tokens && replayResult.replayTrace.total_tokens < replayResult.originalTrace.total_tokens) ? 'text-green-600' : ''}`}>
                     {replayResult.replayTrace.total_tokens?.toLocaleString() || '-'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Cost</span>
-                  <span className={`font-mono ${replayResult.replayTrace.cost_usd < replayResult.originalTrace.cost_usd ? 'text-green-600' : ''}`}>
+                  <span className={`font-mono ${(replayResult.replayTrace.cost_usd !== undefined && replayResult.originalTrace.cost_usd !== undefined && replayResult.replayTrace.cost_usd < replayResult.originalTrace.cost_usd) ? 'text-green-600' : ''}`}>
                     ${replayResult.replayTrace.cost_usd?.toFixed(6) || '-'}
                   </span>
                 </div>

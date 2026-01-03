@@ -21,6 +21,7 @@ interface PythonASTArgs {
 interface PythonASTBase {
   nodeType?: string;
   id?: string;
+  attr?: string;
   [key: string]: unknown;
 }
 
@@ -28,10 +29,12 @@ interface PythonASTNode {
   nodeType?: string;
   name?: string;
   lineno?: number;
+  end_lineno?: number;
   body?: PythonASTNode[];
   bases?: PythonASTBase[];
   args?: PythonASTArgs;
   id?: string;
+  func?: PythonASTBase;
   [key: string]: unknown;
 }
 
@@ -41,13 +44,13 @@ interface PythonAST {
 }
 
 export class PythonASTParser extends BaseASTParser {
-  private ast: PythonAST;
+  private ast!: PythonAST;
 
   async parse(): Promise<ASTParseResult> {
     const startTime = Date.now();
 
     try {
-      this.ast = parse(this.content);
+      this.ast = parse(this.content) as unknown as PythonAST;
     } catch (error) {
       console.error('[PythonASTParser] Parse error:', error);
       throw error;
