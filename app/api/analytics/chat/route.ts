@@ -11,7 +11,7 @@ import { executeGetTraces } from '@/lib/tools/analytics/traces.handler';
 import { startToolLog, completeToolLog, failToolLog, categorizeError } from '@/lib/analytics/tool-logger';
 import { checkRateLimit } from '@/lib/rate-limiting/rate-limiter';
 import { RATE_LIMITS } from '@/lib/rate-limiting/types';
-import { recordUsageEvent } from '@/lib/usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 export const runtime = 'nodejs';
 

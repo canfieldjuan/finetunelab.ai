@@ -11,7 +11,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import type { TrainingStatusResponse } from '@/lib/training/execution-types';
 import { STATUS } from '@/lib/constants';
-import { recordUsageEvent } from '@/lib/usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 export const runtime = 'nodejs';
 
@@ -187,22 +187,24 @@ async function syncOpenAIStatus(
           const durationMs = endTime - startTime;
           const durationMinutes = Math.ceil(durationMs / 60000);
 
-          recordUsageEvent({
-            userId: fullExecution.user_id,
-            metricType: 'compute_minutes',
-            value: durationMinutes,
-            resourceType: 'training_job',
-            resourceId: execution.id,
-            metadata: {
-              provider: fullExecution.provider,
-              openai_job_id: execution.openai_job_id || null,
-              trained_tokens: job.trained_tokens || 0,
-              duration_ms: durationMs,
-              job_type: 'training',
-            }
-          }).catch(err => {
-            console.error('[TrainingStatus] Failed to record compute time:', err);
-          });
+          // DEPRECATED: OLD usage tracking system
+          // Now using usage_meters table via increment_root_trace_count()
+          // recordUsageEvent({
+          //   userId: fullExecution.user_id,
+          //   metricType: 'compute_minutes',
+          //   value: durationMinutes,
+          //   resourceType: 'training_job',
+          //   resourceId: execution.id,
+          //   metadata: {
+          //     provider: fullExecution.provider,
+          //     openai_job_id: execution.openai_job_id || null,
+          //     trained_tokens: job.trained_tokens || 0,
+          //     duration_ms: durationMs,
+          //     job_type: 'training',
+          //   }
+          // }).catch(err => {
+          //   console.error('[TrainingStatus] Failed to record compute time:', err);
+          // });
 
           console.log('[TrainingStatus] Compute time recorded:', durationMinutes, 'minutes');
         }

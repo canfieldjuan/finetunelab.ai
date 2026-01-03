@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { LLMJudge, STANDARD_CRITERIA, LLMJudgeCriterion, LLMJudgmentResult } from '@/lib/evaluation/llm-judge';
 import { graphragService } from '@/lib/graphrag';
-import { recordUsageEvent } from '@/lib/usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 export const runtime = 'nodejs';
 
@@ -215,19 +215,20 @@ IMPORTANT: If the response aligns with these facts, it is ACCURATE. Do NOT penal
     await saveJudgmentsToDatabase(supabase, results);
   }
 
-  // Record usage event for evaluation
-  await recordUsageEvent({
-    userId,
-    metricType: 'evaluation_run',
-    value: 1,
-    resourceType: 'message',
-    resourceId: request.message_id,
-    metadata: {
-      judgeModel: request.judge_model || 'gpt-4.1',
-      criteriaCount: criteria.length,
-      passedCount: results.filter((r) => r.passed).length,
-    },
-  });
+  // DEPRECATED: OLD usage tracking system
+  // Now using usage_meters table via increment_root_trace_count()
+  // await recordUsageEvent({
+  //   userId,
+  //   metricType: 'evaluation_run',
+  //   value: 1,
+  //   resourceType: 'message',
+  //   resourceId: request.message_id,
+  //   metadata: {
+  //     judgeModel: request.judge_model || 'gpt-4.1',
+  //     criteriaCount: criteria.length,
+  //     passedCount: results.filter((r) => r.passed).length,
+  //   },
+  // });
 
   return NextResponse.json({
     success: true,
@@ -386,19 +387,20 @@ IMPORTANT: If response aligns with these facts, it is ACCURATE.`;
     await saveJudgmentsToDatabase(supabase, allJudgments);
   }
 
-  // Record usage event for batch evaluation
-  await recordUsageEvent({
-    userId,
-    metricType: 'evaluation_run',
-    value: request.message_ids.length,
-    resourceType: 'batch_evaluation',
-    resourceId: request.message_ids[0],
-    metadata: {
-      judgeModel: request.judge_model || 'gpt-4.1',
-      criteriaCount: criteria.length,
-      messagesEvaluated: request.message_ids.length,
-    },
-  });
+  // DEPRECATED: OLD usage tracking system
+  // Now using usage_meters table via increment_root_trace_count()
+  // await recordUsageEvent({
+  //   userId,
+  //   metricType: 'evaluation_run',
+  //   value: request.message_ids.length,
+  //   resourceType: 'batch_evaluation',
+  //   resourceId: request.message_ids[0],
+  //   metadata: {
+  //     judgeModel: request.judge_model || 'gpt-4.1',
+  //     criteriaCount: criteria.length,
+  //     messagesEvaluated: request.message_ids.length,
+  //   },
+  // });
 
   // Calculate summary statistics
   const allJudgments = Array.from(results.values()).flat();

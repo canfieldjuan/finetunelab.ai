@@ -134,7 +134,7 @@ import { STATUS } from '@/lib/constants';
 import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
 import { sendBatchTestAlert } from '@/lib/alerts';
 import { logApiKeyUsage, extractClientInfo } from '@/lib/auth/api-key-usage-logger';
-import { recordUsageEvent } from '@/lib/usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 // Use Node.js runtime for file system operations
 export const runtime = 'nodejs';

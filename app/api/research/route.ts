@@ -1,7 +1,7 @@
 import { researchService } from '@/lib/tools/web-search/research.service';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
-import { recordUsageEvent } from '@/lib/usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 export async function POST(request: NextRequest) {
   try {

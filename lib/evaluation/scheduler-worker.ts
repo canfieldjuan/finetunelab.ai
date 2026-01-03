@@ -10,7 +10,7 @@ import type { ScheduledEvaluation, ScheduleType } from '../batch-testing/types';
 import { sendScheduledEvaluationAlert } from '../alerts/alert.service';
 import type { MetricAlertRule, MetricType, ComparisonOperator, AggregationMethod, AlertType } from '../alerts/alert.types';
 import { AlertService } from '../alerts/alert.service';
-import { recordUsageEvent } from '../usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '../usage/checker';
 
 interface ScheduleUpdatePayload {
   last_run_at?: string;
@@ -237,19 +237,20 @@ export class EvaluationSchedulerWorker {
 
       console.log('[EvalScheduler] Batch test started:', batchTestRunId);
 
-      // Record usage event for scheduled evaluation run
-      await recordUsageEvent({
-        userId: evaluation.user_id,
-        metricType: 'scheduled_eval_run',
-        value: 1,
-        resourceType: 'scheduled_evaluation',
-        resourceId: evalId,
-        metadata: {
-          batchTestRunId,
-          scheduleType: evaluation.schedule_type,
-          testSuiteId: evaluation.test_suite_id,
-        },
-      });
+      // DEPRECATED: OLD usage tracking system
+      // Now using usage_meters table via increment_root_trace_count()
+      // await recordUsageEvent({
+      //   userId: evaluation.user_id,
+      //   metricType: 'scheduled_eval_run',
+      //   value: 1,
+      //   resourceType: 'scheduled_evaluation',
+      //   resourceId: evalId,
+      //   metadata: {
+      //     batchTestRunId,
+      //     scheduleType: evaluation.schedule_type,
+      //     testSuiteId: evaluation.test_suite_id,
+      //   },
+      // });
 
       // Schedule next run and update status
       await this.scheduleNextRun(evaluation, 'success', batchTestRunId);

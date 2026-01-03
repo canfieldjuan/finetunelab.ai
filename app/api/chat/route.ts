@@ -25,7 +25,7 @@ import { calculateBasicQualityScore } from '@/lib/batch-testing/evaluation-integ
 import crypto from 'crypto';
 import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
-import { recordUsageEvent } from '@/lib/usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
 
