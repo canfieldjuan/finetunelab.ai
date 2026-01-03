@@ -21,7 +21,13 @@ export type UsageMetricType =
   | 'scheduled_eval_run'
   | 'chat_message'
   | 'inference_call'
-  | 'compute_minutes';
+  | 'compute_minutes'
+  // NEW: Usage tracking audit metrics (added 2026-01-02)
+  | 'evaluation_run'
+  | 'anomaly_detection'
+  | 'analytics_assistant'
+  | 'research_job'
+  | 'graphrag_search';
 
 /**
  * Result of checking if an action can be performed
