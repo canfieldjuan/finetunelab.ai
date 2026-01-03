@@ -354,87 +354,87 @@ export function AppSidebar({
           {children}
         </div>
       )}
-
-      {/* User Settings Section */}
-      {user && (
-        <div className="mt-4 pt-4 border-t">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <SettingsIcon className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-sm truncate">{user.email}</span>
-                </div>
-                <span className="text-xs ml-2">▼</span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-56">
-              {/* Documentation Link */}
-              <DropdownMenuItem asChild>
-                <Link href="/docs" className="flex items-center gap-2 cursor-pointer">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>Documentation</span>
-                </Link>
-              </DropdownMenuItem>
-              {/* Upgrade Account Link */}
-              <DropdownMenuItem asChild>
-                <Link href="/upgrade" className="flex items-center gap-2 cursor-pointer">
-                  <Crown className="w-3.5 h-3.5" />
-                  <span>Upgrade Account</span>
-                </Link>
-              </DropdownMenuItem>
-              {/* Account Settings Link */}
-              <DropdownMenuItem asChild>
-                <Link href="/account" className="flex items-center gap-2 cursor-pointer">
-                  <UserIcon className="w-3.5 h-3.5" />
-                  <span>Account Settings</span>
-                </Link>
-              </DropdownMenuItem>
-              {/* Settings Button */}
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  console.log('[AppSidebar] Settings clicked, session:', session);
-                  console.log('[AppSidebar] Has access_token:', !!session?.access_token);
-                  setShowSettings(true);
-                }}
-                className="cursor-pointer"
-              >
-                <SettingsIcon className="w-3.5 h-3.5 mr-2" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              {/* Secrets Vault Link */}
-              <DropdownMenuItem asChild>
-                <Link href="/secrets" className="flex items-center gap-2 cursor-pointer">
-                  <Key className="w-3.5 h-3.5" />
-                  <span>Secrets Vault</span>
-                </Link>
-              </DropdownMenuItem>
-              {/* Manage Workspaces Button */}
-              <DropdownMenuItem
-                onClick={() => setShowManageWorkspaces(true)}
-                className="cursor-pointer"
-              >
-                <FolderKanban className="w-3.5 h-3.5 mr-2" />
-                <span>Manage Workspaces</span>
-              </DropdownMenuItem>
-              {/* Log Out Button */}
-              <DropdownMenuItem
-                onClick={signOut}
-                className="text-destructive focus:text-destructive cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5 mr-2" />
-                <span>Log out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
         </div>
         {/* END SCROLLABLE CONTENT AREA */}
+
+        {/* User Settings Section - FIXED AT BOTTOM */}
+        {user && (
+          <div className="p-4 pt-3 border-t flex-shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <SettingsIcon className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm truncate">{user.email}</span>
+                  </div>
+                  <span className="text-xs ml-2">▼</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-56">
+                {/* Documentation Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/docs" className="flex items-center gap-2 cursor-pointer">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Documentation</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Upgrade Account Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/upgrade" className="flex items-center gap-2 cursor-pointer">
+                    <Crown className="w-3.5 h-3.5" />
+                    <span>Upgrade Account</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Account Settings Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/account" className="flex items-center gap-2 cursor-pointer">
+                    <UserIcon className="w-3.5 h-3.5" />
+                    <span>Account Settings</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Settings Button */}
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    console.log('[AppSidebar] Settings clicked, session:', session);
+                    console.log('[AppSidebar] Has access_token:', !!session?.access_token);
+                    setShowSettings(true);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <SettingsIcon className="w-3.5 h-3.5 mr-2" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                {/* Secrets Vault Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/secrets" className="flex items-center gap-2 cursor-pointer">
+                    <Key className="w-3.5 h-3.5" />
+                    <span>Secrets Vault</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Manage Workspaces Button */}
+                <DropdownMenuItem
+                  onClick={() => setShowManageWorkspaces(true)}
+                  className="cursor-pointer"
+                >
+                  <FolderKanban className="w-3.5 h-3.5 mr-2" />
+                  <span>Manage Workspaces</span>
+                </DropdownMenuItem>
+                {/* Log Out Button */}
+                <DropdownMenuItem
+                  onClick={signOut}
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5 mr-2" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </aside>
 
       {/* Manage Workspaces Dialog */}
