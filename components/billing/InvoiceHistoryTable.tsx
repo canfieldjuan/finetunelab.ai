@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download, ExternalLink } from "lucide-react";
 
-interface Invoice {
+export interface Invoice {
   id: string;
   periodMonth: number;
   periodYear: number;

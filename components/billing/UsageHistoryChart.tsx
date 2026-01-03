@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-interface MonthlyUsage {
+export interface MonthlyUsage {
   month: string;
   year: number;
   rootTraces: number;

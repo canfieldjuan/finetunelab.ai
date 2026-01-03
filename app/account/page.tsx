@@ -20,9 +20,10 @@ import { NotificationSettings } from "@/components/settings/NotificationSettings
 import { ScheduledEvaluationManager } from "@/components/evaluation/ScheduledEvaluationManager";
 import { UsageDashboard } from "@/components/billing/UsageDashboard";
 import { TierSelector } from "@/components/billing/TierSelector";
-import { UsageHistoryChart } from "@/components/billing/UsageHistoryChart";
-import { InvoiceHistoryTable } from "@/components/billing/InvoiceHistoryTable";
+import { UsageHistoryChart, type MonthlyUsage } from "@/components/billing/UsageHistoryChart";
+import { InvoiceHistoryTable, type Invoice } from "@/components/billing/InvoiceHistoryTable";
 import { safeJsonParse } from "@/lib/utils/safe-json";
+import type { UsageTier } from "@/lib/pricing/usage-based-config";
 
 // Usage Card Component
 interface UsageCardProps {
@@ -100,10 +101,10 @@ export default function AccountPage() {
   const [managingSubscription, setManagingSubscription] = useState(false);
 
   // Usage-based pricing state
-  const [currentTier, setCurrentTier] = useState<string | undefined>(undefined);
+  const [currentTier, setCurrentTier] = useState<UsageTier | undefined>(undefined);
   const [showTierSelector, setShowTierSelector] = useState(false);
-  const [usageHistory, setUsageHistory] = useState<unknown[]>([]);
-  const [invoices, setInvoices] = useState<unknown[]>([]);
+  const [usageHistory, setUsageHistory] = useState<MonthlyUsage[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
 
@@ -360,7 +361,7 @@ export default function AccountPage() {
               {showTierSelector && (
                 <div className="mt-8 pt-8 border-t border-border">
                   <TierSelector
-                    currentTier={currentTier as unknown}
+                    currentTier={currentTier}
                     sessionToken={session.access_token}
                     onTierSelect={(tier) => {
                       console.log('[AccountPage] Tier selected:', tier);

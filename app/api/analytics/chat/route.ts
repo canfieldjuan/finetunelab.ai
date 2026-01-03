@@ -1295,14 +1295,20 @@ async function evaluateMessages(
     const judgeData = await judgeResponse.json();
 
     // Calculate summary statistics
-    const evaluations = judgeData.evaluations || [];
+    interface Evaluation {
+      criterion: string;
+      score: number;
+      passed: boolean;
+      reasoning?: string;
+    }
+    const evaluations = (judgeData.evaluations || []) as Evaluation[];
     const totalEvaluations = evaluations.length;
-    const passedCount = evaluations.filter((e: Record<string, unknown>) => e.passed).length;
+    const passedCount = evaluations.filter((e) => e.passed).length;
     const passRate = totalEvaluations > 0 ? (passedCount / totalEvaluations) * 100 : 0;
 
     // Calculate average scores per criterion
     const criterionScores: Record<string, number[]> = {};
-    evaluations.forEach((evaluation: Record<string, unknown>) => {
+    evaluations.forEach((evaluation) => {
       if (!criterionScores[evaluation.criterion]) {
         criterionScores[evaluation.criterion] = [];
       }
@@ -1316,7 +1322,7 @@ async function evaluateMessages(
     });
 
     // Identify failed evaluations
-    const failedEvaluations = evaluations.filter((e: Record<string, unknown>) => !e.passed);
+    const failedEvaluations = evaluations.filter((e) => !e.passed);
 
     // Return structured summary for the assistant
     return {
@@ -1330,25 +1336,26 @@ async function evaluateMessages(
         judge_model: judgeModel,
       },
       average_scores: averageScores,
-      failed_evaluations: failedEvaluations.map((e: Record<string, unknown>) => ({
-        message_id: e.message_id,
+      failed_evaluations: failedEvaluations.map((e) => ({
+        message_id: (e as any).message_id,
         criterion: e.criterion,
         score: e.score,
-        reasoning: e.evidence?.reasoning || 'No reasoning provided',
+        reasoning: e.reasoning || 'No reasoning provided',
       })),
       criteria_evaluated: actualCriteria,
     };
   } catch (error: unknown) {
     console.error('[AnalyticsAPI] Error in evaluateMessages:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return {
       error: true,
-      message: `Failed to evaluate messages: ${error.message}`,
+      message: `Failed to evaluate messages: ${errorMessage}`,
     };
   }
 }
 
 // Tool call handler
-async function executeAnalyticsTool(toolName: string, args: Record<string, unknown>, userId: string, authHeader?: string, authClient?: unknown) {
+async function executeAnalyticsTool(toolName: string, args: Record<string, unknown>, userId: string, authHeader?: string, authClient?: SupabaseClient) {
   console.log('[AnalyticsAPI] Executing tool:', toolName, 'with args:', JSON.stringify(args).slice(0, 100));
 
   // START LOGGING
