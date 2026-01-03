@@ -45,6 +45,7 @@ import { ManageWorkspacesDialog } from '@/components/workspace/ManageWorkspacesD
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { FineTuneLabFullLogoV2 } from '@/components/branding';
+import { supabase } from '@/lib/supabaseClient';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +81,20 @@ export function AppSidebar({
 
   // State for Settings dialog
   const [showSettings, setShowSettings] = useState(false);
+
+  // State for current session (fetched from Supabase)
+  const [currentSession, setCurrentSession] = useState<Session | null>(session || null);
+
+  // Fetch session on mount to ensure Settings works on all pages
+  useEffect(() => {
+    const fetchSession = async () => {
+      const { data: { session: fetchedSession } } = await supabase.auth.getSession();
+      if (fetchedSession) {
+        setCurrentSession(fetchedSession);
+      }
+    };
+    fetchSession();
+  }, []);
 
   // Load expanded state from localStorage on mount
   useEffect(() => {
@@ -399,8 +414,8 @@ export function AppSidebar({
                 <DropdownMenuItem
                   onSelect={(e) => {
                     e.preventDefault();
-                    console.log('[AppSidebar] Settings clicked, session:', session);
-                    console.log('[AppSidebar] Has access_token:', !!session?.access_token);
+                    console.log('[AppSidebar] Settings clicked, currentSession:', currentSession);
+                    console.log('[AppSidebar] Has access_token:', !!currentSession?.access_token);
                     setShowSettings(true);
                   }}
                   className="cursor-pointer"
@@ -444,18 +459,18 @@ export function AppSidebar({
       />
 
       {/* Settings Dialog */}
-      {session?.access_token ? (
+      {currentSession?.access_token ? (
         <SettingsDialog
           isOpen={showSettings}
           onClose={() => {
             console.log('[AppSidebar] Closing settings dialog');
             setShowSettings(false);
           }}
-          sessionToken={session.access_token}
+          sessionToken={currentSession.access_token}
         />
       ) : (
         <>
-          {showSettings && console.log('[AppSidebar] WARNING: Settings dialog requested but no session.access_token available')}
+          {showSettings && console.log('[AppSidebar] WARNING: Settings dialog requested but no currentSession.access_token available')}
         </>
       )}
     </>
