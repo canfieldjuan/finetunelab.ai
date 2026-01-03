@@ -63,12 +63,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    console.log('[Usage History API] Found', usageHistory?.length || 0, 'usage records');
+
     const { data: commitment } = await supabase
       .from('usage_commitments')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .single();
+
+    console.log('[Usage History API] Commitment tier:', commitment?.tier || 'none');
 
     const history = (usageHistory || []).map((record: UsageMeterRecord) => {
       const payloadGb = record.compressed_payload_bytes / 1_073_741_824;
@@ -96,6 +100,11 @@ export async function GET(req: NextRequest) {
         cost: parseFloat(estimatedCost.toFixed(2)),
       };
     });
+
+    console.log('[Usage History API] Returning', history.length, 'months of data');
+    if (history.length > 0) {
+      console.log('[Usage History API] Sample:', history[0]);
+    }
 
     return NextResponse.json({ history });
 

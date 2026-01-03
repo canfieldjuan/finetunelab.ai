@@ -193,7 +193,10 @@ export default function AccountPage() {
 
         if (response.ok) {
           const data = await safeJsonParse(response, { history: [] });
+          console.log('[AccountPage] Usage history received:', data.history?.length || 0, 'months');
           setUsageHistory(data.history);
+        } else {
+          console.error('[AccountPage] Failed to fetch usage history:', response.status);
         }
       } catch (error) {
         console.error('[AccountPage] Error fetching usage history:', error);
