@@ -666,8 +666,8 @@ export function AnalyticsChat() {
                 <Input
                   value={input}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-                  placeholder={selectedSession ? "Ask about metrics, evaluations, or performance..." : "Select a session first..."}
-                  disabled={loading || !selectedSession}
+                  placeholder={selectedSession ? "Ask about metrics, evaluations, or performance..." : "Ask about your sessions, metrics, or performance..."}
+                  disabled={loading}
                   onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -691,7 +691,7 @@ export function AnalyticsChat() {
               ) : (
                 <Button
                   onClick={handleSend}
-                  disabled={!input.trim() || !selectedSession}
+                  disabled={!input.trim()}
                   className="min-h-[44px] px-6"
                 >
                   Send
