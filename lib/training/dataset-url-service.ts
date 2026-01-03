@@ -13,6 +13,12 @@ export interface DatasetDownloadUrl {
   expires_at: string;
 }
 
+interface AWSMetadata {
+  access_key_id: string;
+  region: string;
+  s3_bucket: string;
+}
+
 export class DatasetUrlService {
   /**
    * Generate temporary download URL for dataset
@@ -80,7 +86,7 @@ export class DatasetUrlService {
       throw new Error('AWS credentials not configured');
     }
 
-    const awsMetadata = awsSecret.metadata.aws as unknown;
+    const awsMetadata = awsSecret.metadata.aws as AWSMetadata;
     const decryptedSecretKey = await secretsManager.getDecryptedApiKey(userId, 'aws', supabase);
 
     if (!decryptedSecretKey) {

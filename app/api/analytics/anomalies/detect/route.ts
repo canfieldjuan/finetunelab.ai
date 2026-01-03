@@ -281,9 +281,9 @@ export async function POST(req: NextRequest) {
     const savedAnomalies: any[] = [];
 
     for (const anomaly of allAnomalies) {
-      const traceId: string | undefined = anomaly.metadata?.trace_id;
-      const modelName: string | undefined = anomaly.metadata?.model_name;
-      const operationType: string | undefined = anomaly.metadata?.operation_type;
+      const traceId: string | undefined = anomaly.metadata?.trace_id as string | undefined;
+      const modelName: string | undefined = anomaly.metadata?.model_name as string | undefined;
+      const operationType: string | undefined = anomaly.metadata?.operation_type as string | undefined;
 
       const { data, error }: { data: any; error: any } = await supabase
         .from('anomaly_detections')
