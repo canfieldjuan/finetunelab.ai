@@ -101,7 +101,7 @@ export function UsageHistoryChart({ data, loading }: UsageHistoryChartProps) {
                   key={index}
                   className="flex-1 flex flex-col items-center gap-2"
                 >
-                  <div className="relative w-full h-full flex items-end justify-center gap-1">
+                  <div className="relative w-full h-48 flex items-end justify-center gap-1">
                     <div
                       className="w-1/2 bg-blue-500 rounded-t hover:bg-blue-600 transition-colors relative group"
                       style={{ height: `${traceHeight}%` }}
