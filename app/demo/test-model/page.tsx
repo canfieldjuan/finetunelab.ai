@@ -23,6 +23,7 @@ import { ModelConfigForm } from '@/components/demo/ModelConfigForm';
 import { BatchTestProgress } from '@/components/demo/BatchTestProgress';
 import { DemoAtlasChat } from '@/components/demo/DemoAtlasChat';
 import { DemoBatchAnalytics } from '@/components/demo/DemoBatchAnalytics';
+import { DemoExportModal } from '@/components/demo/DemoExportModal';
 import { FineTuneLabFullLogoV2 } from '@/components/branding/FineTuneLabFullLogoV2';
 import type { DemoTestSuite, TaskDomain, ConfigureModelResponse } from '@/lib/demo/types';
 
@@ -44,6 +45,7 @@ export default function DemoTestModelPage() {
   const [sessionConfig, setSessionConfig] = useState<ConfigureModelResponse | null>(null);
   const [testRunId, setTestRunId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [cleanupComplete, setCleanupComplete] = useState(false);
   const [showSignupNudge, setShowSignupNudge] = useState(true);
@@ -389,26 +391,14 @@ export default function DemoTestModelPage() {
             <CardContent className="space-y-6">
               {!cleanupComplete && (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => handleExport('csv')}
-                      disabled={isExporting}
-                      className="h-20 flex-col"
-                    >
-                      <FileText className="h-6 w-6 mb-2" />
-                      Export CSV
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleExport('json')}
-                      disabled={isExporting}
-                      className="h-20 flex-col"
-                    >
-                      <FileText className="h-6 w-6 mb-2" />
-                      Export JSON
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => setShowExportModal(true)}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white h-16"
+                    size="lg"
+                  >
+                    <Download className="mr-2 h-5 w-5" />
+                    Export Results (3 Personas Available)
+                  </Button>
 
                   {/* Pre-Cleanup Signup Nudge */}
                   {showSignupNudge && (
@@ -538,6 +528,20 @@ export default function DemoTestModelPage() {
     }
   };
 
+  // Render export modal
+  const renderExportModal = () => {
+    if (!sessionConfig) return null;
+
+    return (
+      <DemoExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        sessionId={sessionConfig.session_id}
+        modelName={sessionConfig.model_name || 'Unknown Model'}
+      />
+    );
+  };
+
   // Step indicator
   const steps = [
     { key: 'task_selection', label: 'Domain' },
@@ -593,6 +597,9 @@ export default function DemoTestModelPage() {
 
         {/* Step content */}
         {renderStep()}
+
+        {/* Export modal */}
+        {renderExportModal()}
       </div>
     </div>
   );
