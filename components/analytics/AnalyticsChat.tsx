@@ -100,7 +100,8 @@ export function AnalyticsChat() {
 
       const groupedSessions = Array.from(grouped.values());
       console.log('[AnalyticsChat] Grouped sessions:', groupedSessions.length);
-      
+      console.log('[AnalyticsChat] Full grouped sessions array:', groupedSessions);
+
       // Log each session's conversation IDs for debugging
       groupedSessions.forEach((session, index) => {
         console.log(`[AnalyticsChat] Session ${index + 1}:`, {
@@ -110,19 +111,27 @@ export function AnalyticsChat() {
           conversation_ids: session.conversation_ids,
         });
         // Validate UUIDs
-        const invalidIds = session.conversation_ids.filter(id => 
+        const invalidIds = session.conversation_ids.filter(id =>
           !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
         );
         if (invalidIds.length > 0) {
           console.error(`[AnalyticsChat] Session ${index + 1} has invalid UUIDs:`, invalidIds);
         }
       });
-      
+
+      console.log('[AnalyticsChat] About to call setSessions with', groupedSessions.length, 'sessions');
       setSessions(groupedSessions);
+      console.log('[AnalyticsChat] setSessions called successfully');
     };
 
     fetchSessions();
   }, [user]);
+
+  // Log when sessions state changes
+  useEffect(() => {
+    console.log('[AnalyticsChat] Sessions state updated. Count:', sessions.length);
+    console.log('[AnalyticsChat] Sessions state value:', sessions);
+  }, [sessions]);
 
   // Save messages to session storage whenever they change
   useEffect(() => {
@@ -142,13 +151,21 @@ export function AnalyticsChat() {
 
   // Filter sessions based on search query
   const filteredSessions = React.useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
+    console.log('[AnalyticsChat] Computing filteredSessions. Sessions count:', sessions.length, 'Search query:', searchQuery);
+
+    if (!searchQuery.trim()) {
+      console.log('[AnalyticsChat] No search query, returning all sessions:', sessions.length);
+      return sessions;
+    }
 
     const query = searchQuery.toLowerCase();
-    return sessions.filter(s =>
+    const filtered = sessions.filter(s =>
       s.experiment_name.toLowerCase().includes(query) ||
       s.session_id.toLowerCase().includes(query)
     );
+
+    console.log('[AnalyticsChat] Filtered sessions count:', filtered.length);
+    return filtered;
   }, [sessions, searchQuery]);
 
   const handleCopyMessage = async (content: string, messageId: string) => {
@@ -246,11 +263,6 @@ export function AnalyticsChat() {
       return;
     }
 
-    if (!selectedSession) {
-      setError('Please select a session to analyze');
-      return;
-    }
-
     setError(null);
     setLoading(true);
 
@@ -278,19 +290,23 @@ export function AnalyticsChat() {
       console.log('[AnalyticsChat] Calling analytics chat API');
       console.log('[AnalyticsChat] Selected session:', selectedSession);
       console.log('[AnalyticsChat] Request payload:', {
-        sessionId: selectedSession.session_id,
-        experimentName: selectedSession.experiment_name,
-        conversationIds: selectedSession.conversation_ids,
+        sessionId: selectedSession?.session_id || 'no-session',
+        experimentName: selectedSession?.experiment_name || 'General Analysis',
+        conversationIds: selectedSession?.conversation_ids || [],
         messageCount: conversationMessages.length,
         model_id: selectedModel
       });
-      
-      // Detailed validation of conversation IDs
-      console.log('[AnalyticsChat] Conversation IDs details:');
-      selectedSession.conversation_ids.forEach((id: string, index: number) => {
-        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-        console.log(`  [${index}]: "${id}" - ${isValidUUID ? '✅ valid UUID' : '❌ INVALID UUID'} (type: ${typeof id}, length: ${id?.length})`);
-      });
+
+      // Detailed validation of conversation IDs (only if session is selected)
+      if (selectedSession && selectedSession.conversation_ids.length > 0) {
+        console.log('[AnalyticsChat] Conversation IDs details:');
+        selectedSession.conversation_ids.forEach((id: string, index: number) => {
+          const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+          console.log(`  [${index}]: "${id}" - ${isValidUUID ? '✅ valid UUID' : '❌ INVALID UUID'} (type: ${typeof id}, length: ${id?.length})`);
+        });
+      } else {
+        console.log('[AnalyticsChat] No session selected - assistant will use list_available_sessions tool');
+      }
 
       const response = await fetch('/api/analytics/chat', {
         method: 'POST',
@@ -301,9 +317,9 @@ export function AnalyticsChat() {
         signal: abortController.signal,
         body: JSON.stringify({
           messages: conversationMessages,
-          sessionId: selectedSession.session_id,
-          experimentName: selectedSession.experiment_name,
-          conversationIds: selectedSession.conversation_ids,
+          sessionId: selectedSession?.session_id || 'no-session',
+          experimentName: selectedSession?.experiment_name || 'General Analysis',
+          conversationIds: selectedSession?.conversation_ids || [],
           model_id: selectedModel, // Pass selected model to API
         }),
       });
@@ -413,7 +429,7 @@ export function AnalyticsChat() {
 
       {/* AppSidebar with Sessions List */}
       <AppSidebar currentPage="analytics" user={user} signOut={signOut}>
-        <div className="h-full flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           <div>
             <span className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
               Tagged Sessions
@@ -433,14 +449,22 @@ export function AnalyticsChat() {
           </div>
 
           {/* Sessions List */}
-          <nav className="flex-1 overflow-y-auto space-y-2">
+          <nav className="space-y-2">
+            {(() => {
+              console.log('[AnalyticsChat] Rendering sessions list. filteredSessions.length:', filteredSessions.length);
+              console.log('[AnalyticsChat] First 3 sessions:', filteredSessions.slice(0, 3));
+              return null;
+            })()}
+
             {filteredSessions.length === 0 && (
               <div className="text-center py-8 text-sm text-muted-foreground">
                 {searchQuery ? 'No sessions found' : 'No tagged sessions yet'}
               </div>
             )}
 
-            {filteredSessions.map((s) => (
+            {filteredSessions.map((s, index) => {
+              console.log(`[AnalyticsChat] Rendering session ${index + 1}/${filteredSessions.length}:`, s.experiment_name);
+              return (
               <div
                 key={`${s.session_id}-${s.experiment_name}`}
                 onClick={() => {
@@ -450,33 +474,34 @@ export function AnalyticsChat() {
                     sessionMessagesRef.current.set(currentKey, messages);
                     console.log(`[AnalyticsChat] Saved ${messages.length} messages for session:`, currentKey);
                   }
-                  
+
                   // Load messages for the new session
                   const newKey = `${s.session_id}-${s.experiment_name}`;
                   const savedMessages = sessionMessagesRef.current.get(newKey) || [];
                   console.log(`[AnalyticsChat] Loading ${savedMessages.length} messages for session:`, newKey);
-                  
+
                   setSelectedSession(s);
                   setMessages(savedMessages);
                 }}
-                className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                className={`p-2.5 rounded-lg cursor-pointer transition-colors overflow-hidden ${
                   selectedSession?.session_id === s.session_id &&
                   selectedSession?.experiment_name === s.experiment_name
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-card hover:bg-accent'
                 }`}
               >
-                <div className="font-medium text-sm truncate">
+                <div className="font-medium text-sm truncate mb-1">
                   {s.experiment_name}
                 </div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs opacity-80">#{s.session_id}</span>
-                  <span className="text-xs opacity-80">
-                    {s.conversation_count} conversation{s.conversation_count !== 1 ? 's' : ''}
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-xs opacity-80 truncate flex-shrink">#{s.session_id}</span>
+                  <span className="text-xs opacity-80 whitespace-nowrap flex-shrink-0">
+                    {s.conversation_count}
                   </span>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </nav>
         </div>
       </AppSidebar>

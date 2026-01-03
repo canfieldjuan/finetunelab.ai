@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import type { ToolDefinition } from '@/lib/llm/openai';
 import { supabase } from '@/lib/supabaseClient';
 import { executeTool } from '@/lib/tools/toolManager';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { executeTrainingMetrics } from '@/lib/tools/analytics/training-metrics.handler';
 import { executeTrainingPredictions } from '@/lib/tools/analytics/training-predictions.handler';
 import { executeAdvancedAnalytics } from '@/lib/tools/analytics/advanced-analytics.handler';
@@ -226,6 +226,35 @@ const analyticsTools: ToolDefinition[] = [
           }
         },
         required: ['conversationIds']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_available_sessions',
+      description: 'Lists all available tagged sessions (batch tests, experiments) with metadata. Use this FIRST to discover which sessions exist before analyzing them. Returns session IDs, experiment names, and conversation IDs for each session.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Maximum number of sessions to return (default: 100)'
+          },
+          model_filter: {
+            type: 'string',
+            description: 'Filter sessions by model name (case-insensitive partial match, e.g., "Qwen", "GPT-5", "Claude")'
+          },
+          date_from: {
+            type: 'string',
+            description: 'Filter sessions created after this date (ISO 8601 format, e.g., "2025-01-01T00:00:00Z")'
+          },
+          date_to: {
+            type: 'string',
+            description: 'Filter sessions created before this date (ISO 8601 format, e.g., "2025-12-31T23:59:59Z")'
+          }
+        },
+        required: []
       }
     }
   },
@@ -1106,6 +1135,95 @@ async function getSessionConversations(
   };
 }
 
+// List all available tagged sessions for the user
+async function listAvailableSessions(
+  userId: string,
+  filters?: {
+    limit?: number;
+    model_filter?: string;
+    date_from?: string;
+    date_to?: string;
+  },
+  supabaseClient: SupabaseClient = supabase
+) {
+  console.log('[AnalyticsAPI] Listing available sessions for user:', userId, 'with filters:', filters);
+
+  let query = supabaseClient
+    .from('conversations')
+    .select('id, session_id, experiment_name, llm_model_id, created_at')
+    .eq('user_id', userId)
+    .not('session_id', 'is', null)
+    .not('experiment_name', 'is', null)
+    .order('created_at', { ascending: false });
+
+  if (filters?.model_filter) {
+    query = query.ilike('experiment_name', `%${filters.model_filter}%`);
+  }
+
+  if (filters?.date_from) {
+    query = query.gte('created_at', filters.date_from);
+  }
+
+  if (filters?.date_to) {
+    query = query.lte('created_at', filters.date_to);
+  }
+
+  const limit = filters?.limit || 100;
+  query = query.limit(1000); // Get more to group properly
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('[AnalyticsAPI] Error listing sessions:', error);
+    return { error: `Failed to list sessions: ${error.message}` };
+  }
+
+  // Group by session
+  const grouped = new Map<string, {
+    session_id: string;
+    experiment_name: string;
+    conversation_ids: string[];
+    conversation_count: number;
+    created_at: string;
+    model: string | null;
+  }>();
+
+  data?.forEach((conv: {
+    id: string;
+    session_id: string;
+    experiment_name: string;
+    llm_model_id: string | null;
+    created_at: string;
+  }) => {
+    const key = `${conv.session_id}-${conv.experiment_name}`;
+    if (grouped.has(key)) {
+      const existing = grouped.get(key)!;
+      existing.conversation_ids.push(conv.id);
+      existing.conversation_count++;
+    } else {
+      grouped.set(key, {
+        session_id: conv.session_id,
+        experiment_name: conv.experiment_name,
+        conversation_ids: [conv.id],
+        conversation_count: 1,
+        created_at: conv.created_at,
+        model: conv.llm_model_id
+      });
+    }
+  });
+
+  const sessions = Array.from(grouped.values())
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, limit);
+
+  console.log(`[AnalyticsAPI] Found ${sessions.length} unique sessions`);
+
+  return {
+    total_sessions: sessions.length,
+    sessions,
+  };
+}
+
 // Evaluate messages using LLM-as-judge
 async function evaluateMessages(
   messageIds: string[],
@@ -1319,6 +1437,15 @@ async function executeAnalyticsTool(toolName: string, args: Record<string, unkno
           authClient || supabase,
           args.limit as number | undefined,
           args.offset as number | undefined
+        );
+        break;
+
+      case 'list_available_sessions':
+        console.log('[AnalyticsAPI] list_available_sessions called with args:', JSON.stringify(args));
+        result = await listAvailableSessions(
+          userId,
+          args as { limit?: number; model_filter?: string; date_from?: string; date_to?: string },
+          authClient || supabase
         );
         break;
 
@@ -1544,8 +1671,8 @@ export async function POST(req: NextRequest) {
       return new Response('Invalid messages format', { status: 400 });
     }
 
-    // Allow experimentName to be empty string, but sessionId and conversationIds must exist
-    if (!sessionId || experimentName === undefined || experimentName === null || !conversationIds || !Array.isArray(conversationIds) || conversationIds.length === 0) {
+    // Allow experimentName to be empty string, sessionId and conversationIds can be empty for general queries
+    if (!sessionId || experimentName === undefined || experimentName === null || !conversationIds || !Array.isArray(conversationIds)) {
       console.error('[AnalyticsAPI] Missing session context:', {
         hasSessionId: !!sessionId,
         experimentName: experimentName,
@@ -1556,23 +1683,25 @@ export async function POST(req: NextRequest) {
       return new Response('Missing session context', { status: 400 });
     }
 
-    // Validate conversation IDs are valid UUIDs
-    console.log('[AnalyticsAPI] Validating conversation IDs:', conversationIds);
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const invalidIds = conversationIds.filter((id: string) => !uuidRegex.test(id));
-    if (invalidIds.length > 0) {
-      console.error('[AnalyticsAPI] Invalid conversation IDs detected:', invalidIds);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Invalid conversation IDs',
-          details: `The following conversation IDs are not valid UUIDs: ${invalidIds.join(', ')}`,
-          invalidIds: invalidIds
-        }), 
-        { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+    // Validate conversation IDs are valid UUIDs (only if conversationIds is not empty)
+    if (conversationIds.length > 0) {
+      console.log('[AnalyticsAPI] Validating conversation IDs:', conversationIds);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const invalidIds = conversationIds.filter((id: string) => !uuidRegex.test(id));
+      if (invalidIds.length > 0) {
+        console.error('[AnalyticsAPI] Invalid conversation IDs detected:', invalidIds);
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid conversation IDs',
+            details: `The following conversation IDs are not valid UUIDs: ${invalidIds.join(', ')}`,
+            invalidIds: invalidIds
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
     }
     
     console.log('[AnalyticsAPI] Request for session:', sessionId, '/', experimentName, 'with', conversationIds.length, 'conversations');
@@ -1609,61 +1738,86 @@ You help users analyze their training sessions by:
 4. Diagnosing issues (errors, quality drops, cost spikes)
 5. Providing actionable recommendations for improvement
 
-## CURRENT SESSION CONTEXT
-Session ID: ${sessionId}
+## AVAILABLE SESSIONS
+
+You have access to ALL tagged batch test sessions and experiments.
+
+### How to Access Sessions:
+
+1. **Discover sessions:** Call \`list_available_sessions()\` to see all available sessions
+   - Returns: session_id, experiment_name, conversation_ids, conversation_count, created_at
+   - Optional filters: model_filter, date_from, date_to, limit
+
+2. **Analyze sessions:** Use the conversation_ids from step 1 with these tools:
+   - \`get_session_metrics(conversationIds)\` - Token usage, costs, performance
+   - \`get_session_evaluations(conversationIds)\` - Ratings, feedback, success rates
+   - \`get_session_conversations(conversationIds)\` - Full message content
+
+### Example Workflows:
+
+**Compare last 3 Qwen tests:**
+1. \`list_available_sessions(model_filter: "Qwen", limit: 3)\`
+2. Extract conversation_ids from each session
+3. \`get_session_metrics(conversationIds: [...])\` for each session
+4. Compare results
+
+**Overall success rate:**
+1. \`list_available_sessions(limit: 100)\`
+2. Combine all conversation_ids
+3. \`get_session_evaluations(conversationIds: [all UUIDs])\`
+4. Calculate aggregate metrics
+
+**Current session (selected in UI):**
+${conversationIds.length > 0 ? `Session ID: ${sessionId}
 Experiment Name: ${experimentName || '(unnamed)'}
-Total Conversations: ${conversationIds.length}
+Conversation IDs: ${JSON.stringify(conversationIds)}` : `⚠️ NO SESSION SELECTED
+The user has not selected a specific session yet.
 
-CONVERSATION IDS FOR THIS SESSION:
-${JSON.stringify(conversationIds)}
+To answer questions, you MUST:
+1. Call \`list_available_sessions()\` to discover available sessions
+2. Use the returned conversation_ids with analysis tools
+3. Or guide the user to select a session in the sidebar
 
-⚠️ CRITICAL TOOL USAGE INSTRUCTION ⚠️
-When calling ANY of these tools (get_session_evaluations, get_session_metrics, get_session_conversations):
-- ALWAYS use this exact conversationIds array: ${JSON.stringify(conversationIds)}
-- DO NOT use ["1"] or ["${conversationIds.length}"] or any number
-- DO NOT invent or guess conversation IDs
-- COPY the exact UUID array shown above
+Example: If asked "What are my overall metrics?", call \`list_available_sessions()\` first to get all sessions.`}
 
-EXAMPLE CORRECT TOOL CALL:
-{
-  "name": "get_session_metrics",
-  "arguments": {
-    "conversationIds": ${JSON.stringify(conversationIds)}
-  }
-}
-
-## YOUR 17 TOOLS
+## YOUR 18 TOOLS
 
 ### Session Data Tools (Start Here)
-1. **get_session_evaluations** - Get ratings, feedback, and success/failure data
-   - USE FIRST when asked about quality, ratings, or user feedback
+1. **list_available_sessions** - Discover all tagged sessions (batch tests, experiments)
+   - USE FIRST to discover which sessions exist
+   - Returns: session_id, experiment_name, conversation_ids, conversation_count, created_at
+   - Optional filters: model_filter, date_from, date_to, limit
+   - Example: list_available_sessions(model_filter: "Qwen", limit: 5)
+
+2. **get_session_evaluations** - Get ratings, feedback, and success/failure data
+   - USE when asked about quality, ratings, or user feedback
    - Returns: evaluation scores (1-5), success boolean, feedback comments
-   - Parameter: conversationIds (use the array from CURRENT SESSION CONTEXT above)
+   - Parameter: conversationIds (from list_available_sessions or current session)
 
-2. **get_session_metrics** - Get token usage, costs, response times, tool usage
-   - USE FIRST when asked about costs, performance, or tool usage
+3. **get_session_metrics** - Get token usage, costs, response times, tool usage
+   - USE when asked about costs, performance, or tool usage
    - Returns: token counts, estimated costs, average response times, tool statistics
-   - Parameter: conversationIds (use the array from CURRENT SESSION CONTEXT above)
+   - Parameter: conversationIds (from list_available_sessions or current session)
 
-3. **get_session_conversations** - Get full conversation messages and content
+4. **get_session_conversations** - Get full conversation messages and content
    - USE when user wants to see actual conversation content or patterns
    - Returns: message history, metadata, timestamps
-   - Parameter: conversationIds (use the array from CURRENT SESSION CONTEXT above)
+   - Parameter: conversationIds (from list_available_sessions or current session)
 
 ### Analysis Tools (Use After Getting Data)
-4. **calculator** - Perform exact mathematical calculations
+5. **calculator** - Perform exact mathematical calculations
    - USE to compute percentages, averages, ratios, cost per conversation
    - Example: "(successful_count / total_count) * 100" for success rate
    - ALWAYS use calculator for math instead of estimating
 
-5. **evaluate_messages** - LLM-as-judge quality evaluation (NEW!)
+6. **evaluate_messages** - LLM-as-judge quality evaluation (NEW!)
    - USE when user asks "evaluate quality", "how good are the responses", or "rate the messages"
    - First call get_session_conversations to get message IDs (filter to assistant messages only)
    - Returns: detailed scores (0-10) for helpfulness, accuracy, clarity, safety, completeness
    - Includes reasoning, pass/fail status, and improvement suggestions
    - Example: User asks "Evaluate this session" → get conversations → filter assistant messages → evaluate_messages
 
-6. **evaluation_metrics** - Advanced quality analysis with 13 operations
+7. **evaluation_metrics** - Advanced quality analysis with 13 operations
    - get_metrics: Overall quality statistics
    - quality_trends: Rating trends over time
    - success_analysis: Success/failure breakdown
@@ -1678,25 +1832,25 @@ EXAMPLE CORRECT TOOL CALL:
    - predictive_quality_modeling: Forecast future trends
    - anomaly_detection: Detect outliers
 
-7. **datetime** - Date/time operations and formatting
+8. **datetime** - Date/time operations and formatting
    - USE for temporal analysis, timezone conversions, date formatting
    - Helps analyze when sessions ran, how recent data is
 
-8. **system_monitor** - System health and performance monitoring
+9. **system_monitor** - System health and performance monitoring
    - USE when checking system status, resource usage, or infrastructure health
    - Operations: health_check, resource_usage, performance_metrics, analyze_logs
 
 ### Training Tools (NEW - Full Training Access)
-9. **training_metrics** - Access training job status, metrics, and history
-   - USE when asked about training jobs, progress, loss curves, or GPU usage
-   - Operations:
-     - get_job_status: Current status, progress, epoch, step, real-time metrics
-     - get_job_metrics: Detailed metrics (loss, perplexity, GPU, throughput)
-     - list_jobs: All training jobs with status filters (pending/running/completed/failed)
-     - get_job_details: Full config, hyperparameters, checkpoint info
-   - Returns: Job status, progress %, loss/eval_loss, GPU metrics, timing estimates
+10. **training_metrics** - Access training job status, metrics, and history
+    - USE when asked about training jobs, progress, loss curves, or GPU usage
+    - Operations:
+      - get_job_status: Current status, progress, epoch, step, real-time metrics
+      - get_job_metrics: Detailed metrics (loss, perplexity, GPU, throughput)
+      - list_jobs: All training jobs with status filters (pending/running/completed/failed)
+      - get_job_details: Full config, hyperparameters, checkpoint info
+    - Returns: Job status, progress %, loss/eval_loss, GPU metrics, timing estimates
 
-10. **training_predictions** - Access model predictions from training
+11. **training_predictions** - Access model predictions from training
     - USE when asked about prediction quality, epoch improvements, or training samples
     - Operations:
       - get_predictions: Get predictions for a job with pagination
@@ -1705,7 +1859,7 @@ EXAMPLE CORRECT TOOL CALL:
       - list_available_epochs: Which epochs have predictions stored
     - Returns: Predictions, ground truth, epoch info, quality statistics
 
-11. **advanced_analytics** - Pre-computed analytics and comparisons
+12. **advanced_analytics** - Pre-computed analytics and comparisons
     - USE for high-level analysis across models and time periods
     - Operations:
       - model_comparison: Compare performance across models
@@ -1717,32 +1871,32 @@ EXAMPLE CORRECT TOOL CALL:
     - Returns: Aggregated metrics, trends, comparisons, forecasts
 
 ### General Purpose Tools
-12. **web_search** - Search the web for current information
+13. **web_search** - Search the web for current information
     - USE when user needs up-to-date info, news, or research from the internet
     - Returns: Search results with titles, snippets, and URLs
     - Can enable deep search for full content or AI summaries
 
-13. **dataset_manager** - Manage training datasets
+14. **dataset_manager** - Manage training datasets
     - USE when user wants to work with their conversation data for training
     - Operations: list, stats, export, validate, delete, merge
     - Supports JSONL/JSON/CSV export formats
 
-14. **token_analyzer** - Analyze token usage and costs
+15. **token_analyzer** - Analyze token usage and costs
     - USE when user asks about token consumption or cost optimization
     - Operations: usage_stats, cost_analysis, model_comparison, optimization_tips
     - Provides detailed cost breakdown by model and time period
 
-15. **analytics_export** - Create downloadable analytics reports
+16. **analytics_export** - Create downloadable analytics reports
     - USE when user wants to export or download analytics data
     - Operations: create_export, list_exports, get_download_link
     - Formats: CSV, JSON, or formatted reports
 
-16. **query_knowledge_graph** - Search user's documents
+17. **query_knowledge_graph** - Search user's documents
     - USE when user asks about their uploaded documents or knowledge base
     - Searches GraphRAG knowledge graph for relevant entities and facts
     - Returns facts, entities, and relationships with confidence scores
 
-17. **get_traces** - Retrieve and analyze LLM execution traces
+18. **get_traces** - Retrieve and analyze LLM execution traces
     - USE for debugging issues, analyzing performance, comparing models, tracking costs
     - Operations:
       - get_traces: Retrieve filtered traces with extensive filtering options
