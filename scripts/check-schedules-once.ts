@@ -148,6 +148,24 @@ async function executeSchedule(
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     console.log(`[Scheduler] Calling batch test API at: ${baseUrl}/api/batch-testing/run`);
 
+    const requestConfig = {
+      config: {
+        ...schedule.batch_test_config,
+        model_id: schedule.model_id,
+        test_suite_id: schedule.test_suite_id,
+      },
+      userId: schedule.user_id,
+      scheduledEvaluationRunId: run.id,
+    };
+
+    // DEBUG: Log what we're sending to the API
+    console.log('[Scheduler] DEBUG - Request config:', JSON.stringify({
+      scheduleName: schedule.name,
+      scheduleModelId: schedule.model_id,
+      batchTestConfig: schedule.batch_test_config,
+      finalConfig: requestConfig.config,
+    }, null, 2));
+
     const response = await fetch(`${baseUrl}/api/batch-testing/run`, {
       method: 'POST',
       headers: {
@@ -155,15 +173,7 @@ async function executeSchedule(
         'x-service-role-key': supabaseServiceKey,
         'x-user-id': schedule.user_id,
       },
-      body: JSON.stringify({
-        config: {
-          ...schedule.batch_test_config,
-          model_id: schedule.model_id,
-          test_suite_id: schedule.test_suite_id,
-        },
-        userId: schedule.user_id,
-        scheduledEvaluationRunId: run.id,
-      }),
+      body: JSON.stringify(requestConfig),
     });
 
     if (!response.ok) {
