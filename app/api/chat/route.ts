@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
     
     // Batch test mode: Has widgetSessionId + Authorization header but NO X-API-Key
     isBatchTestMode = !!(widgetSessionId && authHeader && !apiKey);
-    
+
     // Widget mode: Has X-API-Key + widgetSessionId (takes precedence over batch test)
     isWidgetMode = !!(apiKey && widgetSessionId);
     widgetConversationId = null;
@@ -214,31 +214,47 @@ export async function POST(req: NextRequest) {
       userId = validationResult.userId;
       console.log('[API] Widget mode: API key validated, user_id:', userId);
     } else if (isBatchTestMode && authHeader) {
-      // Batch test mode: Validate session token and extract user_id
-      console.log('[API] Batch test mode: Validating session token');
-      
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        global: { headers: { Authorization: authHeader } }
-      });
-      
-      const { data: { user }, error: sessionError } = await supabase.auth.getUser();
-      
-      if (sessionError || !user) {
-        console.error('[API] Batch test mode: Session validation failed:', sessionError?.message);
-        return new Response(JSON.stringify({ error: 'Invalid session token' }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
+      // Batch test mode: Check if this is service role authentication
+      const userIdHeader = req.headers.get('X-User-Id');
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+      const bearerToken = bearerMatch?.[1];
+
+      if (userIdHeader && bearerToken === serviceRoleKey) {
+        // Service role authentication from scheduler/background worker
+        console.log('[API] Batch test mode: Service role authentication, user_id:', userIdHeader);
+        userId = userIdHeader;
+
+        // Use service role for RLS bypass
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+      } else {
+        // Regular user session token validation
+        console.log('[API] Batch test mode: Validating user session token');
+
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader } }
         });
+
+        const { data: { user }, error: sessionError } = await supabase.auth.getUser();
+
+        if (sessionError || !user) {
+          console.error('[API] Batch test mode: Session validation failed:', sessionError?.message);
+          return new Response(JSON.stringify({ error: 'Invalid session token' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        userId = user.id;
+        console.log('[API] Batch test mode: Session validated, user_id:', userId);
+
+        // Use service role for RLS bypass
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+        supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
       }
-      
-      userId = user.id;
-      console.log('[API] Batch test mode: Session validated, user_id:', userId);
-      
-      // Use service role for RLS bypass (same as widget mode)
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-      supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     } else {
       // Normal mode: Get user ID from request body
       console.log('[API] Normal mode: Getting user from request body');
