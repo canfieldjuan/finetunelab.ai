@@ -24,6 +24,8 @@ import { createClient } from '@supabase/supabase-js';
 import { isTimeDue, calculateNextRun } from '../lib/evaluation/schedule-calculator';
 import type { ScheduledEvaluation } from '../lib/batch-testing/types';
 import { recordUsageEvent } from '../lib/usage/checker';
+import { sendScheduledEvaluationAlert } from '../lib/alerts/alert.service';
+import type { ScheduledEvaluationAlertData } from '../lib/alerts/alert.types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -217,8 +219,35 @@ async function executeSchedule(
       })
       .eq('id', schedule.id);
 
+    // Send failure alert
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const alertData: ScheduledEvaluationAlertData = {
+      scheduledEvaluationId: schedule.id,
+      userId: schedule.user_id,
+      scheduleName: schedule.name,
+      modelId: schedule.model_id,
+      status: 'failed',
+      errorMessage,
+      consecutiveFailures: newFailureCount,
+    };
+
+    try {
+      await sendScheduledEvaluationAlert('scheduled_eval_failed', alertData);
+      console.log(`[Scheduler] Sent scheduled_eval_failed alert for: ${schedule.name}`);
+    } catch (alertError) {
+      console.error(`[Scheduler] Failed to send alert:`, alertError);
+    }
+
     if (shouldDisable) {
       console.log(`[Scheduler] Auto-disabled schedule ${schedule.name} after 3 failures`);
+
+      // Send auto-disabled alert
+      try {
+        await sendScheduledEvaluationAlert('scheduled_eval_disabled', alertData);
+        console.log(`[Scheduler] Sent scheduled_eval_disabled alert for: ${schedule.name}`);
+      } catch (alertError) {
+        console.error(`[Scheduler] Failed to send disabled alert:`, alertError);
+      }
     }
 
     throw error;
