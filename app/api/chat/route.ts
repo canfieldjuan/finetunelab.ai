@@ -228,14 +228,11 @@ export async function POST(req: NextRequest) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
         const serviceRoleClient = createClient(supabaseUrl, serviceRoleKey);
 
-        const { data: userProfile, error: profileError } = await serviceRoleClient
-          .from('profiles')
-          .select('id')
-          .eq('id', userIdHeader)
-          .single();
+        // Use auth.admin.getUserById to validate user exists (works without profiles table)
+        const { data: authUser, error: authUserError } = await serviceRoleClient.auth.admin.getUserById(userIdHeader);
 
-        if (profileError || !userProfile) {
-          console.error('[API] Batch test mode: Invalid user_id in X-User-Id header:', userIdHeader);
+        if (authUserError || !authUser?.user) {
+          console.error('[API] Batch test mode: Invalid user_id in X-User-Id header:', userIdHeader, authUserError?.message);
           return new Response(JSON.stringify({ error: 'Invalid user ID' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' }
