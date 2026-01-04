@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
+import { NextRequest } from 'next/server';
 function makeRequest(url: string, headers?: Record<string, string>) {
   return {
     url,

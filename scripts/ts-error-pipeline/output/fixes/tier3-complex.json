@@ -1,0 +1,29 @@
+[
+  {
+    "file": "lib/tools/web-search/index.ts",
+    "line": 70,
+    "column": 32,
+    "code": "TS2345",
+    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+    "context": {
+      "before": [
+        "    };",
+        "  },",
+        "",
+        "  api: {",
+        "    router: (router: ExpressRouter): ExpressRouter => {"
+      ],
+      "errorLine": "      router.post('/research', researchController.startResearch.bind(researchController));",
+      "after": [
+        "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
+        "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+        "      return router;",
+        "    },",
+        "  },"
+      ]
+    },
+    "tier": "TIER3",
+    "confidence": 0.6,
+    "categorizationReason": "Type mismatch due to unknown types - may require significant refactoring or changes in function signatures"
+  }
+]

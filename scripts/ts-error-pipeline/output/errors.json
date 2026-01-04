@@ -1,0 +1,1054 @@
+[
+  {
+    "file": "app/account/page.tsx",
+    "line": 269,
+    "column": 56,
+    "code": "TS2345",
+    "message": "Argument of type 'string' is not assignable to parameter of type 'SetStateAction<UsageTier | undefined>'.",
+    "context": {
+      "before": [
+        "                  {showTierSelector ? 'Hide Tiers' : 'Change Tier'}",
+        "                </Button>",
+        "              </div>",
+        "              <UsageDashboard ",
+        "                sessionToken={session.access_token}"
+      ],
+      "errorLine": "                onTierLoaded={(tier) => setCurrentTier(tier)}",
+      "after": [
+        "              />",
+        "              ",
+        "              {showTierSelector && (",
+        "                <div className=\"mt-8 pt-8 border-t border-border\">",
+        "                  <TierSelector"
+      ]
+    }
+  },
+  {
+    "file": "app/api/analytics/data/__tests__/route.test.ts",
+    "line": 36,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { GET } = await import('../route');",
+        "",
+        "    const response = await GET("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        'http://localhost:3000/api/analytics/data?startDate=2025-01-01T00:00:00Z&endDate=2025-01-02T00:00:00Z&metrics=all',",
+        "        { 'X-API-Key': 'wak_testkey_should_not_be_validated_by_format_here' }",
+        "      )",
+        "    );",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+    "line": 31,
+    "column": 22,
+    "code": "TS2339",
+    "message": "Property 'headers' does not exist on type '{}'.",
+    "context": {
+      "before": [
+        "",
+        "  it('accepts X-API-Key auth and calls /api/chat with X-API-Key', async () => {",
+        "    const fetchMock = vi.fn(async (_url: string, init?: unknown) => {",
+        "      // Ensure the background prompt processing uses API key auth.",
+        "      if (typeof _url === 'string' && _url.endsWith('/api/chat')) {"
+      ],
+      "errorLine": "        expect(init?.headers?.['X-API-Key']).toBe('wak_testkey');",
+      "after": [
+        "      }",
+        "      return { ok: true, text: async () => '' } as unknown;",
+        "    });",
+        "    // @ts-expect-error - vitest global patching",
+        "    globalThis.fetch = fetchMock;"
+      ]
+    }
+  },
+  {
+    "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+    "line": 99,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          config: {",
+        "            model_id: 'gpt-4',",
+        "            test_suite_id: 'suite-1',",
+        "            prompt_limit: 1,"
+      ]
+    }
+  },
+  {
+    "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+    "line": 136,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          config: {",
+        "            model_id: 'gpt-4',",
+        "            test_suite_id: 'suite-1',",
+        "            prompt_limit: 1,"
+      ]
+    }
+  },
+  {
+    "file": "app/api/batch-testing/run/route.ts",
+    "line": 693,
+    "column": 68,
+    "code": "TS18046",
+    "message": "'t' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "        description: tool.description,",
+        "        parameters: tool.parameters as Record<string, unknown>",
+        "      }",
+        "    })) || [];",
+        ""
+      ],
+      "errorLine": "    console.log('[Background Batch] Loaded tools:', tools.map(t => t.function.name).join(', '));",
+      "after": [
+        "  } else {",
+        "    console.log('[Background Batch] Skipping tools (provider does not support function calling via API)');",
+        "  }",
+        "",
+        "  // Auto-generate session tag for batch test"
+      ]
+    }
+  },
+  {
+    "file": "app/api/batch-testing/run/route.ts",
+    "line": 741,
+    "column": 9,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown[]' is not assignable to parameter of type '{ type: \"function\"; function: { name: string; description: string; parameters: Record<string, unknown>; }; }[]'.",
+    "context": {
+      "before": [
+        "        runId,",
+        "        config.benchmark_id,",
+        "        widgetSessionId,",
+        "        conversation.id,  // Pass conversation ID for efficient lookups",
+        "        config.judge_config,  // Pass judge configuration"
+      ],
+      "errorLine": "        tools  // Pass enabled tools for trace recording",
+      "after": [
+        "      );",
+        "",
+        "      if (success) {",
+        "        completed++;",
+        "      } else {"
+      ]
+    }
+  },
+  {
+    "file": "app/api/batch-testing/run/route.ts",
+    "line": 969,
+    "column": 94,
+    "code": "TS18046",
+    "message": "'e' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "          })",
+        "        });",
+        "",
+        "        if (judgeResponse.ok) {",
+        "          const judgeData = await judgeResponse.json();"
+      ],
+      "errorLine": "          const avgScore = judgeData.evaluations?.reduce((sum: number, e: unknown) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);",
+      "after": [
+        "          console.log(`[Process Prompt] ${promptIndex + 1}: Judge evaluation complete, avg score: ${avgScore.toFixed(1)}/10 (${(avgScore / 10 * 100).toFixed(0)}%)`);",
+        "        } else {",
+        "          const judgeError = await judgeResponse.text();",
+        "          console.error(`[Process Prompt] ${promptIndex + 1}: Judge evaluation failed:`, judgeError.substring(0, 200));",
+        "          // Don't fail the whole prompt if judge fails, just log the error"
+      ]
+    }
+  },
+  {
+    "file": "app/api/batch-testing/status/[id]/__tests__/route.test.ts",
+    "line": 56,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { GET } = await import('../route');",
+        "",
+        "    const response = await GET("
+      ],
+      "errorLine": "      makeRequest({ 'X-API-Key': 'wak_testkey' }),",
+      "after": [
+        "      { params: Promise.resolve({ id: 'test-run-1' }) }",
+        "    );",
+        "",
+        "    expect(response.status).toBe(200);",
+        "    const payload = await response.json();"
+      ]
+    }
+  },
+  {
+    "file": "app/api/evaluate-message/route.ts",
+    "line": 107,
+    "column": 51,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'ContentJson'.",
+    "context": {
+      "before": [
+        "    // 4. Save citations (async, don't block)",
+        "    if (contentJson && typeof contentJson === 'object' && 'citations' in contentJson) {",
+        "      const citations = (contentJson as Record<string, unknown>).citations;",
+        "      if (Array.isArray(citations) && citations.length > 0) {",
+        "         "
+      ],
+      "errorLine": "        citationsService.saveCitations(messageId, contentJson as unknown).catch((err: Error) => {",
+      "after": [
+        "          console.error('[EvaluateMessage] Error saving citations:', err);",
+        "        });",
+        "      }",
+        "    }",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/dataset/route.ts",
+    "line": 314,
+    "column": 22,
+    "code": "TS18046",
+    "message": "'awsMetadata' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "        );",
+        "      }",
+        "",
+        "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+        "      const s3Service = new S3StorageService({"
+      ],
+      "errorLine": "        accessKeyId: awsMetadata.access_key_id,",
+      "after": [
+        "        secretAccessKey: decryptedSecretKey,",
+        "        region: awsMetadata.region,",
+        "        bucket: awsMetadata.s3_bucket,",
+        "      });",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/dataset/route.ts",
+    "line": 316,
+    "column": 17,
+    "code": "TS18046",
+    "message": "'awsMetadata' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "",
+        "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+        "      const s3Service = new S3StorageService({",
+        "        accessKeyId: awsMetadata.access_key_id,",
+        "        secretAccessKey: decryptedSecretKey,"
+      ],
+      "errorLine": "        region: awsMetadata.region,",
+      "after": [
+        "        bucket: awsMetadata.s3_bucket,",
+        "      });",
+        "",
+        "      const buffer = Buffer.from(await normalizedBlob.arrayBuffer());",
+        "      storagePath = await s3Service.uploadDataset(buffer, user.id, datasetId);"
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/dataset/route.ts",
+    "line": 317,
+    "column": 17,
+    "code": "TS18046",
+    "message": "'awsMetadata' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+        "      const s3Service = new S3StorageService({",
+        "        accessKeyId: awsMetadata.access_key_id,",
+        "        secretAccessKey: decryptedSecretKey,",
+        "        region: awsMetadata.region,"
+      ],
+      "errorLine": "        bucket: awsMetadata.s3_bucket,",
+      "after": [
+        "      });",
+        "",
+        "      const buffer = Buffer.from(await normalizedBlob.arrayBuffer());",
+        "      storagePath = await s3Service.uploadDataset(buffer, user.id, datasetId);",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+    "line": 39,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest({ step: 1, epoch: 0 }),",
+      "after": [
+        "      { params: Promise.resolve({ jobId: 'job-123' }) }",
+        "    );",
+        "",
+        "    expect(response.status).toBe(401);",
+        "  });"
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+    "line": 77,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        { step: 1, epoch: 0 },",
+        "        { Authorization: 'Bearer wrong-token' }",
+        "      ),",
+        "      { params: Promise.resolve({ jobId: 'job-123' }) }",
+        "    );"
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+    "line": 118,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          step: 2,",
+        "          epoch: 1.2,",
+        "          loss: 0.5,",
+        "          eval_loss: 0.6,"
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/local/jobs/route.ts",
+    "line": 365,
+    "column": 47,
+    "code": "TS2339",
+    "message": "Property 'job_token' does not exist on type '{}'.",
+    "context": {
+      "before": [
+        "      clearTimeout(timeoutHandle!);",
+        "      console.log('[LocalTrainingJobs] Job persisted successfully:', job_id);",
+        "",
+        "      // Extract job_token from persisted data",
+        "      const persistedData = (result as { data: unknown }).data;"
+      ],
+      "errorLine": "      const returnedJobToken = persistedData?.job_token;",
+      "after": [
+        "",
+        "      return NextResponse.json({",
+        "        success: true,",
+        "        persisted: true,",
+        "        job_id,"
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 66,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest({",
+      "after": [
+        "        job_id: 'job-123',",
+        "        metrics: [{ step: 1, epoch: 0 }],",
+        "      })",
+        "    );",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 115,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          job_id: 'job-123',",
+        "          metrics: [{ step: 1, epoch: 0 }],",
+        "        },",
+        "        { authorization: 'Bearer wrong-token' }"
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 166,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          job_id: 'job-123',",
+        "          metrics: [",
+        "            { step: 1, epoch: 0, train_loss: 1.0, eval_loss: 2.0 },",
+        "            { step: 2, epoch: 0, train_loss: 0.5, eval_loss: 1.5, learning_rate: 0.0001 },"
+      ]
+    }
+  },
+  {
+    "file": "app/api/training/stats/route.ts",
+    "line": 84,
+    "column": 22,
+    "code": "TS18046",
+    "message": "'job' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      );",
+        "    }",
+        "",
+        "    // Count by status",
+        "    const statusCounts = jobs.reduce((acc: Record<string, number>, job: unknown) => {"
+      ],
+      "errorLine": "      const status = job.status || 'unknown';",
+      "after": [
+        "      acc[status] = (acc[status] || 0) + 1;",
+        "      return acc;",
+        "    }, {});",
+        "",
+        "    console.log('[Training Stats API] Stats retrieved:', { totalJobs, statusCounts });"
+      ]
+    }
+  },
+  {
+    "file": "app/models/page.tsx",
+    "line": 410,
+    "column": 19,
+    "code": "TS2322",
+    "message": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'.",
+    "context": {
+      "before": [
+        "                <ModelCard",
+        "                  model={model}",
+        "                  onEdit={handleEditModel}",
+        "                  onDelete={handleDeleteModel}",
+        "                  currentUserId={user?.id}"
+      ],
+      "errorLine": "                  serverInfo={servers[model.id]}",
+      "after": [
+        "                  sessionToken={session?.access_token}",
+        "                  onServerChanged={fetchServers}",
+        "                />",
+        "              </div>",
+        "            ))}"
+      ]
+    }
+  },
+  {
+    "file": "components/billing/InvoiceHistoryTable.tsx",
+    "line": 103,
+    "column": 14,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type '\"default\" | \"destructive\" | \"outline\" | \"secondary\" | null | undefined'.",
+    "context": {
+      "before": [
+        "      failed: \"destructive\",",
+        "      void: \"outline\",",
+        "    };",
+        "",
+        "    return ("
+      ],
+      "errorLine": "      <Badge variant={variants[status]} className=\"capitalize\">",
+      "after": [
+        "        {status}",
+        "      </Badge>",
+        "    );",
+        "  };",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "components/evaluation/ScheduleRunHistory.tsx",
+    "line": 113,
+    "column": 14,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type '\"default\" | \"destructive\" | \"outline\" | \"secondary\" | null | undefined'.",
+    "context": {
+      "before": [
+        "",
+        "    const config = statusConfig[status] || statusConfig.triggered;",
+        "    const Icon = config.icon;",
+        "",
+        "    return ("
+      ],
+      "errorLine": "      <Badge variant={config.variant} className=\"gap-1\">",
+      "after": [
+        "        <Icon className=\"w-3 h-3\" />",
+        "        {config.label}",
+        "      </Badge>",
+        "    );",
+        "  };"
+      ]
+    }
+  },
+  {
+    "file": "components/evaluation/ScheduleRunHistory.tsx",
+    "line": 114,
+    "column": 10,
+    "code": "TS2604",
+    "message": "JSX element type 'Icon' does not have any construct or call signatures.",
+    "context": {
+      "before": [
+        "    const config = statusConfig[status] || statusConfig.triggered;",
+        "    const Icon = config.icon;",
+        "",
+        "    return (",
+        "      <Badge variant={config.variant} className=\"gap-1\">"
+      ],
+      "errorLine": "        <Icon className=\"w-3 h-3\" />",
+      "after": [
+        "        {config.label}",
+        "      </Badge>",
+        "    );",
+        "  };",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "components/evaluation/ScheduleRunHistory.tsx",
+    "line": 114,
+    "column": 10,
+    "code": "TS2786",
+    "message": "'Icon' cannot be used as a JSX component.",
+    "context": {
+      "before": [
+        "    const config = statusConfig[status] || statusConfig.triggered;",
+        "    const Icon = config.icon;",
+        "",
+        "    return (",
+        "      <Badge variant={config.variant} className=\"gap-1\">"
+      ],
+      "errorLine": "        <Icon className=\"w-3 h-3\" />",
+      "after": [
+        "        {config.label}",
+        "      </Badge>",
+        "    );",
+        "  };",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "components/landing/Pricing.tsx",
+    "line": 43,
+    "column": 11,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'PlanTier'.",
+    "context": {
+      "before": [
+        "            Choose the plan that fits your scale. Start with a 15-day free trial.",
+        "          </p>",
+        "        </div>",
+        "",
+        "        <PricingTiers"
+      ],
+      "errorLine": "          currentPlan={null as unknown}",
+      "after": [
+        "          onUpgrade={handleUpgrade}",
+        "          onContactSales={handleContactSales}",
+        "        />",
+        "      </div>",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "lib/auth/api-key-validator.ts",
+    "line": 421,
+    "column": 29,
+    "code": "TS18046",
+    "message": "'supabase' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "  supabase: unknown,",
+        "  keyId: string",
+        "): Promise<void> {",
+        "  try {",
+        "    // Try RPC first (most efficient)"
+      ],
+      "errorLine": "    const { error } = await supabase.rpc('update_api_key_usage', {",
+      "after": [
+        "      p_key_id: keyId",
+        "    });",
+        "",
+        "    if (error) {",
+        "      // Fallback to direct SQL update if RPC doesn't exist"
+      ]
+    }
+  },
+  {
+    "file": "lib/auth/api-key-validator.ts",
+    "line": 429,
+    "column": 46,
+    "code": "TS18046",
+    "message": "'supabase' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "",
+        "    if (error) {",
+        "      // Fallback to direct SQL update if RPC doesn't exist",
+        "      if (error.code === 'PGRST202' || error.code === '42883') {",
+        "        // Use raw SQL to increment counter"
+      ],
+      "errorLine": "        const { error: updateError } = await supabase",
+      "after": [
+        "          .from('user_api_keys')",
+        "          .update({",
+        "            last_used_at: new Date().toISOString()",
+        "          })",
+        "          .eq('id', keyId);"
+      ]
+    }
+  },
+  {
+    "file": "lib/auth/api-key-validator.ts",
+    "line": 440,
+    "column": 17,
+    "code": "TS18046",
+    "message": "'supabase' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "",
+        "        if (updateError) {",
+        "          console.warn('[API Key Usage] Direct update failed:', updateError.message);",
+        "        } else {",
+        "          // Increment request_count separately using raw query"
+      ],
+      "errorLine": "          await supabase.rpc('exec_sql', {",
+      "after": [
+        "            query: `UPDATE user_api_keys SET request_count = COALESCE(request_count, 0) + 1 WHERE id = '${keyId}'`",
+        "          }).catch(() => {",
+        "            // If exec_sql doesn't exist, that's fine - we at least updated last_used_at",
+        "          });",
+        "        }"
+      ]
+    }
+  },
+  {
+    "file": "lib/evaluation/validators/validator-context.ts",
+    "line": 43,
+    "column": 19,
+    "code": "TS2322",
+    "message": "Type '{}' is not assignable to type 'T'.",
+    "context": {
+      "before": [
+        "  context: ValidatorContext,\r",
+        "  validatorId: string,\r",
+        "  defaultConfig?: T\r",
+        "): T {\r",
+        "  const config = context.validatorConfig?.[validatorId];\r"
+      ],
+      "errorLine": "  return config ? { ...defaultConfig, ...config } : (defaultConfig as T);\r",
+      "after": [
+        "}\r",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "lib/inference/fireworks-deployment-service.ts",
+    "line": 82,
+    "column": 7,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'BodyInit | null | undefined'.",
+    "context": {
+      "before": [
+        "    }",
+        "",
+        "    const options: RequestInit = {",
+        "      method,",
+        "      headers,"
+      ],
+      "errorLine": "      body: (body instanceof FormData || body instanceof Buffer) ? (body as unknown) : JSON.stringify(body),",
+      "after": [
+        "    };",
+        "",
+        "    if (body instanceof Buffer) {",
+        "      options.headers = { ...headers, 'Content-Type': 'application/octet-stream' };",
+        "    }"
+      ]
+    }
+  },
+  {
+    "file": "lib/inference/runpod-serverless-service.ts",
+    "line": 434,
+    "column": 9,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "        },\r",
+        "      };\r",
+        "\r",
+        "      if (networkVolumeIdToAttach) {\r",
+        "        console.log(`[RunPodServerlessService] Attaching volume ${networkVolumeIdToAttach} to the pod.`);\r"
+      ],
+      "errorLine": "        (variables.input as unknown).networkVolumeId = networkVolumeIdToAttach;\r",
+      "after": [
+        "        variables.input.volumeMountPath = volumeMountPath;\r",
+        "        const modelFolderName = request.model_id.split('/').pop();\r",
+        "        variables.input.dockerArgs = `vllm serve --model ${volumeMountPath}/${modelFolderName} ${vllmArgs.join(' ')}`;\r",
+        "      }\r",
+        "      \r"
+      ]
+    }
+  },
+  {
+    "file": "lib/llm/adapters/anthropic-adapter.ts",
+    "line": 232,
+    "column": 40,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "    // Extract usage metrics including cache tokens",
+        "    const usage = body.usage",
+        "      ? {",
+        "          input_tokens: body.usage.input_tokens || 0,",
+        "          output_tokens: body.usage.output_tokens || 0,"
+      ],
+      "errorLine": "          cache_creation_input_tokens: (body.usage as unknown).cache_creation_input_tokens,",
+      "after": [
+        "          cache_read_input_tokens: (body.usage as unknown).cache_read_input_tokens,",
+        "        }",
+        "      : undefined;",
+        "",
+        "    // Extract tool calls if present"
+      ]
+    }
+  },
+  {
+    "file": "lib/llm/adapters/anthropic-adapter.ts",
+    "line": 233,
+    "column": 36,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "    const usage = body.usage",
+        "      ? {",
+        "          input_tokens: body.usage.input_tokens || 0,",
+        "          output_tokens: body.usage.output_tokens || 0,",
+        "          cache_creation_input_tokens: (body.usage as unknown).cache_creation_input_tokens,"
+      ],
+      "errorLine": "          cache_read_input_tokens: (body.usage as unknown).cache_read_input_tokens,",
+      "after": [
+        "        }",
+        "      : undefined;",
+        "",
+        "    // Extract tool calls if present",
+        "    const toolUseBlock = Array.isArray(body.content)"
+      ]
+    }
+  },
+  {
+    "file": "lib/models/local-model-scanner.ts",
+    "line": 131,
+    "column": 5,
+    "code": "TS2588",
+    "message": "Cannot assign to 'modelName' because it is a constant.",
+    "context": {
+      "before": [
+        "  const lowercaseMatch = dirName.match(lowercaseAuthorPattern);\r",
+        "  if (lowercaseMatch) {\r",
+        "    const [, author, modelName] = lowercaseMatch;\r",
+        "\r",
+        "    // Clean up version suffixes from modelName\r"
+      ],
+      "errorLine": "    modelName = modelName\r",
+      "after": [
+        "      .replace(/[-_]v?\\d+(\\.\\d+)*$/i, '') // Remove version numbers like -v0.3\r",
+        "      .replace(/[-_](fp16|fp32|int8|int4|gguf|q4_0|q5_0)$/i, ''); // Remove quantization suffixes\r",
+        "\r",
+        "    return `${author}/${modelName}`;\r",
+        "  }\r"
+      ]
+    }
+  },
+  {
+    "file": "lib/services/training-providers/local.provider.ts",
+    "line": 163,
+    "column": 15,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      let payload: TrainingJobRequest = request;\r",
+        "      try {\r",
+        "        if (request && request.config) {\r",
+        "          // Check if already normalized (has 'lora' key at top level)\r",
+        "          // ScriptBuilder output always includes 'lora' key\r"
+      ],
+      "errorLine": "          if ((request.config as unknown).lora) {\r",
+      "after": [
+        "            console.log('[LocalProvider] Config appears already normalized, skipping normalization');\r",
+        "            payload = request;\r",
+        "          } else {\r",
+        "            console.log('[LocalProvider] Normalizing config for backend');\r",
+        "            const normalized = normalizeForBackend(request.config as unknown as TrainingConfig);\r"
+      ]
+    }
+  },
+  {
+    "file": "lib/storage/index.ts",
+    "line": 12,
+    "column": 3,
+    "code": "TS2724",
+    "message": "'\"./export-storage\"' has no exported member named 'useSupabaseStorage'. Did you mean 'isSupabaseStoragePath'?",
+    "context": {
+      "before": [
+        "export {",
+        "  saveExport,",
+        "  getExport,",
+        "  deleteExport,",
+        "  exportExists,"
+      ],
+      "errorLine": "  useSupabaseStorage,",
+      "after": [
+        "  isSupabaseStoragePath,",
+        "  getStorageInfo,",
+        "  type StorageResult,",
+        "} from './export-storage';",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "lib/tools/graphrag/graphrag-query.tool.ts",
+    "line": 33,
+    "column": 7,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'TraceContext | undefined'.",
+    "context": {
+      "before": [
+        "    userId,\r",
+        "    query || 'list all documents and entities',\r",
+        "    {\r",
+        "      maxSources: safeMaxResults,\r",
+        "      includeMetadata: true,\r"
+      ],
+      "errorLine": "      traceContext\r",
+      "after": [
+        "    }\r",
+        "  );\r",
+        "\r",
+        "  // Check if any results found\r",
+        "  if (!enhanced.contextUsed || !enhanced.sources || enhanced.sources.length === 0) {\r"
+      ]
+    }
+  },
+  {
+    "file": "lib/tools/web-search/index.ts",
+    "line": 70,
+    "column": 32,
+    "code": "TS2345",
+    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+    "context": {
+      "before": [
+        "    };",
+        "  },",
+        "",
+        "  api: {",
+        "    router: (router: ExpressRouter): ExpressRouter => {"
+      ],
+      "errorLine": "      router.post('/research', researchController.startResearch.bind(researchController));",
+      "after": [
+        "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
+        "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+        "      return router;",
+        "    },",
+        "  },"
+      ]
+    }
+  },
+  {
+    "file": "lib/tools/web-search/index.ts",
+    "line": 71,
+    "column": 38,
+    "code": "TS2345",
+    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+    "context": {
+      "before": [
+        "  },",
+        "",
+        "  api: {",
+        "    router: (router: ExpressRouter): ExpressRouter => {",
+        "      router.post('/research', researchController.startResearch.bind(researchController));"
+      ],
+      "errorLine": "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
+      "after": [
+        "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+        "      return router;",
+        "    },",
+        "  },",
+        "};"
+      ]
+    }
+  },
+  {
+    "file": "lib/tools/web-search/index.ts",
+    "line": 72,
+    "column": 45,
+    "code": "TS2345",
+    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+    "context": {
+      "before": [
+        "",
+        "  api: {",
+        "    router: (router: ExpressRouter): ExpressRouter => {",
+        "      router.post('/research', researchController.startResearch.bind(researchController));",
+        "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));"
+      ],
+      "errorLine": "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+      "after": [
+        "      return router;",
+        "    },",
+        "  },",
+        "};",
+        ""
+      ]
+    }
+  },
+  {
+    "file": "lib/tools/web-search/research.controller.ts",
+    "line": 58,
+    "column": 13,
+    "code": "TS18046",
+    "message": "'data' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      res.setHeader('Content-Type', 'text/event-stream');",
+        "      res.setHeader('Cache-Control', 'no-cache');",
+        "      res.setHeader('Connection', 'keep-alive');",
+        "      ",
+        "      const handler = (data: unknown) => {"
+      ],
+      "errorLine": "        if (data.jobId === jobId) {",
+      "after": [
+        "           res.write(`data: ${JSON.stringify(data)}\\n\\n`);",
+        "        }",
+        "      };",
+        "      ",
+        "      sseService.on('research_event', handler);"
+      ]
+    }
+  },
+  {
+    "file": "lib/tools/web-search/sse.service.ts",
+    "line": 5,
+    "column": 42,
+    "code": "TS2698",
+    "message": "Spread types may only be created from object types.",
+    "context": {
+      "before": [
+        "import { EventEmitter } from 'events';",
+        "",
+        "class SseService extends EventEmitter {",
+        "  sendEvent(jobId: string, data: unknown) {"
+      ],
+      "errorLine": "    this.emit('research_event', { jobId, ...data });",
+      "after": [
+        "  }",
+        "}",
+        "",
+        "export const sseService = new SseService();",
+        ""
+      ]
+    }
+  }
+]

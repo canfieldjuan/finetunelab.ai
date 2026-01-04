@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { NextRequest } from 'next/server';
 
 type SupabaseResponse<T> = { data: T | null; error: { message: string } | null };
 

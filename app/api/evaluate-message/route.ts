@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       const citations = (contentJson as Record<string, unknown>).citations;
       if (Array.isArray(citations) && citations.length > 0) {
          
-        citationsService.saveCitations(messageId, contentJson as unknown).catch((err: Error) => {
+citationsService.saveCitations(messageId, contentJson as ContentJson).catch((err: Error) => {
           console.error('[EvaluateMessage] Error saving citations:', err);
         });
       }

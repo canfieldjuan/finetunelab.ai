@@ -40,5 +40,5 @@ export function getValidatorConfig<T = unknown>(
   defaultConfig?: T
 ): T {
   const config = context.validatorConfig?.[validatorId];
-  return config ? { ...defaultConfig, ...config } : (defaultConfig as T);
+return config || defaultConfig ? { ...defaultConfig, ...config } : undefined;
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 
 function makeRequest(body: unknown, headers?: Record<string, string>) {
   const bodyText = JSON.stringify(body);
@@ -28,7 +29,7 @@ describe('POST app/api/batch-testing/run', () => {
     const fetchMock = vi.fn(async (_url: string, init?: unknown) => {
       // Ensure the background prompt processing uses API key auth.
       if (typeof _url === 'string' && _url.endsWith('/api/chat')) {
-        expect(init?.headers?.['X-API-Key']).toBe('wak_testkey');
+expect((init as RequestInit)?.headers?.get('X-API-Key')).toBe('wak_testkey');
       }
       return { ok: true, text: async () => '' } as unknown;
     });

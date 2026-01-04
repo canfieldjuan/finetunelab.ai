@@ -128,7 +128,7 @@ function extractModelName(dirName: string, relativePath: string): string {
     const [, author, modelName] = lowercaseMatch;
 
     // Clean up version suffixes from modelName
-    modelName = modelName
+const cleanedModelName
       .replace(/[-_]v?\d+(\.\d+)*$/i, '') // Remove version numbers like -v0.3
       .replace(/[-_](fp16|fp32|int8|int4|gguf|q4_0|q5_0)$/i, ''); // Remove quantization suffixes
 

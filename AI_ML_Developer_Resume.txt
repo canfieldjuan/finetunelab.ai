@@ -1,0 +1,98 @@
+# Juan Canfield
+**AI/ML Developer**
+
+📧 canfieldjuan24@gmail.com | 📱 (555) 123-4567 | 🔗 LinkedIn: linkedin.com/in/yourprofile | 💻 GitHub: github.com/yourusername  
+📍 Your City, State
+
+---
+
+## PROFESSIONAL SUMMARY
+
+Self-directed AI/ML Developer with hands-on experience building production-grade AI applications. Specialized in LLM integration, model deployment, and full-stack AI systems. Proven ability to independently design, develop, and deploy complex AI solutions from concept to production. Strong foundation in Python, JavaScript/TypeScript, and modern AI frameworks.
+
+---
+
+## TECHNICAL SKILLS
+
+**AI/ML:** Large Language Models (LLM), Model Fine-tuning, Prompt Engineering, Model Deployment, AI Model Evaluation, Natural Language Processing, Model Training Pipelines, AI Agent Development
+
+**Languages:** Python, JavaScript, TypeScript, SQL, Node.js
+
+**AI Frameworks & Tools:** OpenAI API, Hugging Face Transformers, Ollama, VLLM, LangChain, OpenRouter
+
+**Web Development:** React, Next.js, REST APIs, Full-Stack Development, Real-time Applications
+
+**Databases:** PostgreSQL, Supabase, SQL Optimization, Row-Level Security (RLS), Database Design
+
+**DevOps:** Cloud Deployment, Docker, API Development, Model Serving, Infrastructure Management, Git/Version Control
+
+---
+
+## PROFESSIONAL EXPERIENCE
+
+### AI/ML Developer (Self-Employed / Independent Projects)
+*[Start Date] – Present*
+
+• Architected and deployed production-ready AI platform integrating multiple LLM providers (OpenAI, OpenRouter, Ollama) with custom inference server configurations and dynamic model routing logic
+
+• Built comprehensive model evaluation and analytics system with automated performance tracking, token usage monitoring, and data visualization dashboards for real-time insights
+
+• Developed end-to-end fine-tuning pipeline enabling custom model training workflows with configuration management and automated deployment to cloud infrastructure
+
+• Implemented robust database architecture with PostgreSQL/Supabase including complex Row-Level Security policies, migration systems, and query optimization for multi-tenant AI applications
+
+• Created real-time AI features with session management, message streaming, and automated tagging systems processing thousands of user interactions with sub-second response times
+
+• Engineered model deployment solutions supporting VLLM, Hugging Face models, and local inference servers with dynamic configuration, scalability features, and failover mechanisms
+
+• Designed and implemented RESTful APIs for AI model interactions, user authentication, and data management with comprehensive error handling and logging
+
+• Developed automated testing frameworks and evaluation metrics for model performance validation and quality assurance
+
+---
+
+## PROJECTS
+
+### AI Chat Platform with Multi-Model Support
+*Full-Stack AI Application*
+
+- Built web-based AI platform supporting multiple LLM providers with real-time chat interface
+- Implemented model fine-tuning capabilities with training job management and configuration workflows
+- Integrated analytics dashboard with usage tracking, cost analysis, and performance metrics
+- Technologies: React, TypeScript, Python, PostgreSQL, OpenAI API, Hugging Face, Ollama
+
+### Model Evaluation & Analytics System
+*AI Performance Monitoring Tool*
+
+- Created automated evaluation framework for comparing model outputs and measuring performance
+- Developed data visualization components for token usage, response times, and quality metrics
+- Implemented session tagging and categorization system for organizing AI interactions
+- Technologies: Python, JavaScript, PostgreSQL, Data Visualization Libraries
+
+---
+
+## EDUCATION
+
+**[Your Degree/Coursework]** *(if applicable, otherwise list online courses/certifications)*
+
+*Or use this section for certifications/courses:*
+
+**Relevant Coursework & Self-Study:**
+- Machine Learning & AI Development (Online courses, documentation, hands-on projects)
+- Deep Learning Specialization (Coursera, DeepLearning.AI) *(if completed)*
+- Full-Stack Web Development
+- Database Design & Optimization
+- Cloud Computing & Deployment
+
+---
+
+## ADDITIONAL INFORMATION
+
+- **Self-Taught:** Independently learned AI/ML development through project-based learning, documentation, and continuous experimentation
+- **Problem Solver:** Strong analytical skills with ability to debug complex systems and optimize performance
+- **Fast Learner:** Quickly adapts to new technologies, frameworks, and AI model architectures
+- **Open to:** Remote, hybrid, or on-site opportunities in AI/ML development roles
+
+---
+
+*References and portfolio details available upon request*

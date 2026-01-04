@@ -29,6 +29,17 @@
     "scheduler:check": "npx tsx scripts/check-schedules-once.ts",
     "review:ai": "npx tsx scripts/ollama-code-review.ts",
     "review:cloud": "npx tsx scripts/replicate-code-review.ts",
+    "ts:scan": "node scripts/ts-error-pipeline/1-scan.mjs",
+    "ts:categorize": "node scripts/ts-error-pipeline/2-categorize.mjs",
+    "ts:fix": "node scripts/ts-error-pipeline/3-generate-fixes.mjs",
+    "ts:fix:parallel": "node scripts/ts-error-pipeline/3-generate-fixes-parallel.mjs",
+    "ts:review": "node scripts/ts-error-pipeline/4-review.mjs",
+    "ts:apply": "node scripts/ts-error-pipeline/5-apply.mjs",
+    "ts:setup-cloud": "node scripts/ts-error-pipeline/setup-cloud.mjs",
+    "ts:test-cloud": "node scripts/ts-error-pipeline/test-cloud.mjs",
+    "ts:pipeline": "npm run ts:scan && npm run ts:categorize && npm run ts:fix && npm run ts:review",
+    "ts:pipeline:parallel": "npm run ts:scan && npm run ts:categorize && npm run ts:fix:parallel && npm run ts:review",
+    "ts:auto": "npm run ts:scan && npm run ts:categorize && npm run ts:fix && npm run ts:apply",
     "prepare": "test -d .git && husky || true"
   },
   "dependencies": {

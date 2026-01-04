@@ -1,0 +1,352 @@
+[
+  {
+    "error": {
+      "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+      "line": 31,
+      "column": 22,
+      "code": "TS2339",
+      "message": "Property 'headers' does not exist on type '{}'.",
+      "context": {
+        "before": [
+          "",
+          "  it('accepts X-API-Key auth and calls /api/chat with X-API-Key', async () => {",
+          "    const fetchMock = vi.fn(async (_url: string, init?: unknown) => {",
+          "      // Ensure the background prompt processing uses API key auth.",
+          "      if (typeof _url === 'string' && _url.endsWith('/api/chat')) {"
+        ],
+        "errorLine": "        expect(init?.headers?.['X-API-Key']).toBe('wak_testkey');",
+        "after": [
+          "      }",
+          "      return { ok: true, text: async () => '' } as unknown;",
+          "    });",
+          "    // @ts-expect-error - vitest global patching",
+          "    globalThis.fetch = fetchMock;"
+        ]
+      },
+      "tier": "TIER1",
+      "confidence": 0.95,
+      "categorizationReason": "Missing property on an object - the type of init should be defined to include a headers property or cast appropriately."
+    },
+    "fix": {
+      "analysis": "The error occurs because the type of 'init' in the fetchMock function is defined as 'unknown', which does not have a 'headers' property. We need to assert that 'init' has the correct type.",
+      "fix_type": "add_type_assertion",
+      "changes": [
+        {
+          "line": 31,
+          "old_content": "expect(init?.headers?.['X-API-Key']).toBe('wak_testkey');",
+          "new_content": "expect((init as RequestInit)?.headers?.get('X-API-Key')).toBe('wak_testkey');"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "Ensure that the 'RequestInit' type is correctly imported or available in the scope."
+    },
+    "model": "qwen2.5-coder:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T00:50:04.360Z"
+  },
+  {
+    "error": {
+      "file": "app/models/page.tsx",
+      "line": 410,
+      "column": 19,
+      "code": "TS2322",
+      "message": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'.",
+      "context": {
+        "before": [
+          "                <ModelCard",
+          "                  model={model}",
+          "                  onEdit={handleEditModel}",
+          "                  onDelete={handleDeleteModel}",
+          "                  currentUserId={user?.id}"
+        ],
+        "errorLine": "                  serverInfo={servers[model.id]}",
+        "after": [
+          "                  sessionToken={session?.access_token}",
+          "                  onServerChanged={fetchServers}",
+          "                />",
+          "              </div>",
+          "            ))}"
+        ]
+      },
+      "tier": "TIER1",
+      "confidence": 0.95,
+      "categorizationReason": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'. This can be fixed by ensuring that the value being assigned to serverInfo is either of type ServerInfo or explicitly undefined."
+    },
+    "fix": null,
+    "model": "qwen2.5-coder:32b",
+    "provider": "local",
+    "error_message": "Request timeout after 300000ms (local)",
+    "generated_at": "2026-01-04T00:55:04.364Z"
+  },
+  {
+    "error": {
+      "file": "lib/models/local-model-scanner.ts",
+      "line": 131,
+      "column": 5,
+      "code": "TS2588",
+      "message": "Cannot assign to 'modelName' because it is a constant.",
+      "context": {
+        "before": [
+          "  const lowercaseMatch = dirName.match(lowercaseAuthorPattern);\r",
+          "  if (lowercaseMatch) {\r",
+          "    const [, author, modelName] = lowercaseMatch;\r",
+          "\r",
+          "    // Clean up version suffixes from modelName\r"
+        ],
+        "errorLine": "    modelName = modelName\r",
+        "after": [
+          "      .replace(/[-_]v?\\d+(\\.\\d+)*$/i, '') // Remove version numbers like -v0.3\r",
+          "      .replace(/[-_](fp16|fp32|int8|int4|gguf|q4_0|q5_0)$/i, ''); // Remove quantization suffixes\r",
+          "\r",
+          "    return `${author}/${modelName}`;\r",
+          "  }\r"
+        ]
+      },
+      "tier": "TIER1",
+      "confidence": 0.95,
+      "categorizationReason": "Attempting to reassign a constant variable - straightforward fix"
+    },
+    "fix": {
+      "analysis": "The error TS2588 occurs because 'modelName' is being treated as a constant within the scope of the if block where it is destructured from the match result. In TypeScript, variables declared with const in destructuring assignments are immutable.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 131,
+          "old_content": "modelName = modelName",
+          "new_content": "const cleanedModelName"
+        }
+      ],
+      "additional_changes": [
+        {
+          "file": "lib/models/local-model-scanner.ts",
+          "line": 134,
+          "old_content": "return `${author}/${modelName}`;",
+          "new_content": "return `${author}/${cleanedModelName}`;"
+        }
+      ],
+      "confidence": 0.95,
+      "notes": "Ensure that the variable name change does not conflict with any existing variables in the scope."
+    },
+    "model": "qwen2.5-coder:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T00:56:17.347Z"
+  },
+  {
+    "error": {
+      "file": "lib/storage/index.ts",
+      "line": 12,
+      "column": 3,
+      "code": "TS2724",
+      "message": "'\"./export-storage\"' has no exported member named 'useSupabaseStorage'. Did you mean 'isSupabaseStoragePath'?",
+      "context": {
+        "before": [
+          "export {",
+          "  saveExport,",
+          "  getExport,",
+          "  deleteExport,",
+          "  exportExists,"
+        ],
+        "errorLine": "  useSupabaseStorage,",
+        "after": [
+          "  isSupabaseStoragePath,",
+          "  getStorageInfo,",
+          "  type StorageResult,",
+          "} from './export-storage';",
+          ""
+        ]
+      },
+      "tier": "TIER1",
+      "confidence": 0.95,
+      "categorizationReason": "Typo or incorrect import - straightforward fix"
+    },
+    "fix": {
+      "analysis": "The error indicates that 'useSupabaseStorage' is not exported from './export-storage'. The suggestion provided by TypeScript is to use 'isSupabaseStoragePath' instead.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 12,
+          "old_content": "  useSupabaseStorage,",
+          "new_content": "  // useSupabaseStorage,"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "Commented out 'useSupabaseStorage' as it is not exported. If 'isSupabaseStoragePath' should be used instead, replace the comment with 'isSupabaseStoragePath,'."
+    },
+    "model": "qwen2.5-coder:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T00:57:12.200Z"
+  },
+  {
+    "error": {
+      "file": "lib/tools/web-search/index.ts",
+      "line": 71,
+      "column": 38,
+      "code": "TS2345",
+      "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+      "context": {
+        "before": [
+          "  },",
+          "",
+          "  api: {",
+          "    router: (router: ExpressRouter): ExpressRouter => {",
+          "      router.post('/research', researchController.startResearch.bind(researchController));"
+        ],
+        "errorLine": "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
+        "after": [
+          "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+          "      return router;",
+          "    },",
+          "  },",
+          "};"
+        ]
+      },
+      "tier": "TIER1",
+      "confidence": 0.95,
+      "categorizationReason": "Missing type annotation - straightforward fix"
+    },
+    "fix": {
+      "analysis": "The error occurs because the handler functions in researchController expect parameters of type (req: Request, res: Response), but the ExpressRouter interface defines them as (req: unknown, res: unknown). This mismatch causes a TypeScript error.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 54,
+          "old_content": "router.post('/research', researchController.startResearch.bind(researchController));",
+          "new_content": "router.post('/research', (req: Request, res: Response) => researchController.startResearch(req, res));"
+        },
+        {
+          "line": 55,
+          "old_content": "router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
+          "new_content": "router.get('/research/:jobId', (req: Request, res: Response) => researchController.getResearchStatus(req, res));"
+        },
+        {
+          "line": 56,
+          "old_content": "router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+          "new_content": "router.get('/research/:jobId/stream', (req: Request, res: Response) => researchController.streamResearchUpdates(req, res));"
+        }
+      ],
+      "additional_changes": [
+        {
+          "file": "lib/tools/web-search/index.ts",
+          "line": 10,
+          "old_content": "import type { SortBy } from './types';",
+          "new_content": "import type { Request, Response, SortBy } from './types';"
+        }
+      ],
+      "confidence": 0.95,
+      "notes": "Ensure that the types for Request and Response are correctly imported or defined in the './types' file."
+    },
+    "model": "qwen2.5-coder:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T00:58:09.250Z"
+  },
+  {
+    "error": {
+      "file": "lib/tools/web-search/index.ts",
+      "line": 72,
+      "column": 45,
+      "code": "TS2345",
+      "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+      "context": {
+        "before": [
+          "",
+          "  api: {",
+          "    router: (router: ExpressRouter): ExpressRouter => {",
+          "      router.post('/research', researchController.startResearch.bind(researchController));",
+          "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));"
+        ],
+        "errorLine": "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+        "after": [
+          "      return router;",
+          "    },",
+          "  },",
+          "};",
+          ""
+        ]
+      },
+      "tier": "TIER1",
+      "confidence": 0.95,
+      "categorizationReason": "Missing type annotation - straightforward fix"
+    },
+    "fix": {
+      "analysis": "The error occurs because the handler functions in researchController expect parameters of type (req: Request, res: Response) => Promise<void>, but the ExpressRouter interface defines them as (req: unknown, res: unknown) => void.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 72,
+          "old_content": "router.post('/research', researchController.startResearch.bind(researchController));",
+          "new_content": "router.post('/research', (req: Request, res: Response) => researchController.startResearch(req, res));"
+        },
+        {
+          "line": 73,
+          "old_content": "router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
+          "new_content": "router.get('/research/:jobId', (req: Request, res: Response) => researchController.getResearchStatus(req, res));"
+        },
+        {
+          "line": 74,
+          "old_content": "router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+          "new_content": "router.get('/research/:jobId/stream', (req: Request, res: Response) => researchController.streamResearchUpdates(req, res));"
+        }
+      ],
+      "additional_changes": [
+        {
+          "file": "lib/tools/web-search/index.ts",
+          "line": 10,
+          "old_content": "import type { SortBy } from './types';",
+          "new_content": "import type { Request, Response } from 'express';\nimport type { SortBy } from './types';"
+        }
+      ],
+      "confidence": 0.95,
+      "notes": "Ensure that the express package is installed and imported correctly."
+    },
+    "model": "qwen2.5-coder:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T00:59:25.123Z"
+  },
+  {
+    "error": {
+      "file": "lib/tools/web-search/sse.service.ts",
+      "line": 5,
+      "column": 42,
+      "code": "TS2698",
+      "message": "Spread types may only be created from object types.",
+      "context": {
+        "before": [
+          "import { EventEmitter } from 'events';",
+          "",
+          "class SseService extends EventEmitter {",
+          "  sendEvent(jobId: string, data: unknown) {"
+        ],
+        "errorLine": "    this.emit('research_event', { jobId, ...data });",
+        "after": [
+          "  }",
+          "}",
+          "",
+          "export const sseService = new SseService();",
+          ""
+        ]
+      },
+      "tier": "TIER1",
+      "confidence": 0.95,
+      "categorizationReason": "Spread operator used on a non-object type - straightforward fix"
+    },
+    "fix": {
+      "analysis": "The error occurs because 'data' is of type 'unknown', and spread syntax can only be used with object types.",
+      "fix_type": "add_type_assertion",
+      "changes": [
+        {
+          "line": 5,
+          "old_content": "this.emit('research_event', { jobId, ...data });",
+          "new_content": "this.emit('research_event', { jobId, ...(data as object) });"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "Ensure that 'data' is indeed an object before using the spread operator to avoid runtime errors."
+    },
+    "model": "qwen2.5-coder:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T01:00:21.751Z"
+  }
+]

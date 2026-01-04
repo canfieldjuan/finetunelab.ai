@@ -1,0 +1,971 @@
+[
+  {
+    "file": "app/account/page.tsx",
+    "line": 269,
+    "column": 56,
+    "code": "TS2345",
+    "message": "Argument of type 'string' is not assignable to parameter of type 'SetStateAction<UsageTier | undefined>'.",
+    "context": {
+      "before": [
+        "                  {showTierSelector ? 'Hide Tiers' : 'Change Tier'}",
+        "                </Button>",
+        "              </div>",
+        "              <UsageDashboard ",
+        "                sessionToken={session.access_token}"
+      ],
+      "errorLine": "                onTierLoaded={(tier) => setCurrentTier(tier)}",
+      "after": [
+        "              />",
+        "              ",
+        "              {showTierSelector && (",
+        "                <div className=\"mt-8 pt-8 border-t border-border\">",
+        "                  <TierSelector"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference issue - the type of 'tier' needs to be explicitly checked or cast to match 'SetStateAction<UsageTier | undefined>'."
+  },
+  {
+    "file": "app/api/analytics/data/__tests__/route.test.ts",
+    "line": 36,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { GET } = await import('../route');",
+        "",
+        "    const response = await GET("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        'http://localhost:3000/api/analytics/data?startDate=2025-01-01T00:00:00Z&endDate=2025-01-02T00:00:00Z&metrics=all',",
+        "        { 'X-API-Key': 'wak_testkey_should_not_be_validated_by_format_here' }",
+        "      )",
+        "    );",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference issue - the argument passed to makeRequest should be of type NextRequest, but it's currently 'unknown'. This requires understanding the context and ensuring the correct type is being passed."
+  },
+  {
+    "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+    "line": 99,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          config: {",
+        "            model_id: 'gpt-4',",
+        "            test_suite_id: 'suite-1',",
+        "            prompt_limit: 1,"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference issue - similar to error [1], the argument passed to makeRequest should be of type NextRequest, but it's currently 'unknown'."
+  },
+  {
+    "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+    "line": 136,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          config: {",
+        "            model_id: 'gpt-4',",
+        "            test_suite_id: 'suite-1',",
+        "            prompt_limit: 1,"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference issue - similar to error [1], the argument passed to makeRequest should be of type NextRequest, but it's currently 'unknown'."
+  },
+  {
+    "file": "app/api/batch-testing/run/route.ts",
+    "line": 693,
+    "column": 68,
+    "code": "TS18046",
+    "message": "'t' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "        description: tool.description,",
+        "        parameters: tool.parameters as Record<string, unknown>",
+        "      }",
+        "    })) || [];",
+        ""
+      ],
+      "errorLine": "    console.log('[Background Batch] Loaded tools:', tools.map(t => t.function.name).join(', '));",
+      "after": [
+        "  } else {",
+        "    console.log('[Background Batch] Skipping tools (provider does not support function calling via API)');",
+        "  }",
+        "",
+        "  // Auto-generate session tag for batch test"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference issue - 't' is of type 'unknown', which means the array 'tools' needs to be properly typed or cast."
+  },
+  {
+    "file": "app/api/batch-testing/run/route.ts",
+    "line": 741,
+    "column": 9,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown[]' is not assignable to parameter of type '{ type: \"function\"; function: { name: string; description: string; parameters: Record<string, unknown>; }; }[]'.",
+    "context": {
+      "before": [
+        "        runId,",
+        "        config.benchmark_id,",
+        "        widgetSessionId,",
+        "        conversation.id,  // Pass conversation ID for efficient lookups",
+        "        config.judge_config,  // Pass judge configuration"
+      ],
+      "errorLine": "        tools  // Pass enabled tools for trace recording",
+      "after": [
+        "      );",
+        "",
+        "      if (success) {",
+        "        completed++;",
+        "      } else {"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type mismatch - the argument passed to tools should match the expected type, requiring a type assertion or proper typing of the array 'tools'."
+  },
+  {
+    "file": "app/api/batch-testing/run/route.ts",
+    "line": 969,
+    "column": 94,
+    "code": "TS18046",
+    "message": "'e' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "          })",
+        "        });",
+        "",
+        "        if (judgeResponse.ok) {",
+        "          const judgeData = await judgeResponse.json();"
+      ],
+      "errorLine": "          const avgScore = judgeData.evaluations?.reduce((sum: number, e: unknown) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);",
+      "after": [
+        "          console.log(`[Process Prompt] ${promptIndex + 1}: Judge evaluation complete, avg score: ${avgScore.toFixed(1)}/10 (${(avgScore / 10 * 100).toFixed(0)}%)`);",
+        "        } else {",
+        "          const judgeError = await judgeResponse.text();",
+        "          console.error(`[Process Prompt] ${promptIndex + 1}: Judge evaluation failed:`, judgeError.substring(0, 200));",
+        "          // Don't fail the whole prompt if judge fails, just log the error"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference issue - 'e' is of type 'unknown', which means the elements in judgeData.evaluations need to be properly typed or cast."
+  },
+  {
+    "file": "app/api/batch-testing/status/[id]/__tests__/route.test.ts",
+    "line": 56,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { GET } = await import('../route');",
+        "",
+        "    const response = await GET("
+      ],
+      "errorLine": "      makeRequest({ 'X-API-Key': 'wak_testkey' }),",
+      "after": [
+        "      { params: Promise.resolve({ id: 'test-run-1' }) }",
+        "    );",
+        "",
+        "    expect(response.status).toBe(200);",
+        "    const payload = await response.json();"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference issue - similar to error [1], the argument passed to makeRequest should be of type NextRequest, but it's currently 'unknown'."
+  },
+  {
+    "file": "app/api/evaluate-message/route.ts",
+    "line": 107,
+    "column": 51,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'ContentJson'.",
+    "context": {
+      "before": [
+        "    // 4. Save citations (async, don't block)",
+        "    if (contentJson && typeof contentJson === 'object' && 'citations' in contentJson) {",
+        "      const citations = (contentJson as Record<string, unknown>).citations;",
+        "      if (Array.isArray(citations) && citations.length > 0) {",
+        "         "
+      ],
+      "errorLine": "        citationsService.saveCitations(messageId, contentJson as unknown).catch((err: Error) => {",
+      "after": [
+        "          console.error('[EvaluateMessage] Error saving citations:', err);",
+        "        });",
+        "      }",
+        "    }",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type mismatch - the argument passed to citationsService.saveCitations should match the expected type ContentJson, requiring a type assertion or proper typing."
+  },
+  {
+    "file": "app/api/training/dataset/route.ts",
+    "line": 314,
+    "column": 22,
+    "code": "TS18046",
+    "message": "'awsMetadata' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "        );",
+        "      }",
+        "",
+        "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+        "      const s3Service = new S3StorageService({"
+      ],
+      "errorLine": "        accessKeyId: awsMetadata.access_key_id,",
+      "after": [
+        "        secretAccessKey: decryptedSecretKey,",
+        "        region: awsMetadata.region,",
+        "        bucket: awsMetadata.s3_bucket,",
+        "      });",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'awsMetadata' is of type 'unknown', requires adding a type or assertion based on the expected structure."
+  },
+  {
+    "file": "app/api/training/dataset/route.ts",
+    "line": 316,
+    "column": 17,
+    "code": "TS18046",
+    "message": "'awsMetadata' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "",
+        "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+        "      const s3Service = new S3StorageService({",
+        "        accessKeyId: awsMetadata.access_key_id,",
+        "        secretAccessKey: decryptedSecretKey,"
+      ],
+      "errorLine": "        region: awsMetadata.region,",
+      "after": [
+        "        bucket: awsMetadata.s3_bucket,",
+        "      });",
+        "",
+        "      const buffer = Buffer.from(await normalizedBlob.arrayBuffer());",
+        "      storagePath = await s3Service.uploadDataset(buffer, user.id, datasetId);"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'awsMetadata' is of type 'unknown', requires adding a type or assertion based on the expected structure."
+  },
+  {
+    "file": "app/api/training/dataset/route.ts",
+    "line": 317,
+    "column": 17,
+    "code": "TS18046",
+    "message": "'awsMetadata' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+        "      const s3Service = new S3StorageService({",
+        "        accessKeyId: awsMetadata.access_key_id,",
+        "        secretAccessKey: decryptedSecretKey,",
+        "        region: awsMetadata.region,"
+      ],
+      "errorLine": "        bucket: awsMetadata.s3_bucket,",
+      "after": [
+        "      });",
+        "",
+        "      const buffer = Buffer.from(await normalizedBlob.arrayBuffer());",
+        "      storagePath = await s3Service.uploadDataset(buffer, user.id, datasetId);",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'awsMetadata' is of type 'unknown', requires adding a type or assertion based on the expected structure."
+  },
+  {
+    "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+    "line": 39,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest({ step: 1, epoch: 0 }),",
+      "after": [
+        "      { params: Promise.resolve({ jobId: 'job-123' }) }",
+        "    );",
+        "",
+        "    expect(response.status).toBe(401);",
+        "  });"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Argument of type 'unknown' suggests that the function parameter needs to be properly typed, possibly involving changes in how the argument is constructed or passed."
+  },
+  {
+    "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+    "line": 77,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        { step: 1, epoch: 0 },",
+        "        { Authorization: 'Bearer wrong-token' }",
+        "      ),",
+        "      { params: Promise.resolve({ jobId: 'job-123' }) }",
+        "    );"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Argument of type 'unknown' suggests that the function parameter needs to be properly typed, possibly involving changes in how the argument is constructed or passed."
+  },
+  {
+    "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+    "line": 118,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          step: 2,",
+        "          epoch: 1.2,",
+        "          loss: 0.5,",
+        "          eval_loss: 0.6,"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Argument of type 'unknown' suggests that the function parameter needs to be properly typed, possibly involving changes in how the argument is constructed or passed."
+  },
+  {
+    "file": "app/api/training/local/jobs/route.ts",
+    "line": 365,
+    "column": 47,
+    "code": "TS2339",
+    "message": "Property 'job_token' does not exist on type '{}'.",
+    "context": {
+      "before": [
+        "      clearTimeout(timeoutHandle!);",
+        "      console.log('[LocalTrainingJobs] Job persisted successfully:', job_id);",
+        "",
+        "      // Extract job_token from persisted data",
+        "      const persistedData = (result as { data: unknown }).data;"
+      ],
+      "errorLine": "      const returnedJobToken = persistedData?.job_token;",
+      "after": [
+        "",
+        "      return NextResponse.json({",
+        "        success: true,",
+        "        persisted: true,",
+        "        job_id,"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'job_token' does not exist on type '{}', requires adding a proper type to 'persistedData' based on the expected structure."
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 66,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest({",
+      "after": [
+        "        job_id: 'job-123',",
+        "        metrics: [{ step: 1, epoch: 0 }],",
+        "      })",
+        "    );",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Argument of type 'unknown' suggests that the function parameter needs to be properly typed, possibly involving changes in how the argument is constructed or passed."
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 115,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          job_id: 'job-123',",
+        "          metrics: [{ step: 1, epoch: 0 }],",
+        "        },",
+        "        { authorization: 'Bearer wrong-token' }"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Argument of type 'unknown' suggests that the function parameter needs to be properly typed, possibly involving changes in how the argument is constructed or passed."
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 166,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          job_id: 'job-123',",
+        "          metrics: [",
+        "            { step: 1, epoch: 0, train_loss: 1.0, eval_loss: 2.0 },",
+        "            { step: 2, epoch: 0, train_loss: 0.5, eval_loss: 1.5, learning_rate: 0.0001 },"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Argument of type 'unknown' suggests that the function parameter needs to be properly typed, possibly involving changes in how the argument is constructed or passed."
+  },
+  {
+    "file": "app/api/training/stats/route.ts",
+    "line": 84,
+    "column": 22,
+    "code": "TS18046",
+    "message": "'job' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      );",
+        "    }",
+        "",
+        "    // Count by status",
+        "    const statusCounts = jobs.reduce((acc: Record<string, number>, job: unknown) => {"
+      ],
+      "errorLine": "      const status = job.status || 'unknown';",
+      "after": [
+        "      acc[status] = (acc[status] || 0) + 1;",
+        "      return acc;",
+        "    }, {});",
+        "",
+        "    console.log('[Training Stats API] Stats retrieved:', { totalJobs, statusCounts });"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "'job' is of type 'unknown'. This likely requires adding a type annotation or assertion based on the context in which 'job' is used."
+  },
+  {
+    "file": "components/billing/InvoiceHistoryTable.tsx",
+    "line": 103,
+    "column": 14,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type '\"default\" | \"destructive\" | \"outline\" | \"secondary\" | null | undefined'.",
+    "context": {
+      "before": [
+        "      failed: \"destructive\",",
+        "      void: \"outline\",",
+        "    };",
+        "",
+        "    return ("
+      ],
+      "errorLine": "      <Badge variant={variants[status]} className=\"capitalize\">",
+      "after": [
+        "        {status}",
+        "      </Badge>",
+        "    );",
+        "  };",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'unknown' is not assignable to a specific set of types. This requires determining the correct type for 'variants[status]' and ensuring it matches one of the expected values."
+  },
+  {
+    "file": "components/evaluation/ScheduleRunHistory.tsx",
+    "line": 113,
+    "column": 14,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type '\"default\" | \"destructive\" | \"outline\" | \"secondary\" | null | undefined'.",
+    "context": {
+      "before": [
+        "",
+        "    const config = statusConfig[status] || statusConfig.triggered;",
+        "    const Icon = config.icon;",
+        "",
+        "    return ("
+      ],
+      "errorLine": "      <Badge variant={config.variant} className=\"gap-1\">",
+      "after": [
+        "        <Icon className=\"w-3 h-3\" />",
+        "        {config.label}",
+        "      </Badge>",
+        "    );",
+        "  };"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'unknown' is not assignable to a specific set of types. This requires determining the correct type for 'config.variant' and ensuring it matches one of the expected values."
+  },
+  {
+    "file": "components/evaluation/ScheduleRunHistory.tsx",
+    "line": 114,
+    "column": 10,
+    "code": "TS2604",
+    "message": "JSX element type 'Icon' does not have any construct or call signatures.",
+    "context": {
+      "before": [
+        "    const config = statusConfig[status] || statusConfig.triggered;",
+        "    const Icon = config.icon;",
+        "",
+        "    return (",
+        "      <Badge variant={config.variant} className=\"gap-1\">"
+      ],
+      "errorLine": "        <Icon className=\"w-3 h-3\" />",
+      "after": [
+        "        {config.label}",
+        "      </Badge>",
+        "    );",
+        "  };",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'Icon' does not have any construct or call signatures. This likely requires checking if 'Icon' is correctly imported and used as a JSX component."
+  },
+  {
+    "file": "components/evaluation/ScheduleRunHistory.tsx",
+    "line": 114,
+    "column": 10,
+    "code": "TS2786",
+    "message": "'Icon' cannot be used as a JSX component.",
+    "context": {
+      "before": [
+        "    const config = statusConfig[status] || statusConfig.triggered;",
+        "    const Icon = config.icon;",
+        "",
+        "    return (",
+        "      <Badge variant={config.variant} className=\"gap-1\">"
+      ],
+      "errorLine": "        <Icon className=\"w-3 h-3\" />",
+      "after": [
+        "        {config.label}",
+        "      </Badge>",
+        "    );",
+        "  };",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'Icon' cannot be used as a JSX component. This likely requires checking if 'Icon' is correctly imported and used as a JSX component, or if it needs to be defined properly."
+  },
+  {
+    "file": "components/landing/Pricing.tsx",
+    "line": 43,
+    "column": 11,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'PlanTier'.",
+    "context": {
+      "before": [
+        "            Choose the plan that fits your scale. Start with a 15-day free trial.",
+        "          </p>",
+        "        </div>",
+        "",
+        "        <PricingTiers"
+      ],
+      "errorLine": "          currentPlan={null as unknown}",
+      "after": [
+        "          onUpgrade={handleUpgrade}",
+        "          onContactSales={handleContactSales}",
+        "        />",
+        "      </div>",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'unknown' is not assignable to type 'PlanTier'. This requires determining the correct type for 'currentPlan' and ensuring it matches one of the expected values."
+  },
+  {
+    "file": "lib/auth/api-key-validator.ts",
+    "line": 421,
+    "column": 29,
+    "code": "TS18046",
+    "message": "'supabase' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "  supabase: unknown,",
+        "  keyId: string",
+        "): Promise<void> {",
+        "  try {",
+        "    // Try RPC first (most efficient)"
+      ],
+      "errorLine": "    const { error } = await supabase.rpc('update_api_key_usage', {",
+      "after": [
+        "      p_key_id: keyId",
+        "    });",
+        "",
+        "    if (error) {",
+        "      // Fallback to direct SQL update if RPC doesn't exist"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'supabase' is of type 'unknown'. This likely requires adding a type annotation or assertion based on the context in which 'supabase' is used."
+  },
+  {
+    "file": "lib/auth/api-key-validator.ts",
+    "line": 429,
+    "column": 46,
+    "code": "TS18046",
+    "message": "'supabase' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "",
+        "    if (error) {",
+        "      // Fallback to direct SQL update if RPC doesn't exist",
+        "      if (error.code === 'PGRST202' || error.code === '42883') {",
+        "        // Use raw SQL to increment counter"
+      ],
+      "errorLine": "        const { error: updateError } = await supabase",
+      "after": [
+        "          .from('user_api_keys')",
+        "          .update({",
+        "            last_used_at: new Date().toISOString()",
+        "          })",
+        "          .eq('id', keyId);"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'supabase' is of type 'unknown'. This likely requires adding a type annotation or assertion based on the context in which 'supabase' is used."
+  },
+  {
+    "file": "lib/auth/api-key-validator.ts",
+    "line": 440,
+    "column": 17,
+    "code": "TS18046",
+    "message": "'supabase' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "",
+        "        if (updateError) {",
+        "          console.warn('[API Key Usage] Direct update failed:', updateError.message);",
+        "        } else {",
+        "          // Increment request_count separately using raw query"
+      ],
+      "errorLine": "          await supabase.rpc('exec_sql', {",
+      "after": [
+        "            query: `UPDATE user_api_keys SET request_count = COALESCE(request_count, 0) + 1 WHERE id = '${keyId}'`",
+        "          }).catch(() => {",
+        "            // If exec_sql doesn't exist, that's fine - we at least updated last_used_at",
+        "          });",
+        "        }"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "'supabase' is of type 'unknown'. This likely requires adding a type annotation or assertion based on the context in which 'supabase' is used."
+  },
+  {
+    "file": "lib/evaluation/validators/validator-context.ts",
+    "line": 43,
+    "column": 19,
+    "code": "TS2322",
+    "message": "Type '{}' is not assignable to type 'T'.",
+    "context": {
+      "before": [
+        "  context: ValidatorContext,\r",
+        "  validatorId: string,\r",
+        "  defaultConfig?: T\r",
+        "): T {\r",
+        "  const config = context.validatorConfig?.[validatorId];\r"
+      ],
+      "errorLine": "  return config ? { ...defaultConfig, ...config } : (defaultConfig as T);\r",
+      "after": [
+        "}\r",
+        ""
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference issue - requires understanding the type of 'config' and 'defaultConfig'"
+  },
+  {
+    "file": "lib/inference/fireworks-deployment-service.ts",
+    "line": 82,
+    "column": 7,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'BodyInit | null | undefined'.",
+    "context": {
+      "before": [
+        "    }",
+        "",
+        "    const options: RequestInit = {",
+        "      method,",
+        "      headers,"
+      ],
+      "errorLine": "      body: (body instanceof FormData || body instanceof Buffer) ? (body as unknown) : JSON.stringify(body),",
+      "after": [
+        "    };",
+        "",
+        "    if (body instanceof Buffer) {",
+        "      options.headers = { ...headers, 'Content-Type': 'application/octet-stream' };",
+        "    }"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Type casting from unknown to a specific type requires judgment on the actual types involved"
+  },
+  {
+    "file": "lib/inference/runpod-serverless-service.ts",
+    "line": 434,
+    "column": 9,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "        },\r",
+        "      };\r",
+        "\r",
+        "      if (networkVolumeIdToAttach) {\r",
+        "        console.log(`[RunPodServerlessService] Attaching volume ${networkVolumeIdToAttach} to the pod.`);\r"
+      ],
+      "errorLine": "        (variables.input as unknown).networkVolumeId = networkVolumeIdToAttach;\r",
+      "after": [
+        "        variables.input.volumeMountPath = volumeMountPath;\r",
+        "        const modelFolderName = request.model_id.split('/').pop();\r",
+        "        variables.input.dockerArgs = `vllm serve --model ${volumeMountPath}/${modelFolderName} ${vllmArgs.join(' ')}`;\r",
+        "      }\r",
+        "      \r"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.8,
+    "categorizationReason": "Casting 'unknown' to a specific type requires understanding the structure of 'variables.input'"
+  },
+  {
+    "file": "lib/llm/adapters/anthropic-adapter.ts",
+    "line": 232,
+    "column": 40,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "    // Extract usage metrics including cache tokens",
+        "    const usage = body.usage",
+        "      ? {",
+        "          input_tokens: body.usage.input_tokens || 0,",
+        "          output_tokens: body.usage.output_tokens || 0,"
+      ],
+      "errorLine": "          cache_creation_input_tokens: (body.usage as unknown).cache_creation_input_tokens,",
+      "after": [
+        "          cache_read_input_tokens: (body.usage as unknown).cache_read_input_tokens,",
+        "        }",
+        "      : undefined;",
+        "",
+        "    // Extract tool calls if present"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Casting 'unknown' to a specific type requires understanding the structure of 'body.usage'"
+  },
+  {
+    "file": "lib/llm/adapters/anthropic-adapter.ts",
+    "line": 233,
+    "column": 36,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "    const usage = body.usage",
+        "      ? {",
+        "          input_tokens: body.usage.input_tokens || 0,",
+        "          output_tokens: body.usage.output_tokens || 0,",
+        "          cache_creation_input_tokens: (body.usage as unknown).cache_creation_input_tokens,"
+      ],
+      "errorLine": "          cache_read_input_tokens: (body.usage as unknown).cache_read_input_tokens,",
+      "after": [
+        "        }",
+        "      : undefined;",
+        "",
+        "    // Extract tool calls if present",
+        "    const toolUseBlock = Array.isArray(body.content)"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Casting 'unknown' to a specific type requires understanding the structure of 'body.usage'"
+  },
+  {
+    "file": "lib/services/training-providers/local.provider.ts",
+    "line": 163,
+    "column": 15,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      let payload: TrainingJobRequest = request;\r",
+        "      try {\r",
+        "        if (request && request.config) {\r",
+        "          // Check if already normalized (has 'lora' key at top level)\r",
+        "          // ScriptBuilder output always includes 'lora' key\r"
+      ],
+      "errorLine": "          if ((request.config as unknown).lora) {\r",
+      "after": [
+        "            console.log('[LocalProvider] Config appears already normalized, skipping normalization');\r",
+        "            payload = request;\r",
+        "          } else {\r",
+        "            console.log('[LocalProvider] Normalizing config for backend');\r",
+        "            const normalized = normalizeForBackend(request.config as unknown as TrainingConfig);\r"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.8,
+    "categorizationReason": "Casting 'unknown' to a specific type requires understanding the structure of 'request.config'"
+  },
+  {
+    "file": "lib/tools/graphrag/graphrag-query.tool.ts",
+    "line": 33,
+    "column": 7,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'TraceContext | undefined'.",
+    "context": {
+      "before": [
+        "    userId,\r",
+        "    query || 'list all documents and entities',\r",
+        "    {\r",
+        "      maxSources: safeMaxResults,\r",
+        "      includeMetadata: true,\r"
+      ],
+      "errorLine": "      traceContext\r",
+      "after": [
+        "    }\r",
+        "  );\r",
+        "\r",
+        "  // Check if any results found\r",
+        "  if (!enhanced.contextUsed || !enhanced.sources || enhanced.sources.length === 0) {\r"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.75,
+    "categorizationReason": "Casting 'unknown' to a specific type requires understanding the structure of 'traceContext'"
+  },
+  {
+    "file": "lib/tools/web-search/research.controller.ts",
+    "line": 58,
+    "column": 13,
+    "code": "TS18046",
+    "message": "'data' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      res.setHeader('Content-Type', 'text/event-stream');",
+        "      res.setHeader('Cache-Control', 'no-cache');",
+        "      res.setHeader('Connection', 'keep-alive');",
+        "      ",
+        "      const handler = (data: unknown) => {"
+      ],
+      "errorLine": "        if (data.jobId === jobId) {",
+      "after": [
+        "           res.write(`data: ${JSON.stringify(data)}\\n\\n`);",
+        "        }",
+        "      };",
+        "      ",
+        "      sseService.on('research_event', handler);"
+      ]
+    },
+    "tier": "TIER2",
+    "confidence": 0.85,
+    "categorizationReason": "Type inference required to determine the correct type of 'data'"
+  }
+]

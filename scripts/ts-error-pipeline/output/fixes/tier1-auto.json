@@ -1,0 +1,190 @@
+[
+  {
+    "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+    "line": 31,
+    "column": 22,
+    "code": "TS2339",
+    "message": "Property 'headers' does not exist on type '{}'.",
+    "context": {
+      "before": [
+        "",
+        "  it('accepts X-API-Key auth and calls /api/chat with X-API-Key', async () => {",
+        "    const fetchMock = vi.fn(async (_url: string, init?: unknown) => {",
+        "      // Ensure the background prompt processing uses API key auth.",
+        "      if (typeof _url === 'string' && _url.endsWith('/api/chat')) {"
+      ],
+      "errorLine": "        expect(init?.headers?.['X-API-Key']).toBe('wak_testkey');",
+      "after": [
+        "      }",
+        "      return { ok: true, text: async () => '' } as unknown;",
+        "    });",
+        "    // @ts-expect-error - vitest global patching",
+        "    globalThis.fetch = fetchMock;"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Missing property on an object - the type of init should be defined to include a headers property or cast appropriately."
+  },
+  {
+    "file": "app/models/page.tsx",
+    "line": 410,
+    "column": 19,
+    "code": "TS2322",
+    "message": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'.",
+    "context": {
+      "before": [
+        "                <ModelCard",
+        "                  model={model}",
+        "                  onEdit={handleEditModel}",
+        "                  onDelete={handleDeleteModel}",
+        "                  currentUserId={user?.id}"
+      ],
+      "errorLine": "                  serverInfo={servers[model.id]}",
+      "after": [
+        "                  sessionToken={session?.access_token}",
+        "                  onServerChanged={fetchServers}",
+        "                />",
+        "              </div>",
+        "            ))}"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'. This can be fixed by ensuring that the value being assigned to serverInfo is either of type ServerInfo or explicitly undefined."
+  },
+  {
+    "file": "lib/models/local-model-scanner.ts",
+    "line": 131,
+    "column": 5,
+    "code": "TS2588",
+    "message": "Cannot assign to 'modelName' because it is a constant.",
+    "context": {
+      "before": [
+        "  const lowercaseMatch = dirName.match(lowercaseAuthorPattern);\r",
+        "  if (lowercaseMatch) {\r",
+        "    const [, author, modelName] = lowercaseMatch;\r",
+        "\r",
+        "    // Clean up version suffixes from modelName\r"
+      ],
+      "errorLine": "    modelName = modelName\r",
+      "after": [
+        "      .replace(/[-_]v?\\d+(\\.\\d+)*$/i, '') // Remove version numbers like -v0.3\r",
+        "      .replace(/[-_](fp16|fp32|int8|int4|gguf|q4_0|q5_0)$/i, ''); // Remove quantization suffixes\r",
+        "\r",
+        "    return `${author}/${modelName}`;\r",
+        "  }\r"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Attempting to reassign a constant variable - straightforward fix"
+  },
+  {
+    "file": "lib/storage/index.ts",
+    "line": 12,
+    "column": 3,
+    "code": "TS2724",
+    "message": "'\"./export-storage\"' has no exported member named 'useSupabaseStorage'. Did you mean 'isSupabaseStoragePath'?",
+    "context": {
+      "before": [
+        "export {",
+        "  saveExport,",
+        "  getExport,",
+        "  deleteExport,",
+        "  exportExists,"
+      ],
+      "errorLine": "  useSupabaseStorage,",
+      "after": [
+        "  isSupabaseStoragePath,",
+        "  getStorageInfo,",
+        "  type StorageResult,",
+        "} from './export-storage';",
+        ""
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Typo or incorrect import - straightforward fix"
+  },
+  {
+    "file": "lib/tools/web-search/index.ts",
+    "line": 71,
+    "column": 38,
+    "code": "TS2345",
+    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+    "context": {
+      "before": [
+        "  },",
+        "",
+        "  api: {",
+        "    router: (router: ExpressRouter): ExpressRouter => {",
+        "      router.post('/research', researchController.startResearch.bind(researchController));"
+      ],
+      "errorLine": "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
+      "after": [
+        "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+        "      return router;",
+        "    },",
+        "  },",
+        "};"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Missing type annotation - straightforward fix"
+  },
+  {
+    "file": "lib/tools/web-search/index.ts",
+    "line": 72,
+    "column": 45,
+    "code": "TS2345",
+    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+    "context": {
+      "before": [
+        "",
+        "  api: {",
+        "    router: (router: ExpressRouter): ExpressRouter => {",
+        "      router.post('/research', researchController.startResearch.bind(researchController));",
+        "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));"
+      ],
+      "errorLine": "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
+      "after": [
+        "      return router;",
+        "    },",
+        "  },",
+        "};",
+        ""
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Missing type annotation - straightforward fix"
+  },
+  {
+    "file": "lib/tools/web-search/sse.service.ts",
+    "line": 5,
+    "column": 42,
+    "code": "TS2698",
+    "message": "Spread types may only be created from object types.",
+    "context": {
+      "before": [
+        "import { EventEmitter } from 'events';",
+        "",
+        "class SseService extends EventEmitter {",
+        "  sendEvent(jobId: string, data: unknown) {"
+      ],
+      "errorLine": "    this.emit('research_event', { jobId, ...data });",
+      "after": [
+        "  }",
+        "}",
+        "",
+        "export const sseService = new SseService();",
+        ""
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Spread operator used on a non-object type - straightforward fix"
+  }
+]

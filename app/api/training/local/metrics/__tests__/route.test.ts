@@ -17,7 +17,7 @@ function makeRequest(body: unknown, headers?: Record<string, string>) {
     }),
   };
 
-  return request as unknown;
+  return request;
 }
 
 describe('POST app/api/training/local/metrics', () => {
