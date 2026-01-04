@@ -44,6 +44,12 @@ export function calculateNextRun(
   let nextRunZoned: Date;
 
   switch (scheduleType) {
+    case 'every_5_minutes': {
+      // Next 5-minute interval (for testing)
+      nextRunZoned = add(zonedNow, { minutes: 5 });
+      break;
+    }
+
     case 'hourly': {
       // Next full hour
       nextRunZoned = addHours(zonedNow, 1);

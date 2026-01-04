@@ -83,7 +83,7 @@ export interface BatchTestResult {
 /**
  * Schedule type - defines how often evaluations run
  */
-export type ScheduleType = 'hourly' | 'daily' | 'weekly' | 'custom';
+export type ScheduleType = 'every_5_minutes' | 'hourly' | 'daily' | 'weekly' | 'custom';
 
 /**
  * Scheduled evaluation record - stores recurring evaluation configuration
