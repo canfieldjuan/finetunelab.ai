@@ -19,6 +19,9 @@ export type ModelProvider =
   | 'lambda'    // Lambda Labs cloud GPU provider
   | 'aws'       // AWS SageMaker and S3
   | 'fireworks' // Fireworks.ai - fast inference with <1s cold starts
+  | 'openrouter'  // OpenRouter aggregator - 200+ models
+  | 'together'    // Together.ai - open-source models
+  | 'groq'        // Groq - ultra-fast LPU inference
   | 'google-colab'
   | 'local'     // Local model deployment (vLLM/Ollama)
   | 'custom';
