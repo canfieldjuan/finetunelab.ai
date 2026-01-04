@@ -35,7 +35,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
   const [formData, setFormData] = useState<Partial<CreateModelDTO>>({
     name: '',
     description: '',
-    provider: 'openai',
+    provider: 'huggingface', // Default to HuggingFace instead of OpenAI (global models)
     base_url: '',
     model_id: '',
     auth_type: 'bearer',
@@ -282,7 +282,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setFormData({
         name: '',
         description: '',
-        provider: 'openai',
+        provider: 'huggingface', // Default to HuggingFace
         base_url: '',
         model_id: '',
         auth_type: 'bearer',
@@ -321,7 +321,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setSelectedTemplate(null);
       setFormData({
         name: '',
-        provider: 'openai',
+        provider: 'huggingface', // Default to HuggingFace
         base_url: '',
         model_id: '',
         auth_type: 'bearer',
@@ -345,9 +345,12 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         {/* Header */}
         <div className="sticky top-0 bg-background border-b px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Add Model</h2>
+            <h2 className="text-2xl font-semibold">Add Custom Model</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Choose from templates or create a custom model configuration
+              Add your own custom models (HuggingFace, local servers, Azure, etc.)
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              💡 OpenAI and Anthropic models are already available to all users
             </p>
           </div>
           <button
@@ -360,8 +363,8 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="border-b px-6">
+        {/* Tabs - COMMENTED OUT: Templates not needed, OpenAI/Anthropic models are global */}
+        {/* <div className="border-b px-6">
           <div className="flex gap-4">
             <button
               onClick={() => setActiveTab('templates')}
@@ -384,11 +387,12 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
               Manual Configuration
             </button>
           </div>
-        </div>
+        </div> */}
 
         {/* Content */}
         <div className="p-6">
-          {activeTab === 'templates' && !selectedTemplate && (
+          {/* Templates commented out - show manual form only */}
+          {/* {activeTab === 'templates' && !selectedTemplate && (
             <TemplateSelector
               templatesByProvider={templatesByProvider}
               onSelect={handleTemplateSelect}
@@ -424,20 +428,19 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
               onTest={handleTestConnection}
               onSubmit={handleSubmit}
             />
-          )}
+          )} */}
 
-          {activeTab === 'manual' && (
-            <ManualForm
-              formData={formData}
-              onChange={handleFieldChange}
-              error={error}
-              testResult={testResult}
-              testing={testing}
-              submitting={submitting}
-              onTest={handleTestConnection}
-              onSubmit={handleSubmit}
-            />
-          )}
+          {/* Always show manual form now */}
+          <ManualForm
+            formData={formData}
+            onChange={handleFieldChange}
+            error={error}
+            testResult={testResult}
+            testing={testing}
+            submitting={submitting}
+            onTest={handleTestConnection}
+            onSubmit={handleSubmit}
+          />
         </div>
       </div>
     </div>
@@ -977,12 +980,18 @@ function ManualForm({
   onTest,
   onSubmit,
 }: ManualFormProps) {
-  const providers: ModelProvider[] = ['openai', 'anthropic', 'huggingface', 'ollama', 'vllm', 'azure', 'runpod', 'fireworks'];
+  // Only show providers for custom models (OpenAI/Anthropic are global)
+  const providers: ModelProvider[] = ['huggingface', 'ollama', 'vllm', 'azure', 'runpod', 'fireworks'];
   const authTypes: AuthType[] = ['bearer', 'api_key', 'custom_header', 'none'];
 
   // Provider-specific helper for base URL
   const getProviderHelp = (provider: ModelProvider) => {
     switch (provider) {
+      case 'huggingface':
+        return {
+          placeholder: 'https://api-inference.huggingface.co/models',
+          hint: 'HuggingFace Inference API endpoint (or use your own endpoint)',
+        };
       case 'runpod':
         return {
           placeholder: 'https://{pod_id}-8000.proxy.runpod.net/v1',
@@ -1003,6 +1012,11 @@ function ManualForm({
           placeholder: 'https://api.fireworks.ai/inference/v1',
           hint: 'Fireworks.ai API - fast inference with <1s cold starts',
         };
+      case 'azure':
+        return {
+          placeholder: 'https://{resource}.openai.azure.com/openai/deployments/{deployment}',
+          hint: 'Azure OpenAI endpoint - replace {resource} and {deployment}',
+        };
       default:
         return {
           placeholder: 'https://api.example.com/v1',
@@ -1015,9 +1029,49 @@ function ManualForm({
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Create a custom model configuration for any OpenAI-compatible API endpoint.
-      </p>
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h4 className="font-medium text-blue-900 mb-2">📋 About Custom Models</h4>
+        <div className="text-sm text-blue-800 space-y-1">
+          <p><strong>Already Available:</strong> OpenAI (GPT-4.1, GPT-5 variants, o3-pro) and Anthropic (Claude Opus/Sonnet/Haiku) models are available to all users.</p>
+          <p><strong>Add Custom Models:</strong> Use this form to connect your own models via HuggingFace, local servers (vLLM/Ollama), Azure, RunPod, or Fireworks.ai</p>
+        </div>
+      </div>
+
+      {/* HuggingFace helper info box */}
+      {formData.provider === 'huggingface' && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h4 className="font-medium text-yellow-900 mb-2">🤗 HuggingFace Models</h4>
+          <div className="text-sm text-yellow-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-yellow-100 px-1 py-0.5 rounded">
+                https://api-inference.huggingface.co/models
+              </code>
+            </p>
+            <p>
+              <strong>Model ID Format:</strong>{' '}
+              <code className="bg-yellow-100 px-1 py-0.5 rounded">
+                username/model-name
+              </code>
+              {' '}(e.g., meta-llama/Llama-3.3-70B-Instruct)
+            </p>
+            <p>
+              <strong>API Token:</strong> Get it from{' '}
+              <a
+                href="https://huggingface.co/settings/tokens"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-yellow-900"
+              >
+                huggingface.co/settings/tokens
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Perfect for custom fine-tuned models and models from the HF Hub
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* RunPod helper info box */}
       {formData.provider === 'runpod' && (
@@ -1043,7 +1097,7 @@ function ManualForm({
       {/* Fireworks helper info box */}
       {formData.provider === 'fireworks' && (
         <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-          <h4 className="font-medium text-orange-900 mb-2">Fireworks.ai - Fast Inference</h4>
+          <h4 className="font-medium text-orange-900 mb-2">🔥 Fireworks.ai - Fast Inference</h4>
           <div className="text-sm text-orange-800 space-y-2">
             <p>
               <strong>Base URL:</strong>{' '}
@@ -1058,7 +1112,102 @@ function ManualForm({
               </code>
             </p>
             <p className="text-xs">
-              Benefits: &lt;1s cold starts, no hosting fees for fine-tuned models, pay per token only. Get your API key at fireworks.ai/account/api-keys
+              💡 Benefits: &lt;1s cold starts, no hosting fees for fine-tuned models, pay per token only. Get your API key at{' '}
+              <a
+                href="https://fireworks.ai/account/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-orange-900"
+              >
+                fireworks.ai/account/api-keys
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Azure helper info box */}
+      {formData.provider === 'azure' && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="font-medium text-blue-900 mb-2">☁️ Azure OpenAI</h4>
+          <div className="text-sm text-blue-800 space-y-2">
+            <p>
+              <strong>Base URL Format:</strong>{' '}
+              <code className="bg-blue-100 px-1 py-0.5 rounded">
+                https://&#123;resource&#125;.openai.azure.com/openai/deployments/&#123;deployment&#125;
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Your Azure deployment name (e.g., gpt-4-turbo)
+            </p>
+            <p>
+              <strong>API Key:</strong> Found in Azure Portal under Keys and Endpoint
+            </p>
+            <p className="text-xs">
+              💡 Enterprise-ready with data residency, private networking, and compliance
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Ollama helper info box */}
+      {formData.provider === 'ollama' && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h4 className="font-medium text-green-900 mb-2">🦙 Ollama - Local Models</h4>
+          <div className="text-sm text-green-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-green-100 px-1 py-0.5 rounded">
+                http://localhost:11434/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> The model name as shown in{' '}
+              <code className="bg-green-100 px-1 py-0.5 rounded">ollama list</code>
+              {' '}(e.g., llama3.2, qwen2.5:7b)
+            </p>
+            <p>
+              <strong>Setup:</strong> Install Ollama from{' '}
+              <a
+                href="https://ollama.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-green-900"
+              >
+                ollama.ai
+              </a>
+              {' '}and pull models with <code className="bg-green-100 px-1 py-0.5 rounded">ollama pull [model]</code>
+            </p>
+            <p className="text-xs">
+              💡 No API key needed for local Ollama - runs entirely offline
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* vLLM helper info box */}
+      {formData.provider === 'vllm' && (
+        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+          <h4 className="font-medium text-indigo-900 mb-2">⚡ vLLM - High-Performance Serving</h4>
+          <div className="text-sm text-indigo-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-indigo-100 px-1 py-0.5 rounded">
+                http://localhost:8000/v1
+              </code>
+              {' '}(or your vLLM server address)
+            </p>
+            <p>
+              <strong>Model ID:</strong> The model loaded in vLLM (e.g., Qwen/Qwen2.5-7B-Instruct)
+            </p>
+            <p>
+              <strong>Setup:</strong> Start vLLM with{' '}
+              <code className="bg-indigo-100 px-1 py-0.5 rounded">
+                vllm serve [model] --port 8000
+              </code>
+            </p>
+            <p className="text-xs">
+              💡 No API key needed for local vLLM - extremely fast inference with PagedAttention
             </p>
           </div>
         </div>
@@ -1086,7 +1235,7 @@ function ManualForm({
             Provider <span className="text-destructive">*</span>
           </label>
           <select
-            value={formData.provider || 'openai'}
+            value={formData.provider || 'huggingface'}
             onChange={(e) => onChange('provider', e.target.value as ModelProvider)}
             className="w-full px-3 py-2 border border-input rounded-md bg-background"
             disabled={submitting}
