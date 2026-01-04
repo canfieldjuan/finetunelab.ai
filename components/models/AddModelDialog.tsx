@@ -35,7 +35,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
   const [formData, setFormData] = useState<Partial<CreateModelDTO>>({
     name: '',
     description: '',
-    provider: 'huggingface', // Default to HuggingFace instead of OpenAI (global models)
+    provider: 'openai',
     base_url: '',
     model_id: '',
     auth_type: 'bearer',
@@ -282,7 +282,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setFormData({
         name: '',
         description: '',
-        provider: 'huggingface', // Default to HuggingFace
+        provider: 'openai',
         base_url: '',
         model_id: '',
         auth_type: 'bearer',
@@ -321,7 +321,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setSelectedTemplate(null);
       setFormData({
         name: '',
-        provider: 'huggingface', // Default to HuggingFace
+        provider: 'openai',
         base_url: '',
         model_id: '',
         auth_type: 'bearer',
@@ -345,12 +345,12 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         {/* Header */}
         <div className="sticky top-0 bg-background border-b px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Add Custom Model</h2>
+            <h2 className="text-2xl font-semibold">Add Model</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Add your own custom models (HuggingFace, local servers, Azure, etc.)
+              Add fine-tuned models, custom endpoints, or third-party providers
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              💡 OpenAI and Anthropic models are already available to all users
+              💡 Global models (GPT-4.1, GPT-5, Claude variants) are already available
             </p>
           </div>
           <button
@@ -980,13 +980,50 @@ function ManualForm({
   onTest,
   onSubmit,
 }: ManualFormProps) {
-  // Only show providers for custom models (OpenAI/Anthropic are global)
-  const providers: ModelProvider[] = ['huggingface', 'ollama', 'vllm', 'azure', 'runpod', 'fireworks'];
+  // All supported providers (includes OpenAI/Anthropic for fine-tuned models)
+  const providers: ModelProvider[] = [
+    'openai',      // For fine-tuned OpenAI models
+    'anthropic',   // For fine-tuned Anthropic models
+    'openrouter',  // OpenRouter aggregator
+    'together',    // Together.ai
+    'groq',        // Groq fast inference
+    'huggingface', // HuggingFace models
+    'fireworks',   // Fireworks.ai
+    'azure',       // Azure OpenAI
+    'runpod',      // RunPod vLLM
+    'vllm',        // Local vLLM
+    'ollama',      // Local Ollama
+  ];
   const authTypes: AuthType[] = ['bearer', 'api_key', 'custom_header', 'none'];
 
   // Provider-specific helper for base URL
   const getProviderHelp = (provider: ModelProvider) => {
     switch (provider) {
+      case 'openai':
+        return {
+          placeholder: 'https://api.openai.com/v1',
+          hint: 'OpenAI API endpoint (for fine-tuned models)',
+        };
+      case 'anthropic':
+        return {
+          placeholder: 'https://api.anthropic.com/v1/messages',
+          hint: 'Anthropic API endpoint (for fine-tuned models)',
+        };
+      case 'openrouter':
+        return {
+          placeholder: 'https://openrouter.ai/api/v1',
+          hint: 'OpenRouter - access 200+ models through one API',
+        };
+      case 'together':
+        return {
+          placeholder: 'https://api.together.xyz/v1',
+          hint: 'Together.ai - fast inference and fine-tuning platform',
+        };
+      case 'groq':
+        return {
+          placeholder: 'https://api.groq.com/openai/v1',
+          hint: 'Groq - extremely fast inference with LPU',
+        };
       case 'huggingface':
         return {
           placeholder: 'https://api-inference.huggingface.co/models',
@@ -1030,12 +1067,195 @@ function ManualForm({
   return (
     <div className="space-y-6">
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h4 className="font-medium text-blue-900 mb-2">📋 About Custom Models</h4>
+        <h4 className="font-medium text-blue-900 mb-2">📋 About Adding Models</h4>
         <div className="text-sm text-blue-800 space-y-1">
-          <p><strong>Already Available:</strong> OpenAI (GPT-4.1, GPT-5 variants, o3-pro) and Anthropic (Claude Opus/Sonnet/Haiku) models are available to all users.</p>
-          <p><strong>Add Custom Models:</strong> Use this form to connect your own models via HuggingFace, local servers (vLLM/Ollama), Azure, RunPod, or Fireworks.ai</p>
+          <p><strong>Global Models:</strong> GPT-4.1, GPT-5 variants, o3-pro, Claude Opus/Sonnet/Haiku are already available to all users.</p>
+          <p><strong>Add Your Own:</strong> Fine-tuned OpenAI/Anthropic models, HuggingFace models, local servers, or third-party providers (OpenRouter, Together.ai, Groq, Fireworks, etc.)</p>
         </div>
       </div>
+
+      {/* OpenAI helper info box */}
+      {formData.provider === 'openai' && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h4 className="font-medium text-green-900 mb-2">🟢 OpenAI Fine-Tuned Models</h4>
+          <div className="text-sm text-green-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-green-100 px-1 py-0.5 rounded">
+                https://api.openai.com/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Your fine-tuned model ID (e.g.,{' '}
+              <code className="bg-green-100 px-1 py-0.5 rounded">
+                ft:gpt-4o-mini-2024-07-18:org:custom:abc123
+              </code>)
+            </p>
+            <p>
+              <strong>API Key:</strong> Found in your{' '}
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-green-900"
+              >
+                OpenAI dashboard
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Use this to test your fine-tuned GPT models - global models are already available
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Anthropic helper info box */}
+      {formData.provider === 'anthropic' && (
+        <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+          <h4 className="font-medium text-purple-900 mb-2">⚡ Anthropic Fine-Tuned Models</h4>
+          <div className="text-sm text-purple-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-purple-100 px-1 py-0.5 rounded">
+                https://api.anthropic.com/v1/messages
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Your fine-tuned Claude model ID
+            </p>
+            <p>
+              <strong>API Key:</strong> Found in your{' '}
+              <a
+                href="https://console.anthropic.com/settings/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-purple-900"
+              >
+                Anthropic console
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Use this to test your fine-tuned Claude models - global models are already available
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* OpenRouter helper info box */}
+      {formData.provider === 'openrouter' && (
+        <div className="p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
+          <h4 className="font-medium text-cyan-900 mb-2">🌐 OpenRouter - 200+ Models</h4>
+          <div className="text-sm text-cyan-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-cyan-100 px-1 py-0.5 rounded">
+                https://openrouter.ai/api/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Browse models at{' '}
+              <a
+                href="https://openrouter.ai/models"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-cyan-900"
+              >
+                openrouter.ai/models
+              </a>
+              {' '}(e.g., anthropic/claude-3.5-sonnet)
+            </p>
+            <p>
+              <strong>API Key:</strong> Get it from{' '}
+              <a
+                href="https://openrouter.ai/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-cyan-900"
+              >
+                openrouter.ai/keys
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Access hundreds of models through one API - great for testing multiple providers
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Together.ai helper info box */}
+      {formData.provider === 'together' && (
+        <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
+          <h4 className="font-medium text-pink-900 mb-2">🤝 Together.ai - Fast & Affordable</h4>
+          <div className="text-sm text-pink-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-pink-100 px-1 py-0.5 rounded">
+                https://api.together.xyz/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Browse models at{' '}
+              <a
+                href="https://api.together.xyz/models"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-pink-900"
+              >
+                api.together.xyz/models
+              </a>
+              {' '}(e.g., meta-llama/Llama-3-70b-chat-hf)
+            </p>
+            <p>
+              <strong>API Key:</strong> Get it from{' '}
+              <a
+                href="https://api.together.xyz/settings/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-pink-900"
+              >
+                Together.ai settings
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Great for fine-tuning and deploying open-source models at scale
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Groq helper info box */}
+      {formData.provider === 'groq' && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <h4 className="font-medium text-red-900 mb-2">⚡ Groq - Lightning Fast Inference</h4>
+          <div className="text-sm text-red-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-red-100 px-1 py-0.5 rounded">
+                https://api.groq.com/openai/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Available models:{' '}
+              <code className="bg-red-100 px-1 py-0.5 rounded">llama-3.3-70b-versatile</code>,{' '}
+              <code className="bg-red-100 px-1 py-0.5 rounded">mixtral-8x7b-32768</code>
+            </p>
+            <p>
+              <strong>API Key:</strong> Get it from{' '}
+              <a
+                href="https://console.groq.com/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-red-900"
+              >
+                console.groq.com/keys
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Powered by LPU (Language Processing Unit) - incredibly fast inference speeds
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* HuggingFace helper info box */}
       {formData.provider === 'huggingface' && (
@@ -1235,7 +1455,7 @@ function ManualForm({
             Provider <span className="text-destructive">*</span>
           </label>
           <select
-            value={formData.provider || 'huggingface'}
+            value={formData.provider || 'openai'}
             onChange={(e) => onChange('provider', e.target.value as ModelProvider)}
             className="w-full px-3 py-2 border border-input rounded-md bg-background"
             disabled={submitting}
