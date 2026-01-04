@@ -4,8 +4,8 @@
 
 The original Add Model dialog was confusing:
 - Templates tab showed 19 different model templates
-- Too many provider options including OpenAI and Anthropic
-- Users didn't know that flagship models were already available globally
+- Not all providers were available (missing OpenRouter, Together.ai, Groq)
+- Users couldn't add fine-tuned OpenAI/Anthropic models
 - Navigation between Templates and Manual tabs was unclear
 
 ## Solution
@@ -32,24 +32,71 @@ const providers = ['openai', 'anthropic', 'huggingface', 'ollama', 'vllm', 'azur
 
 **After:**
 ```typescript
-// Only show providers for custom models (OpenAI/Anthropic are global)
-const providers = ['huggingface', 'ollama', 'vllm', 'azure', 'runpod', 'fireworks'];
+// All supported providers (includes OpenAI/Anthropic for fine-tuned models)
+const providers = [
+  'openai',      // For fine-tuned OpenAI models
+  'anthropic',   // For fine-tuned Anthropic models
+  'openrouter',  // OpenRouter aggregator
+  'together',    // Together.ai
+  'groq',        // Groq fast inference
+  'huggingface', // HuggingFace models
+  'fireworks',   // Fireworks.ai
+  'azure',       // Azure OpenAI
+  'runpod',      // RunPod vLLM
+  'vllm',        // Local vLLM
+  'ollama',      // Local Ollama
+];
 ```
 
 **Providers Now Available:**
 
 | Provider | Use Case | Auth Required |
 |----------|----------|---------------|
+| **OpenAI** | Fine-tuned GPT models (ft:gpt-4o-mini:org:custom:abc123) | API Key |
+| **Anthropic** | Fine-tuned Claude models | API Key |
+| **OpenRouter** | Access 200+ models through one API aggregator | API Key |
+| **Together.ai** | Open-source models at scale, fine-tuning | API Key |
+| **Groq** | Lightning fast inference with LPU | API Key |
 | **HuggingFace** | Custom fine-tuned models from HF Hub | API Token |
-| **Ollama** | Local models running on Ollama | None (local) |
-| **vLLM** | Local high-performance serving | None (local) |
+| **Fireworks** | Fast inference with <1s cold starts | API Key |
 | **Azure** | Enterprise Azure OpenAI deployments | API Key |
 | **RunPod** | vLLM on RunPod cloud infrastructure | None (proxy) |
-| **Fireworks** | Fast inference via Fireworks.ai | API Key |
+| **vLLM** | Local high-performance serving | None (local) |
+| **Ollama** | Local models running offline | None (local) |
 
 ### 3. Enhanced Provider Guidance
 
 Added contextual helper boxes that appear when a provider is selected:
+
+#### 🟢 OpenAI Fine-Tuned Models
+- Base URL: `https://api.openai.com/v1`
+- Model ID format: `ft:gpt-4o-mini-2024-07-18:org:custom:abc123`
+- Link to OpenAI dashboard for API keys
+- Use for testing fine-tuned GPT models
+
+#### ⚡ Anthropic Fine-Tuned Models
+- Base URL: `https://api.anthropic.com/v1/messages`
+- Model ID: Fine-tuned Claude model ID
+- Link to Anthropic console for API keys
+- Use for testing fine-tuned Claude models
+
+#### 🌐 OpenRouter - 200+ Models
+- Base URL: `https://openrouter.ai/api/v1`
+- Browse models at openrouter.ai/models
+- Example: `anthropic/claude-3.5-sonnet`
+- Great for testing multiple providers through one API
+
+#### 🤝 Together.ai - Fast & Affordable
+- Base URL: `https://api.together.xyz/v1`
+- Browse models at api.together.xyz/models
+- Example: `meta-llama/Llama-3-70b-chat-hf`
+- Great for fine-tuning and deploying open-source models
+
+#### ⚡ Groq - Lightning Fast Inference
+- Base URL: `https://api.groq.com/openai/v1`
+- Models: `llama-3.3-70b-versatile`, `mixtral-8x7b-32768`
+- Powered by LPU for incredibly fast speeds
+- Link to console.groq.com/keys
 
 #### 🤗 HuggingFace
 - Base URL: `https://api-inference.huggingface.co/models`
