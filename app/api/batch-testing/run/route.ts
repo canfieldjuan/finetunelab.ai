@@ -306,6 +306,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { config } = body;
 
+    // DEBUG: Log what we received from scheduler
+    if (isScheduledRun) {
+      console.log('[Batch Testing Run] DEBUG Scheduled run config:', {
+        hasConfig: !!config,
+        configType: typeof config,
+        modelId: config?.model_id,
+        modelIdType: typeof config?.model_id,
+        modelIdLength: config?.model_id?.length,
+        fullConfig: JSON.stringify(config, null, 2)
+      });
+    }
+
     if (!config || typeof config !== 'object') {
       return NextResponse.json(
         { error: 'Missing or invalid config object' },
