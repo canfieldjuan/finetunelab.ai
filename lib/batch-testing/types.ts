@@ -106,6 +106,9 @@ export interface ScheduledEvaluation {
   model_id: string;
   batch_test_config: BatchTestConfig;
 
+  // Authentication (for scheduler worker)
+  api_key_encrypted?: string;
+
   // Status tracking
   is_active: boolean;
   last_run_at?: string;

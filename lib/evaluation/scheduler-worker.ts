@@ -10,6 +10,7 @@ import type { ScheduledEvaluation, ScheduleType } from '../batch-testing/types';
 import { sendScheduledEvaluationAlert } from '../alerts/alert.service';
 import type { MetricAlertRule, MetricType, ComparisonOperator, AggregationMethod, AlertType } from '../alerts/alert.types';
 import { AlertService } from '../alerts/alert.service';
+import { decrypt } from '../models/encryption';
 // DEPRECATED: import { recordUsageEvent } from '../usage/checker';
 
 interface ScheduleUpdatePayload {
@@ -234,7 +235,8 @@ export class EvaluationSchedulerWorker {
       const response = await this.callBatchTestAPI(
         evaluation.user_id,
         batchTestConfig,
-        evalId
+        evalId,
+        evaluation.api_key_encrypted
       );
 
       if (!response.ok) {
@@ -278,31 +280,49 @@ export class EvaluationSchedulerWorker {
   }
 
   /**
-   * Call batch testing API with service role authentication
+   * Call batch testing API with API key or service role authentication
+   * Prefers API key auth (same flow as direct batch tests) when available
    */
   private async callBatchTestAPI(
     userId: string,
     batchTestConfig: unknown,
-    scheduledEvalId: string
+    scheduledEvalId: string,
+    apiKeyEncrypted?: string
   ): Promise<Response> {
     const url = `${this.appUrl}/api/batch-testing/run`;
 
-    // Use service role key directly for background worker operations
-    // The batch testing API supports both session auth and service role auth
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
+    // Build headers based on available authentication
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      // Always include scheduled evaluation headers for tracking
+      'x-scheduled-evaluation': 'true',
+      'x-scheduled-evaluation-id': scheduledEvalId,
+    };
+
+    if (apiKeyEncrypted) {
+      // Use API key auth (same flow as direct batch tests)
+      try {
+        const apiKey = decrypt(apiKeyEncrypted);
+        headers['X-API-Key'] = apiKey;
+        console.log('[EvalScheduler] Using API key authentication for scheduled evaluation');
+      } catch (decryptError) {
+        console.error('[EvalScheduler] Failed to decrypt API key:', decryptError);
+        throw new Error('Failed to decrypt stored API key');
+      }
+    } else {
+      // Fallback to service role auth (legacy behavior)
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!serviceRoleKey) {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
+      }
+      headers['x-service-role-key'] = serviceRoleKey;
+      headers['x-user-id'] = userId;
+      console.log('[EvalScheduler] Using service role authentication (no API key configured)');
     }
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-service-role-key': serviceRoleKey,
-        'x-user-id': userId,
-        'x-scheduled-evaluation': 'true',
-        'x-scheduled-evaluation-id': scheduledEvalId,
-      },
+      headers,
       body: JSON.stringify({
         config: batchTestConfig,
       }),
