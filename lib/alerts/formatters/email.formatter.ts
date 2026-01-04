@@ -7,6 +7,7 @@ import {
   AlertPayload,
   TrainingJobAlertData,
   BatchTestAlertData,
+  ScheduledEvaluationAlertData,
   getAlertConfig,
 } from '../alert.types';
 
@@ -17,6 +18,10 @@ const STATUS_COLOR: Record<string, string> = {
   job_cancelled: '#7f8c8d',
   batch_test_completed: '#27ae60',
   batch_test_failed: '#e74c3c',
+  scheduled_eval_completed: '#27ae60',
+  scheduled_eval_failed: '#e74c3c',
+  scheduled_eval_disabled: '#7f8c8d',
+  scheduled_eval_regression: '#f39c12',
   gpu_oom: '#e74c3c',
   disk_warning: '#f39c12',
   timeout_warning: '#f39c12',
@@ -31,6 +36,10 @@ const STATUS_ICON: Record<string, string> = {
   job_cancelled: '\u{1F6D1}',
   batch_test_completed: '\u2705',
   batch_test_failed: '\u274C',
+  scheduled_eval_completed: '\u2705',
+  scheduled_eval_failed: '\u274C',
+  scheduled_eval_disabled: '\u{1F6D1}',
+  scheduled_eval_regression: '\u{1F4C9}',
   gpu_oom: '\u{1F525}',
   disk_warning: '\u26A0\uFE0F',
   timeout_warning: '\u23F3',
@@ -71,9 +80,16 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
   const config = getAlertConfig();
   const color = STATUS_COLOR[alert.type] || '#3498db';
   const icon = STATUS_ICON[alert.type] || '\u{1F514}';
+
+  // Determine alert category
   const isBatchTest = alert.type === 'batch_test_completed' || alert.type === 'batch_test_failed';
-  const jobData = !isBatchTest ? (alert.metadata as TrainingJobAlertData | undefined) : undefined;
+  const isScheduledEval = alert.type.startsWith('scheduled_eval_');
+  const isTrainingJob = !isBatchTest && !isScheduledEval;
+
+  // Extract typed metadata
   const batchData = isBatchTest ? (alert.metadata as BatchTestAlertData | undefined) : undefined;
+  const scheduledEvalData = isScheduledEval ? (alert.metadata as ScheduledEvaluationAlertData | undefined) : undefined;
+  const jobData = isTrainingJob ? (alert.metadata as TrainingJobAlertData | undefined) : undefined;
 
   const subject = `${icon} ${alert.title}`;
 
@@ -123,6 +139,88 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
       buttonHtml = `
         <div style="text-align: center; margin: 30px 0;">
           <a href="${testUrl}" style="display: inline-block; background: ${color}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 500;">View Test Run</a>
+        </div>
+      `;
+    }
+  }
+
+  if (scheduledEvalData) {
+    const metrics: { label: string; value: string }[] = [];
+
+    // Schedule identification
+    if (scheduledEvalData.scheduleName) {
+      metrics.push({ label: 'Schedule', value: escapeHtml(scheduledEvalData.scheduleName) });
+    }
+    if (scheduledEvalData.modelId) {
+      metrics.push({ label: 'Model', value: escapeHtml(scheduledEvalData.modelId) });
+    }
+
+    // Test results (if available)
+    if (scheduledEvalData.totalPrompts !== undefined) {
+      metrics.push({ label: 'Total Prompts', value: String(scheduledEvalData.totalPrompts) });
+    }
+    if (scheduledEvalData.successfulPrompts !== undefined) {
+      metrics.push({ label: 'Successful', value: String(scheduledEvalData.successfulPrompts) });
+    }
+    if (scheduledEvalData.failedPrompts !== undefined) {
+      metrics.push({ label: 'Failed', value: String(scheduledEvalData.failedPrompts) });
+    }
+
+    // Success rate calculation
+    if (scheduledEvalData.totalPrompts && scheduledEvalData.successfulPrompts !== undefined) {
+      const successRate = Math.round((scheduledEvalData.successfulPrompts / scheduledEvalData.totalPrompts) * 100);
+      metrics.push({ label: 'Success Rate', value: `${successRate}%` });
+    }
+
+    // Performance metrics
+    if (scheduledEvalData.avgLatency !== undefined) {
+      metrics.push({ label: 'Avg Latency', value: `${scheduledEvalData.avgLatency.toFixed(0)}ms` });
+    }
+    if (scheduledEvalData.avgQualityScore !== undefined) {
+      metrics.push({ label: 'Avg Quality', value: scheduledEvalData.avgQualityScore.toFixed(2) });
+    }
+
+    // Regression info
+    if (scheduledEvalData.regressionDetected && scheduledEvalData.regressionPercent !== undefined) {
+      metrics.push({ label: 'Regression', value: `${scheduledEvalData.regressionPercent.toFixed(1)}% drop` });
+    }
+
+    // Failure tracking
+    if (scheduledEvalData.consecutiveFailures !== undefined && scheduledEvalData.consecutiveFailures > 0) {
+      metrics.push({ label: 'Consecutive Failures', value: String(scheduledEvalData.consecutiveFailures) });
+    }
+
+    if (metrics.length > 0) {
+      metricsHtml = `
+        <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          ${metrics.map(m => `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #666; width: 140px;">${m.label}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; color: #333; font-weight: 500;">${m.value}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `;
+    }
+
+    // Error message
+    if (scheduledEvalData.errorMessage) {
+      const truncated = scheduledEvalData.errorMessage.length > 1000
+        ? scheduledEvalData.errorMessage.slice(0, 997) + '...'
+        : scheduledEvalData.errorMessage;
+      errorHtml = `
+        <div style="background: #fdf2f2; border: 1px solid #f5c6cb; border-radius: 4px; padding: 12px; margin: 20px 0; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; color: #721c24;">
+          <strong>Error:</strong><br>${escapeHtml(truncated)}
+        </div>
+      `;
+    }
+
+    // CTA button to view evaluation
+    if (scheduledEvalData.scheduledEvaluationId) {
+      const evalUrl = `${config.appBaseUrl}/testing?tab=scheduled&evalId=${scheduledEvalData.scheduledEvaluationId}`;
+      buttonHtml = `
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${evalUrl}" style="display: inline-block; background: ${color}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 500;">View Scheduled Evaluation</a>
         </div>
       `;
     }
@@ -346,6 +444,24 @@ export function formatEmailAlert(alert: AlertPayload): { subject: string; html: 
     if (batchData.errorMessage) textParts.push(`\nError:\n${batchData.errorMessage}`);
     if (batchData.testRunId) {
       textParts.push(`\nView details: ${config.appBaseUrl}/testing?testRunId=${batchData.testRunId}`);
+    }
+  } else if (scheduledEvalData) {
+    if (scheduledEvalData.scheduleName) textParts.push(`Schedule: ${scheduledEvalData.scheduleName}`);
+    if (scheduledEvalData.modelId) textParts.push(`Model: ${scheduledEvalData.modelId}`);
+    if (scheduledEvalData.totalPrompts !== undefined) textParts.push(`Total Prompts: ${scheduledEvalData.totalPrompts}`);
+    if (scheduledEvalData.successfulPrompts !== undefined) textParts.push(`Successful: ${scheduledEvalData.successfulPrompts}`);
+    if (scheduledEvalData.failedPrompts !== undefined) textParts.push(`Failed: ${scheduledEvalData.failedPrompts}`);
+    if (scheduledEvalData.totalPrompts && scheduledEvalData.successfulPrompts !== undefined) {
+      const successRate = Math.round((scheduledEvalData.successfulPrompts / scheduledEvalData.totalPrompts) * 100);
+      textParts.push(`Success Rate: ${successRate}%`);
+    }
+    if (scheduledEvalData.avgLatency !== undefined) textParts.push(`Avg Latency: ${scheduledEvalData.avgLatency.toFixed(0)}ms`);
+    if (scheduledEvalData.consecutiveFailures !== undefined && scheduledEvalData.consecutiveFailures > 0) {
+      textParts.push(`Consecutive Failures: ${scheduledEvalData.consecutiveFailures}`);
+    }
+    if (scheduledEvalData.errorMessage) textParts.push(`\nError:\n${scheduledEvalData.errorMessage}`);
+    if (scheduledEvalData.scheduledEvaluationId) {
+      textParts.push(`\nView details: ${config.appBaseUrl}/testing?tab=scheduled&evalId=${scheduledEvalData.scheduledEvaluationId}`);
     }
   } else if (jobData) {
     if (jobData.modelName) textParts.push(`Model: ${jobData.modelName}`);

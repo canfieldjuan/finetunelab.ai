@@ -132,8 +132,9 @@ import type { BatchTestConfig } from '@/lib/batch-testing/types';
 import { categorizeError } from '@/lib/batch-testing/error-categorizer';
 import { STATUS } from '@/lib/constants';
 import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
-import { sendBatchTestAlert } from '@/lib/alerts';
+import { sendBatchTestAlert, sendScheduledEvaluationAlert } from '@/lib/alerts';
 import { logApiKeyUsage, extractClientInfo } from '@/lib/auth/api-key-usage-logger';
+import type { ScheduledEvaluationAlertData } from '@/lib/alerts/alert.types';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 // Use Node.js runtime for file system operations
@@ -568,7 +569,8 @@ export async function POST(req: NextRequest) {
       batchConfig,
       runId,
       auth,  // Pass auth for /api/chat authentication
-      customName   // Pass custom name for conversation title
+      customName,   // Pass custom name for conversation title
+      scheduledEvalId || undefined  // Pass scheduled eval ID for alert notifications
     ).catch(error => {
       console.error('[Batch Testing Run] Background processing error:', error);
     });
@@ -619,7 +621,8 @@ async function processBackgroundBatch(
   config: BatchTestConfig,
   runId: string | null,
   auth: BatchTestingAuth,  // Session token or API key for authentication
-  customName: string   // Custom name for the batch test (used in conversation title)
+  customName: string,   // Custom name for the batch test (used in conversation title)
+  scheduledEvalId?: string  // Optional: scheduled evaluation ID for alert notifications
 ): Promise<void> {
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
   const widgetSessionId = `batch_test_${testRunId}`;
@@ -852,6 +855,60 @@ async function processBackgroundBatch(
       errorMessage: failed > 0 ? `${failed} prompts failed` : null,
     });
 
+    // Send scheduled evaluation alert with full results (if this was a scheduled run)
+    if (scheduledEvalId) {
+      console.log('[Background Batch] Sending scheduled eval completion alert with results');
+
+      // Update scheduled_evaluation_runs table with results
+      const { error: updateRunError } = await supabaseAdmin
+        .from('scheduled_evaluation_runs')
+        .update({
+          status: failed > 0 ? 'completed' : 'completed',
+          batch_test_run_id: testRunId,
+          completed_at: new Date().toISOString(),
+          total_prompts: prompts.length,
+          successful_prompts: completed,
+          failed_prompts: failed,
+        })
+        .eq('scheduled_evaluation_id', scheduledEvalId)
+        .eq('status', 'triggered')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (updateRunError) {
+        console.error('[Background Batch] Failed to update scheduled_evaluation_runs:', updateRunError);
+      }
+
+      // Fetch the scheduled evaluation for alert data
+      const { data: schedEval } = await supabaseAdmin
+        .from('scheduled_evaluations')
+        .select('name, model_id, consecutive_failures')
+        .eq('id', scheduledEvalId)
+        .single();
+
+      const scheduledAlertData: ScheduledEvaluationAlertData = {
+        scheduledEvaluationId: scheduledEvalId,
+        userId,
+        scheduleName: schedEval?.name || customName,
+        modelId: schedEval?.model_id || config.model_name,
+        status: 'completed',
+        totalPrompts: prompts.length,
+        successfulPrompts: completed,
+        failedPrompts: failed,
+        errorMessage: failed > 0 ? `${failed} prompts failed` : null,
+        consecutiveFailures: schedEval?.consecutive_failures || 0,
+      };
+
+      try {
+        await sendScheduledEvaluationAlert(
+          failed > 0 ? 'scheduled_eval_failed' : 'scheduled_eval_completed',
+          scheduledAlertData
+        );
+      } catch (alertErr) {
+        console.error('[Background Batch] Failed to send scheduled eval alert:', alertErr);
+      }
+    }
+
     // Complete experiment run
     if (runId) {
       await supabaseAdmin
@@ -888,6 +945,57 @@ async function processBackgroundBatch(
       failedPrompts: failed,
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
     });
+
+    // Send scheduled evaluation alert with error details (if this was a scheduled run)
+    if (scheduledEvalId) {
+      console.log('[Background Batch] Sending scheduled eval failure alert with error');
+
+      // Update scheduled_evaluation_runs table with error
+      const { error: updateRunError } = await supabaseAdmin
+        .from('scheduled_evaluation_runs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          total_prompts: prompts.length,
+          successful_prompts: completed,
+          failed_prompts: failed,
+          error_message: error instanceof Error ? error.message : 'Unknown error',
+        })
+        .eq('scheduled_evaluation_id', scheduledEvalId)
+        .eq('status', 'triggered')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (updateRunError) {
+        console.error('[Background Batch] Failed to update scheduled_evaluation_runs:', updateRunError);
+      }
+
+      // Fetch the scheduled evaluation for alert data
+      const { data: schedEval } = await supabaseAdmin
+        .from('scheduled_evaluations')
+        .select('name, model_id, consecutive_failures')
+        .eq('id', scheduledEvalId)
+        .single();
+
+      const scheduledAlertData: ScheduledEvaluationAlertData = {
+        scheduledEvaluationId: scheduledEvalId,
+        userId,
+        scheduleName: schedEval?.name || customName,
+        modelId: schedEval?.model_id || config.model_name,
+        status: 'failed',
+        totalPrompts: prompts.length,
+        successfulPrompts: completed,
+        failedPrompts: failed,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        consecutiveFailures: (schedEval?.consecutive_failures || 0) + 1,
+      };
+
+      try {
+        await sendScheduledEvaluationAlert('scheduled_eval_failed', scheduledAlertData);
+      } catch (alertErr) {
+        console.error('[Background Batch] Failed to send scheduled eval failure alert:', alertErr);
+      }
+    }
   }
 }
 

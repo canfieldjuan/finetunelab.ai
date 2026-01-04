@@ -373,21 +373,9 @@ export class EvaluationSchedulerWorker {
         console.log('[EvalScheduler] Next run scheduled for:', nextRunAt.toISOString());
       }
 
-      // Send completion alert on success (user preferences will filter)
-      if (status === 'success') {
-        try {
-          await sendScheduledEvaluationAlert('scheduled_eval_completed', {
-            scheduledEvaluationId: evaluation.id,
-            userId: evaluation.user_id,
-            scheduleName: evaluation.name,
-            modelId: evaluation.model_id,
-            status: 'triggered',
-            errorMessage: null,
-          });
-        } catch (alertError) {
-          console.error('[EvalScheduler] Failed to send completion alert:', alertError);
-        }
-      }
+      // NOTE: Completion alerts are now sent from the batch-testing route
+      // with full results (total prompts, success rate, etc.) after the batch test completes.
+      // The scheduler only triggers the batch test - the route handles completion alerts.
 
     } catch (error) {
       console.error('[EvalScheduler] Error calculating next run:', error);
