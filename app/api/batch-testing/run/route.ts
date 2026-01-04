@@ -347,6 +347,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // DEBUG: Log incoming config to trace model ID issue
+    console.log('[Batch Testing Run] DEBUG - Incoming config:', {
+      hasModelId: !!config.model_id,
+      hasModelName: !!config.model_name,
+      modelId: config.model_id,
+      modelName: config.model_name,
+      willUseBatchConfigModelName: config.model_id,
+    });
+
     const batchConfig: BatchTestConfig = {
       model_name: config.model_id, // Using model_id from registry
       prompt_limit: config.prompt_limit || parseInt(process.env.BATCH_TESTING_DEFAULT_PROMPT_LIMIT || '25', 10),
