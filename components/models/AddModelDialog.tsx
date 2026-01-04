@@ -36,7 +36,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     name: '',
     description: '',
     provider: 'openai',
-    base_url: '',
+    base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
     model_id: '',
     auth_type: 'bearer',
     api_key: '',
@@ -117,7 +117,51 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
   };
 
   const handleFieldChange = (field: keyof CreateModelDTO, value: unknown) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+
+      // Auto-populate base_url when provider changes
+      if (field === 'provider') {
+        const provider = value as ModelProvider;
+        switch (provider) {
+          case 'openai':
+            updated.base_url = 'https://api.openai.com/v1';
+            break;
+          case 'anthropic':
+            updated.base_url = 'https://api.anthropic.com/v1/messages';
+            break;
+          case 'openrouter':
+            updated.base_url = 'https://openrouter.ai/api/v1';
+            break;
+          case 'together':
+            updated.base_url = 'https://api.together.xyz/v1';
+            break;
+          case 'groq':
+            updated.base_url = 'https://api.groq.com/openai/v1';
+            break;
+          case 'huggingface':
+            updated.base_url = 'https://api-inference.huggingface.co/models';
+            break;
+          case 'fireworks':
+            updated.base_url = 'https://api.fireworks.ai/inference/v1';
+            break;
+          case 'azure':
+            updated.base_url = 'https://{resource}.openai.azure.com/openai/deployments/{deployment}';
+            break;
+          case 'runpod':
+            updated.base_url = 'https://{pod_id}-8000.proxy.runpod.net/v1';
+            break;
+          case 'vllm':
+            updated.base_url = 'http://localhost:8000/v1';
+            break;
+          case 'ollama':
+            updated.base_url = 'http://localhost:11434/v1';
+            break;
+        }
+      }
+
+      return updated;
+    });
     setError(null);
   };
 
@@ -283,7 +327,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         name: '',
         description: '',
         provider: 'openai',
-        base_url: '',
+        base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
         model_id: '',
         auth_type: 'bearer',
         api_key: '',
@@ -322,7 +366,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setFormData({
         name: '',
         provider: 'openai',
-        base_url: '',
+        base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
         model_id: '',
         auth_type: 'bearer',
         api_key: '',
