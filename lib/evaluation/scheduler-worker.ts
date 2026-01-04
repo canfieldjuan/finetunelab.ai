@@ -220,6 +220,16 @@ export class EvaluationSchedulerWorker {
         test_suite_id: evaluation.test_suite_id,
       };
 
+      // DEBUG: Log what we're about to send
+      console.log('[EvalScheduler] DEBUG Sending config:', {
+        evaluationId: evalId,
+        evaluationModelId: evaluation.model_id,
+        batchConfigModelId: batchTestConfig.model_id,
+        hasModelId: !!batchTestConfig.model_id,
+        modelIdType: typeof batchTestConfig.model_id,
+        fullConfig: JSON.stringify(batchTestConfig)
+      });
+
       // Call batch testing API with scheduled headers
       const response = await this.callBatchTestAPI(
         evaluation.user_id,
