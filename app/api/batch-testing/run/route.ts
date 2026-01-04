@@ -628,8 +628,30 @@ async function processBackgroundBatch(
     testRunId,
     promptCount: prompts.length,
     modelId: config.model_name,
-    widgetSessionId
+    widgetSessionId,
+    authMode: auth.mode
   });
+
+  // If using service role auth, fetch user's API key to use for chat requests
+  let chatAuth = auth;
+  if (auth.mode === 'serviceRole') {
+    console.log('[Background Batch] Service role mode: Fetching user API key for chat authentication');
+    const { data: apiKey, error: keyError } = await supabaseAdmin
+      .from('workspace_api_keys')
+      .select('key, id')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .limit(1)
+      .single();
+
+    if (keyError || !apiKey) {
+      console.error('[Background Batch] Failed to fetch user API key:', keyError);
+      // Fall back to service role - will likely fail but at least we tried
+    } else {
+      console.log('[Background Batch] Using user API key for chat requests');
+      chatAuth = { mode: 'apiKey', userId, apiKey: apiKey.key, keyId: apiKey.id };
+    }
+  }
 
   // Pre-create the conversation to avoid race conditions
   const { data: conversation, error: convError } = await supabaseAdmin
@@ -752,7 +774,7 @@ async function processBackgroundBatch(
         testRunId,
         config.model_name,
         prompt,
-        auth,
+        chatAuth,
         i,
         runId,
         config.benchmark_id,
