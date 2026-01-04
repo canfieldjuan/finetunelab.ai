@@ -16,7 +16,7 @@ function makeRequest(body: unknown, headers?: Record<string, string>) {
     json: async () => body,
   };
 
-  return request as unknown;
+return request as NextRequest;
 }
 
 describe('POST app/api/training/jobs/[jobId]/metrics', () => {

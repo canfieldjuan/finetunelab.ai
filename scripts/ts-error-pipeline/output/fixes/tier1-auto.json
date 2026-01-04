@@ -1,30 +1,57 @@
 [
   {
-    "file": "app/api/batch-testing/run/__tests__/route.test.ts",
-    "line": 31,
-    "column": 22,
-    "code": "TS2339",
-    "message": "Property 'headers' does not exist on type '{}'.",
+    "file": "app/account/page.tsx",
+    "line": 269,
+    "column": 56,
+    "code": "TS2345",
+    "message": "Argument of type 'string' is not assignable to parameter of type 'SetStateAction<UsageTier | undefined>'.",
     "context": {
       "before": [
-        "",
-        "  it('accepts X-API-Key auth and calls /api/chat with X-API-Key', async () => {",
-        "    const fetchMock = vi.fn(async (_url: string, init?: unknown) => {",
-        "      // Ensure the background prompt processing uses API key auth.",
-        "      if (typeof _url === 'string' && _url.endsWith('/api/chat')) {"
+        "                  {showTierSelector ? 'Hide Tiers' : 'Change Tier'}",
+        "                </Button>",
+        "              </div>",
+        "              <UsageDashboard ",
+        "                sessionToken={session.access_token}"
       ],
-      "errorLine": "        expect(init?.headers?.['X-API-Key']).toBe('wak_testkey');",
+      "errorLine": "                onTierLoaded={(tier) => setCurrentTier(tier)}",
       "after": [
-        "      }",
-        "      return { ok: true, text: async () => '' } as unknown;",
-        "    });",
-        "    // @ts-expect-error - vitest global patching",
-        "    globalThis.fetch = fetchMock;"
+        "              />",
+        "              ",
+        "              {showTierSelector && (",
+        "                <div className=\"mt-8 pt-8 border-t border-border\">",
+        "                  <TierSelector"
       ]
     },
     "tier": "TIER1",
     "confidence": 0.95,
-    "categorizationReason": "Missing property on an object - the type of init should be defined to include a headers property or cast appropriately."
+    "categorizationReason": "Type mismatch - straightforward type annotation fix"
+  },
+  {
+    "file": "app/api/evaluate-message/route.ts",
+    "line": 107,
+    "column": 58,
+    "code": "TS2304",
+    "message": "Cannot find name 'ContentJson'.",
+    "context": {
+      "before": [
+        "    // 4. Save citations (async, don't block)",
+        "    if (contentJson && typeof contentJson === 'object' && 'citations' in contentJson) {",
+        "      const citations = (contentJson as Record<string, unknown>).citations;",
+        "      if (Array.isArray(citations) && citations.length > 0) {",
+        "         "
+      ],
+      "errorLine": "citationsService.saveCitations(messageId, contentJson as ContentJson).catch((err: Error) => {",
+      "after": [
+        "          console.error('[EvaluateMessage] Error saving citations:', err);",
+        "        });",
+        "      }",
+        "    }",
+        ""
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Missing type definition for 'ContentJson' - straightforward fix by defining or importing the type"
   },
   {
     "file": "app/models/page.tsx",
@@ -51,140 +78,114 @@
     },
     "tier": "TIER1",
     "confidence": 0.95,
-    "categorizationReason": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'. This can be fixed by ensuring that the value being assigned to serverInfo is either of type ServerInfo or explicitly undefined."
+    "categorizationReason": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'. This can be fixed by ensuring that the value being assigned to serverInfo is either ServerInfo or explicitly undefined."
   },
   {
-    "file": "lib/models/local-model-scanner.ts",
-    "line": 131,
-    "column": 5,
-    "code": "TS2588",
-    "message": "Cannot assign to 'modelName' because it is a constant.",
+    "file": "lib/inference/fireworks-deployment-service.ts",
+    "line": 82,
+    "column": 7,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'BodyInit | null | undefined'.",
     "context": {
       "before": [
-        "  const lowercaseMatch = dirName.match(lowercaseAuthorPattern);\r",
-        "  if (lowercaseMatch) {\r",
-        "    const [, author, modelName] = lowercaseMatch;\r",
+        "    }",
+        "",
+        "    const options: RequestInit = {",
+        "      method,",
+        "      headers,"
+      ],
+      "errorLine": "      body: (body instanceof FormData || body instanceof Buffer) ? (body as unknown) : JSON.stringify(body),",
+      "after": [
+        "    };",
+        "",
+        "    if (body instanceof Buffer) {",
+        "      options.headers = { ...headers, 'Content-Type': 'application/octet-stream' };",
+        "    }"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "The error indicates that an unknown type cannot be assigned to a specific type. Casting body as BodyInit, null, or undefined should resolve this issue."
+  },
+  {
+    "file": "lib/inference/runpod-serverless-service.ts",
+    "line": 434,
+    "column": 9,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "        },\r",
+        "      };\r",
         "\r",
-        "    // Clean up version suffixes from modelName\r"
+        "      if (networkVolumeIdToAttach) {\r",
+        "        console.log(`[RunPodServerlessService] Attaching volume ${networkVolumeIdToAttach} to the pod.`);\r"
       ],
-      "errorLine": "    modelName = modelName\r",
+      "errorLine": "        (variables.input as unknown).networkVolumeId = networkVolumeIdToAttach;\r",
       "after": [
-        "      .replace(/[-_]v?\\d+(\\.\\d+)*$/i, '') // Remove version numbers like -v0.3\r",
-        "      .replace(/[-_](fp16|fp32|int8|int4|gguf|q4_0|q5_0)$/i, ''); // Remove quantization suffixes\r",
-        "\r",
-        "    return `${author}/${modelName}`;\r",
-        "  }\r"
+        "        variables.input.volumeMountPath = volumeMountPath;\r",
+        "        const modelFolderName = request.model_id.split('/').pop();\r",
+        "        variables.input.dockerArgs = `vllm serve --model ${volumeMountPath}/${modelFolderName} ${vllmArgs.join(' ')}`;\r",
+        "      }\r",
+        "      \r"
       ]
     },
     "tier": "TIER1",
     "confidence": 0.95,
-    "categorizationReason": "Attempting to reassign a constant variable - straightforward fix"
+    "categorizationReason": "The error is due to an object being of type 'unknown'. Adding a type assertion or check will fix it."
   },
   {
-    "file": "lib/storage/index.ts",
-    "line": 12,
-    "column": 3,
-    "code": "TS2724",
-    "message": "'\"./export-storage\"' has no exported member named 'useSupabaseStorage'. Did you mean 'isSupabaseStoragePath'?",
+    "file": "lib/services/training-providers/local.provider.ts",
+    "line": 163,
+    "column": 15,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
     "context": {
       "before": [
-        "export {",
-        "  saveExport,",
-        "  getExport,",
-        "  deleteExport,",
-        "  exportExists,"
+        "      let payload: TrainingJobRequest = request;\r",
+        "      try {\r",
+        "        if (request && request.config) {\r",
+        "          // Check if already normalized (has 'lora' key at top level)\r",
+        "          // ScriptBuilder output always includes 'lora' key\r"
       ],
-      "errorLine": "  useSupabaseStorage,",
+      "errorLine": "          if ((request.config as unknown).lora) {\r",
       "after": [
-        "  isSupabaseStoragePath,",
-        "  getStorageInfo,",
-        "  type StorageResult,",
-        "} from './export-storage';",
-        ""
+        "            console.log('[LocalProvider] Config appears already normalized, skipping normalization');\r",
+        "            payload = request;\r",
+        "          } else {\r",
+        "            console.log('[LocalProvider] Normalizing config for backend');\r",
+        "            const normalized = normalizeForBackend(request.config as unknown as TrainingConfig);\r"
       ]
     },
     "tier": "TIER1",
     "confidence": 0.95,
-    "categorizationReason": "Typo or incorrect import - straightforward fix"
+    "categorizationReason": "Similar to the previous error, this one also involves an object of type 'unknown'. A type assertion is needed here as well."
   },
   {
-    "file": "lib/tools/web-search/index.ts",
-    "line": 71,
-    "column": 38,
-    "code": "TS2345",
-    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+    "file": "lib/tools/web-search/research.controller.ts",
+    "line": 58,
+    "column": 13,
+    "code": "TS18046",
+    "message": "'data' is of type 'unknown'.",
     "context": {
       "before": [
-        "  },",
-        "",
-        "  api: {",
-        "    router: (router: ExpressRouter): ExpressRouter => {",
-        "      router.post('/research', researchController.startResearch.bind(researchController));"
+        "      res.setHeader('Content-Type', 'text/event-stream');",
+        "      res.setHeader('Cache-Control', 'no-cache');",
+        "      res.setHeader('Connection', 'keep-alive');",
+        "      ",
+        "      const handler = (data: unknown) => {"
       ],
-      "errorLine": "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
+      "errorLine": "        if (data.jobId === jobId) {",
       "after": [
-        "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
-        "      return router;",
-        "    },",
-        "  },",
-        "};"
+        "           res.write(`data: ${JSON.stringify(data)}\\n\\n`);",
+        "        }",
+        "      };",
+        "      ",
+        "      sseService.on('research_event', handler);"
       ]
     },
     "tier": "TIER1",
     "confidence": 0.95,
-    "categorizationReason": "Missing type annotation - straightforward fix"
-  },
-  {
-    "file": "lib/tools/web-search/index.ts",
-    "line": 72,
-    "column": 45,
-    "code": "TS2345",
-    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
-    "context": {
-      "before": [
-        "",
-        "  api: {",
-        "    router: (router: ExpressRouter): ExpressRouter => {",
-        "      router.post('/research', researchController.startResearch.bind(researchController));",
-        "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));"
-      ],
-      "errorLine": "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
-      "after": [
-        "      return router;",
-        "    },",
-        "  },",
-        "};",
-        ""
-      ]
-    },
-    "tier": "TIER1",
-    "confidence": 0.95,
-    "categorizationReason": "Missing type annotation - straightforward fix"
-  },
-  {
-    "file": "lib/tools/web-search/sse.service.ts",
-    "line": 5,
-    "column": 42,
-    "code": "TS2698",
-    "message": "Spread types may only be created from object types.",
-    "context": {
-      "before": [
-        "import { EventEmitter } from 'events';",
-        "",
-        "class SseService extends EventEmitter {",
-        "  sendEvent(jobId: string, data: unknown) {"
-      ],
-      "errorLine": "    this.emit('research_event', { jobId, ...data });",
-      "after": [
-        "  }",
-        "}",
-        "",
-        "export const sseService = new SseService();",
-        ""
-      ]
-    },
-    "tier": "TIER1",
-    "confidence": 0.95,
-    "categorizationReason": "Spread operator used on a non-object type - straightforward fix"
+    "categorizationReason": "The variable data is of type 'unknown'. Adding a type assertion or check will fix this issue, ensuring that data has the expected structure before accessing its properties."
   }
 ]

@@ -1,29 +1,164 @@
 [
   {
-    "file": "lib/tools/web-search/index.ts",
-    "line": 70,
-    "column": 32,
+    "file": "app/api/batch-testing/run/route.ts",
+    "line": 753,
+    "column": 9,
     "code": "TS2345",
-    "message": "Argument of type '(req: Request, res: Response) => Promise<void>' is not assignable to parameter of type '(req: unknown, res: unknown) => void'.",
+    "message": "Argument of type 'unknown[]' is not assignable to parameter of type '{ type: \"function\"; function: { name: string; description: string; parameters: Record<string, unknown>; }; }[]'.",
     "context": {
       "before": [
-        "    };",
-        "  },",
-        "",
-        "  api: {",
-        "    router: (router: ExpressRouter): ExpressRouter => {"
+        "        runId,",
+        "        config.benchmark_id,",
+        "        widgetSessionId,",
+        "        conversation.id,  // Pass conversation ID for efficient lookups",
+        "        config.judge_config,  // Pass judge configuration"
       ],
-      "errorLine": "      router.post('/research', researchController.startResearch.bind(researchController));",
+      "errorLine": "        tools  // Pass enabled tools for trace recording",
       "after": [
-        "      router.get('/research/:jobId', researchController.getResearchStatus.bind(researchController));",
-        "      router.get('/research/:jobId/stream', researchController.streamResearchUpdates.bind(researchController));",
-        "      return router;",
-        "    },",
-        "  },"
+        "      );",
+        "",
+        "      if (success) {",
+        "        completed++;",
+        "      } else {"
       ]
     },
     "tier": "TIER3",
-    "confidence": 0.6,
-    "categorizationReason": "Type mismatch due to unknown types - may require significant refactoring or changes in function signatures"
+    "confidence": 0.65,
+    "categorizationReason": "Type mismatch with an array of unknown objects - requires understanding the structure and possibly refactoring"
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 66,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type '{ headers: Headers; clone: () => { text: () => Promise<string>; }; }' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest({",
+      "after": [
+        "        job_id: 'job-123',",
+        "        metrics: [{ step: 1, epoch: 0 }],",
+        "      })",
+        "    );",
+        ""
+      ]
+    },
+    "tier": "TIER3",
+    "confidence": 0.65,
+    "categorizationReason": "The object being passed to 'makeRequest' is not compatible with 'NextRequest'. This might require a significant refactor or change in the function's expected input."
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 115,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type '{ headers: Headers; clone: () => { text: () => Promise<string>; }; }' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          job_id: 'job-123',",
+        "          metrics: [{ step: 1, epoch: 0 }],",
+        "        },",
+        "        { authorization: 'Bearer wrong-token' }"
+      ]
+    },
+    "tier": "TIER3",
+    "confidence": 0.65,
+    "categorizationReason": "The object being passed to 'makeRequest' is not compatible with 'NextRequest'. This might require a significant refactor or change in the function's expected input."
+  },
+  {
+    "file": "app/api/training/local/metrics/__tests__/route.test.ts",
+    "line": 166,
+    "column": 7,
+    "code": "TS2345",
+    "message": "Argument of type '{ headers: Headers; clone: () => { text: () => Promise<string>; }; }' is not assignable to parameter of type 'NextRequest'.",
+    "context": {
+      "before": [
+        "    }));",
+        "",
+        "    const { POST } = await import('../route');",
+        "",
+        "    const response = await POST("
+      ],
+      "errorLine": "      makeRequest(",
+      "after": [
+        "        {",
+        "          job_id: 'job-123',",
+        "          metrics: [",
+        "            { step: 1, epoch: 0, train_loss: 1.0, eval_loss: 2.0 },",
+        "            { step: 2, epoch: 0, train_loss: 0.5, eval_loss: 1.5, learning_rate: 0.0001 },"
+      ]
+    },
+    "tier": "TIER3",
+    "confidence": 0.65,
+    "categorizationReason": "The object being passed to 'makeRequest' is not compatible with 'NextRequest'. This might require a significant refactor or change in the function's expected input."
+  },
+  {
+    "file": "components/evaluation/ScheduleRunHistory.tsx",
+    "line": 114,
+    "column": 10,
+    "code": "TS2604",
+    "message": "JSX element type 'Icon' does not have any construct or call signatures.",
+    "context": {
+      "before": [
+        "    const config = statusConfig[status] || statusConfig.triggered;",
+        "    const Icon = config.icon;",
+        "",
+        "    return (",
+        "      <Badge variant={config.variant} className=\"gap-1\">"
+      ],
+      "errorLine": "        <Icon className=\"w-3 h-3\" />",
+      "after": [
+        "        {config.label}",
+        "      </Badge>",
+        "    );",
+        "  };",
+        ""
+      ]
+    },
+    "tier": "TIER3",
+    "confidence": 0.65,
+    "categorizationReason": "JSX element type 'Icon' does not have any construct or call signatures. This might indicate an issue with the import or definition of 'Icon'. It could be a complex architectural issue if 'Icon' is supposed to be dynamically imported or conditionally rendered."
+  },
+  {
+    "file": "components/evaluation/ScheduleRunHistory.tsx",
+    "line": 114,
+    "column": 10,
+    "code": "TS2786",
+    "message": "'Icon' cannot be used as a JSX component.",
+    "context": {
+      "before": [
+        "    const config = statusConfig[status] || statusConfig.triggered;",
+        "    const Icon = config.icon;",
+        "",
+        "    return (",
+        "      <Badge variant={config.variant} className=\"gap-1\">"
+      ],
+      "errorLine": "        <Icon className=\"w-3 h-3\" />",
+      "after": [
+        "        {config.label}",
+        "      </Badge>",
+        "    );",
+        "  };",
+        ""
+      ]
+    },
+    "tier": "TIER3",
+    "confidence": 0.65,
+    "categorizationReason": "'Icon' cannot be used as a JSX component. Similar to error [4], this might indicate an issue with the import or definition of 'Icon'. It could be a complex architectural issue if 'Icon' is supposed to be dynamically imported or conditionally rendered."
   }
 ]
