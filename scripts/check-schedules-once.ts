@@ -154,7 +154,11 @@ async function executeSchedule(
         'x-user-id': schedule.user_id,
       },
       body: JSON.stringify({
-        config: schedule.batch_test_config,
+        config: {
+          ...schedule.batch_test_config,
+          model_id: schedule.model_id,
+          test_suite_id: schedule.test_suite_id,
+        },
         userId: schedule.user_id,
         scheduledEvaluationRunId: run.id,
       }),
