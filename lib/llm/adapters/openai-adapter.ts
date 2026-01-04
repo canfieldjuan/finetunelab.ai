@@ -31,6 +31,13 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       }
     }
 
+    // OpenRouter requires HTTP-Referer and X-Title headers
+    if (config.provider === 'openrouter') {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://finetunelab.ai';
+      headers['HTTP-Referer'] = baseUrl;
+      headers['X-Title'] = 'FineTuneLab';
+    }
+
     // Add custom headers if provided
     if (config.auth_headers) {
       Object.assign(headers, config.auth_headers);
