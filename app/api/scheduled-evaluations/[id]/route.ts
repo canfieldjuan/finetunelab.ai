@@ -165,7 +165,7 @@ export async function PATCH(
     if (body.name !== undefined) updates.name = body.name;
     if (body.description !== undefined) updates.description = body.description;
     if (body.schedule_type !== undefined) {
-      const validScheduleTypes: ScheduleType[] = ['hourly', 'daily', 'weekly', 'custom'];
+      const validScheduleTypes: ScheduleType[] = ['every_5_minutes', 'hourly', 'daily', 'weekly', 'custom'];
       if (!validScheduleTypes.includes(body.schedule_type)) {
         return NextResponse.json(
           { error: `Invalid schedule_type. Must be one of: ${validScheduleTypes.join(', ')}` },
