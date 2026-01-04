@@ -223,11 +223,27 @@ export async function POST(req: NextRequest) {
       if (userIdHeader && bearerToken === serviceRoleKey) {
         // Service role authentication from scheduler/background worker
         console.log('[API] Batch test mode: Service role authentication, user_id:', userIdHeader);
-        userId = userIdHeader;
 
-        // Use service role for RLS bypass
+        // Validate that the user exists before accepting the user_id
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+        const serviceRoleClient = createClient(supabaseUrl, serviceRoleKey);
+
+        const { data: userProfile, error: profileError } = await serviceRoleClient
+          .from('profiles')
+          .select('id')
+          .eq('id', userIdHeader)
+          .single();
+
+        if (profileError || !userProfile) {
+          console.error('[API] Batch test mode: Invalid user_id in X-User-Id header:', userIdHeader);
+          return new Response(JSON.stringify({ error: 'Invalid user ID' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        userId = userIdHeader;
+        supabaseAdmin = serviceRoleClient;
       } else {
         // Regular user session token validation
         console.log('[API] Batch test mode: Validating user session token');
