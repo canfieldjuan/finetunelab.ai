@@ -266,7 +266,7 @@ export default function AccountPage() {
               </div>
               <UsageDashboard 
                 sessionToken={session.access_token}
-                onTierLoaded={(tier) => setCurrentTier(tier)}
+                onTierLoaded={(tier: UsageTier | undefined) => setCurrentTier(tier)}
               />
               
               {showTierSelector && (
