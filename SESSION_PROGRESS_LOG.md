@@ -1,14 +1,112 @@
-# Session Progress Log - RunPod Training Deployment Investigation
+# Session Progress Log - Training System Development
 
-**Session Date**: November 24, 2025  
-**Session Focus**: RunPod Training Deployment Failure Analysis & Fix Planning  
-**Status**: Analysis Complete, Implementation Plan Ready
+**Session Date**: November 24, 2025 (Updated: January 7, 2026)
+**Session Focus**: Training System Development & Local Worker Agent
+**Status**: Multiple Phases Active
 
 ---
 
 ## Session Timeline
 
-### **Phase 25: Trace Metadata Enhancement** (Current)
+### **Phase 26: Local Worker Agent - Poll-Based Job Dispatch** (Current)
+**Started**: January 7, 2026
+**User Request**: Simplify local worker system and implement poll-based job dispatch
+**Requirements**: Never assume—verify code, identify exact insertion points, avoid breaking changes, document before implementation, validate changes work.
+
+#### **Problem Identified**
+
+The current training-agent architecture assumes the cloud server can reach `localhost:8000` on the user's machine, which is impossible for remote deployments.
+
+**Current (broken) flow:**
+1. Web UI (cloud) -> calls `POST /api/training/local/start`
+2. Next.js server -> tries to call `http://localhost:8000/api/training/execute`
+3. FAILS - cloud server can't reach user's localhost
+
+#### **Actions Completed**
+
+1. **Worker System Cleanup** (Committed: `ec04fa7`, `a8f32ad`)
+   - Removed unused `app/api/workers/` routes (6 files)
+   - Removed `lib/auth/worker-auth.ts`
+   - Removed `worker-agent/` Go package
+   - Removed `supabase/migrations/20251226000000_create_worker_system.sql`
+   - Removed orphaned `worker` scope from API key validator
+
+2. **Architecture Investigation**
+   - Verified training-agent uses `job_token` auth (not wak_ API keys)
+   - Confirmed no polling mechanism exists in training-agent
+   - Documented current dispatch flow and its limitations
+
+3. **Design Document Created**
+   - `docs/POLL_BASED_JOB_DISPATCH_DESIGN.md` - Complete architecture design
+
+#### **Proposed Solution: Poll-Based Architecture**
+
+**New flow:**
+1. User clicks "Start Training" -> job created with `status: 'pending'`
+2. Agent polls `GET /api/training/agent/poll` every 10s
+3. Backend returns pending job
+4. Agent claims job -> `status: 'running'`
+5. Agent executes, reports metrics
+6. Agent marks complete/failed
+
+#### **Files to Create (Backend)**
+
+| File | Purpose |
+|------|---------|
+| `app/api/training/agent/poll/route.ts` | Poll endpoint for agents |
+| `app/api/training/agent/claim/[jobId]/route.ts` | Claim endpoint |
+| `supabase/migrations/YYYYMMDD_add_agent_columns.sql` | Add agent_id column |
+
+#### **Files to Create (Agent - Python)**
+
+| File | Purpose |
+|------|---------|
+| `src/services/job_poller.py` | Polling service |
+
+#### **Files to Modify (Backend)**
+
+| File | Change |
+|------|--------|
+| `lib/training/providers/local-provider.ts` | Skip direct agent call for remote URLs |
+
+#### **Files to Modify (Agent - Python)**
+
+| File | Change |
+|------|--------|
+| `src/config.py` | Add api_key, agent_id settings |
+| `src/main.py` | Start poller on startup |
+| `.env.example` | Add API_KEY, AGENT_ID |
+
+#### **Implementation Phases**
+
+**Phase 1: Database & Backend API**
+- Add `agent_id`, `claimed_at` columns
+- Create poll endpoint
+- Create claim endpoint
+
+**Phase 2: Agent Poller (Python)**
+- Add job_poller.py service
+- Update config
+- Integrate into main.py
+
+**Phase 3: Job Creation Flow**
+- Modify local-provider.ts
+- Update UI for agent status
+
+**Phase 4: Testing & Documentation**
+- Integration tests
+- Update README
+
+#### **Next Steps**
+- Await user approval on design
+- Once approved, begin Phase 1
+
+#### **Artifacts**
+- `docs/POLL_BASED_JOB_DISPATCH_DESIGN.md` - Full design document
+
+---
+
+### **Phase 25: Trace Metadata Enhancement** (Historical)
 **Started**: December 22, 2025  
 **User Request**: Extend trace system with richer request/performance/RAG/evaluation metadata  
 **Requirements**: Never assume—verify code in target files, identify exact insertion points, avoid breaking dependent modules, document work before implementation, validate changes before applying.
