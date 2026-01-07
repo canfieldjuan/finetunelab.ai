@@ -1,6 +1,7 @@
 """
 FineTune Lab Training Agent - Main Application
 """
+import asyncio
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from loguru import logger
 from src.api.routes import router
 from src.config import settings
 from src.monitoring.gpu_monitor import gpu_monitor
+from src.services.job_poller import job_poller, get_or_create_agent_id
 
 
 # Configure logging
@@ -77,6 +79,23 @@ async def startup_event():
     else:
         logger.warning("No CUDA devices found - training will run on CPU")
 
+    # Initialize agent ID if not configured
+    if not settings.agent_id:
+        settings.agent_id = get_or_create_agent_id()
+        job_poller.agent_id = settings.agent_id
+    logger.info(f"Agent ID: {settings.agent_id}")
+
+    # Start job poller if enabled
+    if settings.poll_enabled and settings.api_key:
+        job_poller.agent_id = settings.agent_id
+        job_poller.api_key = settings.api_key
+        asyncio.create_task(job_poller.run())
+        logger.info("Job poller started")
+    elif not settings.api_key:
+        logger.warning("No API key configured - job polling disabled")
+    elif not settings.poll_enabled:
+        logger.info("Job polling disabled by configuration")
+
     logger.info("=" * 60)
     logger.info("Training Agent Ready")
     logger.info("=" * 60)
@@ -86,6 +105,11 @@ async def startup_event():
 async def shutdown_event():
     """Run on application shutdown"""
     logger.info("Training Agent Shutting Down")
+
+    # Stop job poller
+    if job_poller.is_running():
+        job_poller.stop()
+        logger.info("Job poller stopped")
 
 
 def main():
