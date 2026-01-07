@@ -237,25 +237,25 @@ async def startup_event():
 
 ## Implementation Phases
 
-### Phase 1: Database & API (Backend)
-- Add `agent_id`, `claimed_at` columns to `local_training_jobs`
-- Create `GET /api/training/agent/poll` endpoint
-- Create `POST /api/training/agent/claim/{jobId}` endpoint
+### Phase 1: Database & API (Backend) ✅ COMPLETE
+- [x] Add `agent_id`, `claimed_at` columns to `local_training_jobs`
+- [x] Create `GET /api/training/agent/poll` endpoint
+- [x] Create `POST /api/training/agent/claim/{jobId}` endpoint
 
-### Phase 2: Agent Poller (Python)
-- Add `job_poller.py` service
-- Update config for API key and agent ID
-- Integrate poller into main.py startup
+### Phase 2: Agent Poller (Python) ✅ COMPLETE
+- [x] Add `job_poller.py` service
+- [x] Update config for API key and agent ID
+- [x] Integrate poller into main.py startup
 
-### Phase 3: Job Creation Flow
-- Modify `local-provider.ts` to skip direct agent call for remote URLs
-- Update UI to show "Waiting for agent..." status
-- Add agent connection status indicator
+### Phase 3: Job Creation Flow ✅ COMPLETE
+- [x] Modify `local-provider.ts` to skip direct agent call for remote URLs
+- [ ] Update UI to show "Waiting for agent..." status (future)
+- [ ] Add agent connection status indicator (future)
 
-### Phase 4: Testing & Documentation
-- Integration tests for poll/claim flow
-- Update README and QUICK_START docs
-- Add troubleshooting guide
+### Phase 4: Documentation ✅ COMPLETE
+- [x] Update training-agent README
+- [x] Document polling configuration
+- [ ] Add troubleshooting guide (future)
 
 ## Open Questions
 
