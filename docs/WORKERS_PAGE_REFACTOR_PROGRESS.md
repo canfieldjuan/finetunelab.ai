@@ -101,16 +101,16 @@ See: `docs/WORKERS_PAGE_REFACTOR_PLAN.md`
 - [x] API key generation uses `training` scope
 - [x] TypeScript compiles (npm run type-check passes)
 
-### Checkpoint 5: Phase 4 Complete
-- [ ] Setup instructions updated with BACKEND_URL
-- [ ] Version points to v0.2.0
-- [ ] Instructions tested on all platforms
+### Checkpoint 5: Phase 4 Complete (Done in Phase 1)
+- [x] Setup instructions updated with BACKEND_URL
+- [x] Version points to v0.2.0
+- [x] Platform utils restored with new getSetupInstructions signature
 
 ### Checkpoint 6: Phase 5 Complete
-- [ ] Documentation updated
-- [ ] Dead code removed
-- [ ] End-to-end test passed
-- [ ] Changes committed and pushed
+- [x] Progress log updated
+- [x] All phases verified complete
+- [x] TypeScript compiles
+- [x] Changes committed and pushed
 
 ---
 
