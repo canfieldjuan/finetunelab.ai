@@ -36,7 +36,7 @@ for (const file of files) {
     });
 
     console.log(`✅ ${file} - No syntax errors`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasErrors = true;
 
     console.log(`\n${'='.repeat(80)}`);

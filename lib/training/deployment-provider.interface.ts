@@ -16,7 +16,7 @@ export interface DeploymentProvider {
     config: TrainingConfig,
     modelName: string,
     datasetPath: string,
-    options?: any
+    options?: unknown
   ): Promise<string>;
 
   /**

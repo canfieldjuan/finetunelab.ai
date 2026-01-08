@@ -46,6 +46,14 @@ interface TraceListItem {
   has_user_feedback?: boolean;
 }
 
+interface RawTraceWithMetadata extends TraceListItem {
+  metadata?: {
+    tags?: string[];
+    session_id?: string;
+    environment?: string;
+  };
+}
+
 interface SavedPreset {
   id: string;
   name: string;
@@ -182,7 +190,7 @@ export function TraceExplorer() {
       });
       
       // Map metadata to top-level fields
-      const mappedTraces = (data.traces || []).map((t: any) => ({
+      const mappedTraces = (data.traces || []).map((t: RawTraceWithMetadata): TraceListItem => ({
         ...t,
         session_tag: t.metadata?.tags?.[0] || t.metadata?.session_id,
         environment: t.metadata?.environment
@@ -362,10 +370,12 @@ export function TraceExplorer() {
     if (maxDurationParam) setMaxDuration(parseInt(maxDurationParam));
     if (minThroughputParam) setMinThroughput(parseFloat(minThroughputParam));
     if (maxThroughputParam) setMaxThroughput(parseFloat(maxThroughputParam));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
   useEffect(() => {
     fetchTraces();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, page, timeRange, operationFilter, statusFilter, minCost, maxCost, minDuration, maxDuration, minThroughput, maxThroughput, hasError, hasQualityScore, minQualityScore]);
 
   // Auto-expand trace from URL params (e.g., from anomaly navigation)
@@ -395,6 +405,7 @@ export function TraceExplorer() {
         // Could potentially fetch the specific trace or adjust filters here
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loading, traces]);
 
   // Live streaming via SSE
@@ -496,6 +507,7 @@ export function TraceExplorer() {
         reconnectTimeoutRef.current = null;
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveStreaming, session]);
 
   // Toggle live streaming
@@ -859,7 +871,7 @@ export function TraceExplorer() {
             </div>
 
             {/* Time Range */}
-            <Select value={timeRange} onValueChange={(v) => setTimeRange(v as any)}>
+            <Select value={timeRange} onValueChange={(v) => setTimeRange(v as '1h' | '24h' | '7d' | '30d')}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

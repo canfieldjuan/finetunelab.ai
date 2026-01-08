@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { calculateNextRun, isValidCronExpression, describeCronExpression } from '@/lib/evaluation/schedule-calculator';
 import type { ScheduledEvaluation, ScheduleType, BatchTestConfig } from '@/lib/batch-testing/types';
+import { encrypt } from '@/lib/models/encryption';
+import { validateApiKey } from '@/lib/auth/api-key-validator';
 
 // Supabase configuration
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
@@ -151,7 +153,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate schedule_type
-    const validScheduleTypes: ScheduleType[] = ['hourly', 'daily', 'weekly', 'custom'];
+    const validScheduleTypes: ScheduleType[] = ['every_5_minutes', 'hourly', 'daily', 'weekly', 'custom'];
     if (!validScheduleTypes.includes(body.schedule_type)) {
       return NextResponse.json(
         { error: `Invalid schedule_type. Must be one of: ${validScheduleTypes.join(', ')}` },
@@ -227,6 +229,50 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Block 4.5: Validate and encrypt API key (required for recurring evaluations)
+    let apiKeyEncrypted: string | null = null;
+    if (body.api_key) {
+      // Validate API key format (must start with wak_)
+      if (!body.api_key.startsWith('wak_')) {
+        return NextResponse.json(
+          { error: 'Invalid API key format. API key must start with "wak_".' },
+          { status: 400 }
+        );
+      }
+
+      // Validate API key is active and has testing scope
+      const keyValidation = await validateApiKey(body.api_key);
+      if (!keyValidation.isValid) {
+        return NextResponse.json(
+          { error: 'Invalid API key: ' + (keyValidation.errorMessage || 'Key validation failed') },
+          { status: 400 }
+        );
+      }
+
+      // Verify the key belongs to this user
+      if (keyValidation.userId !== user.id) {
+        return NextResponse.json(
+          { error: 'API key does not belong to authenticated user' },
+          { status: 403 }
+        );
+      }
+
+      // Verify the key has testing scope
+      const scopes = keyValidation.scopes || [];
+      if (!scopes.includes('testing') && !scopes.includes('all')) {
+        return NextResponse.json(
+          { error: 'API key must have "testing" scope for scheduled evaluations' },
+          { status: 400 }
+        );
+      }
+
+      // Encrypt the API key for storage
+      apiKeyEncrypted = encrypt(body.api_key);
+      console.log('[Scheduled Evaluations API] API key validated and encrypted');
+    } else {
+      console.log('[Scheduled Evaluations API] No API key provided - scheduled evaluation will use legacy service role auth');
+    }
+
     // Block 5: Prepare batch test config
     const batchTestConfig: BatchTestConfig = {
       model_name: body.model_id,
@@ -251,6 +297,7 @@ export async function POST(req: NextRequest) {
         test_suite_id: body.test_suite_id,
         model_id: body.model_id,
         batch_test_config: batchTestConfig,
+        api_key_encrypted: apiKeyEncrypted,
         is_active: body.is_active !== undefined ? body.is_active : true,
         next_run_at: nextRunAt.toISOString(),
         alert_on_failure: body.alert_on_failure !== undefined ? body.alert_on_failure : true,

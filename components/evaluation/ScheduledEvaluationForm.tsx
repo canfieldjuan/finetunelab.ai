@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 // Scheduled Evaluation Form Component
 // Purpose: Create/edit scheduled batch test evaluations
 // Date: 2025-12-16
@@ -319,6 +320,7 @@ export function ScheduledEvaluationForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="every_5_minutes">Every 5 Minutes (Testing)</SelectItem>
                     <SelectItem value="hourly">Hourly</SelectItem>
                     <SelectItem value="daily">Daily (2 AM)</SelectItem>
                     <SelectItem value="weekly">Weekly (Monday 2 AM)</SelectItem>

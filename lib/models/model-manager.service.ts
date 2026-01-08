@@ -301,24 +301,29 @@ class ModelManagerService {
       // Passing a client from the caller ensures proper access to user-specific models
       const supabaseClient = client || supabaseAdmin || defaultSupabase;
 
-      let data: any | null = null;
-      let error: any | null = null;
+      let data: LLMModel | null = null;
+      let error: { code?: string; message?: string } | null = null;
 
       if (isUUID) {
-        ({ data, error } = await supabaseClient
+        const result = await supabaseClient
           .from('llm_models')
           .select('*')
           .eq('id', modelId)
-          .single());
+          .single();
+        data = result.data as LLMModel | null;
+        error = result.error as { code?: string; message?: string } | null;
       } else {
         console.log('[ModelManager] Alias resolution for model:', modelId);
         // Try matching by name, model_id, or served_model_name on enabled/global models
-        const { data: aliasList, error: aliasErr } = await supabaseClient
+        const result = await supabaseClient
           .from('llm_models')
           .select('*')
           .eq('enabled', true)
           .or(`is_global.eq.true`) // prioritize global models for aliases
           .or(`name.eq.${modelId},model_id.eq.${modelId},served_model_name.eq.${modelId}`);
+
+        const aliasList = result.data as LLMModel[] | null;
+        const aliasErr = result.error as { code?: string; message?: string } | null;
 
         if (aliasErr) {
           error = aliasErr;

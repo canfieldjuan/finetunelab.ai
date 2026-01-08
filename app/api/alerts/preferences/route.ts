@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getAlertService } from '@/lib/alerts';
+import { getAlertService } from '@/lib/alerts/alert.service';
 
 export const runtime = 'nodejs';
 
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const alertService = getAlertService();
     const preferences = await alertService.getUserPreferences(user.id);
 
-    return NextResponse.json({ preferences });
+    return NextResponse.json({ preferences: preferences });
   } catch (err) {
     console.error('[AlertPreferencesAPI] Error:', err);
     return NextResponse.json(
@@ -92,7 +92,7 @@ export async function PUT(request: NextRequest) {
       'timezone',
     ];
 
-    const updates: Record<string, unknown> = {};
+    const updates: Record<string, any> = {};
     for (const field of allowedFields) {
       if (field in body) {
         updates[field] = body[field];

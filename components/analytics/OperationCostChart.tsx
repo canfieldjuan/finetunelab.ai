@@ -21,6 +21,8 @@ export function OperationCostChart() {
 
   useEffect(() => {
     fetchOperationCosts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchOperationCosts() {

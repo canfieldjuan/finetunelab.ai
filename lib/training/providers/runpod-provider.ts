@@ -1,8 +1,21 @@
 import { DeploymentProvider } from '../deployment-provider.interface';
 import { TrainingConfig } from '../training-config.types';
-import { DeploymentStatus, DeploymentMetrics } from '../deployment.types';
+import { DeploymentStatus, DeploymentMetrics, RunPodGPUType } from '../deployment.types';
 import { runPodService } from '../runpod-service';
 import { ScriptBuilder } from '../script-builder';
+
+interface RunPodDeployOptions {
+  jobId: string;
+  huggingFaceToken?: string;
+  wandbKey?: string;
+  trainingConfigId: string;
+  gpuType?: RunPodGPUType;
+  gpuCount?: number;
+  dockerImage?: string;
+  volumeSizeGb?: number;
+  envVars?: Record<string, string>;
+  budgetLimit?: number;
+}
 
 export class RunPodProvider implements DeploymentProvider {
   name = 'runpod';
@@ -16,13 +29,13 @@ export class RunPodProvider implements DeploymentProvider {
     config: TrainingConfig,
     modelName: string,
     datasetPath: string,
-    options?: any
+    options?: RunPodDeployOptions
   ): Promise<string> {
-    const jobId = options?.jobId;
-    if (!jobId) throw new Error('Job ID is required for RunPod deployment');
-    
-    const huggingFaceToken = options?.huggingFaceToken;
-    const wandbKey = options?.wandbKey;
+    if (!options?.jobId) throw new Error('Job ID is required for RunPod deployment');
+
+    const jobId = options.jobId;
+    const huggingFaceToken = options.huggingFaceToken || '';
+    const wandbKey = options.wandbKey;
     
     // 1. Generate Config
     // For RunPod, the dataset is always downloaded to this location by the bash script

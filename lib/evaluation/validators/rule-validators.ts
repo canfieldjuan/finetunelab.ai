@@ -298,28 +298,28 @@ export const VALIDATORS_V2 = {
    * Check if factual claims have citations
    */
   must_cite_if_claims: async (context: ValidatorContext): Promise<ValidatorResult> => {
-    return mustCiteIfClaims(context.responseContent, context.contentJson);
+    return mustCiteIfClaims(context.responseContent, context.contentJson as ContentJsonWithCitations);
   },
 
   /**
    * Verify all cited documents exist in database
    */
   citation_exists: async (context: ValidatorContext): Promise<ValidatorResult> => {
-    return citationExists(context.contentJson, context.userId);
+    return citationExists(context.contentJson as ContentJsonWithCitations, context.userId);
   },
 
   /**
    * Check format and PII
    */
   format_ok: (context: ValidatorContext): ValidatorResult => {
-    return formatOk(context.responseContent, context.contentJson);
+    return formatOk(context.responseContent, context.contentJson as JsonValue);
   },
 
   /**
    * Check user authorization for policy scope
    */
   policy_scope_allowed: async (context: ValidatorContext): Promise<ValidatorResult> => {
-    return policyScopeAllowed(context.contentJson, context.userId);
+    return policyScopeAllowed(context.contentJson as ContentJsonWithPolicyScope, context.userId);
   },
 
   /**
@@ -327,7 +327,7 @@ export const VALIDATORS_V2 = {
    */
   freshness_ok: async (context: ValidatorContext): Promise<ValidatorResult> => {
     const config = getValidatorConfig<{ maxAgeDays?: number }>(context, 'freshness_ok', { maxAgeDays: 365 });
-    return freshnessOk(context.contentJson, config.maxAgeDays);
+    return freshnessOk(context.contentJson as ContentJsonWithCitations, config.maxAgeDays);
   },
 
   /**

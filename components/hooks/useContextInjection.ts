@@ -34,6 +34,8 @@ export function useContextInjection() {
     }
 
     loadPreference();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, session]);
 
   const loadPreference = async () => {

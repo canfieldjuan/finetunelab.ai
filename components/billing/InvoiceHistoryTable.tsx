@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download, ExternalLink } from "lucide-react";
 
-interface Invoice {
+export interface Invoice {
   id: string;
   periodMonth: number;
   periodYear: number;
@@ -91,7 +91,7 @@ export function InvoiceHistoryTable({ invoices, loading }: InvoiceHistoryTablePr
   };
 
   const getStatusBadge = (status: Invoice["status"]) => {
-    const variants: Record<Invoice["status"], any> = {
+    const variants: Record<Invoice["status"], unknown> = {
       paid: "default",
       pending: "secondary",
       draft: "outline",

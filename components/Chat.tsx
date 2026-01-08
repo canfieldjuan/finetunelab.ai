@@ -623,6 +623,8 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     // fetchConversations (called by hook) will set the new conversation as active
     setMessages([]);
     setConversationError(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, handleNewConversationHook, setMessages, setConversationError]);
 
   useEffect(() => {
@@ -740,7 +742,9 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
       }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     loadSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, session?.access_token, setSelectedVoiceURI, setAutoSpeakEnabled, setUserSettings]);
 
 

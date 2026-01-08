@@ -13,6 +13,13 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
+interface UsageMeterRecord {
+  period_month: number;
+  period_year: number;
+  root_traces_count: number;
+  compressed_payload_bytes: number;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get('authorization');
@@ -56,6 +63,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    console.log('[Usage History API] Found', usageHistory?.length || 0, 'usage records');
+
     const { data: commitment } = await supabase
       .from('usage_commitments')
       .select('*')
@@ -63,7 +72,9 @@ export async function GET(req: NextRequest) {
       .eq('status', 'active')
       .single();
 
-    const history = (usageHistory || []).map((record: any) => {
+    console.log('[Usage History API] Commitment tier:', commitment?.tier || 'none');
+
+    const history = (usageHistory || []).map((record: UsageMeterRecord) => {
       const payloadGb = record.compressed_payload_bytes / 1_073_741_824;
       
       let estimatedCost = commitment ? parseFloat(commitment.minimum_monthly_usd) : 0;
@@ -89,6 +100,11 @@ export async function GET(req: NextRequest) {
         cost: parseFloat(estimatedCost.toFixed(2)),
       };
     });
+
+    console.log('[Usage History API] Returning', history.length, 'months of data');
+    if (history.length > 0) {
+      console.log('[Usage History API] Sample:', history[0]);
+    }
 
     return NextResponse.json({ history });
 

@@ -132,9 +132,10 @@ import type { BatchTestConfig } from '@/lib/batch-testing/types';
 import { categorizeError } from '@/lib/batch-testing/error-categorizer';
 import { STATUS } from '@/lib/constants';
 import { validateRequestWithScope, extractApiKeyFromHeaders } from '@/lib/auth/api-key-validator';
-import { sendBatchTestAlert } from '@/lib/alerts';
+import { sendBatchTestAlert, sendScheduledEvaluationAlert } from '@/lib/alerts';
 import { logApiKeyUsage, extractClientInfo } from '@/lib/auth/api-key-usage-logger';
-import { recordUsageEvent } from '@/lib/usage/checker';
+import type { ScheduledEvaluationAlertData } from '@/lib/alerts/alert.types';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 // Use Node.js runtime for file system operations
 export const runtime = 'nodejs';
@@ -306,6 +307,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { config } = body;
 
+    // DEBUG: Log what we received from scheduler
+    if (isScheduledRun) {
+      console.log('[Batch Testing Run] DEBUG Scheduled run config:', {
+        hasConfig: !!config,
+        configType: typeof config,
+        modelId: config?.model_id,
+        modelIdType: typeof config?.model_id,
+        modelIdLength: config?.model_id?.length,
+        fullConfig: JSON.stringify(config, null, 2)
+      });
+    }
+
     if (!config || typeof config !== 'object') {
       return NextResponse.json(
         { error: 'Missing or invalid config object' },
@@ -334,6 +347,15 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // DEBUG: Log incoming config to trace model ID issue
+    console.log('[Batch Testing Run] DEBUG - Incoming config:', {
+      hasModelId: !!config.model_id,
+      hasModelName: !!config.model_name,
+      modelId: config.model_id,
+      modelName: config.model_name,
+      willUseBatchConfigModelName: config.model_id,
+    });
 
     const batchConfig: BatchTestConfig = {
       model_name: config.model_id, // Using model_id from registry
@@ -486,23 +508,24 @@ export async function POST(req: NextRequest) {
 
     console.log('[Batch Testing Run] Created batch test run:', batchTestRun.id);
 
-    // Record batch test usage (fire-and-forget)
-    recordUsageEvent({
-      userId: auth.userId,
-      metricType: 'batch_test_run',
-      value: 1,
-      resourceType: 'batch_test',
-      resourceId: batchTestRun.id,
-      metadata: {
-        model_name: batchConfig.model_name,
-        test_suite_id: config.test_suite_id || null,
-        dataset_id: config.dataset_id || null,
-        total_prompts: extractionResult.total,
-      }
-    }).catch(err => {
-      console.error('[Batch Testing Run] Failed to record usage:', err);
-      // Don't fail the request if usage recording fails
-    });
+    // DEPRECATED: OLD usage tracking system
+    // Now using usage_meters table via increment_root_trace_count()
+    // recordUsageEvent({
+    //   userId: auth.userId,
+    //   metricType: 'batch_test_run',
+    //   value: 1,
+    //   resourceType: 'batch_test',
+    //   resourceId: batchTestRun.id,
+    //   metadata: {
+    //     model_name: batchConfig.model_name,
+    //     test_suite_id: config.test_suite_id || null,
+    //     dataset_id: config.dataset_id || null,
+    //     total_prompts: extractionResult.total,
+    //   }
+    // }).catch(err => {
+    //   console.error('[Batch Testing Run] Failed to record usage:', err);
+    //   // Don't fail the request if usage recording fails
+    // });
 
     // Step 2.5: Create experiment run for tracking
     console.log('[Batch Testing Run] Attempting to create experiment run...');
@@ -546,7 +569,8 @@ export async function POST(req: NextRequest) {
       batchConfig,
       runId,
       auth,  // Pass auth for /api/chat authentication
-      customName   // Pass custom name for conversation title
+      customName,   // Pass custom name for conversation title
+      scheduledEvalId || undefined  // Pass scheduled eval ID for alert notifications
     ).catch(error => {
       console.error('[Batch Testing Run] Background processing error:', error);
     });
@@ -597,7 +621,8 @@ async function processBackgroundBatch(
   config: BatchTestConfig,
   runId: string | null,
   auth: BatchTestingAuth,  // Session token or API key for authentication
-  customName: string   // Custom name for the batch test (used in conversation title)
+  customName: string,   // Custom name for the batch test (used in conversation title)
+  scheduledEvalId?: string  // Optional: scheduled evaluation ID for alert notifications
 ): Promise<void> {
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
   const widgetSessionId = `batch_test_${testRunId}`;
@@ -606,7 +631,8 @@ async function processBackgroundBatch(
     testRunId,
     promptCount: prompts.length,
     modelId: config.model_name,
-    widgetSessionId
+    widgetSessionId,
+    authMode: auth.mode
   });
 
   // Pre-create the conversation to avoid race conditions
@@ -665,7 +691,7 @@ async function processBackgroundBatch(
   // HuggingFace Inference API doesn't support OpenAI-style function calling
   const providerSupportsTools = modelProvider && !['huggingface', 'replicate'].includes(modelProvider.toLowerCase());
 
-  let tools: any[] = [];
+  let tools: unknown[] = [];
   if (providerSupportsTools) {
     console.log('[Background Batch] Fetching enabled tools (provider supports function calling)');
     const { data: userTools, error: toolsError } = await supabaseAdmin
@@ -795,19 +821,21 @@ async function processBackgroundBatch(
         const durationMs = endTime - startTime;
         const durationMinutes = Math.ceil(durationMs / 60000);
 
-        await recordUsageEvent({
-          userId: batchRun.user_id,
-          metricType: 'compute_minutes',
-          value: durationMinutes,
-          resourceType: 'batch_test',
-          resourceId: testRunId,
-          metadata: {
-            model_name: config.model_name,
-            total_prompts: prompts.length,
-            duration_ms: durationMs,
-            job_type: 'batch_test',
-          }
-        });
+        // DEPRECATED: OLD usage tracking system
+        // Now using usage_meters table via increment_root_trace_count()
+        // await recordUsageEvent({
+        //   userId: batchRun.user_id,
+        //   metricType: 'compute_minutes',
+        //   value: durationMinutes,
+        //   resourceType: 'batch_test',
+        //   resourceId: testRunId,
+        //   metadata: {
+        //     model_name: config.model_name,
+        //     total_prompts: prompts.length,
+        //     duration_ms: durationMs,
+        //     job_type: 'batch_test',
+        //   }
+        // });
         console.log('[Background Batch] Compute time recorded:', durationMinutes, 'minutes');
       }
     } catch (usageErr) {
@@ -826,6 +854,60 @@ async function processBackgroundBatch(
       failedPrompts: failed,
       errorMessage: failed > 0 ? `${failed} prompts failed` : null,
     });
+
+    // Send scheduled evaluation alert with full results (if this was a scheduled run)
+    if (scheduledEvalId) {
+      console.log('[Background Batch] Sending scheduled eval completion alert with results');
+
+      // Update scheduled_evaluation_runs table with results
+      const { error: updateRunError } = await supabaseAdmin
+        .from('scheduled_evaluation_runs')
+        .update({
+          status: failed > 0 ? 'completed' : 'completed',
+          batch_test_run_id: testRunId,
+          completed_at: new Date().toISOString(),
+          total_prompts: prompts.length,
+          successful_prompts: completed,
+          failed_prompts: failed,
+        })
+        .eq('scheduled_evaluation_id', scheduledEvalId)
+        .eq('status', 'triggered')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (updateRunError) {
+        console.error('[Background Batch] Failed to update scheduled_evaluation_runs:', updateRunError);
+      }
+
+      // Fetch the scheduled evaluation for alert data
+      const { data: schedEval } = await supabaseAdmin
+        .from('scheduled_evaluations')
+        .select('name, model_id, consecutive_failures')
+        .eq('id', scheduledEvalId)
+        .single();
+
+      const scheduledAlertData: ScheduledEvaluationAlertData = {
+        scheduledEvaluationId: scheduledEvalId,
+        userId,
+        scheduleName: schedEval?.name || customName,
+        modelId: schedEval?.model_id || config.model_name,
+        status: 'completed',
+        totalPrompts: prompts.length,
+        successfulPrompts: completed,
+        failedPrompts: failed,
+        errorMessage: failed > 0 ? `${failed} prompts failed` : null,
+        consecutiveFailures: schedEval?.consecutive_failures || 0,
+      };
+
+      try {
+        await sendScheduledEvaluationAlert(
+          failed > 0 ? 'scheduled_eval_failed' : 'scheduled_eval_completed',
+          scheduledAlertData
+        );
+      } catch (alertErr) {
+        console.error('[Background Batch] Failed to send scheduled eval alert:', alertErr);
+      }
+    }
 
     // Complete experiment run
     if (runId) {
@@ -863,6 +945,57 @@ async function processBackgroundBatch(
       failedPrompts: failed,
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
     });
+
+    // Send scheduled evaluation alert with error details (if this was a scheduled run)
+    if (scheduledEvalId) {
+      console.log('[Background Batch] Sending scheduled eval failure alert with error');
+
+      // Update scheduled_evaluation_runs table with error
+      const { error: updateRunError } = await supabaseAdmin
+        .from('scheduled_evaluation_runs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          total_prompts: prompts.length,
+          successful_prompts: completed,
+          failed_prompts: failed,
+          error_message: error instanceof Error ? error.message : 'Unknown error',
+        })
+        .eq('scheduled_evaluation_id', scheduledEvalId)
+        .eq('status', 'triggered')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (updateRunError) {
+        console.error('[Background Batch] Failed to update scheduled_evaluation_runs:', updateRunError);
+      }
+
+      // Fetch the scheduled evaluation for alert data
+      const { data: schedEval } = await supabaseAdmin
+        .from('scheduled_evaluations')
+        .select('name, model_id, consecutive_failures')
+        .eq('id', scheduledEvalId)
+        .single();
+
+      const scheduledAlertData: ScheduledEvaluationAlertData = {
+        scheduledEvaluationId: scheduledEvalId,
+        userId,
+        scheduleName: schedEval?.name || customName,
+        modelId: schedEval?.model_id || config.model_name,
+        status: 'failed',
+        totalPrompts: prompts.length,
+        successfulPrompts: completed,
+        failedPrompts: failed,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        consecutiveFailures: (schedEval?.consecutive_failures || 0) + 1,
+      };
+
+      try {
+        await sendScheduledEvaluationAlert('scheduled_eval_failed', scheduledAlertData);
+      } catch (alertErr) {
+        console.error('[Background Batch] Failed to send scheduled eval failure alert:', alertErr);
+      }
+    }
   }
 }
 
@@ -899,6 +1032,7 @@ async function processSinglePrompt(
     } else if (auth.mode === 'serviceRole') {
       // Use service role key for internal service calls
       headers['Authorization'] = `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
+      headers['X-User-Id'] = auth.userId;
     }
 
     const chatResponse = await fetch(`${baseUrl}/api/chat`, {
@@ -963,7 +1097,7 @@ async function processSinglePrompt(
 
         if (judgeResponse.ok) {
           const judgeData = await judgeResponse.json();
-          const avgScore = judgeData.evaluations?.reduce((sum: number, e: any) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);
+          const avgScore = judgeData.evaluations?.reduce((sum: number, e: unknown) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);
           console.log(`[Process Prompt] ${promptIndex + 1}: Judge evaluation complete, avg score: ${avgScore.toFixed(1)}/10 (${(avgScore / 10 * 100).toFixed(0)}%)`);
         } else {
           const judgeError = await judgeResponse.text();

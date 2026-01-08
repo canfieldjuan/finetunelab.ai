@@ -64,8 +64,8 @@ async function runMigration() {
   // Step 4: Verify columns were created
   console.log('\n[Migration] Step 4: Verifying columns...');
 
-  let columns: any;
-  let colError: any;
+  let columns: unknown;
+  let colError: unknown;
 
   try {
     const result = await supabase.rpc('exec_sql', {
@@ -98,7 +98,7 @@ async function runMigration() {
   } else {
     console.log('[Migration] Verified columns:');
     if (Array.isArray(columns)) {
-      columns.forEach((col: any) => {
+      columns.forEach((col: unknown) => {
         console.log(`  - ${col.column_name}`);
       });
     }

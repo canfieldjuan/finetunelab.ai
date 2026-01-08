@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-interface MonthlyUsage {
+export interface MonthlyUsage {
   month: string;
   year: number;
   rootTraces: number;
@@ -28,6 +28,12 @@ interface UsageHistoryChartProps {
 }
 
 export function UsageHistoryChart({ data, loading }: UsageHistoryChartProps) {
+  console.log('[UsageHistoryChart] Rendering with:', {
+    dataLength: data?.length || 0,
+    loading,
+    hasData: !!data,
+  });
+
   if (loading) {
     return (
       <Card>
@@ -43,6 +49,7 @@ export function UsageHistoryChart({ data, loading }: UsageHistoryChartProps) {
   }
 
   if (!data || data.length === 0) {
+    console.log('[UsageHistoryChart] No data available');
     return (
       <Card>
         <CardHeader>
@@ -58,8 +65,8 @@ export function UsageHistoryChart({ data, loading }: UsageHistoryChartProps) {
     );
   }
 
-  const maxTraces = Math.max(...data.map((d) => d.rootTraces));
-  const maxCost = Math.max(...data.map((d) => d.cost));
+  const maxTraces = Math.max(...data.map((d) => d.rootTraces), 1);
+  const maxCost = Math.max(...data.map((d) => d.cost), 1);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -94,7 +101,7 @@ export function UsageHistoryChart({ data, loading }: UsageHistoryChartProps) {
                   key={index}
                   className="flex-1 flex flex-col items-center gap-2"
                 >
-                  <div className="relative w-full h-full flex items-end justify-center gap-1">
+                  <div className="relative w-full h-48 flex items-end justify-center gap-1">
                     <div
                       className="w-1/2 bg-blue-500 rounded-t hover:bg-blue-600 transition-colors relative group"
                       style={{ height: `${traceHeight}%` }}

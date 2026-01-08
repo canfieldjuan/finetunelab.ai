@@ -3,27 +3,30 @@
 /**
  * Local Ollama Code Review Script
  *
- * Uses Qwen 2.5 Coder 32B running LOCALLY on your GPU
+ * Uses Command-R running LOCALLY on your GPU
  * Cost: $0 (runs on your RTX 3090)
- * Speed: 2-5 seconds (local GPU is FAST)
+ * Speed: 10-30 seconds (fast and accurate)
  * Privacy: 100% (never leaves your machine)
  *
  * Usage:
- *   # Review staged files
+ *   # Review staged files (uses command-r:latest by default)
  *   npx tsx scripts/ollama-code-review.ts
  *
  *   # Review specific files
  *   npx tsx scripts/ollama-code-review.ts app/api/chat/route.ts lib/tracing/types.ts
  *
- *   # Use different model
- *   MODEL=qwen2.5-coder:7b npx tsx scripts/ollama-code-review.ts
+ *   # Use DeepSeek-R1 for deeper analysis (SLOW: 5-15 minutes per file)
+ *   MODEL=deepseek-r1:70b npx tsx scripts/ollama-code-review.ts app/api/chat/route.ts
+ *
+ *   # Skip syntax check (useful when project has unrelated TS errors)
+ *   npx tsx scripts/ollama-code-review.ts --skip-syntax app/api/chat/route.ts
  */
 
 import { execSync } from 'child_process';
 import fs from 'fs';
 
 // Model selection (can override with MODEL env var)
-const DEFAULT_MODEL = 'qwen2.5-coder:32b'; // Your 24GB VRAM can handle this!
+const DEFAULT_MODEL = 'command-r:latest'; // Fast and accurate (10-30s per review)
 const MODEL = process.env.MODEL || DEFAULT_MODEL;
 
 interface OllamaResponse {
@@ -47,13 +50,20 @@ async function callOllama(prompt: string): Promise<string> {
   };
 
   try {
+    // Create AbortController with 5 minute timeout for large reasoning models like DeepSeek-R1
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+
     const response = await fetch('http://localhost:11434/api/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`Ollama API error: ${response.statusText}`);
@@ -76,9 +86,12 @@ async function callOllama(prompt: string): Promise<string> {
 async function getFilesToReview(): Promise<string[]> {
   const args = process.argv.slice(2);
 
+  // Filter out flags from arguments
+  const files = args.filter(arg => !arg.startsWith('--'));
+
   // If files specified on command line, use those
-  if (args.length > 0 && !args[0].startsWith('--')) {
-    return args;
+  if (files.length > 0) {
+    return files;
   }
 
   // Otherwise, get staged files
@@ -128,11 +141,11 @@ async function checkModelExists(): Promise<void> {
     const data = await response.json();
     const models = data.models || [];
 
-    const modelExists = models.some((m: any) => m.name === MODEL);
+    const modelExists = models.some((m: unknown) => m.name === MODEL);
 
     if (!modelExists) {
       console.error(`\n❌ Error: Model "${MODEL}" not found`);
-      console.error(`   Available models: ${models.map((m: any) => m.name).join(', ')}`);
+      console.error(`   Available models: ${models.map((m: unknown) => m.name).join(', ')}`);
       console.error(`\n   Pull the model with: ollama pull ${MODEL}\n`);
       process.exit(1);
     }
@@ -153,26 +166,33 @@ async function main() {
   const files = await getFilesToReview();
   console.log(`📂 Reviewing ${files.length} file(s):\n   ${files.join('\n   ')}\n`);
 
-  // Check syntax first (fast!)
-  console.log('⚡ Checking syntax first...');
-  for (const file of files) {
-    try {
-      execSync(`npx tsx scripts/check-syntax.ts "${file}"`, {
-        encoding: 'utf-8',
-        stdio: 'pipe'
-      });
-      console.log(`  ✅ ${file}`);
-    } catch (error: any) {
-      console.log(`\n${'='.repeat(80)}`);
-      console.log(`❌ SYNTAX ERROR IN: ${file}`);
-      console.log('='.repeat(80));
-      console.log(error.stdout || error.message);
-      console.log('='.repeat(80));
-      console.log('\n💡 Fix syntax errors before running AI review\n');
-      process.exit(1);
+  // Check for --skip-syntax flag
+  const skipSyntax = process.argv.includes('--skip-syntax');
+
+  if (skipSyntax) {
+    console.log('⚠️  Skipping syntax check (--skip-syntax flag detected)\n');
+  } else {
+    // Check syntax first (fast!)
+    console.log('⚡ Checking syntax first...');
+    for (const file of files) {
+      try {
+        execSync(`npx tsx scripts/check-syntax.ts "${file}"`, {
+          encoding: 'utf-8',
+          stdio: 'pipe'
+        });
+        console.log(`  ✅ ${file}`);
+      } catch (error: unknown) {
+        console.log(`\n${'='.repeat(80)}`);
+        console.log(`❌ SYNTAX ERROR IN: ${file}`);
+        console.log('='.repeat(80));
+        console.log(error.stdout || error.message);
+        console.log('='.repeat(80));
+        console.log('\n💡 Fix syntax errors before running AI review\n');
+        process.exit(1);
+      }
     }
+    console.log('');
   }
-  console.log('');
 
   // Build review prompt
   let prompt = `You are an expert code reviewer. Analyze the following files for:

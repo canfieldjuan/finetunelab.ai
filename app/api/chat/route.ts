@@ -25,7 +25,7 @@ import { calculateBasicQualityScore } from '@/lib/batch-testing/evaluation-integ
 import crypto from 'crypto';
 import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
-import { recordUsageEvent } from '@/lib/usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
 
@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
     
     // Batch test mode: Has widgetSessionId + Authorization header but NO X-API-Key
     isBatchTestMode = !!(widgetSessionId && authHeader && !apiKey);
-    
+
     // Widget mode: Has X-API-Key + widgetSessionId (takes precedence over batch test)
     isWidgetMode = !!(apiKey && widgetSessionId);
     widgetConversationId = null;
@@ -214,31 +214,60 @@ export async function POST(req: NextRequest) {
       userId = validationResult.userId;
       console.log('[API] Widget mode: API key validated, user_id:', userId);
     } else if (isBatchTestMode && authHeader) {
-      // Batch test mode: Validate session token and extract user_id
-      console.log('[API] Batch test mode: Validating session token');
-      
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MjAsImV4cCI6MTk2MDc2ODgyMH0.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        global: { headers: { Authorization: authHeader } }
-      });
-      
-      const { data: { user }, error: sessionError } = await supabase.auth.getUser();
-      
-      if (sessionError || !user) {
-        console.error('[API] Batch test mode: Session validation failed:', sessionError?.message);
-        return new Response(JSON.stringify({ error: 'Invalid session token' }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
+      // Batch test mode: Check if this is service role authentication
+      const userIdHeader = req.headers.get('X-User-Id');
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+      const bearerToken = bearerMatch?.[1];
+
+      if (userIdHeader && bearerToken === serviceRoleKey) {
+        // Service role authentication from scheduler/background worker
+        console.log('[API] Batch test mode: Service role authentication, user_id:', userIdHeader);
+
+        // Validate that the user exists before accepting the user_id
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const serviceRoleClient = createClient(supabaseUrl, serviceRoleKey);
+
+        // Use auth.admin.getUserById to validate user exists (works without profiles table)
+        const { data: authUser, error: authUserError } = await serviceRoleClient.auth.admin.getUserById(userIdHeader);
+
+        if (authUserError || !authUser?.user) {
+          console.error('[API] Batch test mode: Invalid user_id in X-User-Id header:', userIdHeader, authUserError?.message);
+          return new Response(JSON.stringify({ error: 'Invalid user ID' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        userId = userIdHeader;
+        supabaseAdmin = serviceRoleClient;
+      } else {
+        // Regular user session token validation
+        console.log('[API] Batch test mode: Validating user session token');
+
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader } }
         });
+
+        const { data: { user }, error: sessionError } = await supabase.auth.getUser();
+
+        if (sessionError || !user) {
+          console.error('[API] Batch test mode: Session validation failed:', sessionError?.message);
+          return new Response(JSON.stringify({ error: 'Invalid session token' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        userId = user.id;
+        console.log('[API] Batch test mode: Session validated, user_id:', userId);
+
+        // Use service role for RLS bypass
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+        supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
       }
-      
-      userId = user.id;
-      console.log('[API] Batch test mode: Session validated, user_id:', userId);
-      
-      // Use service role for RLS bypass (same as widget mode)
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgyMCwiZXhwIjoxOTYwNzY4ODIwfQ.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
-      supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     } else {
       // Normal mode: Get user ID from request body
       console.log('[API] Normal mode: Getting user from request body');
@@ -246,8 +275,8 @@ export async function POST(req: NextRequest) {
       console.log('[API] Normal mode: userId:', userId || 'not provided');
       
       // Create service role client for DB operations (bypasses RLS)
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgyMCwiZXhwIjoxOTYwNzY4ODIwfQ.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
       supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     }
 
@@ -265,8 +294,8 @@ export async function POST(req: NextRequest) {
     // Note: Batch test mode already created service role client above
     // ========================================================================
     if (isWidgetMode) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgyMCwiZXhwIjoxOTYwNzY4ODIwfQ.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
       supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     }
 
@@ -531,8 +560,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         // Fetch user's embedding settings for GraphRAG
         let embedderConfig: EmbedderConfig | undefined;
         try {
-          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
-          const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgyMCwiZXhwIjoxOTYwNzY4ODIwfQ.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+          const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
           const settingsClient = createClient(supabaseUrl, supabaseServiceKey);
 
           const { data: settings } = await settingsClient
@@ -660,7 +689,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             console.log('[API] generateSessionTag returned:', sessionTag);
 
             if (sessionTag) {
-              const updateData: Record<string, any> = {
+              const updateData: Record<string, unknown> = {
                 session_id: sessionTag.session_id,
                 experiment_name: sessionTag.experiment_name
               };
@@ -1283,22 +1312,23 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             } else {
               console.log('[API] Widget mode: User message saved');
 
-              // Record chat message usage (fire-and-forget, only for user messages)
-              recordUsageEvent({
-                userId: userId,
-                metricType: 'chat_message',
-                value: 1,
-                resourceType: 'message',
-                resourceId: widgetConversationId,
-                metadata: {
-                  conversation_id: widgetConversationId,
-                  is_widget_mode: isWidgetMode || false,
-                  is_batch_test_mode: isBatchTestMode || false,
-                }
-              }).catch(err => {
-                console.error('[API] Failed to record chat usage:', err);
-                // Don't fail the request if usage recording fails
-              });
+              // DEPRECATED: OLD usage tracking system
+              // Now using usage_meters table via increment_root_trace_count()
+              // recordUsageEvent({
+              //   userId: userId,
+              //   metricType: 'chat_message',
+              //   value: 1,
+              //   resourceType: 'message',
+              //   resourceId: widgetConversationId,
+              //   metadata: {
+              //     conversation_id: widgetConversationId,
+              //     is_widget_mode: isWidgetMode || false,
+              //     is_batch_test_mode: isBatchTestMode || false,
+              //   }
+              // }).catch(err => {
+              //   console.error('[API] Failed to record chat usage:', err);
+              //   // Don't fail the request if usage recording fails
+              // });
             }
           }
 
@@ -1933,23 +1963,24 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     });
                   console.log('[API] Widget mode (streaming): User message saved');
 
-                  // Record chat message usage (fire-and-forget, only for user messages)
-                  recordUsageEvent({
-                    userId: userId,
-                    metricType: 'chat_message',
-                    value: 1,
-                    resourceType: 'message',
-                    resourceId: widgetConversationId,
-                    metadata: {
-                      conversation_id: widgetConversationId,
-                      is_widget_mode: isWidgetMode || false,
-                      is_batch_test_mode: isBatchTestMode || false,
-                      is_streaming: true,
-                    }
-                  }).catch(err => {
-                    console.error('[API] Failed to record chat usage (streaming):', err);
-                    // Don't fail the request if usage recording fails
-                  });
+                  // DEPRECATED: OLD usage tracking system
+                  // Now using usage_meters table via increment_root_trace_count()
+                  // recordUsageEvent({
+                  //   userId: userId,
+                  //   metricType: 'chat_message',
+                  //   value: 1,
+                  //   resourceType: 'message',
+                  //   resourceId: widgetConversationId,
+                  //   metadata: {
+                  //     conversation_id: widgetConversationId,
+                  //     is_widget_mode: isWidgetMode || false,
+                  //     is_batch_test_mode: isBatchTestMode || false,
+                  //     is_streaming: true,
+                  //   }
+                  // }).catch(err => {
+                  //   console.error('[API] Failed to record chat usage (streaming):', err);
+                  //   // Don't fail the request if usage recording fails
+                  // });
                 }
 
                 // Save assistant message with latency and token estimates

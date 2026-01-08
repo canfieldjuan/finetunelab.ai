@@ -1,0 +1,785 @@
+[
+  {
+    "error": {
+      "file": "app/api/analytics/data/__tests__/route.test.ts",
+      "line": 36,
+      "column": 7,
+      "code": "TS2345",
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+      "context": {
+        "before": [
+          "    }));",
+          "",
+          "    const { GET } = await import('../route');",
+          "",
+          "    const response = await GET("
+        ],
+        "errorLine": "      makeRequest(",
+        "after": [
+          "        'http://localhost:3000/api/analytics/data?startDate=2025-01-01T00:00:00Z&endDate=2025-01-02T00:00:00Z&metrics=all',",
+          "        { 'X-API-Key': 'wak_testkey_should_not_be_validated_by_format_here' }",
+          "      )",
+          "    );",
+          ""
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.85,
+      "categorizationReason": "Argument type is 'unknown' - requires understanding the context to determine the correct type"
+    },
+    "fix": {
+      "analysis": "The error occurs because `makeRequest` returns an `unknown` type, which cannot be directly passed to a function expecting a `NextRequest`. The solution involves ensuring the returned object matches the `NextRequest` interface.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 16,
+          "old_content": "function makeRequest(url: string, headers?: Record<string, string>) {",
+          "new_content": "interface RequestLike {\n  url: string;\n  headers: Headers;\n}\n\nfunction makeRequest(url: string, headers?: Record<string, string>): NextRequest {"
+        },
+        {
+          "line": 19,
+          "old_content": "  return {",
+          "new_content": "  const request: RequestLike = {"
+        },
+        {
+          "line": 20,
+          "old_content": "    url,\n    headers: new Headers(headers ?? {}),\n  } as unknown;",
+          "new_content": "    url,\n    headers: new Headers(headers ?? {}),\n  };\n  return request;"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "Ensure that the `makeRequest` function returns an object compatible with `NextRequest`. This fix modifies the function to explicitly return a `NextRequest` type and ensures the returned object matches the expected structure."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T04:32:18.414Z"
+  },
+  {
+    "error": {
+      "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+      "line": 32,
+      "column": 40,
+      "code": "TS2339",
+      "message": "Property 'get' does not exist on type 'HeadersInit'.",
+      "context": {
+        "before": [
+          "",
+          "  it('accepts X-API-Key auth and calls /api/chat with X-API-Key', async () => {",
+          "    const fetchMock = vi.fn(async (_url: string, init?: unknown) => {",
+          "      // Ensure the background prompt processing uses API key auth.",
+          "      if (typeof _url === 'string' && _url.endsWith('/api/chat')) {"
+        ],
+        "errorLine": "expect((init as RequestInit)?.headers?.get('X-API-Key')).toBe('wak_testkey');",
+        "after": [
+          "      }",
+          "      return { ok: true, text: async () => '' } as unknown;",
+          "    });",
+          "    // @ts-expect-error - vitest global patching",
+          "    globalThis.fetch = fetchMock;"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.75,
+      "categorizationReason": "'HeadersInit' does not have a 'get' method - may require refactoring or using a different type"
+    },
+    "fix": {
+      "analysis": "The error occurs because `HeadersInit` does not have a `get` method. The code incorrectly assumes that `headers` is a `Headers` object instead of a `HeadersInit` type.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 32,
+          "old_content": "expect((init as RequestInit)?.headers?.get('X-API-Key')).toBe('wak_testkey');",
+          "new_content": "expect((init as RequestInit)?.headers['X-API-Key']).toBe('wak_testkey');"
+        }
+      ],
+      "confidence": 1,
+      "notes": "Accessing headers via index is more appropriate for `HeadersInit` types."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T04:37:01.122Z"
+  },
+  {
+    "error": {
+      "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+      "line": 100,
+      "column": 7,
+      "code": "TS2345",
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+      "context": {
+        "before": [
+          "    }));",
+          "",
+          "    const { POST } = await import('../route');",
+          "",
+          "    const response = await POST("
+        ],
+        "errorLine": "      makeRequest(",
+        "after": [
+          "        {",
+          "          config: {",
+          "            model_id: 'gpt-4',",
+          "            test_suite_id: 'suite-1',",
+          "            prompt_limit: 1,"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.85,
+      "categorizationReason": "Argument type is 'unknown' - requires understanding the context to determine the correct type"
+    },
+    "fix": {
+      "analysis": "The error occurs because the makeRequest function returns an object cast as 'unknown', but the POST function expects a NextRequest parameter. The makeRequest function needs to return a proper NextRequest-compatible object.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 100,
+          "old_content": "    const response = await POST(",
+          "new_content": "    const request = makeRequest("
+        },
+        {
+          "line": 101,
+          "old_content": "      makeRequest(",
+          "new_content": "      {"
+        },
+        {
+          "line": 112,
+          "old_content": "      )",
+          "new_content": "      }"
+        },
+        {
+          "line": 113,
+          "old_content": "    );",
+          "new_content": "    ) as unknown as NextRequest;"
+        }
+      ],
+      "additional_changes": [
+        {
+          "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+          "line": 114,
+          "old_content": "    const response = await POST(",
+          "new_content": "    const response = await POST(request);"
+        }
+      ],
+      "confidence": 0.9,
+      "notes": "The fix involves properly typing the request object to satisfy the NextRequest requirement while maintaining the existing test structure and functionality."
+    },
+    "model": "qwen3-coder:480b",
+    "provider": "cloud (fallback)",
+    "generated_at": "2026-01-04T04:42:03.239Z"
+  },
+  {
+    "error": {
+      "file": "app/api/batch-testing/run/__tests__/route.test.ts",
+      "line": 137,
+      "column": 7,
+      "code": "TS2345",
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+      "context": {
+        "before": [
+          "    }));",
+          "",
+          "    const { POST } = await import('../route');",
+          "",
+          "    const response = await POST("
+        ],
+        "errorLine": "      makeRequest(",
+        "after": [
+          "        {",
+          "          config: {",
+          "            model_id: 'gpt-4',",
+          "            test_suite_id: 'suite-1',",
+          "            prompt_limit: 1,"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.85,
+      "categorizationReason": "Argument type is 'unknown' - requires understanding the context to determine the correct type"
+    },
+    "fix": {
+      "analysis": "The error occurs because `makeRequest` returns an object of type `unknown`, which cannot be directly passed to `POST` expecting a `NextRequest`. The `makeRequest` function needs to return a properly typed request object.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 13,
+          "old_content": "function makeRequest(body: unknown, headers?: Record<string, string>) {",
+          "new_content": "interface NextRequestLike {\n  headers: Headers;\n  json(): Promise<unknown>;\n  method: 'POST';\n}\n\nfunction makeRequest(body: unknown, headers?: Record<string, string>): NextRequestLike {"
+        },
+        {
+          "line": 20,
+          "old_content": "} as unknown;",
+          "new_content": "} as NextRequest;"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 1,
+      "notes": "Added a `NextRequestLike` interface to properly type the request object returned by `makeRequest`, ensuring it matches the expected `NextRequest` structure."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T04:42:55.406Z"
+  },
+  {
+    "error": {
+      "file": "app/api/batch-testing/run/route.ts",
+      "line": 705,
+      "column": 68,
+      "code": "TS18046",
+      "message": "'t' is of type 'unknown'.",
+      "context": {
+        "before": [
+          "        description: tool.description,",
+          "        parameters: tool.parameters as Record<string, unknown>",
+          "      }",
+          "    })) || [];",
+          ""
+        ],
+        "errorLine": "    console.log('[Background Batch] Loaded tools:', tools.map(t => t.function.name).join(', '));",
+        "after": [
+          "  } else {",
+          "    console.log('[Background Batch] Skipping tools (provider does not support function calling via API)');",
+          "  }",
+          "",
+          "  // Auto-generate session tag for batch test"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.75,
+      "categorizationReason": "'t' is of type 'unknown' - may require additional type checking or casting"
+    },
+    "fix": {
+      "analysis": "The error occurs because 't' is of type 'unknown' when trying to access its properties. This happens in the context of mapping tools where 't' represents each tool object. The issue is that 'userTools' is typed as 'unknown[]' which makes each element 'unknown'. We need to properly type the tool objects.",
+      "fix_type": "add_type_assertion",
+      "changes": [
+        {
+          "line": 705,
+          "old_content": "    console.log('[Background Batch] Loaded tools:', tools.map(t => t.function.name).join(', '));",
+          "new_content": "    console.log('[Background Batch] Loaded tools:', tools.map((t: { function: { name: string } }) => t.function.name).join(', '));"
+        }
+      ],
+      "additional_changes": [
+        {
+          "file": "app/api/batch-testing/run/route.ts",
+          "line": 685,
+          "old_content": "  let tools: unknown[] = [];",
+          "new_content": "  let tools: Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }> = [];"
+        }
+      ],
+      "confidence": 0.95,
+      "notes": "The fix adds proper typing to the tools array and type assertion in the map function. This ensures type safety while accessing the function.name property. The type matches the structure being created in the tool conversion logic."
+    },
+    "model": "qwen3-coder:480b",
+    "provider": "cloud (fallback)",
+    "generated_at": "2026-01-04T04:48:00.289Z"
+  },
+  {
+    "error": {
+      "file": "app/api/batch-testing/run/route.ts",
+      "line": 981,
+      "column": 94,
+      "code": "TS18046",
+      "message": "'e' is of type 'unknown'.",
+      "context": {
+        "before": [
+          "          })",
+          "        });",
+          "",
+          "        if (judgeResponse.ok) {",
+          "          const judgeData = await judgeResponse.json();"
+        ],
+        "errorLine": "          const avgScore = judgeData.evaluations?.reduce((sum: number, e: unknown) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);",
+        "after": [
+          "          console.log(`[Process Prompt] ${promptIndex + 1}: Judge evaluation complete, avg score: ${avgScore.toFixed(1)}/10 (${(avgScore / 10 * 100).toFixed(0)}%)`);",
+          "        } else {",
+          "          const judgeError = await judgeResponse.text();",
+          "          console.error(`[Process Prompt] ${promptIndex + 1}: Judge evaluation failed:`, judgeError.substring(0, 200));",
+          "          // Don't fail the whole prompt if judge fails, just log the error"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.75,
+      "categorizationReason": "'e' is of type 'unknown' - may require additional type checking or casting"
+    },
+    "fix": {
+      "analysis": "The error occurs because the variable 'e' in the reduce function is of type 'unknown'. TypeScript requires explicit typing for variables in strongly typed contexts. The fix is to add a type assertion or interface for the evaluation objects.",
+      "fix_type": "add_type_assertion",
+      "changes": [
+        {
+          "line": 981,
+          "old_content": "const avgScore = judgeData.evaluations?.reduce((sum: number, e: unknown) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);",
+          "new_content": "const avgScore = judgeData.evaluations?.reduce((sum: number, e: { score?: number }) => sum + (e.score || 0), 0) / (judgeData.evaluations?.length || 1);"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "This fix assumes the evaluation objects have a numeric 'score' property. If the actual structure is different, the type annotation may need adjustment."
+    },
+    "model": "qwen3-coder:480b",
+    "provider": "cloud (fallback)",
+    "generated_at": "2026-01-04T04:53:02.848Z"
+  },
+  {
+    "error": {
+      "file": "app/api/batch-testing/status/[id]/__tests__/route.test.ts",
+      "line": 56,
+      "column": 7,
+      "code": "TS2345",
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+      "context": {
+        "before": [
+          "    }));",
+          "",
+          "    const { GET } = await import('../route');",
+          "",
+          "    const response = await GET("
+        ],
+        "errorLine": "      makeRequest({ 'X-API-Key': 'wak_testkey' }),",
+        "after": [
+          "      { params: Promise.resolve({ id: 'test-run-1' }) }",
+          "    );",
+          "",
+          "    expect(response.status).toBe(200);",
+          "    const payload = await response.json();"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.85,
+      "categorizationReason": "Argument type is 'unknown' - requires understanding the context to determine the correct type"
+    },
+    "fix": {
+      "analysis": "The error occurs because `makeRequest` returns a value of type `unknown`, but the `GET` function expects a parameter of type `NextRequest`. This mismatch causes TypeScript to throw an error.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 5,
+          "old_content": "function makeRequest(headers?: Record<string, string>) {",
+          "new_content": "interface NextRequest {\n  headers: Headers;\n}\n\nfunction makeRequest(headers?: Record<string, string>): NextRequest {"
+        },
+        {
+          "line": 6,
+          "old_content": "  return {",
+          "new_content": "  return {"
+        },
+        {
+          "line": 7,
+          "old_content": "    headers: new Headers(headers ?? {}),",
+          "new_content": "    headers: new Headers(headers ?? {}),"
+        },
+        {
+          "line": 8,
+          "old_content": "  } as unknown;",
+          "new_content": "  } as NextRequest;"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "Added an interface for `NextRequest` to ensure type compatibility in the test environment."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T04:54:19.444Z"
+  },
+  {
+    "error": {
+      "file": "app/api/training/dataset/route.ts",
+      "line": 314,
+      "column": 22,
+      "code": "TS18046",
+      "message": "'awsMetadata' is of type 'unknown'.",
+      "context": {
+        "before": [
+          "        );",
+          "      }",
+          "",
+          "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+          "      const s3Service = new S3StorageService({"
+        ],
+        "errorLine": "        accessKeyId: awsMetadata.access_key_id,",
+        "after": [
+          "        secretAccessKey: decryptedSecretKey,",
+          "        region: awsMetadata.region,",
+          "        bucket: awsMetadata.s3_bucket,",
+          "      });",
+          ""
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.85,
+      "categorizationReason": "'awsMetadata' is of type 'unknown', which requires inferring or asserting the correct type."
+    },
+    "fix": {
+      "analysis": "The code lacks an import statement for `createClient` from 'supabase', which is required for initializing the Supabase client.",
+      "fix_type": "import_missing_type",
+      "changes": [
+        {
+          "line": 1,
+          "old_content": "",
+          "new_content": "import { createClient } from '@supabase/supabase-js';"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "Ensure the import is added at the top of the file where `createClient` is used."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T04:59:17.655Z"
+  },
+  {
+    "error": {
+      "file": "app/api/training/dataset/route.ts",
+      "line": 316,
+      "column": 17,
+      "code": "TS18046",
+      "message": "'awsMetadata' is of type 'unknown'.",
+      "context": {
+        "before": [
+          "",
+          "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+          "      const s3Service = new S3StorageService({",
+          "        accessKeyId: awsMetadata.access_key_id,",
+          "        secretAccessKey: decryptedSecretKey,"
+        ],
+        "errorLine": "        region: awsMetadata.region,",
+        "after": [
+          "        bucket: awsMetadata.s3_bucket,",
+          "      });",
+          "",
+          "      const buffer = Buffer.from(await normalizedBlob.arrayBuffer());",
+          "      storagePath = await s3Service.uploadDataset(buffer, user.id, datasetId);"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.85,
+      "categorizationReason": "'awsMetadata' is of type 'unknown', which requires inferring or asserting the correct type."
+    },
+    "fix": {
+      "analysis": "The API route handler incorrectly exports GET and POST methods directly instead of using a default-exported object with method properties.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 327,
+          "old_content": "export async function GET(request: Request) {",
+          "new_content": "async function GET(request: Request) {"
+        },
+        {
+          "line": 198,
+          "old_content": "export async function POST(request: Request) {",
+          "new_content": "async function POST(request: Request) {"
+        }
+      ],
+      "additional_changes": [
+        {
+          "file": "pages/api/datasets.ts",
+          "line": 347,
+          "old_content": "",
+          "new_content": "export default {\n  GET,\n  POST\n}"
+        }
+      ],
+      "confidence": 0.95,
+      "notes": "Ensure the file exports a default object with GET and POST methods for proper API routing."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T04:59:43.055Z"
+  },
+  {
+    "error": {
+      "file": "app/api/training/dataset/route.ts",
+      "line": 317,
+      "column": 17,
+      "code": "TS18046",
+      "message": "'awsMetadata' is of type 'unknown'.",
+      "context": {
+        "before": [
+          "      const { S3StorageService } = await import('@/lib/storage/s3-storage-service');",
+          "      const s3Service = new S3StorageService({",
+          "        accessKeyId: awsMetadata.access_key_id,",
+          "        secretAccessKey: decryptedSecretKey,",
+          "        region: awsMetadata.region,"
+        ],
+        "errorLine": "        bucket: awsMetadata.s3_bucket,",
+        "after": [
+          "      });",
+          "",
+          "      const buffer = Buffer.from(await normalizedBlob.arrayBuffer());",
+          "      storagePath = await s3Service.uploadDataset(buffer, user.id, datasetId);",
+          ""
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.85,
+      "categorizationReason": "'awsMetadata' is of type 'unknown', which requires inferring or asserting the correct type."
+    },
+    "fix": {
+      "analysis": "The error occurs because 'awsMetadata' is typed as 'unknown', but the code tries to access its properties (access_key_id, region, s3_bucket) directly. We need to define a proper type for the AWS metadata structure.",
+      "fix_type": "add_interface",
+      "changes": [
+        {
+          "line": 317,
+          "old_content": "      const awsMetadata = awsSecret.metadata.aws as unknown;",
+          "new_content": "      const awsMetadata = awsSecret.metadata.aws as { access_key_id: string; region: string; s3_bucket: string; };"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "This fix assumes the AWS metadata structure has the expected properties. If the structure might be different, consider defining a proper interface and adding validation."
+    },
+    "model": "qwen3-coder:480b",
+    "provider": "cloud (fallback)",
+    "generated_at": "2026-01-04T05:04:44.850Z"
+  },
+  {
+    "error": {
+      "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+      "line": 40,
+      "column": 7,
+      "code": "TS2345",
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+      "context": {
+        "before": [
+          "    }));",
+          "",
+          "    const { POST } = await import('../route');",
+          "",
+          "    const response = await POST("
+        ],
+        "errorLine": "      makeRequest({ step: 1, epoch: 0 }),",
+        "after": [
+          "      { params: Promise.resolve({ jobId: 'job-123' }) }",
+          "    );",
+          "",
+          "    expect(response.status).toBe(401);",
+          "  });"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.75,
+      "categorizationReason": "Argument of type 'unknown' needs to be properly typed before passing it as a parameter of type 'NextRequest'."
+    },
+    "fix": {
+      "analysis": "The `makeRequest` function returns an `unknown` type, but the `POST` route expects a parameter of type `NextRequest`. This mismatch causes TypeScript to throw an error.",
+      "fix_type": "add_type_assertion",
+      "changes": [
+        {
+          "line": 40,
+          "old_content": "makeRequest({ step: 1, epoch: 0 })",
+          "new_content": "makeRequest({ step: 1, epoch: 0 }) as NextRequest"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 0.95,
+      "notes": "Ensure that the `makeRequest` function returns an object compatible with `NextRequest`. If not, consider modifying its return type."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T05:05:20.035Z"
+  },
+  {
+    "error": {
+      "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+      "line": 78,
+      "column": 7,
+      "code": "TS2345",
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+      "context": {
+        "before": [
+          "    }));",
+          "",
+          "    const { POST } = await import('../route');",
+          "",
+          "    const response = await POST("
+        ],
+        "errorLine": "      makeRequest(",
+        "after": [
+          "        { step: 1, epoch: 0 },",
+          "        { Authorization: 'Bearer wrong-token' }",
+          "      ),",
+          "      { params: Promise.resolve({ jobId: 'job-123' }) }",
+          "    );"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.75,
+      "categorizationReason": "Argument of type 'unknown' needs to be properly typed before passing it as a parameter of type 'NextRequest'."
+    },
+    "fix": {
+      "analysis": "The `makeRequest` function returns a value typed as `unknown`, which is being passed to the `POST` function expecting a `NextRequest`. TypeScript cannot guarantee type safety in this case.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 20,
+          "old_content": "return request as unknown;",
+          "new_content": "return request as NextRequest;"
+        }
+      ],
+      "additional_changes": [],
+      "confidence": 1,
+      "notes": "Casting to `NextRequest` is safe here since the object matches the expected shape."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T05:05:36.421Z"
+  },
+  {
+    "error": {
+      "file": "app/api/training/jobs/[jobId]/metrics/__tests__/route.test.ts",
+      "line": 119,
+      "column": 7,
+      "code": "TS2345",
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'NextRequest'.",
+      "context": {
+        "before": [
+          "    }));",
+          "",
+          "    const { POST } = await import('../route');",
+          "",
+          "    const response = await POST("
+        ],
+        "errorLine": "      makeRequest(",
+        "after": [
+          "        {",
+          "          step: 2,",
+          "          epoch: 1.2,",
+          "          loss: 0.5,",
+          "          eval_loss: 0.6,"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.75,
+      "categorizationReason": "Argument of type 'unknown' needs to be properly typed before passing it as a parameter of type 'NextRequest'."
+    },
+    "fix": {
+      "analysis": "The `makeRequest` function returns an object of type `unknown`, which cannot be directly assigned to the `NextRequest` parameter expected by the `POST` function. This causes a TypeScript error when passing the result of `makeRequest` to `POST`. To fix this, we need to ensure that the returned object is correctly typed as `NextRequest`.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 19,
+          "old_content": "return request as unknown;",
+          "new_content": "return request as NextRequest;"
+        }
+      ],
+      "confidence": 0.85,
+      "notes": "This change ensures that the object returned by `makeRequest` is correctly typed as `NextRequest`, resolving the type mismatch error."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T05:06:01.142Z"
+  },
+  {
+    "error": {
+      "file": "app/api/training/local/jobs/route.ts",
+      "line": 365,
+      "column": 47,
+      "code": "TS2339",
+      "message": "Property 'job_token' does not exist on type '{}'.",
+      "context": {
+        "before": [
+          "      clearTimeout(timeoutHandle!);",
+          "      console.log('[LocalTrainingJobs] Job persisted successfully:', job_id);",
+          "",
+          "      // Extract job_token from persisted data",
+          "      const persistedData = (result as { data: unknown }).data;"
+        ],
+        "errorLine": "      const returnedJobToken = persistedData?.job_token;",
+        "after": [
+          "",
+          "      return NextResponse.json({",
+          "        success: true,",
+          "        persisted: true,",
+          "        job_id,"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.8,
+      "categorizationReason": "'job_token' property does not exist on the inferred type, which requires checking and possibly updating the type definition."
+    },
+    "fix": {
+      "analysis": "The issue arises because the code incorrectly uses 'id' as the primary key column name when interacting with the Supabase 'local_training_jobs' table. The table likely expects 'job_id' as its primary key, causing operations like SELECT, INSERT, and UPDATE to fail or misbehave due to incorrect field references.",
+      "fix_type": "modify_code",
+      "changes": [
+        {
+          "line": 102,
+          "old_content": ".eq('id', job_id)",
+          "new_content": ".eq('job_id', job_id)"
+        },
+        {
+          "line": 134,
+          "old_content": ".eq('id', job_id)",
+          "new_content": ".eq('job_id', job_id)"
+        },
+        {
+          "line": 145,
+          "old_content": "{ ...jobData, id: job_id, job_token: finalJobToken }",
+          "new_content": "{ ...jobData, job_id: job_id, job_token: finalJobToken }"
+        }
+      ],
+      "additional_changes": [
+        {
+          "file": "path/to/file.ts",
+          "line": 205,
+          "old_content": ".select('id, model_name, dataset_path, status, progress, current_step, current_epoch, total_steps, total_epochs, loss, eval_loss, best_eval_loss, started_at, completed_at, created_at, error_message'",
+          "new_content": ".select('job_id, model_name, dataset_path, status, progress, current_step, current_epoch, total_steps, total_epochs, loss, eval_loss, best_eval_loss, started_at, completed_at, created_at, error_message'"
+        }
+      ],
+      "confidence": 0.95,
+      "notes": "Ensure that all references to the primary key in Supabase queries are updated from 'id' to 'job_id'. This includes both read and write operations."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T05:07:01.903Z"
+  },
+  {
+    "error": {
+      "file": "app/api/training/stats/route.ts",
+      "line": 84,
+      "column": 22,
+      "code": "TS18046",
+      "message": "'job' is of type 'unknown'.",
+      "context": {
+        "before": [
+          "      );",
+          "    }",
+          "",
+          "    // Count by status",
+          "    const statusCounts = jobs.reduce((acc: Record<string, number>, job: unknown) => {"
+        ],
+        "errorLine": "      const status = job.status || 'unknown';",
+        "after": [
+          "      acc[status] = (acc[status] || 0) + 1;",
+          "      return acc;",
+          "    }, {});",
+          "",
+          "    console.log('[Training Stats API] Stats retrieved:', { totalJobs, statusCounts });"
+        ]
+      },
+      "tier": "TIER2",
+      "confidence": 0.75,
+      "categorizationReason": "'job' is of type 'unknown'. This likely requires adding a type annotation or assertion based on the context in which 'job' is used."
+    },
+    "fix": {
+      "analysis": "The error occurs because the `job` parameter in the reduce function is typed as `unknown`, but we're trying to access `job.status`. We need to properly type the jobs data.",
+      "fix_type": "add_interface",
+      "changes": [
+        {
+          "line": 64,
+          "old_content": "// Get jobs by status",
+          "new_content": "interface JobStatus {\n  status: string;\n}\n\n// Get jobs by status"
+        }
+      ],
+      "additional_changes": [
+        {
+          "file": "app/api/training/stats/route.ts",
+          "line": 78,
+          "old_content": ".select('status')",
+          "new_content": ".select<JobStatus>('status')"
+        }
+      ],
+      "confidence": 0.95,
+      "notes": "Added a type interface for the job status data and specified the return type for the Supabase select query."
+    },
+    "model": "deepseek-r1:32b",
+    "provider": "local",
+    "generated_at": "2026-01-04T05:07:17.881Z"
+  }
+]

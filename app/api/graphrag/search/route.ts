@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { searchService } from '@/lib/graphrag';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 export const runtime = 'nodejs';
 
@@ -35,6 +36,20 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await searchService.search(query, user.id);
+
+    // DEPRECATED: OLD usage tracking system
+    // Now using usage_meters table via increment_root_trace_count()
+    // await recordUsageEvent({
+    //   userId: user.id,
+    //   metricType: 'graphrag_search',
+    //   value: 1,
+    //   resourceType: 'graphrag_query',
+    //   metadata: {
+    //     queryLength: query.length,
+    //     resultsCount: result.nodes?.length || 0,
+    //     limit,
+    //   },
+    // });
 
     return NextResponse.json({
       ...result,

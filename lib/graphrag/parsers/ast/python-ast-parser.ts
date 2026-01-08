@@ -7,14 +7,50 @@ import { parse } from 'py-ast';
 import { BaseASTParser, type ASTParseResult } from './base-ast-parser';
 import type { CodeEntity, CodeRelation, CodeChunk } from '../../types';
 
+// Type definitions for Python AST nodes from py-ast library
+interface PythonASTArg {
+  arg?: string;
+  [key: string]: unknown;
+}
+
+interface PythonASTArgs {
+  args?: PythonASTArg[];
+  [key: string]: unknown;
+}
+
+interface PythonASTBase {
+  nodeType?: string;
+  id?: string;
+  attr?: string;
+  [key: string]: unknown;
+}
+
+interface PythonASTNode {
+  nodeType?: string;
+  name?: string;
+  lineno?: number;
+  end_lineno?: number;
+  body?: PythonASTNode[];
+  bases?: PythonASTBase[];
+  args?: PythonASTArgs;
+  id?: string;
+  func?: PythonASTBase;
+  [key: string]: unknown;
+}
+
+interface PythonAST {
+  body?: PythonASTNode[];
+  [key: string]: unknown;
+}
+
 export class PythonASTParser extends BaseASTParser {
-  private ast: any;
+  private ast!: PythonAST;
 
   async parse(): Promise<ASTParseResult> {
     const startTime = Date.now();
 
     try {
-      this.ast = parse(this.content);
+      this.ast = parse(this.content) as unknown as PythonAST;
     } catch (error) {
       console.error('[PythonASTParser] Parse error:', error);
       throw error;
@@ -24,7 +60,7 @@ export class PythonASTParser extends BaseASTParser {
     const relations: CodeRelation[] = [];
 
     if (this.ast.body) {
-      this.ast.body.forEach((node: any) => {
+      this.ast.body.forEach((node: PythonASTNode) => {
         this.extractFromNode(node, entities, relations);
       });
     }
@@ -45,7 +81,7 @@ export class PythonASTParser extends BaseASTParser {
     };
   }
 
-  private extractFromNode(node: any, entities: CodeEntity[], relations: CodeRelation[]): void {
+  private extractFromNode(node: PythonASTNode, entities: CodeEntity[], relations: CodeRelation[]): void {
     if (!node || !node.nodeType) return;
 
     switch (node.nodeType) {
@@ -68,7 +104,7 @@ export class PythonASTParser extends BaseASTParser {
 
     if (!this.ast.body) return chunks;
 
-    this.ast.body.forEach((node: any) => {
+    this.ast.body.forEach((node: PythonASTNode) => {
       if (node.nodeType === 'FunctionDef') {
         chunks.push(this.createFunctionChunk(node));
       } else if (node.nodeType === 'ClassDef') {
@@ -79,7 +115,7 @@ export class PythonASTParser extends BaseASTParser {
     return chunks;
   }
 
-  private extractFunction(node: any, entities: CodeEntity[]): void {
+  private extractFunction(node: PythonASTNode, entities: CodeEntity[]): void {
     const lineno = node.lineno || 0;
     const endLineno = this.findNodeEndLine(node);
 
@@ -93,7 +129,7 @@ export class PythonASTParser extends BaseASTParser {
     });
   }
 
-  private extractClass(node: any, entities: CodeEntity[], relations: CodeRelation[]): void {
+  private extractClass(node: PythonASTNode, entities: CodeEntity[], relations: CodeRelation[]): void {
     const lineno = node.lineno || 0;
     const endLineno = this.findNodeEndLine(node);
 
@@ -109,7 +145,7 @@ export class PythonASTParser extends BaseASTParser {
     entities.push(classEntity);
 
     if (node.bases && node.bases.length > 0) {
-      node.bases.forEach((base: any) => {
+      node.bases.forEach((base: PythonASTBase) => {
         const baseName = this.getBaseName(base);
         if (baseName) {
           relations.push({
@@ -132,7 +168,7 @@ export class PythonASTParser extends BaseASTParser {
     const imports: string[] = [];
     if (!this.ast.body) return imports;
 
-    this.ast.body.forEach((node: any) => {
+    this.ast.body.forEach((node: PythonASTNode) => {
       if (node.nodeType === 'Import' || node.nodeType === 'ImportFrom') {
         const lineno = node.lineno || 0;
         const importLine = this.content.split('\n')[lineno - 1];
@@ -153,7 +189,7 @@ export class PythonASTParser extends BaseASTParser {
     return [];
   }
 
-  private findNodeEndLine(node: any): number {
+  private findNodeEndLine(node: PythonASTNode): number {
     if (node.end_lineno) {
       return node.end_lineno;
     }
@@ -166,31 +202,31 @@ export class PythonASTParser extends BaseASTParser {
     return node.lineno || 0;
   }
 
-  private generateFunctionSignature(node: any): string {
+  private generateFunctionSignature(node: PythonASTNode): string {
     const params = node.args?.args || [];
-    const paramNames = params.map((arg: any) => arg.arg || 'param').join(', ');
+    const paramNames = params.map((arg: PythonASTArg) => arg.arg || 'param').join(', ');
     return `${node.name || 'anonymous'}(${paramNames})`;
   }
 
-  private extractClassMembers(node: any): string[] {
+  private extractClassMembers(node: PythonASTNode): string[] {
     if (!node.body || !Array.isArray(node.body)) {
       return [];
     }
 
     return node.body
-      .filter((member: any) => member.nodeType === 'FunctionDef')
-      .map((member: any) => member.name || 'unknown')
+      .filter((member: PythonASTNode) => member.nodeType === 'FunctionDef')
+      .map((member: PythonASTNode) => member.name || 'unknown')
       .filter((name: string) => name !== 'unknown');
   }
 
-  private getBaseName(base: any): string | null {
+  private getBaseName(base: PythonASTBase): string | null {
     if (base.nodeType === 'Name' && base.id) {
       return base.id;
     }
     return null;
   }
 
-  private createFunctionChunk(node: any): CodeChunk {
+  private createFunctionChunk(node: PythonASTNode): CodeChunk {
     const lineno = node.lineno || 0;
     const endLineno = this.findNodeEndLine(node);
 
@@ -207,7 +243,7 @@ export class PythonASTParser extends BaseASTParser {
     };
   }
 
-  private createClassChunk(node: any): CodeChunk {
+  private createClassChunk(node: PythonASTNode): CodeChunk {
     const lineno = node.lineno || 0;
     const endLineno = this.findNodeEndLine(node);
 
@@ -224,10 +260,10 @@ export class PythonASTParser extends BaseASTParser {
     };
   }
 
-  private extractDependencies(node: any): string[] {
+  private extractDependencies(node: PythonASTNode): string[] {
     const deps: string[] = [];
 
-    const traverse = (n: any) => {
+    const traverse = (n: PythonASTNode) => {
       if (!n) return;
 
       if (n.nodeType === 'Call' && n.func) {
@@ -239,7 +275,7 @@ export class PythonASTParser extends BaseASTParser {
       }
 
       if (Array.isArray(n.body)) {
-        n.body.forEach((child: any) => traverse(child));
+        n.body.forEach((child: PythonASTNode) => traverse(child));
       }
     };
 

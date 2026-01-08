@@ -1,5 +1,5 @@
 // Test Node SDK predictions client
-const { FinetuneLabClient } = require('./dist/index.js');
+import { FinetuneLabClient } from './dist/index.js';
 
 const API_KEY = 'wak_7ug7yOXttPvAlEnCDEWPfina4eShUvZd';
 const BASE_URL = 'http://localhost:3000';

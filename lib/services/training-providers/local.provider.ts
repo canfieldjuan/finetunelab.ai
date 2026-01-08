@@ -160,7 +160,7 @@ export class LocalTrainingProvider {
         if (request && request.config) {
           // Check if already normalized (has 'lora' key at top level)
           // ScriptBuilder output always includes 'lora' key
-          if ((request.config as any).lora) {
+          if ((request.config as unknown).lora) {
             console.log('[LocalProvider] Config appears already normalized, skipping normalization');
             payload = request;
           } else {

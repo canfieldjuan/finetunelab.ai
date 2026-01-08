@@ -26,7 +26,7 @@ export interface StorageResult {
 /**
  * Check if we should use Supabase Storage
  */
-export function useSupabaseStorage(): boolean {
+export function isSupabaseStorageEnabled(): boolean {
   // Explicit env var takes priority
   if (process.env.EXPORT_USE_SUPABASE_STORAGE === 'true') {
     return true;
@@ -72,7 +72,7 @@ export async function saveExport(
 ): Promise<StorageResult> {
   const buffer = typeof content === 'string' ? Buffer.from(content) : content;
 
-  if (useSupabaseStorage()) {
+  if (isSupabaseStorageEnabled()) {
     return saveToSupabase(buffer, filename);
   }
   return saveToFilesystem(buffer, filename, localBasePath);
@@ -223,7 +223,7 @@ export async function exportExists(filePath: string): Promise<boolean> {
  * Get storage info for logging (safe, no sensitive data)
  */
 export function getStorageInfo(): string {
-  if (useSupabaseStorage()) {
+  if (isSupabaseStorageEnabled()) {
     return `Supabase Storage (bucket: ${SUPABASE_STORAGE_BUCKET})`;
   }
   return `Local filesystem (${process.env.EXPORT_STORAGE_PATH || '/tmp/exports'})`;

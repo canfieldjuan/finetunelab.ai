@@ -23,12 +23,24 @@ interface TrainingMetricsArgs {
   offset?: number;
 }
 
+interface JobConfigMetadata {
+  job_name?: string;
+  jobName?: string;
+}
+
+interface JobConfig {
+  metadata?: JobConfigMetadata;
+  job_name?: string;
+  jobName?: string;
+  [key: string]: unknown;
+}
+
 export async function executeTrainingMetrics(
   args: Record<string, unknown>,
   userId: string,
   authHeader?: string,
-  authClient?: any
-): Promise<any> {
+  authClient?: unknown
+): Promise<unknown> {
   console.log('[TrainingMetrics] Executing:', args.operation);
 
   const { operation, jobId, status, limit, offset } = args as unknown as TrainingMetricsArgs;
@@ -61,7 +73,7 @@ export async function executeTrainingMetrics(
 /**
  * Get current training job status
  */
-async function getJobStatus(jobId: string, userId: string, authHeader: string): Promise<any> {
+async function getJobStatus(jobId: string, userId: string, authHeader: string): Promise<unknown> {
   console.log('[TrainingMetrics] Getting status for job:', jobId);
 
   try {
@@ -149,7 +161,7 @@ async function getJobStatus(jobId: string, userId: string, authHeader: string): 
 /**
  * Get detailed metrics for a training job
  */
-async function getJobMetrics(jobId: string, userId: string, authHeader: string): Promise<any> {
+async function getJobMetrics(jobId: string, userId: string, authHeader: string): Promise<unknown> {
   console.log('[TrainingMetrics] Getting metrics for job:', jobId);
 
   try {
@@ -247,7 +259,7 @@ async function listJobs(
   limit: number = 50,
   offset: number = 0,
   authHeader?: string
-): Promise<any> {
+): Promise<unknown> {
   console.log('[TrainingMetrics] Listing jobs for user:', userId, { status, limit, offset });
 
   try {
@@ -282,7 +294,7 @@ async function listJobs(
       success: true,
       jobs: jobs?.map(job => {
         // Extract job_name from config if available
-        const config = job.config as any;
+        const config = job.config as JobConfig;
         const job_name = config?.metadata?.job_name ||
                         config?.metadata?.jobName ||
                         config?.job_name ||
@@ -330,7 +342,7 @@ async function listJobs(
 /**
  * Get detailed job configuration and hyperparameters
  */
-async function getJobDetails(jobId: string, userId: string, authHeader: string): Promise<any> {
+async function getJobDetails(jobId: string, userId: string, authHeader: string): Promise<unknown> {
   console.log('[TrainingMetrics] Getting details for job:', jobId);
 
   try {
@@ -353,7 +365,7 @@ async function getJobDetails(jobId: string, userId: string, authHeader: string):
     }
 
     // Extract job_name from config if available
-    const config = job.config as any;
+    const config = job.config as JobConfig;
     const job_name = config?.metadata?.job_name ||
                     config?.metadata?.jobName ||
                     config?.job_name ||

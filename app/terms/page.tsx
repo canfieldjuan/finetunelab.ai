@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -104,7 +105,7 @@ export default function TermsPage() {
               <li>Charges are billed monthly in arrears</li>
               <li>Payments are processed via Stripe or approved payment processor</li>
               <li>All fees are in USD unless otherwise stated</li>
-              <li>Taxes are your responsibility unless we're legally required to collect them</li>
+              <li>Taxes are your responsibility unless we&apos;re legally required to collect them</li>
             </ul>
 
             <h3 className="text-xl font-semibold mb-3 mt-6">5.3 Refunds</h3>

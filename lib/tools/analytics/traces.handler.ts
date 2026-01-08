@@ -13,17 +13,18 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Use placeholder values during build when env vars aren't available
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 interface GetTracesArgs {
   operation: 'get_traces' | 'get_trace_details' | 'compare_traces' |
-             'get_trace_summary' | 'get_rag_metrics' | 'get_performance_stats';
+             'get_trace_summary' | 'get_rag_metrics' | 'get_performance_stats' |
+             'get_traces_by_conversations';
 
   // Filtering
   conversation_id?: string;
+  conversation_ids?: string[];  // For batch conversation trace lookup
   trace_id?: string;
   message_id?: string;
   session_tag?: string;
@@ -60,12 +61,137 @@ interface GetTracesArgs {
   include_input_output?: boolean;
 }
 
+// Type definitions for trace objects
+interface PerformanceMetrics {
+  queue_time_ms?: number;
+  inference_time_ms?: number;
+  network_time_ms?: number;
+  tokens_per_second?: number;
+  streaming_enabled?: boolean;
+}
+
+interface RagMetrics {
+  rag_graph_used?: boolean;
+  rag_nodes_retrieved?: number;
+  rag_chunks_used?: number;
+  rag_relevance_score?: number | null;
+  rag_answer_grounded?: boolean;
+  retrieval_latency_ms?: number;
+  context_tokens?: number;
+}
+
+interface QualityMetrics {
+  judgments?: Array<{ passed: boolean; [key: string]: unknown }>;
+  user_rating?: number;
+  user_notes?: string;
+  groundedness_score?: number | null;
+}
+
+interface ErrorInfo {
+  error_message?: string;
+  error_type?: string;
+}
+
+interface TraceObject {
+  trace_id?: string;
+  span_id?: string;
+  span_name?: string;
+  operation_type?: string;
+  status?: 'pending' | 'completed' | 'error';
+  start_time?: string;
+  duration_ms?: number;
+  ttft_ms?: number | null;
+  model_name?: string;
+  model_provider?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  cost_usd?: number;
+  conversation_id?: string;
+  message_id?: string;
+  session_tag?: string;
+  performance?: PerformanceMetrics;
+  rag_metrics?: RagMetrics;
+  quality?: QualityMetrics;
+  error?: ErrorInfo;
+  input_data?: unknown;
+  output_data?: unknown;
+  rag_graph_used?: boolean;
+  groundedness_score?: number | null;
+  retrieval_latency_ms?: number;
+  rag_relevance_score?: number | null;
+  rag_answer_grounded?: boolean;
+  rag_nodes_retrieved?: number;
+  rag_chunks_used?: number;
+  context_tokens?: number;
+  queue_time_ms?: number;
+  inference_time_ms?: number;
+  network_time_ms?: number;
+  tokens_per_second?: number;
+  streaming_enabled?: boolean;
+  judgments?: Array<{ passed: boolean; [key: string]: unknown }>;
+  user_rating?: number;
+  user_notes?: string;
+  error_message?: string;
+  error_type?: string;
+  children?: TraceObject[];
+  [key: string]: unknown;
+}
+
+interface FormattedTrace {
+  trace_id?: string;
+  span_id?: string;
+  span_name?: string;
+  operation_type?: string;
+  status?: 'pending' | 'completed' | 'error';
+  start_time?: string;
+  duration_ms?: number;
+  ttft_ms?: number | null;
+  model_name?: string;
+  model_provider?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  cost_usd?: number;
+  conversation_id?: string;
+  message_id?: string;
+  session_tag?: string;
+  performance?: PerformanceMetrics;
+  rag_metrics?: RagMetrics;
+  quality?: QualityMetrics;
+  error?: ErrorInfo;
+  input_data?: unknown;
+  output_data?: unknown;
+  children?: FormattedTrace[];
+  [key: string]: unknown;
+}
+
+type GetTracesResult =
+  | { success: true; traces: FormattedTrace[]; total_count: number; filters_applied: Record<string, unknown>; pagination: Record<string, unknown> }
+  | { error: string; details?: string };
+
+type GetTraceDetailsResult =
+  | { success: true; trace: FormattedTrace; summary?: Record<string, unknown> }
+  | { error: string; details?: string };
+
+type ComparisonResult =
+  | {
+      success: true;
+      traces?: unknown[];
+      comparison?: Record<string, unknown>;
+      summary?: Record<string, unknown>;
+      rag_metrics?: Record<string, unknown>;
+      performance_stats?: Record<string, unknown>;
+      filters_applied?: Record<string, unknown>;
+    }
+  | { error: string; details?: string };
+
 export async function executeGetTraces(
   args: Record<string, unknown>,
   userId: string,
   authHeader?: string,
-  authClient?: any
-): Promise<any> {
+  authClient?: unknown
+): Promise<unknown> {
   console.log('[GetTraces] Executing:', args.operation);
 
   const typedArgs = args as unknown as GetTracesArgs;
@@ -90,6 +216,9 @@ export async function executeGetTraces(
       case 'get_performance_stats':
         return await getPerformanceStats(typedArgs, userId, authHeader!);
 
+      case 'get_traces_by_conversations':
+        return await getTracesByConversations(typedArgs, userId, authHeader!);
+
       default:
         return { error: `Unknown operation: ${typedArgs.operation}` };
     }
@@ -104,7 +233,7 @@ export async function executeGetTraces(
 /**
  * Get filtered traces
  */
-async function getTraces(args: GetTracesArgs, userId: string, authHeader: string): Promise<any> {
+async function getTraces(args: GetTracesArgs, userId: string, authHeader: string): Promise<GetTracesResult> {
   console.log('[GetTraces] Fetching traces with filters:', {
     conversation_id: args.conversation_id,
     operation_type: args.operation_type,
@@ -146,20 +275,20 @@ async function getTraces(args: GetTracesArgs, userId: string, authHeader: string
 
     // Filter by session_tag
     if (args.session_tag) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.session_tag === args.session_tag
       );
     }
 
     // Filter by model
     if (args.model_name) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.model_name?.includes(args.model_name!)
       );
     }
 
     if (args.model_provider) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.model_provider === args.model_provider
       );
     }
@@ -167,59 +296,59 @@ async function getTraces(args: GetTracesArgs, userId: string, authHeader: string
     // Filter by time range
     if (args.start_date) {
       const startTime = new Date(args.start_date).getTime();
-      filteredTraces = filteredTraces.filter((t: any) =>
-        new Date(t.start_time).getTime() >= startTime
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
+        t.start_time && new Date(t.start_time).getTime() >= startTime
       );
     }
 
     if (args.end_date) {
       const endTime = new Date(args.end_date).getTime();
-      filteredTraces = filteredTraces.filter((t: any) =>
-        new Date(t.start_time).getTime() <= endTime
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
+        t.start_time && new Date(t.start_time).getTime() <= endTime
       );
     }
 
     // Filter by performance
     if (args.min_duration_ms !== undefined) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.duration_ms && t.duration_ms >= args.min_duration_ms!
       );
     }
 
     if (args.max_duration_ms !== undefined) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.duration_ms && t.duration_ms <= args.max_duration_ms!
       );
     }
 
     if (args.min_cost_usd !== undefined) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.cost_usd && t.cost_usd >= args.min_cost_usd!
       );
     }
 
     if (args.streaming_only) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.streaming_enabled === true
       );
     }
 
     // Filter by RAG
     if (args.rag_used !== undefined) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.rag_graph_used === args.rag_used
       );
     }
 
     if (args.min_groundedness_score !== undefined) {
-      filteredTraces = filteredTraces.filter((t: any) =>
+      filteredTraces = filteredTraces.filter((t: TraceObject) =>
         t.groundedness_score && t.groundedness_score >= args.min_groundedness_score!
       );
     }
 
     // Format response for LLM
-    const formattedTraces = filteredTraces.map((trace: any) => {
-      const formatted: any = {
+    const formattedTraces = filteredTraces.map((trace: TraceObject) => {
+      const formatted: FormattedTrace = {
         trace_id: trace.trace_id,
         span_id: trace.span_id,
         span_name: trace.span_name,
@@ -327,7 +456,7 @@ async function getTraces(args: GetTracesArgs, userId: string, authHeader: string
 /**
  * Get single trace with hierarchy
  */
-async function getTraceDetails(args: GetTracesArgs, userId: string, authHeader: string): Promise<any> {
+async function getTraceDetails(args: GetTracesArgs, userId: string, authHeader: string): Promise<GetTraceDetailsResult> {
   console.log('[GetTraces] Getting trace details:', args.trace_id);
 
   if (!args.trace_id) {
@@ -380,7 +509,7 @@ async function getTraceDetails(args: GetTracesArgs, userId: string, authHeader: 
 /**
  * Compare multiple traces
  */
-async function compareTraces(args: GetTracesArgs, userId: string, authHeader: string): Promise<any> {
+async function compareTraces(args: GetTracesArgs, userId: string, authHeader: string): Promise<ComparisonResult> {
   console.log('[GetTraces] Comparing traces:', args.trace_ids);
 
   if (!args.trace_ids || args.trace_ids.length < 2) {
@@ -412,7 +541,7 @@ async function compareTraces(args: GetTracesArgs, userId: string, authHeader: st
     // Compare by specified metric
     const compareBy = args.compare_by || 'duration';
 
-    const comparison: any = {
+    const comparison: Record<string, unknown> = {
       traces_compared: traces.length,
       compare_by: compareBy,
       traces: []
@@ -420,36 +549,36 @@ async function compareTraces(args: GetTracesArgs, userId: string, authHeader: st
 
     switch (compareBy) {
       case 'duration':
-        comparison.traces = traces.map((t: any) => ({
+        comparison.traces = traces.map((t: TraceObject) => ({
           trace_id: t.trace_id,
           span_name: t.span_name,
           duration_ms: t.duration_ms,
           ttft_ms: t.ttft_ms,
           tokens_per_second: t.tokens_per_second,
           model_name: t.model_name
-        })).sort((a: any, b: any) => (b.duration_ms || 0) - (a.duration_ms || 0));
+        })).sort((a: TraceObject, b: TraceObject) => (b.duration_ms || 0) - (a.duration_ms || 0));
 
-        comparison.fastest = comparison.traces[comparison.traces.length - 1];
-        comparison.slowest = comparison.traces[0];
-        comparison.avg_duration_ms = average(traces.map((t: any) => t.duration_ms || 0));
+        comparison.fastest = (comparison.traces as unknown[])[((comparison.traces as unknown[]).length - 1)];
+        comparison.slowest = (comparison.traces as unknown[])[0];
+        comparison.avg_duration_ms = average(traces.map((t: TraceObject) => t.duration_ms || 0));
         break;
 
       case 'tokens':
-        comparison.traces = traces.map((t: any) => ({
+        comparison.traces = traces.map((t: TraceObject) => ({
           trace_id: t.trace_id,
           span_name: t.span_name,
           input_tokens: t.input_tokens,
           output_tokens: t.output_tokens,
           total_tokens: t.total_tokens,
           model_name: t.model_name
-        })).sort((a: any, b: any) => (b.total_tokens || 0) - (a.total_tokens || 0));
+        })).sort((a: TraceObject, b: TraceObject) => (b.total_tokens || 0) - (a.total_tokens || 0));
 
-        comparison.total_tokens_sum = sum(traces.map((t: any) => t.total_tokens || 0));
-        comparison.avg_tokens = average(traces.map((t: any) => t.total_tokens || 0));
+        comparison.total_tokens_sum = sum(traces.map((t: TraceObject) => t.total_tokens || 0));
+        comparison.avg_tokens = average(traces.map((t: TraceObject) => t.total_tokens || 0));
         break;
 
       case 'cost':
-        comparison.traces = traces.map((t: any) => ({
+        comparison.traces = traces.map((t: TraceObject) => ({
           trace_id: t.trace_id,
           span_name: t.span_name,
           cost_usd: t.cost_usd,
@@ -458,33 +587,33 @@ async function compareTraces(args: GetTracesArgs, userId: string, authHeader: st
             ? (t.cost_usd / t.total_tokens) * 1000
             : null,
           model_name: t.model_name
-        })).sort((a: any, b: any) => (b.cost_usd || 0) - (a.cost_usd || 0));
+        })).sort((a: TraceObject, b: TraceObject) => (b.cost_usd || 0) - (a.cost_usd || 0));
 
-        comparison.total_cost_usd = sum(traces.map((t: any) => t.cost_usd || 0));
-        comparison.avg_cost_usd = average(traces.map((t: any) => t.cost_usd || 0));
-        comparison.most_expensive = comparison.traces[0];
-        comparison.least_expensive = comparison.traces[comparison.traces.length - 1];
+        comparison.total_cost_usd = sum(traces.map((t: TraceObject) => t.cost_usd || 0));
+        comparison.avg_cost_usd = average(traces.map((t: TraceObject) => t.cost_usd || 0));
+        comparison.most_expensive = (comparison.traces as unknown[])[0];
+        comparison.least_expensive = (comparison.traces as unknown[])[(comparison.traces as unknown[]).length - 1];
         break;
 
       case 'quality':
-        comparison.traces = traces.map((t: any) => ({
+        comparison.traces = traces.map((t: TraceObject) => ({
           trace_id: t.trace_id,
           span_name: t.span_name,
           groundedness_score: t.groundedness_score,
           user_rating: t.user_rating,
-          judgments_passed: t.judgments?.filter((j: any) => j.passed).length || 0,
+          judgments_passed: t.judgments?.filter((j: { passed: boolean; [key: string]: unknown }) => j.passed).length || 0,
           judgments_total: t.judgments?.length || 0,
           model_name: t.model_name
         }));
 
         comparison.avg_groundedness = average(
-          traces.map((t: any) => t.groundedness_score).filter((s: any) => s !== null)
+          traces.filter((t: TraceObject) => t.groundedness_score !== null).map((t: TraceObject) => t.groundedness_score || 0)
         );
         break;
 
       case 'rag_performance':
-        const ragTraces = traces.filter((t: any) => t.rag_graph_used);
-        comparison.traces = ragTraces.map((t: any) => ({
+        const ragTraces = traces.filter((t: TraceObject) => t.rag_graph_used);
+        comparison.traces = ragTraces.map((t: TraceObject) => ({
           trace_id: t.trace_id,
           span_name: t.span_name,
           rag_nodes_retrieved: t.rag_nodes_retrieved,
@@ -496,10 +625,10 @@ async function compareTraces(args: GetTracesArgs, userId: string, authHeader: st
         }));
 
         comparison.avg_retrieval_latency_ms = average(
-          ragTraces.map((t: any) => t.retrieval_latency_ms || 0)
+          ragTraces.map((t: TraceObject) => t.retrieval_latency_ms || 0)
         );
         comparison.avg_relevance_score = average(
-          ragTraces.map((t: any) => t.rag_relevance_score).filter((s: any) => s !== null)
+          ragTraces.filter((t: TraceObject) => t.rag_relevance_score !== null).map((t: TraceObject) => t.rag_relevance_score || 0)
         );
         break;
     }
@@ -520,14 +649,14 @@ async function compareTraces(args: GetTracesArgs, userId: string, authHeader: st
 /**
  * Get aggregate trace summary
  */
-async function getTraceSummary(args: GetTracesArgs, userId: string, authHeader: string): Promise<any> {
+async function getTraceSummary(args: GetTracesArgs, userId: string, authHeader: string): Promise<ComparisonResult> {
   console.log('[GetTraces] Getting trace summary');
 
   try {
     // Get traces with same filters as get_traces
     const tracesResult = await getTraces(args, userId, authHeader);
 
-    if (!tracesResult.success) {
+    if ('error' in tracesResult) {
       return tracesResult;
     }
 
@@ -549,9 +678,9 @@ async function getTraceSummary(args: GetTracesArgs, userId: string, authHeader: 
 
       // Status breakdown
       status_breakdown: {
-        completed: traces.filter((t: any) => t.status === 'completed').length,
-        pending: traces.filter((t: any) => t.status === 'pending').length,
-        error: traces.filter((t: any) => t.status === 'error').length
+        completed: traces.filter((t: TraceObject) => t.status === 'completed').length,
+        pending: traces.filter((t: TraceObject) => t.status === 'pending').length,
+        error: traces.filter((t: TraceObject) => t.status === 'error').length
       },
 
       // Operation types
@@ -562,53 +691,53 @@ async function getTraceSummary(args: GetTracesArgs, userId: string, authHeader: 
 
       // Timing statistics
       timing: {
-        avg_duration_ms: average(traces.map((t: any) => t.duration_ms || 0)),
-        min_duration_ms: Math.min(...traces.map((t: any) => t.duration_ms || 0)),
-        max_duration_ms: Math.max(...traces.map((t: any) => t.duration_ms || 0)),
+        avg_duration_ms: average(traces.map((t: TraceObject) => t.duration_ms || 0)),
+        min_duration_ms: Math.min(...traces.map((t: TraceObject) => t.duration_ms || 0)),
+        max_duration_ms: Math.max(...traces.map((t: TraceObject) => t.duration_ms || 0)),
         avg_ttft_ms: average(
-          traces.filter((t: any) => t.ttft_ms !== null).map((t: any) => t.ttft_ms)
+          traces.filter((t: TraceObject) => t.ttft_ms !== null).map((t: TraceObject) => t.ttft_ms || 0)
         )
       },
 
       // Token statistics
       tokens: {
-        total_input_tokens: sum(traces.map((t: any) => t.input_tokens || 0)),
-        total_output_tokens: sum(traces.map((t: any) => t.output_tokens || 0)),
-        total_tokens: sum(traces.map((t: any) => t.total_tokens || 0)),
-        avg_tokens_per_trace: average(traces.map((t: any) => t.total_tokens || 0))
+        total_input_tokens: sum(traces.map((t: TraceObject) => t.input_tokens || 0)),
+        total_output_tokens: sum(traces.map((t: TraceObject) => t.output_tokens || 0)),
+        total_tokens: sum(traces.map((t: TraceObject) => t.total_tokens || 0)),
+        avg_tokens_per_trace: average(traces.map((t: TraceObject) => t.total_tokens || 0))
       },
 
       // Cost statistics
       cost: {
-        total_cost_usd: sum(traces.map((t: any) => t.cost_usd || 0)),
-        avg_cost_per_trace: average(traces.map((t: any) => t.cost_usd || 0)),
+        total_cost_usd: sum(traces.map((t: TraceObject) => t.cost_usd || 0)),
+        avg_cost_per_trace: average(traces.map((t: TraceObject) => t.cost_usd || 0)),
         cost_by_model: groupBySum(traces, 'model_name', 'cost_usd')
       },
 
       // RAG statistics
       rag: {
-        traces_with_rag: traces.filter((t: any) => t.rag_metrics?.rag_graph_used).length,
+        traces_with_rag: traces.filter((t: TraceObject) => t.rag_metrics?.rag_graph_used).length,
         avg_rag_relevance: average(
           traces
-            .filter((t: any) => t.rag_metrics?.rag_relevance_score !== null)
-            .map((t: any) => t.rag_metrics.rag_relevance_score)
+            .filter((t: TraceObject) => t.rag_metrics?.rag_relevance_score !== null)
+            .map((t: TraceObject) => t.rag_metrics?.rag_relevance_score || 0)
         ),
         avg_retrieval_latency_ms: average(
           traces
-            .filter((t: any) => t.rag_metrics?.retrieval_latency_ms)
-            .map((t: any) => t.rag_metrics.retrieval_latency_ms)
+            .filter((t: TraceObject) => t.rag_metrics?.retrieval_latency_ms)
+            .map((t: TraceObject) => t.rag_metrics?.retrieval_latency_ms || 0)
         )
       },
 
       // Performance
       performance: {
-        streaming_traces: traces.filter((t: any) =>
+        streaming_traces: traces.filter((t: TraceObject) =>
           t.performance?.streaming_enabled === true
         ).length,
         avg_tokens_per_second: average(
           traces
-            .filter((t: any) => t.performance?.tokens_per_second)
-            .map((t: any) => t.performance.tokens_per_second)
+            .filter((t: TraceObject) => t.performance?.tokens_per_second)
+            .map((t: TraceObject) => t.performance?.tokens_per_second || 0)
         )
       },
 
@@ -622,7 +751,7 @@ async function getTraceSummary(args: GetTracesArgs, userId: string, authHeader: 
     return {
       success: true,
       summary,
-      filters_applied: tracesResult.filters_applied
+      filters_applied: 'filters_applied' in tracesResult ? tracesResult.filters_applied : undefined
     };
 
   } catch (error) {
@@ -636,7 +765,7 @@ async function getTraceSummary(args: GetTracesArgs, userId: string, authHeader: 
 /**
  * Get RAG-specific metrics
  */
-async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: string): Promise<any> {
+async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: string): Promise<ComparisonResult> {
   console.log('[GetTraces] Getting RAG metrics');
 
   try {
@@ -644,11 +773,11 @@ async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: st
     const ragArgs = { ...args, rag_used: true };
     const tracesResult = await getTraces(ragArgs, userId, authHeader);
 
-    if (!tracesResult.success) {
+    if ('error' in tracesResult) {
       return tracesResult;
     }
 
-    const ragTraces = tracesResult.traces.filter((t: any) => t.rag_metrics);
+    const ragTraces = tracesResult.traces.filter((t: TraceObject) => t.rag_metrics);
 
     if (ragTraces.length === 0) {
       return {
@@ -666,13 +795,13 @@ async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: st
       // Retrieval statistics
       retrieval: {
         avg_nodes_retrieved: average(
-          ragTraces.map((t: any) => t.rag_metrics.rag_nodes_retrieved || 0)
+          ragTraces.map((t: TraceObject) => t.rag_metrics?.rag_nodes_retrieved || 0)
         ),
         avg_chunks_used: average(
-          ragTraces.map((t: any) => t.rag_metrics.rag_chunks_used || 0)
+          ragTraces.map((t: TraceObject) => t.rag_metrics?.rag_chunks_used || 0)
         ),
         avg_retrieval_latency_ms: average(
-          ragTraces.map((t: any) => t.rag_metrics.retrieval_latency_ms || 0)
+          ragTraces.map((t: TraceObject) => t.rag_metrics?.retrieval_latency_ms || 0)
         )
       },
 
@@ -680,20 +809,20 @@ async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: st
       quality: {
         avg_relevance_score: average(
           ragTraces
-            .filter((t: any) => t.rag_metrics.rag_relevance_score !== null)
-            .map((t: any) => t.rag_metrics.rag_relevance_score)
+            .filter((t: TraceObject) => t.rag_metrics?.rag_relevance_score !== null)
+            .map((t: TraceObject) => t.rag_metrics?.rag_relevance_score || 0)
         ),
         avg_groundedness_score: average(
           ragTraces
-            .filter((t: any) => t.quality?.groundedness_score !== null)
-            .map((t: any) => t.quality.groundedness_score)
+            .filter((t: TraceObject) => t.quality?.groundedness_score !== null)
+            .map((t: TraceObject) => t.quality?.groundedness_score || 0)
         ),
-        grounded_answers: ragTraces.filter((t: any) =>
-          t.rag_metrics.rag_answer_grounded === true
+        grounded_answers: ragTraces.filter((t: TraceObject) =>
+          t.rag_metrics?.rag_answer_grounded === true
         ).length,
         grounded_percentage: (
-          ragTraces.filter((t: any) =>
-            t.rag_metrics.rag_answer_grounded === true
+          ragTraces.filter((t: TraceObject) =>
+            t.rag_metrics?.rag_answer_grounded === true
           ).length / ragTraces.length
         ) * 100
       },
@@ -701,21 +830,21 @@ async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: st
       // Context usage
       context: {
         avg_context_tokens: average(
-          ragTraces.map((t: any) => t.rag_metrics.context_tokens || 0)
+          ragTraces.map((t: TraceObject) => t.rag_metrics?.context_tokens || 0)
         ),
         total_context_tokens: sum(
-          ragTraces.map((t: any) => t.rag_metrics.context_tokens || 0)
+          ragTraces.map((t: TraceObject) => t.rag_metrics?.context_tokens || 0)
         )
       },
 
       // Performance impact
       performance_impact: {
         avg_total_duration_ms: average(
-          ragTraces.map((t: any) => t.duration_ms || 0)
+          ragTraces.map((t: TraceObject) => t.duration_ms || 0)
         ),
         retrieval_latency_percentage: (
-          average(ragTraces.map((t: any) => t.rag_metrics.retrieval_latency_ms || 0)) /
-          average(ragTraces.map((t: any) => t.duration_ms || 1))
+          average(ragTraces.map((t: TraceObject) => t.rag_metrics?.retrieval_latency_ms || 0)) /
+          average(ragTraces.map((t: TraceObject) => t.duration_ms || 1))
         ) * 100
       }
     };
@@ -723,7 +852,7 @@ async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: st
     return {
       success: true,
       rag_metrics: ragMetrics,
-      filters_applied: tracesResult.filters_applied
+      filters_applied: 'filters_applied' in tracesResult ? tracesResult.filters_applied : undefined
     };
 
   } catch (error) {
@@ -737,13 +866,13 @@ async function getRagMetrics(args: GetTracesArgs, userId: string, authHeader: st
 /**
  * Get performance statistics
  */
-async function getPerformanceStats(args: GetTracesArgs, userId: string, authHeader: string): Promise<any> {
+async function getPerformanceStats(args: GetTracesArgs, userId: string, authHeader: string): Promise<ComparisonResult> {
   console.log('[GetTraces] Getting performance stats');
 
   try {
     const tracesResult = await getTraces(args, userId, authHeader);
 
-    if (!tracesResult.success) {
+    if ('error' in tracesResult) {
       return tracesResult;
     }
 
@@ -760,8 +889,8 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
     }
 
     // Separate streaming vs non-streaming
-    const streamingTraces = traces.filter((t: any) => t.performance?.streaming_enabled);
-    const nonStreamingTraces = traces.filter((t: any) =>
+    const streamingTraces = traces.filter((t: TraceObject) => t.performance?.streaming_enabled);
+    const nonStreamingTraces = traces.filter((t: TraceObject) =>
       t.performance?.streaming_enabled === false || !t.performance?.streaming_enabled
     );
 
@@ -770,12 +899,12 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
 
       // Overall timing
       timing: {
-        avg_duration_ms: average(traces.map((t: any) => t.duration_ms || 0)),
-        p50_duration_ms: percentile(traces.map((t: any) => t.duration_ms || 0), 50),
-        p95_duration_ms: percentile(traces.map((t: any) => t.duration_ms || 0), 95),
-        p99_duration_ms: percentile(traces.map((t: any) => t.duration_ms || 0), 99),
-        min_duration_ms: Math.min(...traces.map((t: any) => t.duration_ms || 0)),
-        max_duration_ms: Math.max(...traces.map((t: any) => t.duration_ms || 0))
+        avg_duration_ms: average(traces.map((t: TraceObject) => t.duration_ms || 0)),
+        p50_duration_ms: percentile(traces.map((t: TraceObject) => t.duration_ms || 0), 50),
+        p95_duration_ms: percentile(traces.map((t: TraceObject) => t.duration_ms || 0), 95),
+        p99_duration_ms: percentile(traces.map((t: TraceObject) => t.duration_ms || 0), 99),
+        min_duration_ms: Math.min(...traces.map((t: TraceObject) => t.duration_ms || 0)),
+        max_duration_ms: Math.max(...traces.map((t: TraceObject) => t.duration_ms || 0))
       },
 
       // Streaming vs Non-streaming
@@ -783,18 +912,18 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
         streaming_count: streamingTraces.length,
         non_streaming_count: nonStreamingTraces.length,
         streaming_avg_duration_ms: average(
-          streamingTraces.map((t: any) => t.duration_ms || 0)
+          streamingTraces.map((t: TraceObject) => t.duration_ms || 0)
         ),
         non_streaming_avg_duration_ms: average(
-          nonStreamingTraces.map((t: any) => t.duration_ms || 0)
+          nonStreamingTraces.map((t: TraceObject) => t.duration_ms || 0)
         ),
         streaming_avg_ttft_ms: average(
-          streamingTraces.filter((t: any) => t.ttft_ms).map((t: any) => t.ttft_ms)
+          streamingTraces.filter((t: TraceObject) => t.ttft_ms).map((t: TraceObject) => t.ttft_ms || 0)
         ),
         streaming_avg_tokens_per_sec: average(
           streamingTraces
-            .filter((t: any) => t.performance?.tokens_per_second)
-            .map((t: any) => t.performance.tokens_per_second)
+            .filter((t: TraceObject) => t.performance?.tokens_per_second)
+            .map((t: TraceObject) => t.performance?.tokens_per_second || 0)
         )
       },
 
@@ -802,18 +931,18 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
       latency_breakdown: {
         avg_queue_time_ms: average(
           traces
-            .filter((t: any) => t.performance?.queue_time_ms)
-            .map((t: any) => t.performance.queue_time_ms)
+            .filter((t: TraceObject) => t.performance?.queue_time_ms)
+            .map((t: TraceObject) => t.performance?.queue_time_ms || 0)
         ),
         avg_inference_time_ms: average(
           traces
-            .filter((t: any) => t.performance?.inference_time_ms)
-            .map((t: any) => t.performance.inference_time_ms)
+            .filter((t: TraceObject) => t.performance?.inference_time_ms)
+            .map((t: TraceObject) => t.performance?.inference_time_ms || 0)
         ),
         avg_network_time_ms: average(
           traces
-            .filter((t: any) => t.performance?.network_time_ms)
-            .map((t: any) => t.performance.network_time_ms)
+            .filter((t: TraceObject) => t.performance?.network_time_ms)
+            .map((t: TraceObject) => t.performance?.network_time_ms || 0)
         )
       },
 
@@ -822,9 +951,9 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
 
       // Slowest traces
       slowest_traces: traces
-        .sort((a: any, b: any) => (b.duration_ms || 0) - (a.duration_ms || 0))
+        .sort((a: TraceObject, b: TraceObject) => (b.duration_ms || 0) - (a.duration_ms || 0))
         .slice(0, 5)
-        .map((t: any) => ({
+        .map((t: TraceObject) => ({
           trace_id: t.trace_id,
           span_name: t.span_name,
           duration_ms: t.duration_ms,
@@ -834,9 +963,9 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
 
       // Error rate
       errors: {
-        total_errors: traces.filter((t: any) => t.status === 'error').length,
+        total_errors: traces.filter((t: TraceObject) => t.status === 'error').length,
         error_rate: (
-          traces.filter((t: any) => t.status === 'error').length / traces.length
+          traces.filter((t: TraceObject) => t.status === 'error').length / traces.length
         ) * 100
       }
     };
@@ -844,23 +973,23 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
     // Group performance by model
     const modelGroups = groupBy(traces, 'model_name');
     for (const [model, count] of Object.entries(modelGroups)) {
-      const modelTraces = traces.filter((t: any) => (t.model_name || 'unknown') === model);
-      (performanceStats.by_model as any)[model] = {
+      const modelTraces = traces.filter((t: TraceObject) => (t.model_name || 'unknown') === model);
+      (performanceStats.by_model as Record<string, unknown>)[model] = {
         trace_count: count,
-        avg_duration_ms: average(modelTraces.map((t: any) => t.duration_ms || 0)),
+        avg_duration_ms: average(modelTraces.map((t: TraceObject) => t.duration_ms || 0)),
         avg_tokens_per_second: average(
           modelTraces
-            .filter((t: any) => t.performance?.tokens_per_second)
-            .map((t: any) => t.performance.tokens_per_second)
+            .filter((t: TraceObject) => t.performance?.tokens_per_second)
+            .map((t: TraceObject) => t.performance?.tokens_per_second || 0)
         ),
-        avg_cost_usd: average(modelTraces.map((t: any) => t.cost_usd || 0))
+        avg_cost_usd: average(modelTraces.map((t: TraceObject) => t.cost_usd || 0))
       };
     }
 
     return {
       success: true,
       performance_stats: performanceStats,
-      filters_applied: tracesResult.filters_applied
+      filters_applied: 'filters_applied' in tracesResult ? tracesResult.filters_applied : undefined
     };
 
   } catch (error) {
@@ -871,9 +1000,101 @@ async function getPerformanceStats(args: GetTracesArgs, userId: string, authHead
   }
 }
 
+/**
+ * Get all traces for multiple conversations (helper for session analysis)
+ */
+async function getTracesByConversations(
+  args: GetTracesArgs,
+  userId: string,
+  authHeader: string
+): Promise<ComparisonResult> {
+  console.log('[GetTraces] Getting traces for conversations:', args.conversation_ids?.length);
+
+  if (!args.conversation_ids || args.conversation_ids.length === 0) {
+    return { error: 'conversation_ids array is required for get_traces_by_conversations operation' };
+  }
+
+  if (args.conversation_ids.length > 100) {
+    return { error: 'Maximum 100 conversations can be queried at once' };
+  }
+
+  try {
+    // Fetch traces for all conversations in parallel (batched)
+    const batchSize = 10;
+    const batches: string[][] = [];
+
+    for (let i = 0; i < args.conversation_ids.length; i += batchSize) {
+      batches.push(args.conversation_ids.slice(i, i + batchSize));
+    }
+
+    const allTraces: FormattedTrace[] = [];
+
+    for (const batch of batches) {
+      // Fetch traces for each conversation in batch
+      const batchPromises = batch.map(convId =>
+        getTraces({ ...args, conversation_id: convId }, userId, authHeader)
+      );
+
+      const batchResults = await Promise.all(batchPromises);
+
+      for (const result of batchResults) {
+        const typedResult = result as { success?: boolean; traces?: FormattedTrace[] };
+        if (typedResult.success && typedResult.traces) {
+          allTraces.push(...typedResult.traces);
+        }
+      }
+    }
+
+    // Group by conversation for easier analysis
+    const byConversation: Record<string, FormattedTrace[]> = {};
+
+    for (const trace of allTraces) {
+      const convId = trace.conversation_id || 'unknown';
+      if (!byConversation[convId]) {
+        byConversation[convId] = [];
+      }
+      byConversation[convId].push(trace);
+    }
+
+    // Calculate statistics per conversation
+    const conversationStats = Object.entries(byConversation).map(([convId, traces]) => ({
+      conversation_id: convId,
+      trace_count: traces.length,
+      total_duration_ms: sum(traces.map(t => t.duration_ms || 0)),
+      total_tokens: sum(traces.map(t => t.total_tokens || 0)),
+      total_cost_usd: sum(traces.map(t => t.cost_usd || 0)),
+      avg_duration_ms: average(traces.map(t => t.duration_ms || 0)),
+      error_count: traces.filter(t => t.status === 'error').length,
+      operations: groupBy(traces as unknown as TraceObject[], 'operation_type')
+    }));
+
+    return {
+      success: true,
+      traces: allTraces,
+      total_count: allTraces.length,
+      conversations_analyzed: args.conversation_ids.length,
+      by_conversation: byConversation,
+      conversation_stats: conversationStats,
+      summary: {
+        total_traces: allTraces.length,
+        total_conversations: args.conversation_ids.length,
+        avg_traces_per_conversation: allTraces.length / args.conversation_ids.length,
+        total_cost_usd: sum(conversationStats.map((s: { total_cost_usd: number }) => s.total_cost_usd)),
+        total_errors: sum(conversationStats.map((s: { error_count: number }) => s.error_count))
+      }
+    } as ComparisonResult;
+
+  } catch (error) {
+    console.error('[GetTraces] getTracesByConversations error:', error);
+    return {
+      error: error instanceof Error ? error.message : 'Failed to get traces for conversations'
+    };
+  }
+}
+
 // Helper functions
 
-function countSpans(trace: any): number {
+function countSpans(trace: TraceObject): number {
   let count = 1;
   if (trace.children) {
     for (const child of trace.children) {
@@ -883,7 +1104,7 @@ function countSpans(trace: any): number {
   return count;
 }
 
-function hasErrors(trace: any): boolean {
+function hasErrors(trace: TraceObject): boolean {
   if (trace.status === 'error') return true;
   if (trace.children) {
     for (const child of trace.children) {
@@ -902,20 +1123,20 @@ function sum(numbers: number[]): number {
   return numbers.reduce((acc, n) => acc + n, 0);
 }
 
-function groupBy(items: any[], key: string): Record<string, number> {
+function groupBy(items: TraceObject[], key: string): Record<string, number> {
   const groups: Record<string, number> = {};
   for (const item of items) {
-    const value = item[key] || 'unknown';
+    const value = String(item[key] || 'unknown');
     groups[value] = (groups[value] || 0) + 1;
   }
   return groups;
 }
 
-function groupBySum(items: any[], groupKey: string, sumKey: string): Record<string, number> {
+function groupBySum(items: TraceObject[], groupKey: string, sumKey: string): Record<string, number> {
   const groups: Record<string, number> = {};
   for (const item of items) {
-    const group = item[groupKey] || 'unknown';
-    const value = item[sumKey] || 0;
+    const group = String(item[groupKey] || 'unknown');
+    const value = Number(item[sumKey] || 0);
     groups[group] = (groups[group] || 0) + value;
   }
   return groups;

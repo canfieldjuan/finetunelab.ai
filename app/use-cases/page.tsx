@@ -85,7 +85,7 @@ export default function UseCasesPage() {
                 </span>
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                See how companies are training custom AI models to solve specific business problems. From customer support to code generation, discover what's possible with fine-tuning.
+                See how companies are training custom AI models to solve specific business problems. From customer support to code generation, discover what&apos;s possible with fine-tuning.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link href="/welcome" className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 h-11 rounded-md px-8">
@@ -508,7 +508,7 @@ export default function UseCasesPage() {
 
                 <div className="mt-6 p-4 bg-white dark:bg-slate-900 border rounded-lg">
                   <p className="text-sm text-muted-foreground">
-                    <strong>Note:</strong> Domain-specific models require high-quality training data and rigorous evaluation. FineTune Lab's LLM-as-a-Judge and batch testing features help validate accuracy before production deployment.
+                    <strong>Note:</strong> Domain-specific models require high-quality training data and rigorous evaluation. FineTune Lab&apos;s LLM-as-a-Judge and batch testing features help validate accuracy before production deployment.
                   </p>
                 </div>
               </div>
@@ -616,7 +616,7 @@ export default function UseCasesPage() {
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <p className="mt-4 text-muted-foreground">
-                  Use FineTune Lab's batch testing to run your model on held-out test data. Enable LLM-as-a-Judge for automated scoring on accuracy, helpfulness, and safety. Test with real edge cases and failure modes. Compare predictions from different checkpoints side-by-side. Monitor Model Observability metrics in production.
+                  Use FineTune Lab&apos;s batch testing to run your model on held-out test data. Enable LLM-as-a-Judge for automated scoring on accuracy, helpfulness, and safety. Test with real edge cases and failure modes. Compare predictions from different checkpoints side-by-side. Monitor Model Observability metrics in production.
                 </p>
               </details>
 
@@ -626,13 +626,13 @@ export default function UseCasesPage() {
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <p className="mt-4 text-muted-foreground">
-                  Yes. As you collect new examples (customer conversations, support tickets, etc.), combine them with your original training data and retrain. FineTune Lab's Training Analytics lets you compare new versions against previous ones to ensure improvement. Versioning helps track which training data produced the best results.
+                  Yes. As you collect new examples (customer conversations, support tickets, etc.), combine them with your original training data and retrain. FineTune Lab&apos;s Training Analytics lets you compare new versions against previous ones to ensure improvement. Versioning helps track which training data produced the best results.
                 </p>
               </details>
 
               <details className="bg-card border rounded-lg p-6 group">
                 <summary className="font-semibold cursor-pointer list-none flex items-center justify-between">
-                  What if my use case isn't listed here?
+                  What if my use case isn&apos;t listed here?
                   <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <p className="mt-4 text-muted-foreground">

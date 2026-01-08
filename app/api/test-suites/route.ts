@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
 
     // Filter out empty prompts
     const cleanedPrompts = prompts
-      .map((p: any) => (typeof p === 'string' ? p.trim() : ''))
+      .map((p: unknown) => (typeof p === 'string' ? p.trim() : ''))
       .filter((p: string) => p.length > 0);
 
     if (cleanedPrompts.length === 0) {
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
     let cleanedExpectedAnswers: string[] | undefined;
     if (expected_answers && Array.isArray(expected_answers)) {
       cleanedExpectedAnswers = expected_answers
-        .map((a: any) => (typeof a === 'string' ? a.trim() : ''))
+        .map((a: unknown) => (typeof a === 'string' ? a.trim() : ''))
         .filter((a: string) => a.length > 0);
 
       // Validate that expected_answers length matches prompts length

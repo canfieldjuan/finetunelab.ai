@@ -10,6 +10,28 @@ import type { ScheduledEvaluation, ScheduleType } from '../batch-testing/types';
 import { sendScheduledEvaluationAlert } from '../alerts/alert.service';
 import type { MetricAlertRule, MetricType, ComparisonOperator, AggregationMethod, AlertType } from '../alerts/alert.types';
 import { AlertService } from '../alerts/alert.service';
+import { decrypt } from '../models/encryption';
+// DEPRECATED: import { recordUsageEvent } from '../usage/checker';
+
+interface ScheduleUpdatePayload {
+  last_run_at?: string;
+  last_run_status?: string;
+  last_run_id?: string | null;
+  next_run_at?: string;
+  consecutive_failures?: number;
+  is_active?: boolean;
+}
+
+interface TraceData {
+  duration_ms?: number;
+  status?: string;
+  cost?: number;
+  ttft_ms?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  is_anomaly?: boolean;
+  anomaly_score?: number;
+}
 
 // Configuration
 const WORKER_INTERVAL_MS = 60000; // Check every minute
@@ -199,11 +221,22 @@ export class EvaluationSchedulerWorker {
         test_suite_id: evaluation.test_suite_id,
       };
 
+      // DEBUG: Log what we're about to send
+      console.log('[EvalScheduler] DEBUG Sending config:', {
+        evaluationId: evalId,
+        evaluationModelId: evaluation.model_id,
+        batchConfigModelId: batchTestConfig.model_id,
+        hasModelId: !!batchTestConfig.model_id,
+        modelIdType: typeof batchTestConfig.model_id,
+        fullConfig: JSON.stringify(batchTestConfig)
+      });
+
       // Call batch testing API with scheduled headers
       const response = await this.callBatchTestAPI(
         evaluation.user_id,
         batchTestConfig,
-        evalId
+        evalId,
+        evaluation.api_key_encrypted
       );
 
       if (!response.ok) {
@@ -215,6 +248,21 @@ export class EvaluationSchedulerWorker {
       const batchTestRunId = result.test_run_id || null;
 
       console.log('[EvalScheduler] Batch test started:', batchTestRunId);
+
+      // DEPRECATED: OLD usage tracking system
+      // Now using usage_meters table via increment_root_trace_count()
+      // await recordUsageEvent({
+      //   userId: evaluation.user_id,
+      //   metricType: 'scheduled_eval_run',
+      //   value: 1,
+      //   resourceType: 'scheduled_evaluation',
+      //   resourceId: evalId,
+      //   metadata: {
+      //     batchTestRunId,
+      //     scheduleType: evaluation.schedule_type,
+      //     testSuiteId: evaluation.test_suite_id,
+      //   },
+      // });
 
       // Schedule next run and update status
       await this.scheduleNextRun(evaluation, 'success', batchTestRunId);
@@ -232,31 +280,49 @@ export class EvaluationSchedulerWorker {
   }
 
   /**
-   * Call batch testing API with service role authentication
+   * Call batch testing API with API key or service role authentication
+   * Prefers API key auth (same flow as direct batch tests) when available
    */
   private async callBatchTestAPI(
     userId: string,
-    batchTestConfig: any,
-    scheduledEvalId: string
+    batchTestConfig: unknown,
+    scheduledEvalId: string,
+    apiKeyEncrypted?: string
   ): Promise<Response> {
     const url = `${this.appUrl}/api/batch-testing/run`;
 
-    // Use service role key directly for background worker operations
-    // The batch testing API supports both session auth and service role auth
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
+    // Build headers based on available authentication
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      // Always include scheduled evaluation headers for tracking
+      'x-scheduled-evaluation': 'true',
+      'x-scheduled-evaluation-id': scheduledEvalId,
+    };
+
+    if (apiKeyEncrypted) {
+      // Use API key auth (same flow as direct batch tests)
+      try {
+        const apiKey = decrypt(apiKeyEncrypted);
+        headers['X-API-Key'] = apiKey;
+        console.log('[EvalScheduler] Using API key authentication for scheduled evaluation');
+      } catch (decryptError) {
+        console.error('[EvalScheduler] Failed to decrypt API key:', decryptError);
+        throw new Error('Failed to decrypt stored API key');
+      }
+    } else {
+      // Fallback to service role auth (legacy behavior)
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!serviceRoleKey) {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
+      }
+      headers['x-service-role-key'] = serviceRoleKey;
+      headers['x-user-id'] = userId;
+      console.log('[EvalScheduler] Using service role authentication (no API key configured)');
     }
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-service-role-key': serviceRoleKey,
-        'x-user-id': userId,
-        'x-scheduled-evaluation': 'true',
-        'x-scheduled-evaluation-id': scheduledEvalId,
-      },
+      headers,
       body: JSON.stringify({
         config: batchTestConfig,
       }),
@@ -284,7 +350,7 @@ export class EvaluationSchedulerWorker {
       );
 
       // Update schedule
-      const updates: any = {
+      const updates: ScheduleUpdatePayload = {
         last_run_at: new Date().toISOString(),
         last_run_status: status,
         last_run_id: batchTestRunId,
@@ -307,21 +373,9 @@ export class EvaluationSchedulerWorker {
         console.log('[EvalScheduler] Next run scheduled for:', nextRunAt.toISOString());
       }
 
-      // Send completion alert on success (user preferences will filter)
-      if (status === 'success') {
-        try {
-          await sendScheduledEvaluationAlert('scheduled_eval_completed', {
-            scheduledEvaluationId: evaluation.id,
-            userId: evaluation.user_id,
-            scheduleName: evaluation.name,
-            modelId: evaluation.model_id,
-            status: 'triggered',
-            errorMessage: null,
-          });
-        } catch (alertError) {
-          console.error('[EvalScheduler] Failed to send completion alert:', alertError);
-        }
-      }
+      // NOTE: Completion alerts are now sent from the batch-testing route
+      // with full results (total prompts, success rate, etc.) after the batch test completes.
+      // The scheduler only triggers the batch test - the route handles completion alerts.
 
     } catch (error) {
       console.error('[EvalScheduler] Error calculating next run:', error);
@@ -341,7 +395,7 @@ export class EvaluationSchedulerWorker {
     console.log('[EvalScheduler] Handling failure:', evaluation.id);
     console.log('[EvalScheduler] Consecutive failures:', newConsecutiveFailures);
 
-    const updates: any = {
+    const updates: ScheduleUpdatePayload = {
       last_run_at: new Date().toISOString(),
       last_run_status: 'failed',
       consecutive_failures: newConsecutiveFailures,
@@ -586,7 +640,7 @@ export class EvaluationSchedulerWorker {
    * Calculate metric value from traces
    */
   private calculateMetricValue(
-    traces: any[],
+    traces: TraceData[],
     metricType: MetricType,
     aggregationMethod: AggregationMethod
   ): number {

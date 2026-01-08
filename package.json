@@ -29,7 +29,18 @@
     "scheduler:check": "npx tsx scripts/check-schedules-once.ts",
     "review:ai": "npx tsx scripts/ollama-code-review.ts",
     "review:cloud": "npx tsx scripts/replicate-code-review.ts",
-    "prepare": "husky"
+    "ts:scan": "node scripts/ts-error-pipeline/1-scan.mjs",
+    "ts:categorize": "node scripts/ts-error-pipeline/2-categorize.mjs",
+    "ts:fix": "node scripts/ts-error-pipeline/3-generate-fixes.mjs",
+    "ts:fix:parallel": "node scripts/ts-error-pipeline/3-generate-fixes-parallel.mjs",
+    "ts:review": "node scripts/ts-error-pipeline/4-review.mjs",
+    "ts:apply": "node scripts/ts-error-pipeline/5-apply.mjs",
+    "ts:setup-cloud": "node scripts/ts-error-pipeline/setup-cloud.mjs",
+    "ts:test-cloud": "node scripts/ts-error-pipeline/test-cloud.mjs",
+    "ts:pipeline": "npm run ts:scan && npm run ts:categorize && npm run ts:fix && npm run ts:review",
+    "ts:pipeline:parallel": "npm run ts:scan && npm run ts:categorize && npm run ts:fix:parallel && npm run ts:review",
+    "ts:auto": "npm run ts:scan && npm run ts:categorize && npm run ts:fix && npm run ts:apply",
+    "prepare": "test -d .git && husky || true"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
@@ -115,7 +126,7 @@
     "@vitest/ui": "^4.0.3",
     "autoprefixer": "^10.4.21",
     "dotenv": "^17.2.3",
-    "eslint": "^9",
+    "eslint": "^9.39.2",
     "eslint-config-next": "15.5.4",
     "eventsource": "^4.1.0",
     "husky": "^9.1.7",

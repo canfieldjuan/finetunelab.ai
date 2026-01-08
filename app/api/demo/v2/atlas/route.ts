@@ -12,12 +12,9 @@ import {
   getDemoTestRunSummary,
   validateDemoSession,
 } from '@/lib/demo/demo-analytics.service';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgyMCwiZXhwIjoxOTYwNzY4ODIwfQ.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
 
 export async function POST(req: NextRequest) {
   try {
@@ -79,7 +76,7 @@ If the user asks for detailed breakdowns or specific examples, let them know the
     const enhancedMessages = [systemMessage, ...messages];
 
     // Load user's model configuration from session
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = await createClient();
     const { data: modelConfig, error: configError } = await supabase
       .from('demo_model_configs')
       .select('endpoint_url, api_key_encrypted, model_id, model_name')

@@ -36,7 +36,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     name: '',
     description: '',
     provider: 'openai',
-    base_url: '',
+    base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
     model_id: '',
     auth_type: 'bearer',
     api_key: '',
@@ -117,7 +117,51 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
   };
 
   const handleFieldChange = (field: keyof CreateModelDTO, value: unknown) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+
+      // Auto-populate base_url when provider changes
+      if (field === 'provider') {
+        const provider = value as ModelProvider;
+        switch (provider) {
+          case 'openai':
+            updated.base_url = 'https://api.openai.com/v1';
+            break;
+          case 'anthropic':
+            updated.base_url = 'https://api.anthropic.com/v1/messages';
+            break;
+          case 'openrouter':
+            updated.base_url = 'https://openrouter.ai/api/v1';
+            break;
+          case 'together':
+            updated.base_url = 'https://api.together.xyz/v1';
+            break;
+          case 'groq':
+            updated.base_url = 'https://api.groq.com/openai/v1';
+            break;
+          case 'huggingface':
+            updated.base_url = 'https://api-inference.huggingface.co/models';
+            break;
+          case 'fireworks':
+            updated.base_url = 'https://api.fireworks.ai/inference/v1';
+            break;
+          case 'azure':
+            updated.base_url = 'https://{resource}.openai.azure.com/openai/deployments/{deployment}';
+            break;
+          case 'runpod':
+            updated.base_url = 'https://{pod_id}-8000.proxy.runpod.net/v1';
+            break;
+          case 'vllm':
+            updated.base_url = 'http://localhost:8000/v1';
+            break;
+          case 'ollama':
+            updated.base_url = 'http://localhost:11434/v1';
+            break;
+        }
+      }
+
+      return updated;
+    });
     setError(null);
   };
 
@@ -283,7 +327,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         name: '',
         description: '',
         provider: 'openai',
-        base_url: '',
+        base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
         model_id: '',
         auth_type: 'bearer',
         api_key: '',
@@ -322,7 +366,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setFormData({
         name: '',
         provider: 'openai',
-        base_url: '',
+        base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
         model_id: '',
         auth_type: 'bearer',
         api_key: '',
@@ -347,7 +391,10 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
           <div>
             <h2 className="text-2xl font-semibold">Add Model</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Choose from templates or create a custom model configuration
+              Add fine-tuned models, custom endpoints, or third-party providers
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              💡 Global models (GPT-4.1, GPT-5, Claude variants) are already available
             </p>
           </div>
           <button
@@ -360,8 +407,8 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="border-b px-6">
+        {/* Tabs - COMMENTED OUT: Templates not needed, OpenAI/Anthropic models are global */}
+        {/* <div className="border-b px-6">
           <div className="flex gap-4">
             <button
               onClick={() => setActiveTab('templates')}
@@ -384,11 +431,12 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
               Manual Configuration
             </button>
           </div>
-        </div>
+        </div> */}
 
         {/* Content */}
         <div className="p-6">
-          {activeTab === 'templates' && !selectedTemplate && (
+          {/* Templates commented out - show manual form only */}
+          {/* {activeTab === 'templates' && !selectedTemplate && (
             <TemplateSelector
               templatesByProvider={templatesByProvider}
               onSelect={handleTemplateSelect}
@@ -424,20 +472,19 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
               onTest={handleTestConnection}
               onSubmit={handleSubmit}
             />
-          )}
+          )} */}
 
-          {activeTab === 'manual' && (
-            <ManualForm
-              formData={formData}
-              onChange={handleFieldChange}
-              error={error}
-              testResult={testResult}
-              testing={testing}
-              submitting={submitting}
-              onTest={handleTestConnection}
-              onSubmit={handleSubmit}
-            />
-          )}
+          {/* Always show manual form now */}
+          <ManualForm
+            formData={formData}
+            onChange={handleFieldChange}
+            error={error}
+            testResult={testResult}
+            testing={testing}
+            submitting={submitting}
+            onTest={handleTestConnection}
+            onSubmit={handleSubmit}
+          />
         </div>
       </div>
     </div>
@@ -977,12 +1024,55 @@ function ManualForm({
   onTest,
   onSubmit,
 }: ManualFormProps) {
-  const providers: ModelProvider[] = ['openai', 'anthropic', 'huggingface', 'ollama', 'vllm', 'azure', 'runpod', 'fireworks'];
+  // All supported providers (includes OpenAI/Anthropic for fine-tuned models)
+  const providers: ModelProvider[] = [
+    'openai',      // For fine-tuned OpenAI models
+    'anthropic',   // For fine-tuned Anthropic models
+    'openrouter',  // OpenRouter aggregator
+    'together',    // Together.ai
+    'groq',        // Groq fast inference
+    'huggingface', // HuggingFace models
+    'fireworks',   // Fireworks.ai
+    'azure',       // Azure OpenAI
+    'runpod',      // RunPod vLLM
+    'vllm',        // Local vLLM
+    'ollama',      // Local Ollama
+  ];
   const authTypes: AuthType[] = ['bearer', 'api_key', 'custom_header', 'none'];
 
   // Provider-specific helper for base URL
   const getProviderHelp = (provider: ModelProvider) => {
     switch (provider) {
+      case 'openai':
+        return {
+          placeholder: 'https://api.openai.com/v1',
+          hint: 'OpenAI API endpoint (for fine-tuned models)',
+        };
+      case 'anthropic':
+        return {
+          placeholder: 'https://api.anthropic.com/v1/messages',
+          hint: 'Anthropic API endpoint (for fine-tuned models)',
+        };
+      case 'openrouter':
+        return {
+          placeholder: 'https://openrouter.ai/api/v1',
+          hint: 'OpenRouter - access 200+ models through one API',
+        };
+      case 'together':
+        return {
+          placeholder: 'https://api.together.xyz/v1',
+          hint: 'Together.ai - fast inference and fine-tuning platform',
+        };
+      case 'groq':
+        return {
+          placeholder: 'https://api.groq.com/openai/v1',
+          hint: 'Groq - extremely fast inference with LPU',
+        };
+      case 'huggingface':
+        return {
+          placeholder: 'https://api-inference.huggingface.co/models',
+          hint: 'HuggingFace Inference API endpoint (or use your own endpoint)',
+        };
       case 'runpod':
         return {
           placeholder: 'https://{pod_id}-8000.proxy.runpod.net/v1',
@@ -1003,6 +1093,11 @@ function ManualForm({
           placeholder: 'https://api.fireworks.ai/inference/v1',
           hint: 'Fireworks.ai API - fast inference with <1s cold starts',
         };
+      case 'azure':
+        return {
+          placeholder: 'https://{resource}.openai.azure.com/openai/deployments/{deployment}',
+          hint: 'Azure OpenAI endpoint - replace {resource} and {deployment}',
+        };
       default:
         return {
           placeholder: 'https://api.example.com/v1',
@@ -1015,9 +1110,232 @@ function ManualForm({
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Create a custom model configuration for any OpenAI-compatible API endpoint.
-      </p>
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h4 className="font-medium text-blue-900 mb-2">📋 About Adding Models</h4>
+        <div className="text-sm text-blue-800 space-y-1">
+          <p><strong>Global Models:</strong> GPT-4.1, GPT-5 variants, o3-pro, Claude Opus/Sonnet/Haiku are already available to all users.</p>
+          <p><strong>Add Your Own:</strong> Fine-tuned OpenAI/Anthropic models, HuggingFace models, local servers, or third-party providers (OpenRouter, Together.ai, Groq, Fireworks, etc.)</p>
+        </div>
+      </div>
+
+      {/* OpenAI helper info box */}
+      {formData.provider === 'openai' && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h4 className="font-medium text-green-900 mb-2">🟢 OpenAI Fine-Tuned Models</h4>
+          <div className="text-sm text-green-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-green-100 px-1 py-0.5 rounded">
+                https://api.openai.com/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Your fine-tuned model ID (e.g.,{' '}
+              <code className="bg-green-100 px-1 py-0.5 rounded">
+                ft:gpt-4o-mini-2024-07-18:org:custom:abc123
+              </code>)
+            </p>
+            <p>
+              <strong>API Key:</strong> Found in your{' '}
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-green-900"
+              >
+                OpenAI dashboard
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Use this to test your fine-tuned GPT models - global models are already available
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Anthropic helper info box */}
+      {formData.provider === 'anthropic' && (
+        <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+          <h4 className="font-medium text-purple-900 mb-2">⚡ Anthropic Fine-Tuned Models</h4>
+          <div className="text-sm text-purple-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-purple-100 px-1 py-0.5 rounded">
+                https://api.anthropic.com/v1/messages
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Your fine-tuned Claude model ID
+            </p>
+            <p>
+              <strong>API Key:</strong> Found in your{' '}
+              <a
+                href="https://console.anthropic.com/settings/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-purple-900"
+              >
+                Anthropic console
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Use this to test your fine-tuned Claude models - global models are already available
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* OpenRouter helper info box */}
+      {formData.provider === 'openrouter' && (
+        <div className="p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
+          <h4 className="font-medium text-cyan-900 mb-2">🌐 OpenRouter - 200+ Models</h4>
+          <div className="text-sm text-cyan-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-cyan-100 px-1 py-0.5 rounded">
+                https://openrouter.ai/api/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Browse models at{' '}
+              <a
+                href="https://openrouter.ai/models"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-cyan-900"
+              >
+                openrouter.ai/models
+              </a>
+              {' '}(e.g., anthropic/claude-3.5-sonnet)
+            </p>
+            <p>
+              <strong>API Key:</strong> Get it from{' '}
+              <a
+                href="https://openrouter.ai/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-cyan-900"
+              >
+                openrouter.ai/keys
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Access hundreds of models through one API - great for testing multiple providers
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Together.ai helper info box */}
+      {formData.provider === 'together' && (
+        <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
+          <h4 className="font-medium text-pink-900 mb-2">🤝 Together.ai - Fast & Affordable</h4>
+          <div className="text-sm text-pink-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-pink-100 px-1 py-0.5 rounded">
+                https://api.together.xyz/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Browse models at{' '}
+              <a
+                href="https://api.together.xyz/models"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-pink-900"
+              >
+                api.together.xyz/models
+              </a>
+              {' '}(e.g., meta-llama/Llama-3-70b-chat-hf)
+            </p>
+            <p>
+              <strong>API Key:</strong> Get it from{' '}
+              <a
+                href="https://api.together.xyz/settings/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-pink-900"
+              >
+                Together.ai settings
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Great for fine-tuning and deploying open-source models at scale
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Groq helper info box */}
+      {formData.provider === 'groq' && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <h4 className="font-medium text-red-900 mb-2">⚡ Groq - Lightning Fast Inference</h4>
+          <div className="text-sm text-red-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-red-100 px-1 py-0.5 rounded">
+                https://api.groq.com/openai/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Available models:{' '}
+              <code className="bg-red-100 px-1 py-0.5 rounded">llama-3.3-70b-versatile</code>,{' '}
+              <code className="bg-red-100 px-1 py-0.5 rounded">mixtral-8x7b-32768</code>
+            </p>
+            <p>
+              <strong>API Key:</strong> Get it from{' '}
+              <a
+                href="https://console.groq.com/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-red-900"
+              >
+                console.groq.com/keys
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Powered by LPU (Language Processing Unit) - incredibly fast inference speeds
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* HuggingFace helper info box */}
+      {formData.provider === 'huggingface' && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h4 className="font-medium text-yellow-900 mb-2">🤗 HuggingFace Models</h4>
+          <div className="text-sm text-yellow-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-yellow-100 px-1 py-0.5 rounded">
+                https://api-inference.huggingface.co/models
+              </code>
+            </p>
+            <p>
+              <strong>Model ID Format:</strong>{' '}
+              <code className="bg-yellow-100 px-1 py-0.5 rounded">
+                username/model-name
+              </code>
+              {' '}(e.g., meta-llama/Llama-3.3-70B-Instruct)
+            </p>
+            <p>
+              <strong>API Token:</strong> Get it from{' '}
+              <a
+                href="https://huggingface.co/settings/tokens"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-yellow-900"
+              >
+                huggingface.co/settings/tokens
+              </a>
+            </p>
+            <p className="text-xs">
+              💡 Perfect for custom fine-tuned models and models from the HF Hub
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* RunPod helper info box */}
       {formData.provider === 'runpod' && (
@@ -1043,7 +1361,7 @@ function ManualForm({
       {/* Fireworks helper info box */}
       {formData.provider === 'fireworks' && (
         <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-          <h4 className="font-medium text-orange-900 mb-2">Fireworks.ai - Fast Inference</h4>
+          <h4 className="font-medium text-orange-900 mb-2">🔥 Fireworks.ai - Fast Inference</h4>
           <div className="text-sm text-orange-800 space-y-2">
             <p>
               <strong>Base URL:</strong>{' '}
@@ -1058,7 +1376,102 @@ function ManualForm({
               </code>
             </p>
             <p className="text-xs">
-              Benefits: &lt;1s cold starts, no hosting fees for fine-tuned models, pay per token only. Get your API key at fireworks.ai/account/api-keys
+              💡 Benefits: &lt;1s cold starts, no hosting fees for fine-tuned models, pay per token only. Get your API key at{' '}
+              <a
+                href="https://fireworks.ai/account/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-orange-900"
+              >
+                fireworks.ai/account/api-keys
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Azure helper info box */}
+      {formData.provider === 'azure' && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="font-medium text-blue-900 mb-2">☁️ Azure OpenAI</h4>
+          <div className="text-sm text-blue-800 space-y-2">
+            <p>
+              <strong>Base URL Format:</strong>{' '}
+              <code className="bg-blue-100 px-1 py-0.5 rounded">
+                https://&#123;resource&#125;.openai.azure.com/openai/deployments/&#123;deployment&#125;
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> Your Azure deployment name (e.g., gpt-4-turbo)
+            </p>
+            <p>
+              <strong>API Key:</strong> Found in Azure Portal under Keys and Endpoint
+            </p>
+            <p className="text-xs">
+              💡 Enterprise-ready with data residency, private networking, and compliance
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Ollama helper info box */}
+      {formData.provider === 'ollama' && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h4 className="font-medium text-green-900 mb-2">🦙 Ollama - Local Models</h4>
+          <div className="text-sm text-green-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-green-100 px-1 py-0.5 rounded">
+                http://localhost:11434/v1
+              </code>
+            </p>
+            <p>
+              <strong>Model ID:</strong> The model name as shown in{' '}
+              <code className="bg-green-100 px-1 py-0.5 rounded">ollama list</code>
+              {' '}(e.g., llama3.2, qwen2.5:7b)
+            </p>
+            <p>
+              <strong>Setup:</strong> Install Ollama from{' '}
+              <a
+                href="https://ollama.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-green-900"
+              >
+                ollama.ai
+              </a>
+              {' '}and pull models with <code className="bg-green-100 px-1 py-0.5 rounded">ollama pull [model]</code>
+            </p>
+            <p className="text-xs">
+              💡 No API key needed for local Ollama - runs entirely offline
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* vLLM helper info box */}
+      {formData.provider === 'vllm' && (
+        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+          <h4 className="font-medium text-indigo-900 mb-2">⚡ vLLM - High-Performance Serving</h4>
+          <div className="text-sm text-indigo-800 space-y-2">
+            <p>
+              <strong>Base URL:</strong>{' '}
+              <code className="bg-indigo-100 px-1 py-0.5 rounded">
+                http://localhost:8000/v1
+              </code>
+              {' '}(or your vLLM server address)
+            </p>
+            <p>
+              <strong>Model ID:</strong> The model loaded in vLLM (e.g., Qwen/Qwen2.5-7B-Instruct)
+            </p>
+            <p>
+              <strong>Setup:</strong> Start vLLM with{' '}
+              <code className="bg-indigo-100 px-1 py-0.5 rounded">
+                vllm serve [model] --port 8000
+              </code>
+            </p>
+            <p className="text-xs">
+              💡 No API key needed for local vLLM - extremely fast inference with PagedAttention
             </p>
           </div>
         </div>

@@ -13,7 +13,7 @@
 export interface ValidatorContext {
   // Required: Always provided
   responseContent: string;           // Raw LLM response text
-  contentJson: any;                  // Parsed JSON (if available)
+  contentJson: unknown;                  // Parsed JSON (if available)
   userId: string;                    // User ID for database queries
   messageId: string;                 // Message being evaluated
 
@@ -24,21 +24,21 @@ export interface ValidatorContext {
   retrievedDocuments?: Array<{      // RAG documents (if applicable)
     doc_id: string;
     text: string;
-    metadata?: any;
+    metadata?: unknown;
   }>;
 
   // Configuration: Validator-specific settings from benchmark
-  validatorConfig?: Record<string, any>;  // e.g., { maxAgeDays: 365, k: 5 }
+  validatorConfig?: Record<string, unknown>;  // e.g., { maxAgeDays: 365, k: 5 }
 }
 
 /**
  * Helper to extract validator config for a specific validator
  */
-export function getValidatorConfig<T = any>(
+export function getValidatorConfig<T = unknown>(
   context: ValidatorContext,
   validatorId: string,
   defaultConfig?: T
 ): T {
   const config = context.validatorConfig?.[validatorId];
-  return config ? { ...defaultConfig, ...config } : (defaultConfig as T);
+return config || defaultConfig ? { ...defaultConfig, ...config } : undefined;
 }

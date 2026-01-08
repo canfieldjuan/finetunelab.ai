@@ -16,13 +16,18 @@ import {
   FileText,
   Sparkles,
   Zap,
+  TrendingUp,
+  Users,
 } from 'lucide-react';
 import { ModelConfigForm } from '@/components/demo/ModelConfigForm';
 import { BatchTestProgress } from '@/components/demo/BatchTestProgress';
 import { DemoAtlasChat } from '@/components/demo/DemoAtlasChat';
+import { DemoBatchAnalytics } from '@/components/demo/DemoBatchAnalytics';
+import { DemoExportModal } from '@/components/demo/DemoExportModal';
+import { FineTuneLabFullLogoV2 } from '@/components/branding/FineTuneLabFullLogoV2';
 import type { DemoTestSuite, TaskDomain, ConfigureModelResponse } from '@/lib/demo/types';
 
-type DemoStep = 'welcome' | 'task_selection' | 'model_config' | 'batch_test' | 'atlas_chat' | 'export';
+type DemoStep = 'welcome' | 'task_selection' | 'model_config' | 'batch_test' | 'atlas_chat' | 'analytics' | 'export';
 
 const TASK_DOMAINS: { domain: TaskDomain; label: string; description: string; icon: React.ElementType }[] = [
   { domain: 'customer_support', label: 'Customer Support', description: 'Help desk and support queries', icon: MessageSquare },
@@ -40,8 +45,10 @@ export default function DemoTestModelPage() {
   const [sessionConfig, setSessionConfig] = useState<ConfigureModelResponse | null>(null);
   const [testRunId, setTestRunId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [cleanupComplete, setCleanupComplete] = useState(false);
+  const [showSignupNudge, setShowSignupNudge] = useState(true);
 
   // Fetch test suites when domain is selected
   useEffect(() => {
@@ -138,7 +145,7 @@ export default function DemoTestModelPage() {
   };
 
   // Navigation helpers
-  const canGoBack = step !== 'welcome' && step !== 'export';
+  const canGoBack = step !== 'welcome' && step !== 'analytics' && step !== 'export';
   const goBack = () => {
     switch (step) {
       case 'task_selection':
@@ -153,6 +160,9 @@ export default function DemoTestModelPage() {
       case 'atlas_chat':
         setStep('batch_test');
         break;
+      case 'analytics':
+        setStep('atlas_chat');
+        break;
     }
   };
 
@@ -164,48 +174,66 @@ export default function DemoTestModelPage() {
           <Card className="w-full max-w-2xl mx-auto">
             <CardHeader className="text-center">
               <div className="flex justify-center mb-4">
-                <div className="p-4 bg-purple-100 dark:bg-purple-900 rounded-full">
-                  <Beaker className="h-12 w-12 text-purple-600" />
+                <div className="p-4 bg-orange-100 dark:bg-orange-900/50 rounded-full">
+                  <Zap className="h-12 w-12 text-orange-600 dark:text-orange-500" />
                 </div>
               </div>
               <CardTitle className="text-2xl">Test Your Fine-Tuned Model</CardTitle>
               <CardDescription className="text-base mt-2">
-                Connect your model, run batch tests, and analyze results with your own AI
+                Connect your model, run test suites, and analyze your model's results using our tracing and analytics systems
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4">
-                <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                  <Badge className="mt-0.5">1</Badge>
+                <div className="flex items-start gap-3 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-100 dark:border-orange-900/30">
+                  <Badge className="mt-0.5 bg-orange-500">1</Badge>
                   <div>
                     <p className="font-medium">Select Test Domain</p>
-                    <p className="text-sm text-muted-foreground">Choose from coding, reasoning, creative, or general tasks</p>
+                    <p className="text-sm text-muted-foreground">Choose from customer support, code generation, Q&A, or creative writing</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                  <Badge className="mt-0.5">2</Badge>
+                <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                  <Badge className="mt-0.5 bg-blue-500">2</Badge>
                   <div>
                     <p className="font-medium">Connect Your Model</p>
                     <p className="text-sm text-muted-foreground">Enter your OpenAI-compatible endpoint and API key</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                  <Badge className="mt-0.5">3</Badge>
+                <div className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-100 dark:border-green-900/30">
+                  <Badge className="mt-0.5 bg-green-500">3</Badge>
                   <div>
-                    <p className="font-medium">Run Batch Test</p>
-                    <p className="text-sm text-muted-foreground">Test against 10 curated prompts and track performance</p>
+                    <p className="font-medium">Run Test Suite</p>
+                    <p className="text-sm text-muted-foreground">Execute 10 curated prompts and watch real-time progress</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                  <Badge className="mt-0.5">4</Badge>
+                <div className="flex items-start gap-3 p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                  <Badge className="mt-0.5 bg-purple-500">4</Badge>
                   <div>
-                    <p className="font-medium">Analyze Results</p>
-                    <p className="text-sm text-muted-foreground">Chat with your model to analyze test results</p>
+                    <p className="font-medium">Chat with Atlas AI</p>
+                    <p className="text-sm text-muted-foreground">Ask Atlas questions about your test results</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-cyan-50 dark:bg-cyan-950/20 rounded-lg border border-cyan-100 dark:border-cyan-900/30">
+                  <Badge className="mt-0.5 bg-cyan-500">5</Badge>
+                  <div>
+                    <p className="font-medium">View Full Analytics</p>
+                    <p className="text-sm text-muted-foreground">Review detailed execution traces and performance metrics</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-pink-50 dark:bg-pink-950/20 rounded-lg border border-pink-100 dark:border-pink-900/30">
+                  <Badge className="mt-0.5 bg-pink-500">6</Badge>
+                  <div>
+                    <p className="font-medium">Export & Clean Up</p>
+                    <p className="text-sm text-muted-foreground">Download results in CSV or JSON and securely delete your data</p>
                   </div>
                 </div>
               </div>
 
-              <Button onClick={() => setStep('task_selection')} className="w-full" size="lg">
+              <Button
+                onClick={() => setStep('task_selection')}
+                className="w-full bg-green-400 hover:bg-green-500 text-white border border-green-300"
+                size="lg"
+              >
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -257,7 +285,11 @@ export default function DemoTestModelPage() {
                 <Button
                   onClick={() => setStep('model_config')}
                   disabled={!selectedDomain || !selectedSuite}
-                  className="flex-1"
+                  className={`flex-1 ${
+                    selectedDomain && selectedSuite
+                      ? 'bg-green-400 hover:bg-green-500 text-white border border-green-300'
+                      : ''
+                  }`}
                 >
                   Continue
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -288,7 +320,7 @@ export default function DemoTestModelPage() {
               <BatchTestProgress
                 testRunId={testRunId}
                 onComplete={handleTestComplete}
-                onError={(error) => console.error('Test error:', error)}
+                onError={(error: string) => console.error('Test error:', error)}
               />
             )}
           </div>
@@ -299,10 +331,14 @@ export default function DemoTestModelPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center max-w-3xl mx-auto">
               <p className="text-sm text-muted-foreground">
-                Chat with your model to analyze batch test results
+                Chat with Atlas to analyze batch test results
               </p>
-              <Button variant="outline" size="sm" onClick={() => setStep('export')}>
-                Continue to Export
+              <Button
+                size="sm"
+                onClick={() => setStep('analytics')}
+                className="bg-green-400 hover:bg-green-500 text-white border border-green-300"
+              >
+                View Full Analysis
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -310,7 +346,20 @@ export default function DemoTestModelPage() {
               <DemoAtlasChat
                 sessionId={sessionConfig.session_id}
                 modelName={sessionConfig.model_name}
-                onExportRequest={() => setStep('export')}
+                onExportRequest={() => setStep('analytics')}
+              />
+            )}
+          </div>
+        );
+
+      case 'analytics':
+        return (
+          <div className="space-y-6">
+            {sessionConfig && (
+              <DemoBatchAnalytics
+                sessionId={sessionConfig.session_id}
+                modelName={sessionConfig.model_name}
+                onExportClick={() => setStep('export')}
               />
             )}
           </div>
@@ -342,26 +391,47 @@ export default function DemoTestModelPage() {
             <CardContent className="space-y-6">
               {!cleanupComplete && (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => handleExport('csv')}
-                      disabled={isExporting}
-                      className="h-20 flex-col"
-                    >
-                      <FileText className="h-6 w-6 mb-2" />
-                      Export CSV
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleExport('json')}
-                      disabled={isExporting}
-                      className="h-20 flex-col"
-                    >
-                      <FileText className="h-6 w-6 mb-2" />
-                      Export JSON
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => setShowExportModal(true)}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white h-16"
+                    size="lg"
+                  >
+                    <Download className="mr-2 h-5 w-5" />
+                    Export Results (3 Personas Available)
+                  </Button>
+
+                  {/* Pre-Cleanup Signup Nudge */}
+                  {showSignupNudge && (
+                    <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border-2 border-green-200 dark:border-green-800">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-green-500 rounded-full shrink-0">
+                          <Sparkles className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-base mb-1">Save Your Results</h4>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Sign up to preserve your test data, run unlimited tests, and unlock historical analytics
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => window.location.href = '/signup'}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              Sign Up Free - Keep Data
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => setShowSignupNudge(false)}
+                              className="text-sm"
+                            >
+                              No thanks
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="border-t pt-6">
                     <p className="text-sm text-muted-foreground mb-4">
@@ -390,13 +460,66 @@ export default function DemoTestModelPage() {
               )}
 
               {cleanupComplete && (
-                <div className="text-center space-y-4">
-                  <p className="text-muted-foreground">
-                    Your API key and test data have been securely deleted.
-                  </p>
-                  <Button onClick={() => window.location.reload()} className="w-full">
-                    Start New Test
-                  </Button>
+                <div className="space-y-6">
+                  {/* Success Message */}
+                  <div className="text-center">
+                    <div className="inline-block p-3 bg-green-100 dark:bg-green-900/30 rounded-full mb-3">
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                    </div>
+                    <p className="text-muted-foreground">
+                      Your API key and test data have been securely deleted.
+                    </p>
+                  </div>
+
+                  {/* Conversion Offer */}
+                  <div className="border-t pt-6">
+                    <h3 className="text-lg font-semibold text-center mb-4">
+                      Liked what you saw?
+                    </h3>
+
+                    {/* 3-Column Benefits */}
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <Zap className="h-6 w-6 mx-auto mb-2 text-orange-500" />
+                        <p className="text-sm font-medium">Unlimited Tests</p>
+                        <p className="text-xs text-muted-foreground">No 10-prompt limit</p>
+                      </div>
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <TrendingUp className="h-6 w-6 mx-auto mb-2 text-blue-500" />
+                        <p className="text-sm font-medium">Historical Analytics</p>
+                        <p className="text-xs text-muted-foreground">Track trends over time</p>
+                      </div>
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <Users className="h-6 w-6 mx-auto mb-2 text-purple-500" />
+                        <p className="text-sm font-medium">Team Collaboration</p>
+                        <p className="text-xs text-muted-foreground">Share with your team</p>
+                      </div>
+                    </div>
+
+                    {/* CTA Buttons */}
+                    <div className="space-y-3">
+                      <Button
+                        onClick={() => window.location.href = '/signup'}
+                        className="w-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-semibold h-12"
+                        size="lg"
+                      >
+                        Start Free Trial
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                      </Button>
+                      <Button
+                        onClick={() => window.location.reload()}
+                        variant="ghost"
+                        className="w-full"
+                      >
+                        No thanks, test again
+                      </Button>
+                    </div>
+
+                    {/* Trust Indicators */}
+                    <p className="text-xs text-center text-muted-foreground mt-4">
+                      ✓ No credit card required  •  ✓ 14-day free trial  •  ✓ Cancel anytime
+                    </p>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -405,13 +528,27 @@ export default function DemoTestModelPage() {
     }
   };
 
+  // Render export modal
+  const renderExportModal = () => {
+    if (!sessionConfig) return null;
+
+    return (
+      <DemoExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        sessionId={sessionConfig.session_id}
+        modelName={sessionConfig.model_name || 'Unknown Model'}
+      />
+    );
+  };
+
   // Step indicator
   const steps = [
-    { key: 'welcome', label: 'Welcome' },
     { key: 'task_selection', label: 'Domain' },
     { key: 'model_config', label: 'Connect' },
     { key: 'batch_test', label: 'Test' },
     { key: 'atlas_chat', label: 'Chat' },
+    { key: 'analytics', label: 'Analytics' },
     { key: 'export', label: 'Export' },
   ];
 
@@ -422,36 +559,47 @@ export default function DemoTestModelPage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">FineTuneLab Demo</h1>
-          <p className="text-muted-foreground">Bring Your Own Model - Batch Testing & AI Analysis</p>
+          <div className="flex justify-center mb-4">
+            <FineTuneLabFullLogoV2
+              width={280}
+              height={84}
+              className="text-foreground dark:text-foreground"
+            />
+          </div>
+          <p className="text-lg text-muted-foreground font-medium">Model Testing & Analysis for Production Ops</p>
         </div>
 
-        {/* Step indicator */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-2">
-            {steps.map((s, i) => (
-              <React.Fragment key={s.key}>
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    i < currentStepIndex
-                      ? 'bg-primary text-primary-foreground'
-                      : i === currentStepIndex
-                      ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {i < currentStepIndex ? <CheckCircle className="h-4 w-4" /> : i + 1}
-                </div>
-                {i < steps.length - 1 && (
-                  <div className={`w-8 h-0.5 ${i < currentStepIndex ? 'bg-primary' : 'bg-muted'}`} />
-                )}
-              </React.Fragment>
-            ))}
+        {/* Step indicator - hide on welcome screen */}
+        {step !== 'welcome' && (
+          <div className="flex justify-center mb-8">
+            <div className="flex items-center gap-2">
+              {steps.map((s, i) => (
+                <React.Fragment key={s.key}>
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      i < currentStepIndex
+                        ? 'bg-orange-500 text-white'
+                        : i === currentStepIndex
+                        ? 'bg-orange-500 text-white ring-2 ring-orange-400 ring-offset-2'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {i < currentStepIndex ? <CheckCircle className="h-4 w-4" /> : i + 1}
+                  </div>
+                  {i < steps.length - 1 && (
+                    <div className={`w-8 h-0.5 ${i < currentStepIndex ? 'bg-orange-500' : 'bg-muted'}`} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Step content */}
         {renderStep()}
+
+        {/* Export modal */}
+        {renderExportModal()}
       </div>
     </div>
   );

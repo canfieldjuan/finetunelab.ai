@@ -266,7 +266,7 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   let jobId: string | undefined;
-  let supabase: any;
+  let supabase: ReturnType<typeof createClient> | undefined;
 
   try {
     console.log('[RunPod API] Received deployment request');
@@ -363,10 +363,11 @@ export async function POST(request: NextRequest) {
         console.log('[RunPod API] HuggingFace metadata:', JSON.stringify(hfSecret.metadata));
 
         // Try multiple possible paths for username
+        const metadata = hfSecret.metadata as { huggingface?: { username?: string }; username?: string; hf_username?: string } | null;
         let hfUsername =
-          hfSecret.metadata?.huggingface?.username ||  // Expected path
-          hfSecret.metadata?.username ||                // Alternative path
-          (hfSecret.metadata as any)?.hf_username;      // Another alternative
+          metadata?.huggingface?.username ||  // Expected path
+          metadata?.username ||                // Alternative path
+          metadata?.hf_username;               // Another alternative
 
         console.log('[RunPod API] Extracted username:', hfUsername);
 
@@ -406,7 +407,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch training configuration with attached datasets via junction table
-    const { data: trainingConfig, error: configError } = await supabase
+    const { data: trainingConfig, error: configError }: {
+      data: {
+        name: string;
+        config_json: Record<string, unknown> | null;
+        model_name?: string;
+        config_id?: string;
+        datasets?: Array<{
+          dataset: {
+            name: string;
+            storage_path: string;
+            storage_provider?: string;
+            sample_count?: number;
+            total_examples?: number;
+          } | null;
+        }>;
+      } | null;
+      error: { message: string } | null;
+    } = await supabase
       .from('training_configs')
       .select(`
         *,
@@ -481,17 +499,18 @@ export async function POST(request: NextRequest) {
     const jobToken = crypto.randomBytes(32).toString('base64url');
 
     // Extract model name from config JSON
+    const configWithModel = trainingConfig.config_json as { model?: { name?: string } } | null;
     console.log('[RunPod API] Config structure:', {
       has_config_json: !!trainingConfig.config_json,
-      has_model_in_config: !!trainingConfig.config_json?.model,
-      model_name: trainingConfig.config_json?.model?.name,
-      model_name_type: typeof trainingConfig.config_json?.model?.name,
-      model_name_raw: JSON.stringify(trainingConfig.config_json?.model?.name),
+      has_model_in_config: !!configWithModel?.model,
+      model_name: configWithModel?.model?.name,
+      model_name_type: typeof configWithModel?.model?.name,
+      model_name_raw: JSON.stringify(configWithModel?.model?.name),
       config_keys: trainingConfig.config_json ? Object.keys(trainingConfig.config_json) : [],
-      full_model_object: JSON.stringify(trainingConfig.config_json?.model)
+      full_model_object: JSON.stringify(configWithModel?.model)
     });
 
-    const modelName = trainingConfig.config_json?.model?.name ||
+    const modelName = configWithModel?.model?.name ||
                       trainingConfig.model_name ||
                       'Qwen/Qwen2.5-0.5B-Instruct'; // Fallback to a small public model
 
@@ -507,7 +526,7 @@ export async function POST(request: NextRequest) {
     console.log('[RunPod API] Dataset object:', JSON.stringify(dataset));
 
     // Calculate total_steps from config
-    const config = trainingConfig.config_json;
+    const config = trainingConfig.config_json as { training?: { batch_size?: number; gradient_accumulation_steps?: number; num_epochs?: number } } | null;
     const batchSize = config?.training?.batch_size || 4;
     const gradAccum = config?.training?.gradient_accumulation_steps || 8;
     const numEpochs = config?.training?.num_epochs || 3;
@@ -535,7 +554,7 @@ export async function POST(request: NextRequest) {
         total_samples: sampleCount || null,
         // Add calculated total_steps
         total_steps: totalSteps,
-      });
+      } as any);
 
     if (jobError) {
       console.error('[RunPod API] Failed to create job:', jobError);
@@ -605,7 +624,7 @@ export async function POST(request: NextRequest) {
     // We ignore the returned ID as we already generated one and passed it in
     await trainingDeploymentService.deployJob(
       'runpod',
-      trainingConfig.config_json || {},
+      (trainingConfig.config_json || {}) as any,
       modelName,
       datasetStoragePath,
       {
@@ -668,7 +687,7 @@ export async function POST(request: NextRequest) {
         estimated_cost: deployment.cost?.estimated_cost,
         cost_per_hour: deployment.cost?.cost_per_hour,
         budget_limit,
-      })
+      } as any)
       .select()
       .single();
 
@@ -698,7 +717,7 @@ export async function POST(request: NextRequest) {
     if (jobId && supabase) {
       console.log('[RunPod API] Marking job as failed:', jobId);
       try {
-        await supabase
+        await (supabase as any)
           .from('local_training_jobs')
           .update({
             status: 'failed',

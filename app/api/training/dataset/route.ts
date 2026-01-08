@@ -299,7 +299,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const awsMetadata = awsSecret.metadata.aws as any;
+      const awsMetadata = awsSecret.metadata.aws as unknown;
       const decryptedSecretKey = await secretsManager.getDecryptedApiKey(user.id, 'aws', supabase);
 
       if (!decryptedSecretKey) {

@@ -407,7 +407,7 @@ function ModelsPageContent() {
                   onEdit={handleEditModel}
                   onDelete={handleDeleteModel}
                   currentUserId={user?.id}
-                  serverInfo={servers[model.id]}
+                  serverInfo={servers[model.id] || undefined}
                   sessionToken={session?.access_token}
                   onServerChanged={fetchServers}
                 />

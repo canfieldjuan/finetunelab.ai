@@ -8,6 +8,17 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
+interface TraceData {
+  model_name?: string;
+  model_provider?: string;
+  cost_usd?: number;
+  operation_type?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
 interface Recommendation {
   id: string;
   category: 'model' | 'cache' | 'operation' | 'tokens' | 'timing';
@@ -57,7 +68,7 @@ export async function GET(request: NextRequest) {
     }
 
     const recommendations: Recommendation[] = [];
-    const traceData = traces || [];
+    const traceData = (traces || []) as TraceData[];
 
     analyzeModelCosts(traceData, recommendations);
     analyzeCacheUsage(traceData, recommendations);
@@ -87,7 +98,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function analyzeModelCosts(traces: any[], recommendations: Recommendation[]) {
+function analyzeModelCosts(traces: TraceData[], recommendations: Recommendation[]) {
   const modelStats: Record<string, { cost: number; count: number }> = {};
 
   traces.forEach(t => {
@@ -132,7 +143,7 @@ function analyzeModelCosts(traces: any[], recommendations: Recommendation[]) {
   });
 }
 
-function analyzeCacheUsage(traces: any[], recommendations: Recommendation[]) {
+function analyzeCacheUsage(traces: TraceData[], recommendations: Recommendation[]) {
   const anthropicTraces = traces.filter(t =>
     t.model_provider === 'anthropic' ||
     (t.model_name && t.model_name.includes('claude'))
@@ -164,7 +175,7 @@ function analyzeCacheUsage(traces: any[], recommendations: Recommendation[]) {
   }
 }
 
-function analyzeOperationCosts(traces: any[], recommendations: Recommendation[]) {
+function analyzeOperationCosts(traces: TraceData[], recommendations: Recommendation[]) {
   const opStats: Record<string, { cost: number; count: number }> = {};
 
   traces.forEach(t => {
@@ -194,7 +205,7 @@ function analyzeOperationCosts(traces: any[], recommendations: Recommendation[])
   });
 }
 
-function analyzeTokenUsage(traces: any[], recommendations: Recommendation[]) {
+function analyzeTokenUsage(traces: TraceData[], recommendations: Recommendation[]) {
   const highTokenTraces = traces.filter(t =>
     (t.input_tokens || 0) + (t.output_tokens || 0) > 10000
   );

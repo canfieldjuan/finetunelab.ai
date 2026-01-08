@@ -350,7 +350,7 @@ def validate_jsonl(file_path):
     return this.fetch(\`/api/training/metrics/\${jobId}\`);
   }
 
-  async monitorTraining(jobId: string, onUpdate: (metrics: any) => void) {
+  async monitorTraining(jobId: string, onUpdate: (metrics: unknown) => void) {
     while (true) {
       const metrics = await this.getMetrics(jobId);
       onUpdate(metrics);

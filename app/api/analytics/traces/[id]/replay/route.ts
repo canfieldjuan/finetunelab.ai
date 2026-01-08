@@ -52,8 +52,8 @@ export async function POST(
     const body = (await req.json()) as ReplayRequest;
     const overrides = body.overrides || {};
 
-    const inputData = originalTrace.input_data as Record<string, any> || {};
-    const originalParams = inputData.parameters as Record<string, any> || {};
+    const inputData = originalTrace.input_data as Record<string, unknown> || {};
+    const originalParams = inputData.parameters as Record<string, unknown> || {};
 
     const replayedInputData = {
       ...inputData,

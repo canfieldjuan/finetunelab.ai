@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
+import { NextRequest } from 'next/server';
 function makeRequest(url: string, headers?: Record<string, string>) {
   return {
     url,
     headers: new Headers(headers ?? {}),
-  } as any;
+  } as unknown;
 }
 
 describe('GET app/api/analytics/data', () => {

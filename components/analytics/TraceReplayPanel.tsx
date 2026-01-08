@@ -7,8 +7,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Play, RefreshCw, ArrowRight } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import type { Trace } from './TraceView';
+
+interface TraceData {
+  model_name: string;
+  total_tokens?: number;
+  cost_usd?: number;
+  duration_ms: number;
+}
+
+interface ReplayResult {
+  originalTrace: TraceData;
+  replayTrace: TraceData;
+}
 
 interface TraceReplayPanelProps {
   trace: Trace;
@@ -16,17 +28,23 @@ interface TraceReplayPanelProps {
 
 export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
   const [replaying, setReplaying] = useState(false);
-  const [replayResult, setReplayResult] = useState<any>(null);
+  const [replayResult, setReplayResult] = useState<ReplayResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const inputData = trace.input_data as Record<string, any> || {};
-  const originalParams = inputData.parameters as Record<string, any> || {};
+  const inputData = trace.input_data as Record<string, unknown> || {};
+  const originalParams = inputData.parameters as Record<string, unknown> || {};
 
   const [modelName, setModelName] = useState(trace.model_name || '');
   const [modelProvider, setModelProvider] = useState(trace.model_provider || '');
-  const [temperature, setTemperature] = useState(originalParams.temperature ?? 0.7);
-  const [maxTokens, setMaxTokens] = useState(originalParams.maxTokens ?? 1000);
-  const [systemPrompt, setSystemPrompt] = useState(inputData.systemPrompt || '');
+  const [temperature, setTemperature] = useState<number>(
+    typeof originalParams.temperature === 'number' ? originalParams.temperature : 0.7
+  );
+  const [maxTokens, setMaxTokens] = useState<number>(
+    typeof originalParams.maxTokens === 'number' ? originalParams.maxTokens : 1000
+  );
+  const [systemPrompt, setSystemPrompt] = useState<string>(
+    typeof inputData.systemPrompt === 'string' ? inputData.systemPrompt : ''
+  );
   const [disableCache, setDisableCache] = useState(false);
 
   async function replayTrace() {
@@ -34,7 +52,7 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
     setReplaying(true);
 
     try {
-      const overrides: Record<string, any> = {};
+      const overrides: Record<string, unknown> = {};
 
       if (modelName !== trace.model_name) overrides.modelName = modelName;
       if (modelProvider !== trace.model_provider) overrides.modelProvider = modelProvider;
@@ -44,9 +62,7 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
       if (disableCache) overrides.disableCache = true;
 
       // Get session token for authentication
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MjAsImV4cCI6MTk2MDc2ODgyMH0.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
@@ -69,7 +85,7 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
         return;
       }
 
-      setReplayResult(data);
+      setReplayResult(data as ReplayResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to replay trace');
     } finally {
@@ -144,7 +160,7 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
           <Label htmlFor="disable-cache" className="text-sm font-normal">Disable Cache</Label>
         </div>
 
-        <Button onClick={replayTrace} disabled={replaying} size="sm" className="w-auto px-6">
+        <Button type="button" onClick={replayTrace} disabled={replaying} size="sm" className="w-auto px-6">
           <Play className="h-3.5 w-3.5 mr-2" />
           {replaying ? 'Replaying...' : 'Run Replay'}
         </Button>
@@ -199,13 +215,13 @@ export function TraceReplayPanel({ trace }: TraceReplayPanelProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tokens</span>
-                  <span className={`font-mono ${replayResult.replayTrace.total_tokens < replayResult.originalTrace.total_tokens ? 'text-green-600' : ''}`}>
+                  <span className={`font-mono ${(replayResult.replayTrace.total_tokens && replayResult.originalTrace.total_tokens && replayResult.replayTrace.total_tokens < replayResult.originalTrace.total_tokens) ? 'text-green-600' : ''}`}>
                     {replayResult.replayTrace.total_tokens?.toLocaleString() || '-'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Cost</span>
-                  <span className={`font-mono ${replayResult.replayTrace.cost_usd < replayResult.originalTrace.cost_usd ? 'text-green-600' : ''}`}>
+                  <span className={`font-mono ${(replayResult.replayTrace.cost_usd !== undefined && replayResult.originalTrace.cost_usd !== undefined && replayResult.replayTrace.cost_usd < replayResult.originalTrace.cost_usd) ? 'text-green-600' : ''}`}>
                     ${replayResult.replayTrace.cost_usd?.toFixed(6) || '-'}
                   </span>
                 </div>

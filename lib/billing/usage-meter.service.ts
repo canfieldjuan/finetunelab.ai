@@ -34,6 +34,19 @@ export interface UsageWarning {
   payloadUsagePercent: number;
 }
 
+// Type for usage_commitments table
+interface UsageCommitment {
+  user_id: string;
+  tier: 'starter' | 'growth' | 'business' | 'enterprise';
+  minimum_monthly_usd: string;
+  price_per_thousand_traces: string;
+  included_traces: number;
+  included_kb_per_trace: number;
+  overage_price_per_gb: string;
+  base_retention_days: number;
+  status: 'active' | 'cancelled' | 'expired';
+}
+
 /**
  * Record usage for a root trace
  * Serializes and compresses payload to calculate billing size
@@ -50,8 +63,8 @@ export async function recordRootTraceUsage(params: RootTraceUsageParams): Promis
     });
 
     // 2. Calculate size (compressed if possible)
-    let billingSize = payload.length; // Fallback to string length
-    let isCompressed = false;
+    let billingSize: number = payload.length; // Fallback to string length
+    let isCompressed: boolean = false;
 
     if (typeof CompressionStream !== 'undefined') {
       try {
@@ -59,7 +72,7 @@ export async function recordRootTraceUsage(params: RootTraceUsageParams): Promis
         const stream = new Blob([payload]).stream().pipeThrough(new CompressionStream('gzip'));
         // Read the stream to get the size
         const response = new Response(stream);
-        const blob = await response.blob();
+        const blob: Blob = await response.blob();
         billingSize = blob.size;
         isCompressed = true;
       } catch (e) {
@@ -78,7 +91,7 @@ export async function recordRootTraceUsage(params: RootTraceUsageParams): Promis
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { error } = await supabase.rpc('increment_root_trace_count', {
+    const { error }: { error: any } = await supabase.rpc('increment_root_trace_count', {
       p_user_id: userId,
       p_payload_bytes: billingSize,
       p_compressed_bytes: isCompressed ? billingSize : 0
@@ -107,8 +120,8 @@ export async function getCurrentUsage(userId: string): Promise<UsageStats | null
     if (!supabaseUrl || !supabaseServiceKey) return null;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    const { data, error } = await supabase.rpc('get_current_usage', {
+
+    const { data, error }: { data: any; error: any } = await supabase.rpc('get_current_usage', {
       p_user_id: userId
     });
 
@@ -121,7 +134,7 @@ export async function getCurrentUsage(userId: string): Promise<UsageStats | null
       return null;
     }
 
-    const record = data[0];
+    const record: any = data[0];
     return {
       periodMonth: record.period_month,
       periodYear: record.period_year,
@@ -148,8 +161,8 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
     if (!supabaseUrl || !supabaseServiceKey) return null;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    const { data, error } = await supabase.rpc('calculate_estimated_cost', {
+
+    const { data, error }: { data: any; error: any } = await supabase.rpc('calculate_estimated_cost', {
       p_user_id: userId
     });
 
@@ -162,7 +175,7 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
       return null;
     }
 
-    const record = data[0];
+    const record: any = data[0];
     return {
       baseMinimum: parseFloat(record.base_minimum),
       traceOverage: parseFloat(record.trace_overage),
@@ -189,7 +202,7 @@ export async function checkUsageWarnings(userId: string): Promise<UsageWarning |
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get current usage
-    const usage = await getCurrentUsage(userId);
+    const usage: UsageStats | null = await getCurrentUsage(userId);
     if (!usage) {
       return {
         traceWarning: false,
@@ -200,14 +213,15 @@ export async function checkUsageWarnings(userId: string): Promise<UsageWarning |
     }
 
     // Get commitment to calculate percentages
-    const { data: commitment } = await supabase
+    const { data: commitment, error: commitmentError } = await supabase
       .from('usage_commitments')
       .select('*')
       .eq('user_id', userId)
       .eq('status', 'active')
-      .single();
+      .single() as { data: UsageCommitment | null; error: any };
 
-    if (!commitment) {
+    if (commitmentError || !commitment) {
+      console.warn('[UsageMeter] No active commitment found for user:', userId, commitmentError);
       return {
         traceWarning: false,
         payloadWarning: false,
@@ -217,10 +231,10 @@ export async function checkUsageWarnings(userId: string): Promise<UsageWarning |
     }
 
     // Calculate usage percentages
-    const traceUsagePercent = (usage.rootTraces / commitment.included_traces) * 100;
-    const includedPayloadGb = (usage.rootTraces * commitment.included_kb_per_trace) / 1_048_576;
-    const payloadUsagePercent = includedPayloadGb > 0 
-      ? (usage.compressedPayloadGb / includedPayloadGb) * 100 
+    const traceUsagePercent: number = (usage.rootTraces / commitment.included_traces) * 100;
+    const includedPayloadGb: number = (usage.rootTraces * commitment.included_kb_per_trace) / 1_048_576;
+    const payloadUsagePercent: number = includedPayloadGb > 0
+      ? (usage.compressedPayloadGb / includedPayloadGb) * 100
       : 0;
 
     return {

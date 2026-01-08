@@ -29,6 +29,11 @@ function getEncryptionKey(): Buffer {
     return crypto.scryptSync(envKey, 'demo-salt', KEY_LENGTH);
   }
 
+  // In production, DEMO_ENCRYPTION_KEY is required
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('DEMO_ENCRYPTION_KEY is not set in a production environment. Please set it to a 32-byte hex string.');
+  }
+
   // Fallback: derive from service role key (development only)
   const fallbackKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!fallbackKey) {

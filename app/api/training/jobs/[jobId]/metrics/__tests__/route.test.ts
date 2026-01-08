@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { NextRequest } from 'next/server';
 
 type SupabaseResponse<T> = { data: T | null; error: { message: string } | null };
 
@@ -15,7 +16,7 @@ function makeRequest(body: unknown, headers?: Record<string, string>) {
     json: async () => body,
   };
 
-  return request as any;
+return request as NextRequest;
 }
 
 describe('POST app/api/training/jobs/[jobId]/metrics', () => {
@@ -133,7 +134,7 @@ describe('POST app/api/training/jobs/[jobId]/metrics', () => {
     expect(jobsUpdate).toHaveBeenCalledTimes(1);
     expect(metricsInsert).toHaveBeenCalledTimes(1);
 
-    const updateArg = (jobsUpdate.mock.calls[0] as any[])?.[0];
+    const updateArg = (jobsUpdate.mock.calls[0] as unknown[])?.[0];
     expect(updateArg).toMatchObject({
       current_step: 2,
       current_epoch: 1,
@@ -143,7 +144,7 @@ describe('POST app/api/training/jobs/[jobId]/metrics', () => {
       status: 'running',
     });
 
-    const insertArg = (metricsInsert.mock.calls[0] as any[])?.[0];
+    const insertArg = (metricsInsert.mock.calls[0] as unknown[])?.[0];
     expect(insertArg).toMatchObject({
       job_id: 'job-123',
       step: 2,

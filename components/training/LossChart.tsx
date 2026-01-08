@@ -25,22 +25,32 @@ interface MetricDataPoint {
   step: number;
   train_loss: number | null;
   eval_loss: number | null;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    dataKey: string;
+    value: number | null;
+    [key: string]: unknown;
+  }>;
+  label?: string | number;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (!active || !payload || !label) return null;
 
   // Aggregate all train_loss and eval_loss values for this step
   let trainLoss: number | null = null;
   let evalLoss: number | null = null;
 
-  payload.forEach((entry: any) => {
+  payload.forEach((entry) => {
     if (entry.dataKey === 'train_loss' && entry.value != null) {
-      trainLoss = entry.value as number;
+      trainLoss = entry.value;
     }
     if (entry.dataKey === 'eval_loss' && entry.value != null) {
-      evalLoss = entry.value as number;
+      evalLoss = entry.value;
     }
   });
 

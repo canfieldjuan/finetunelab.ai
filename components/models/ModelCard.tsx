@@ -19,12 +19,32 @@ import { Sparkles, Zap, Eye, Edit, Trash2, Globe, User, PlayCircle, StopCircle, 
 import type { LLMModelDisplay } from '@/lib/models/llm-model.types';
 import { toast } from 'sonner';
 
+interface ServerInfo {
+  id: string;
+  status: 'running' | 'stopped' | 'starting' | 'error';
+  port?: number;
+}
+
+interface ModelMetadata {
+  model_path?: string;
+  training_job_id?: string;
+}
+
+interface DeployPayload {
+  server_type: 'ollama' | 'vllm';
+  name: string;
+  config: {
+    model_path: string;
+  };
+  job_id?: string;
+}
+
 interface ModelCardProps {
   model: LLMModelDisplay;
   onEdit?: (model: LLMModelDisplay) => void;
   onDelete?: (model: LLMModelDisplay) => void;
   currentUserId?: string;
-  serverInfo?: any;
+  serverInfo?: ServerInfo;
   sessionToken?: string;
   onServerChanged?: () => void;
 }
@@ -136,7 +156,7 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
     if (!canDeploy || !sessionToken) return;
 
     // Check if model has deployment metadata
-    const metadata = model.metadata as any;
+    const metadata = model.metadata as ModelMetadata | undefined;
     if (!metadata?.model_path) {
       toast.error('No model path found. This model cannot be deployed.');
       return;
@@ -147,7 +167,7 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
 
     try {
       // Construct payload matching /api/training/deploy expectations
-      const payload: any = {
+      const payload: DeployPayload = {
         server_type: model.provider === 'ollama' ? 'ollama' : 'vllm',
         name: model.name,
         config: {

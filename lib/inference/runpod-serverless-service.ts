@@ -431,7 +431,7 @@ export class RunPodServerlessService {
 
       if (networkVolumeIdToAttach) {
         console.log(`[RunPodServerlessService] Attaching volume ${networkVolumeIdToAttach} to the pod.`);
-        (variables.input as any).networkVolumeId = networkVolumeIdToAttach;
+        (variables.input as unknown).networkVolumeId = networkVolumeIdToAttach;
         variables.input.volumeMountPath = volumeMountPath;
         const modelFolderName = request.model_id.split('/').pop();
         variables.input.dockerArgs = `vllm serve --model ${volumeMountPath}/${modelFolderName} ${vllmArgs.join(' ')}`;

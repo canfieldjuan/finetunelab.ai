@@ -37,6 +37,7 @@ import {
   FlaskConical,
   Network,
   Cpu,
+  HardDrive
 } from 'lucide-react';
 import type { NavItem } from './CollapsibleNavGroup';
 import { CollapsibleNavGroup } from './CollapsibleNavGroup';
@@ -46,6 +47,7 @@ import { ManageWorkspacesDialog } from '@/components/workspace/ManageWorkspacesD
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { FineTuneLabFullLogoV2 } from '@/components/branding';
+import { supabase } from '@/lib/supabaseClient';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,6 +83,20 @@ export function AppSidebar({
 
   // State for Settings dialog
   const [showSettings, setShowSettings] = useState(false);
+
+  // State for current session (fetched from Supabase)
+  const [currentSession, setCurrentSession] = useState<Session | null>(session || null);
+
+  // Fetch session on mount to ensure Settings works on all pages
+  useEffect(() => {
+    const fetchSession = async () => {
+      const { data: { session: fetchedSession } } = await supabase.auth.getSession();
+      if (fetchedSession) {
+        setCurrentSession(fetchedSession);
+      }
+    };
+    fetchSession();
+  }, []);
 
   // Load expanded state from localStorage on mount
   useEffect(() => {
@@ -183,21 +199,19 @@ export function AppSidebar({
     { id: 'docs-troubleshooting', href: '/docs/troubleshooting', icon: AlertCircle, label: 'Troubleshooting' },
   ];
 
-  // Lab Notes - standalone item for research & insights
-  const labNotesItem: NavItem = { id: 'lab-notes', href: '/lab-notes', icon: FlaskConical, label: 'Lab Notes' };
-  const labAcademyItem: NavItem = { id: 'lab-academy', href: '/lab-academy', icon: BookOpen, label: 'Lab Academy' };
-  const caseStudiesItem: NavItem = { id: 'case-studies', href: '/case-studies', icon: TrendingUp, label: 'Case Studies' };
 
   return (
     <>
-      <aside className="w-64 h-screen bg-secondary border-r flex flex-col p-4">
-        {/* Brand/Logo Section */}
-        <div className="mb-2">
+      <aside className="w-64 h-screen bg-secondary border-r flex flex-col">
+        {/* Brand/Logo Section - FIXED, NO SCROLL */}
+        <div className="p-4 pb-2 flex-shrink-0">
           <Link href="/chat" className="hover:opacity-80 transition-opacity">
             <FineTuneLabFullLogoV2 width={180} height={54} />
           </Link>
         </div>
 
+        {/* SCROLLABLE CONTENT AREA */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
       {/* Workspace Selector - Only show when user has multiple workspaces */}
       {workspaces.length > 1 && (
         <div className="mb-4 pb-4 border-b">
@@ -292,72 +306,6 @@ export function AppSidebar({
                 onToggle={() => toggleGroup('evaluation')}
                 collapsible={false}
               />
-
-              {/* Lab Notes & Case Studies - Hidden on Chat page */}
-              {currentPage !== 'chat' && (
-                <div className="pt-2 border-t space-y-1">
-                  {(() => {
-                    const ItemIcon = labNotesItem.icon;
-                    const isActive = labNotesItem.id === currentPage || currentPage.startsWith('lab-notes');
-                    return (
-                      <Link href={labNotesItem.href} className="block">
-                        <button
-                          type="button"
-                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                            isActive
-                              ? 'bg-accent text-accent-foreground font-medium'
-                              : 'hover:bg-muted'
-                          }`}
-                          aria-current={isActive ? 'page' : undefined}
-                        >
-                          <ItemIcon className="w-3.5 h-3.5" />
-                          <span>🧪 {labNotesItem.label}</span>
-                        </button>
-                      </Link>
-                    );
-                  })()}
-                  {(() => {
-                    const ItemIcon = labAcademyItem.icon;
-                    const isActive = labAcademyItem.id === currentPage || currentPage.startsWith('lab-academy');
-                    return (
-                      <Link href={labAcademyItem.href} className="block">
-                        <button
-                          type="button"
-                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                            isActive
-                              ? 'bg-accent text-accent-foreground font-medium'
-                              : 'hover:bg-muted'
-                          }`}
-                          aria-current={isActive ? 'page' : undefined}
-                        >
-                          <ItemIcon className="w-3.5 h-3.5" />
-                          <span>📚 {labAcademyItem.label}</span>
-                        </button>
-                      </Link>
-                    );
-                  })()}
-                  {(() => {
-                    const ItemIcon = caseStudiesItem.icon;
-                    const isActive = caseStudiesItem.id === currentPage || currentPage.startsWith('case-studies');
-                    return (
-                      <Link href={caseStudiesItem.href} className="block">
-                        <button
-                          type="button"
-                          className={`w-full text-left px-2.5 py-1.5 text-sm rounded-md flex items-center gap-2 transition-colors cursor-pointer ${
-                            isActive
-                              ? 'bg-accent text-accent-foreground font-medium'
-                              : 'hover:bg-muted'
-                          }`}
-                          aria-current={isActive ? 'page' : undefined}
-                        >
-                          <ItemIcon className="w-3.5 h-3.5" />
-                          <span>🎯 {caseStudiesItem.label}</span>
-                        </button>
-                      </Link>
-                    );
-                  })()}
-                </div>
-              )}
             </div>
           </>
         )}
@@ -391,94 +339,99 @@ export function AppSidebar({
       </div>
 
       {/* Children Slot - For Chat's conversations list */}
-      {children ? (
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-            {children}
-          </div>
+      {children && (
+        <div className="mb-4">
+          {children}
         </div>
-      ) : (
-        <div className="flex-1" />
       )}
+        </div>
+        {/* END SCROLLABLE CONTENT AREA */}
 
-      {/* User Settings Section */}
-      {user && (
-        <div className="mt-auto pt-4 border-t">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <SettingsIcon className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-sm truncate">{user.email}</span>
-                </div>
-                <span className="text-xs ml-2">▼</span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-56">
-              {/* Documentation Link */}
-              <DropdownMenuItem asChild>
-                <Link href="/docs" className="flex items-center gap-2 cursor-pointer">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>Documentation</span>
-                </Link>
-              </DropdownMenuItem>
-              {/* Upgrade Account Link */}
-              <DropdownMenuItem asChild>
-                <Link href="/upgrade" className="flex items-center gap-2 cursor-pointer">
-                  <Crown className="w-3.5 h-3.5" />
-                  <span>Upgrade Account</span>
-                </Link>
-              </DropdownMenuItem>
-              {/* Account Settings Link */}
-              <DropdownMenuItem asChild>
-                <Link href="/account" className="flex items-center gap-2 cursor-pointer">
-                  <UserIcon className="w-3.5 h-3.5" />
-                  <span>Account Settings</span>
-                </Link>
-              </DropdownMenuItem>
-              {/* Settings Button */}
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  console.log('[AppSidebar] Settings clicked, session:', session);
-                  console.log('[AppSidebar] Has access_token:', !!session?.access_token);
-                  setShowSettings(true);
-                }}
-                className="cursor-pointer"
-              >
-                <SettingsIcon className="w-3.5 h-3.5 mr-2" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              {/* Secrets Vault Link */}
-              <DropdownMenuItem asChild>
-                <Link href="/secrets" className="flex items-center gap-2 cursor-pointer">
-                  <Key className="w-3.5 h-3.5" />
-                  <span>Secrets Vault</span>
-                </Link>
-              </DropdownMenuItem>
-              {/* Manage Workspaces Button */}
-              <DropdownMenuItem
-                onClick={() => setShowManageWorkspaces(true)}
-                className="cursor-pointer"
-              >
-                <FolderKanban className="w-3.5 h-3.5 mr-2" />
-                <span>Manage Workspaces</span>
-              </DropdownMenuItem>
-              {/* Log Out Button */}
-              <DropdownMenuItem
-                onClick={signOut}
-                className="text-destructive focus:text-destructive cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5 mr-2" />
-                <span>Log out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
+        {/* User Settings Section - FIXED AT BOTTOM */}
+        {user && (
+          <div className="p-4 pt-3 border-t flex-shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <SettingsIcon className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm truncate">{user.email}</span>
+                  </div>
+                  <span className="text-xs ml-2">▼</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-56">
+                {/* Documentation Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/docs" className="flex items-center gap-2 cursor-pointer">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Documentation</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Upgrade Account Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/upgrade" className="flex items-center gap-2 cursor-pointer">
+                    <Crown className="w-3.5 h-3.5" />
+                    <span>Upgrade Account</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Account Settings Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/account" className="flex items-center gap-2 cursor-pointer">
+                    <UserIcon className="w-3.5 h-3.5" />
+                    <span>Account Settings</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Settings Button */}
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    console.log('[AppSidebar] Settings clicked, currentSession:', currentSession);
+                    console.log('[AppSidebar] Has access_token:', !!currentSession?.access_token);
+                    setShowSettings(true);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <SettingsIcon className="w-3.5 h-3.5 mr-2" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                {/* Secrets Vault Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/secrets" className="flex items-center gap-2 cursor-pointer">
+                    <Key className="w-3.5 h-3.5" />
+                    <span>Secrets Vault</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Manage Workspaces Button */}
+                <DropdownMenuItem
+                  onClick={() => setShowManageWorkspaces(true)}
+                  className="cursor-pointer"
+                >
+                  <FolderKanban className="w-3.5 h-3.5 mr-2" />
+                  <span>Manage Workspaces</span>
+                </DropdownMenuItem>
+                {/* Worker Agents Link */}
+                <DropdownMenuItem asChild>
+                  <Link href="/workers" className="flex items-center gap-2 cursor-pointer">
+                    <HardDrive className="w-3.5 h-3.5" />
+                    <span>Worker Agents</span>
+                  </Link>
+                </DropdownMenuItem>
+                {/* Log Out Button */}
+                <DropdownMenuItem
+                  onClick={signOut}
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5 mr-2" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </aside>
 
       {/* Manage Workspaces Dialog */}
@@ -488,18 +441,18 @@ export function AppSidebar({
       />
 
       {/* Settings Dialog */}
-      {session?.access_token ? (
+      {currentSession?.access_token ? (
         <SettingsDialog
           isOpen={showSettings}
           onClose={() => {
             console.log('[AppSidebar] Closing settings dialog');
             setShowSettings(false);
           }}
-          sessionToken={session.access_token}
+          sessionToken={currentSession.access_token}
         />
       ) : (
         <>
-          {showSettings && console.log('[AppSidebar] WARNING: Settings dialog requested but no session.access_token available')}
+          {showSettings && console.log('[AppSidebar] WARNING: Settings dialog requested but no currentSession.access_token available')}
         </>
       )}
     </>

@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 
 type SupabaseResponse<T> = { data: T | null; error: { message: string } | null };
 
-function makeRequest(url: string, body?: unknown, headers?: Record<string, string>) {
+interface QueryBuilder {
+  select: (columns?: string) => QueryBuilder;
+  eq: (column: string, value: unknown) => QueryBuilder;
+  order: (column: string, options?: unknown) => QueryBuilder;
+  range: (from: number, to: number) => Promise<unknown>;
+}
+
+function makeRequest(url: string, body?: unknown, headers?: Record<string, string>): NextRequest {
   const bodyText = body === undefined ? '' : JSON.stringify(body);
   const baseHeaders: Record<string, string> = {
     ...(headers ?? {}),
@@ -13,7 +21,7 @@ function makeRequest(url: string, body?: unknown, headers?: Record<string, strin
     url,
     headers: new Headers(baseHeaders),
     json: async () => body,
-  } as any;
+  } as NextRequest;
 }
 
 describe('app/api/analytics/traces', () => {
@@ -64,7 +72,7 @@ describe('app/api/analytics/traces', () => {
 
     expect(response.status).toBe(200);
     expect(insert).toHaveBeenCalledTimes(1);
-    const insertArg = (insert.mock.calls[0] as any[])?.[0];
+    const insertArg = (insert.mock.calls[0] as unknown[])?.[0] as { user_id: string };
     expect(insertArg.user_id).toBe('user-123');
   });
 
@@ -74,7 +82,7 @@ describe('app/api/analytics/traces', () => {
     }));
 
     const range = vi.fn(async () => ({ data: [], error: null }));
-    const builder: any = {};
+    const builder = {} as QueryBuilder;
     builder.select = vi.fn(() => builder);
     builder.eq = vi.fn(() => builder);
     builder.order = vi.fn(() => builder);

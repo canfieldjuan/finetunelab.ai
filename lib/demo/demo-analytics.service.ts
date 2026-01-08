@@ -23,6 +23,7 @@ export interface DemoSessionMetrics {
   totalOutputTokens: number;
   avgResponseLength: number;
   successRate: number;
+  errorCounts: { [error: string]: number };
 }
 
 export interface DemoPromptResult {
@@ -80,6 +81,7 @@ export async function getDemoSessionMetrics(sessionId: string): Promise<DemoSess
       totalOutputTokens: 0,
       avgResponseLength: 0,
       successRate: 0,
+      errorCounts: {},
     };
   }
 
@@ -87,8 +89,8 @@ export async function getDemoSessionMetrics(sessionId: string): Promise<DemoSess
   const successful = results.filter(r => r.success);
   const failed = results.filter(r => !r.success);
 
-  // Latency calculations (only for successful results with latency)
-  const latencies = successful
+  // Latency calculations (include all results with latency)
+  const latencies = results
     .map(r => r.latency_ms)
     .filter((l): l is number => l !== null && l !== undefined && l > 0)
     .sort((a, b) => a - b);
@@ -111,6 +113,13 @@ export async function getDemoSessionMetrics(sessionId: string): Promise<DemoSess
     ? responseLengths.reduce((sum, l) => sum + l, 0) / responseLengths.length
     : 0;
 
+  // Error aggregation
+  const errorCounts = failed.reduce((acc, r) => {
+    const error = r.error || 'Unknown error';
+    acc[error] = (acc[error] || 0) + 1;
+    return acc;
+  }, {} as { [error: string]: number });
+
   return {
     totalPrompts: results.length,
     completedPrompts: successful.length,
@@ -127,6 +136,7 @@ export async function getDemoSessionMetrics(sessionId: string): Promise<DemoSess
     totalOutputTokens,
     avgResponseLength: Math.round(avgResponseLength),
     successRate: results.length > 0 ? (successful.length / results.length) * 100 : 0,
+    errorCounts,
   };
 }
 

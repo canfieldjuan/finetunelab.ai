@@ -55,6 +55,8 @@ export function ScheduleRunHistory({
     if (open && scheduleId) {
       fetchRuns();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, scheduleId]);
 
   const fetchRuns = async () => {
@@ -96,7 +98,7 @@ export function ScheduleRunHistory({
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { variant: any; icon: any; label: string }> = {
+    const statusConfig: Record<string, { variant: unknown; icon: unknown; label: string }> = {
       triggered: { variant: 'outline', icon: Clock, label: 'Triggered' },
       running: { variant: 'default', icon: RefreshCw, label: 'Running' },
       completed: { variant: 'outline', icon: CheckCircle, label: 'Completed' },
@@ -172,7 +174,7 @@ export function ScheduleRunHistory({
             <Clock className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No runs yet</h3>
             <p className="text-muted-foreground">
-              This schedule hasn't executed yet. Runs will appear here once the schedule triggers.
+              This schedule hasn&apos;t executed yet. Runs will appear here once the schedule triggers.
             </p>
           </div>
         ) : (

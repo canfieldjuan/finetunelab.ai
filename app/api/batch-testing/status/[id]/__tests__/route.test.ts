@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 function makeRequest(headers?: Record<string, string>) {
   return {
     headers: new Headers(headers ?? {}),
-  } as any;
+  } as unknown;
 }
 
 describe('GET app/api/batch-testing/status/[id]', () => {

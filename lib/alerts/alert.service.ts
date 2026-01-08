@@ -15,6 +15,7 @@ import {
   BatchTestAlertData,
   ScheduledEvaluationAlertData,
   AlertType,
+  AlertHistoryEntry,
 } from './alert.types';
 import { emailChannel } from './channels/email.channel';
 import { webhookChannel } from './channels/webhook.channel';
@@ -342,8 +343,8 @@ export class AlertService {
     userId: string,
     limit: number = 50,
     offset: number = 0
-  ): Promise<{ alerts: unknown[]; total: number }> {
-    const { data, error, count } = await this.supabase
+  ): Promise<{ alerts: AlertHistoryEntry[]; total: number }> {
+    const { data, error, count }: { data: AlertHistoryEntry[] | null; error: any; count: number | null } = await this.supabase
       .from('alert_history')
       .select('*', { count: 'exact' })
       .eq('user_id', userId)

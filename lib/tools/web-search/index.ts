@@ -8,8 +8,8 @@ import type { SortBy } from './types';
 
  
 interface ExpressRouter {
-  post: (path: string, handler: (req: any, res: any) => void) => void;
-  get: (path: string, handler: (req: any, res: any) => void) => void;
+  post: (path: string, handler: (req: unknown, res: unknown) => void) => void;
+  get: (path: string, handler: (req: unknown, res: unknown) => void) => void;
 }
 
 interface WebSearchToolDefinition extends ToolDefinition {

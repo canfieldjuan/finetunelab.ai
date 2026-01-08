@@ -3,11 +3,15 @@ import { NextRequest } from 'next/server';
 import type { ToolDefinition } from '@/lib/llm/openai';
 import { supabase } from '@/lib/supabaseClient';
 import { executeTool } from '@/lib/tools/toolManager';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { executeTrainingMetrics } from '@/lib/tools/analytics/training-metrics.handler';
 import { executeTrainingPredictions } from '@/lib/tools/analytics/training-predictions.handler';
 import { executeAdvancedAnalytics } from '@/lib/tools/analytics/advanced-analytics.handler';
 import { executeGetTraces } from '@/lib/tools/analytics/traces.handler';
+import { startToolLog, completeToolLog, failToolLog, categorizeError } from '@/lib/analytics/tool-logger';
+import { checkRateLimit } from '@/lib/rate-limiting/rate-limiter';
+import { RATE_LIMITS } from '@/lib/rate-limiting/types';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 export const runtime = 'nodejs';
 
@@ -155,7 +159,7 @@ const analyticsTools: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_session_evaluations',
-      description: 'Retrieves all evaluation scores and feedback for conversations in the selected session. Returns ratings, success/failure status, feedback comments, and evaluation metadata. IMPORTANT: Use the conversation IDs from the CURRENT SESSION context above.',
+      description: 'Retrieves evaluation scores and feedback for conversations in the selected session with pagination support. Returns ratings, success/failure status, feedback comments, and evaluation metadata. IMPORTANT: Use the conversation IDs from the CURRENT SESSION context above. Supports pagination for large sessions.',
       parameters: {
         type: 'object',
         properties: {
@@ -163,6 +167,14 @@ const analyticsTools: ToolDefinition[] = [
             type: 'array',
             items: { type: 'string' },
             description: 'Array of conversation UUIDs from the CURRENT SESSION context (copy the exact IDs provided in the session context)'
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum evaluations to return (default: 100, max: 500). Use for pagination with large sessions.'
+          },
+          offset: {
+            type: 'number',
+            description: 'Number of evaluations to skip for pagination (default: 0). Use with limit for paginated requests.'
           }
         },
         required: ['conversationIds']
@@ -191,7 +203,7 @@ const analyticsTools: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_session_conversations',
-      description: 'Retrieves full conversation data including all messages, tools used, and metadata for the selected session. Useful for detailed analysis of conversation patterns and content. IMPORTANT: Use the conversation IDs from the CURRENT SESSION context above.',
+      description: 'Retrieves full conversation data including all messages, tools used, and metadata for the selected session with pagination support. Useful for detailed analysis of conversation patterns and content. IMPORTANT: Use the conversation IDs from the CURRENT SESSION context above. Supports pagination for large sessions.',
       parameters: {
         type: 'object',
         properties: {
@@ -204,9 +216,46 @@ const analyticsTools: ToolDefinition[] = [
             type: 'boolean',
             description: 'Whether to include full message content (default: true)',
             default: true
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum conversations to return (default: 100, max: 500). Use for pagination with large sessions.'
+          },
+          offset: {
+            type: 'number',
+            description: 'Number of conversations to skip for pagination (default: 0). Use with limit for paginated requests.'
           }
         },
         required: ['conversationIds']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_available_sessions',
+      description: 'Lists all available tagged sessions (batch tests, experiments) with metadata. Use this FIRST to discover which sessions exist before analyzing them. Returns session IDs, experiment names, and conversation IDs for each session.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Maximum number of sessions to return (default: 100)'
+          },
+          model_filter: {
+            type: 'string',
+            description: 'Filter sessions by model name (case-insensitive partial match, e.g., "Qwen", "GPT-5", "Claude")'
+          },
+          date_from: {
+            type: 'string',
+            description: 'Filter sessions created after this date (ISO 8601 format, e.g., "2025-01-01T00:00:00Z")'
+          },
+          date_to: {
+            type: 'string',
+            description: 'Filter sessions created before this date (ISO 8601 format, e.g., "2025-12-31T23:59:59Z")'
+          }
+        },
+        required: []
       }
     }
   },
@@ -564,12 +613,17 @@ Use this to:
         properties: {
           operation: {
             type: 'string',
-            enum: ['get_traces', 'get_trace_details', 'compare_traces', 'get_trace_summary', 'get_rag_metrics', 'get_performance_stats'],
+            enum: ['get_traces', 'get_trace_details', 'compare_traces', 'get_trace_summary', 'get_rag_metrics', 'get_performance_stats', 'get_traces_by_conversations'],
             description: 'Operation to perform'
           },
           conversation_id: {
             type: 'string',
             description: 'Filter traces by conversation ID'
+          },
+          conversation_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of conversation IDs to get traces for (for get_traces_by_conversations operation, max: 100). Returns traces grouped by conversation with per-conversation statistics.'
           },
           trace_id: {
             type: 'string',
@@ -670,17 +724,27 @@ Use this to:
 ];
 
 // Tool execution handlers
-async function getSessionEvaluations(conversationIds: string[], authClient = supabase) {
+async function getSessionEvaluations(
+  conversationIds: string[],
+  authClient = supabase,
+  limit?: number,
+  offset?: number
+) {
   console.log('[AnalyticsAPI] Getting evaluations for', conversationIds.length, 'conversations');
   console.log('[AnalyticsAPI] Conversation IDs:', conversationIds);
+
+  // Pagination parameters with defaults
+  const paginationLimit = typeof limit === 'number' ? Math.min(limit, 500) : 100;
+  const paginationOffset = typeof offset === 'number' ? offset : 0;
+  console.log('[AnalyticsAPI] Pagination:', { limit: paginationLimit, offset: paginationOffset });
 
   // Validate conversation IDs are valid UUIDs
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const invalidIds = conversationIds.filter(id => !uuidRegex.test(id));
   if (invalidIds.length > 0) {
     console.error('[AnalyticsAPI] Invalid conversation IDs detected:', invalidIds);
-    return { 
-      error: `Invalid conversation IDs: ${invalidIds.join(', ')}. Conversation IDs must be valid UUIDs.` 
+    return {
+      error: `Invalid conversation IDs: ${invalidIds.join(', ')}. Conversation IDs must be valid UUIDs.`
     };
   }
 
@@ -711,12 +775,13 @@ async function getSessionEvaluations(conversationIds: string[], authClient = sup
   const messageIds = messages.map(m => m.id);
   console.log('[AnalyticsAPI] Found', messageIds.length, 'messages to check for evaluations');
 
-  // Get message evaluations
+  // Get message evaluations with pagination
   const { data: evaluations, error } = await authClient
     .from('message_evaluations')
     .select('*')
     .in('message_id', messageIds)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(paginationOffset, paginationOffset + paginationLimit - 1);
 
   if (error) {
     console.error('[AnalyticsAPI] Error fetching evaluations:', error);
@@ -739,7 +804,13 @@ async function getSessionEvaluations(conversationIds: string[], authClient = sup
 
   return {
     evaluations: evaluations || [],
-    statistics: stats
+    statistics: stats,
+    pagination: {
+      limit: paginationLimit,
+      offset: paginationOffset,
+      total_returned: evaluations?.length || 0,
+      has_more: (evaluations?.length || 0) === paginationLimit
+    }
   };
 }
 
@@ -985,26 +1056,38 @@ async function getSessionMetrics(conversationIds: string[], authClient = supabas
   };
 }
 
-async function getSessionConversations(conversationIds: string[], includeMessages = true, authClient = supabase) {
+async function getSessionConversations(
+  conversationIds: string[],
+  includeMessages = true,
+  authClient = supabase,
+  limit?: number,
+  offset?: number
+) {
   console.log('[AnalyticsAPI] Getting conversations for', conversationIds.length, 'IDs');
   console.log('[AnalyticsAPI] Conversation IDs:', conversationIds);
+
+  // Pagination parameters with defaults
+  const paginationLimit = typeof limit === 'number' ? Math.min(limit, 500) : 100;
+  const paginationOffset = typeof offset === 'number' ? offset : 0;
+  console.log('[AnalyticsAPI] Pagination:', { limit: paginationLimit, offset: paginationOffset });
 
   // Validate conversation IDs are valid UUIDs
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const invalidIds = conversationIds.filter(id => !uuidRegex.test(id));
   if (invalidIds.length > 0) {
     console.error('[AnalyticsAPI] Invalid conversation IDs detected:', invalidIds);
-    return { 
-      error: `Invalid conversation IDs: ${invalidIds.join(', ')}. Conversation IDs must be valid UUIDs.` 
+    return {
+      error: `Invalid conversation IDs: ${invalidIds.join(', ')}. Conversation IDs must be valid UUIDs.`
     };
   }
 
-  // Get conversation metadata
+  // Get conversation metadata with pagination
   const { data: conversations, error: convError } = await authClient
     .from('conversations')
     .select('*')
     .in('id', conversationIds)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(paginationOffset, paginationOffset + paginationLimit - 1);
 
   if (convError) {
     console.error('[AnalyticsAPI] Error fetching conversations:', convError);
@@ -1012,7 +1095,15 @@ async function getSessionConversations(conversationIds: string[], includeMessage
   }
 
   if (!includeMessages) {
-    return { conversations };
+    return {
+      conversations,
+      pagination: {
+        limit: paginationLimit,
+        offset: paginationOffset,
+        total_returned: conversations?.length || 0,
+        has_more: (conversations?.length || 0) === paginationLimit
+      }
+    };
   }
 
   // Get messages for each conversation
@@ -1035,7 +1126,102 @@ async function getSessionConversations(conversationIds: string[], includeMessage
 
   return {
     conversations: conversationsWithMessages,
-    totalMessages: messages?.length || 0
+    totalMessages: messages?.length || 0,
+    pagination: {
+      limit: paginationLimit,
+      offset: paginationOffset,
+      total_returned: conversations?.length || 0,
+      has_more: (conversations?.length || 0) === paginationLimit
+    }
+  };
+}
+
+// List all available tagged sessions for the user
+async function listAvailableSessions(
+  userId: string,
+  filters?: {
+    limit?: number;
+    model_filter?: string;
+    date_from?: string;
+    date_to?: string;
+  },
+  supabaseClient: SupabaseClient = supabase
+) {
+  console.log('[AnalyticsAPI] Listing available sessions for user:', userId, 'with filters:', filters);
+
+  let query = supabaseClient
+    .from('conversations')
+    .select('id, session_id, experiment_name, llm_model_id, created_at')
+    .eq('user_id', userId)
+    .not('session_id', 'is', null)
+    .not('experiment_name', 'is', null)
+    .order('created_at', { ascending: false });
+
+  if (filters?.model_filter) {
+    query = query.ilike('experiment_name', `%${filters.model_filter}%`);
+  }
+
+  if (filters?.date_from) {
+    query = query.gte('created_at', filters.date_from);
+  }
+
+  if (filters?.date_to) {
+    query = query.lte('created_at', filters.date_to);
+  }
+
+  const limit = filters?.limit || 100;
+  query = query.limit(1000); // Get more to group properly
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('[AnalyticsAPI] Error listing sessions:', error);
+    return { error: `Failed to list sessions: ${error.message}` };
+  }
+
+  // Group by session
+  const grouped = new Map<string, {
+    session_id: string;
+    experiment_name: string;
+    conversation_ids: string[];
+    conversation_count: number;
+    created_at: string;
+    model: string | null;
+  }>();
+
+  data?.forEach((conv: {
+    id: string;
+    session_id: string;
+    experiment_name: string;
+    llm_model_id: string | null;
+    created_at: string;
+  }) => {
+    const key = `${conv.session_id}-${conv.experiment_name}`;
+    if (grouped.has(key)) {
+      const existing = grouped.get(key)!;
+      existing.conversation_ids.push(conv.id);
+      existing.conversation_count++;
+    } else {
+      grouped.set(key, {
+        session_id: conv.session_id,
+        experiment_name: conv.experiment_name,
+        conversation_ids: [conv.id],
+        conversation_count: 1,
+        created_at: conv.created_at,
+        model: conv.llm_model_id
+      });
+    }
+  });
+
+  const sessions = Array.from(grouped.values())
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, limit);
+
+  console.log(`[AnalyticsAPI] Found ${sessions.length} unique sessions`);
+
+  return {
+    total_sessions: sessions.length,
+    sessions,
   };
 }
 
@@ -1044,9 +1230,36 @@ async function evaluateMessages(
   messageIds: string[],
   criteria: string[] = ['all'],
   judgeModel: string = 'claude-3-sonnet',
-  authHeader: string
+  authHeader: string,
+  userId: string
 ) {
   console.log(`[AnalyticsAPI] Evaluating ${messageIds.length} messages with ${judgeModel}`);
+
+  // RATE LIMITING: Check if user has exceeded rate limit for evaluations
+  const rateLimit = await checkRateLimit({
+    userId,
+    action: 'evaluate_messages',
+    limit: RATE_LIMITS.EVALUATE_MESSAGES.limit,
+    windowMs: RATE_LIMITS.EVALUATE_MESSAGES.windowMs,
+  });
+
+  if (!rateLimit.allowed) {
+    const retryAfterMinutes = Math.ceil(rateLimit.retryAfterMs / 60000);
+    console.warn(`[AnalyticsAPI] Rate limit exceeded for user ${userId}. Retry after ${retryAfterMinutes} minutes`);
+
+    return {
+      error: true,
+      message: `Rate limit exceeded. You can evaluate ${RATE_LIMITS.EVALUATE_MESSAGES.limit} messages per hour. Please try again in ${retryAfterMinutes} minute${retryAfterMinutes !== 1 ? 's' : ''}.`,
+      rate_limit: {
+        limit: RATE_LIMITS.EVALUATE_MESSAGES.limit,
+        remaining: 0,
+        reset_at: rateLimit.resetAt.toISOString(),
+        retry_after_minutes: retryAfterMinutes,
+      },
+    };
+  }
+
+  console.log(`[AnalyticsAPI] Rate limit check passed. Remaining: ${rateLimit.remaining}/${RATE_LIMITS.EVALUATE_MESSAGES.limit}`);
 
   try {
     // Expand 'all' to full criteria list
@@ -1082,14 +1295,20 @@ async function evaluateMessages(
     const judgeData = await judgeResponse.json();
 
     // Calculate summary statistics
-    const evaluations = judgeData.evaluations || [];
+    interface Evaluation {
+      criterion: string;
+      score: number;
+      passed: boolean;
+      reasoning?: string;
+    }
+    const evaluations = (judgeData.evaluations || []) as Evaluation[];
     const totalEvaluations = evaluations.length;
-    const passedCount = evaluations.filter((e: any) => e.passed).length;
+    const passedCount = evaluations.filter((e) => e.passed).length;
     const passRate = totalEvaluations > 0 ? (passedCount / totalEvaluations) * 100 : 0;
 
     // Calculate average scores per criterion
     const criterionScores: Record<string, number[]> = {};
-    evaluations.forEach((evaluation: any) => {
+    evaluations.forEach((evaluation) => {
       if (!criterionScores[evaluation.criterion]) {
         criterionScores[evaluation.criterion] = [];
       }
@@ -1103,7 +1322,7 @@ async function evaluateMessages(
     });
 
     // Identify failed evaluations
-    const failedEvaluations = evaluations.filter((e: any) => !e.passed);
+    const failedEvaluations = evaluations.filter((e) => !e.passed);
 
     // Return structured summary for the assistant
     return {
@@ -1117,150 +1336,301 @@ async function evaluateMessages(
         judge_model: judgeModel,
       },
       average_scores: averageScores,
-      failed_evaluations: failedEvaluations.map((e: any) => ({
-        message_id: e.message_id,
+      failed_evaluations: failedEvaluations.map((e) => ({
+        message_id: (e as any).message_id,
         criterion: e.criterion,
         score: e.score,
-        reasoning: e.evidence?.reasoning || 'No reasoning provided',
+        reasoning: e.reasoning || 'No reasoning provided',
       })),
       criteria_evaluated: actualCriteria,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AnalyticsAPI] Error in evaluateMessages:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return {
       error: true,
-      message: `Failed to evaluate messages: ${error.message}`,
+      message: `Failed to evaluate messages: ${errorMessage}`,
     };
   }
 }
 
 // Tool call handler
-async function executeAnalyticsTool(toolName: string, args: Record<string, unknown>, userId: string, authHeader?: string, authClient?: any) {
+async function executeAnalyticsTool(toolName: string, args: Record<string, unknown>, userId: string, authHeader?: string, authClient?: SupabaseClient) {
   console.log('[AnalyticsAPI] Executing tool:', toolName, 'with args:', JSON.stringify(args).slice(0, 100));
 
+  // START LOGGING
+  const logId = await startToolLog({
+    userId,
+    toolName,
+    args,
+  });
+
   try {
+    let result;
+
     switch (toolName) {
       case 'calculator':
         // Use the shared tool manager for calculator
         const calcResult = await executeTool('calculator', args, '', undefined, userId);
         if (calcResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: calcResult.error,
+          });
           return { error: calcResult.error };
         }
-        return calcResult.data;
+        result = calcResult.data;
+        break;
 
       case 'evaluation_metrics':
         // Add userId to args for evaluation metrics
         const metricsArgs = { ...args, userId };
         const metricsResult = await executeTool('evaluation_metrics', metricsArgs, '', undefined, userId);
         if (metricsResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: metricsResult.error,
+          });
           return { error: metricsResult.error };
         }
-        return metricsResult.data;
+        result = metricsResult.data;
+        break;
 
       case 'datetime':
         // Use the shared tool manager for datetime
         const datetimeResult = await executeTool('datetime', args, '', undefined, userId);
         if (datetimeResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: datetimeResult.error,
+          });
           return { error: datetimeResult.error };
         }
-        return datetimeResult.data;
+        result = datetimeResult.data;
+        break;
 
       case 'system_monitor':
         // Use the shared tool manager for system monitor
         const systemResult = await executeTool('system_monitor', args, '', undefined, userId);
         if (systemResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: systemResult.error,
+          });
           return { error: systemResult.error };
         }
-        return systemResult.data;
+        result = systemResult.data;
+        break;
 
       case 'get_session_evaluations':
         console.log('[AnalyticsAPI] get_session_evaluations called with args:', JSON.stringify(args));
-        return await getSessionEvaluations(args.conversationIds as string[], authClient || supabase);
+        result = await getSessionEvaluations(
+          args.conversationIds as string[],
+          authClient || supabase,
+          args.limit as number | undefined,
+          args.offset as number | undefined
+        );
+        break;
 
       case 'get_session_metrics':
         console.log('[AnalyticsAPI] get_session_metrics called with args:', JSON.stringify(args));
-        return await getSessionMetrics(args.conversationIds as string[], authClient || supabase);
+        result = await getSessionMetrics(args.conversationIds as string[], authClient || supabase);
+        break;
 
       case 'get_session_conversations':
         console.log('[AnalyticsAPI] get_session_conversations called with args:', JSON.stringify(args));
-        return await getSessionConversations(
+        result = await getSessionConversations(
           args.conversationIds as string[],
           args.includeMessages as boolean | undefined,
+          authClient || supabase,
+          args.limit as number | undefined,
+          args.offset as number | undefined
+        );
+        break;
+
+      case 'list_available_sessions':
+        console.log('[AnalyticsAPI] list_available_sessions called with args:', JSON.stringify(args));
+        result = await listAvailableSessions(
+          userId,
+          args as { limit?: number; model_filter?: string; date_from?: string; date_to?: string },
           authClient || supabase
         );
+        break;
 
       case 'training_control':
         const trainingResult = await executeTool('training_control', args, '', undefined, userId, authClient);
         if (trainingResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: trainingResult.error,
+          });
           return { error: trainingResult.error };
         }
-        return trainingResult.data;
+        result = trainingResult.data;
+        break;
 
       case 'evaluate_messages':
         if (!authHeader) {
+          await failToolLog(logId, {
+            errorType: 'auth_error',
+            errorMessage: 'Authorization required for message evaluation',
+          });
           return { error: 'Authorization required for message evaluation' };
         }
-        return await evaluateMessages(
+        result = await evaluateMessages(
           args.message_ids as string[],
           args.criteria as string[] | undefined,
           args.judge_model as string | undefined,
-          authHeader
+          authHeader,
+          userId
         );
+        break;
 
       case 'training_metrics':
-        return await executeTrainingMetrics(args, userId, authHeader, authClient);
+        result = await executeTrainingMetrics(args, userId, authHeader, authClient);
+        break;
 
       case 'training_predictions':
-        return await executeTrainingPredictions(args, userId, authHeader, authClient);
+        result = await executeTrainingPredictions(args, userId, authHeader, authClient);
+        break;
 
       case 'advanced_analytics':
-        return await executeAdvancedAnalytics(args, userId, authHeader, authClient);
+        result = await executeAdvancedAnalytics(args, userId, authHeader, authClient);
+        break;
 
       case 'web_search':
         const webSearchResult = await executeTool('web_search', args, '', undefined, userId, authClient);
         if (webSearchResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: webSearchResult.error,
+          });
           return { error: webSearchResult.error };
         }
-        return webSearchResult.data;
+        result = webSearchResult.data;
+        break;
 
       case 'dataset_manager':
         const datasetResult = await executeTool('dataset_manager', { ...args, user_id: userId }, '', undefined, userId, authClient);
         if (datasetResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: datasetResult.error,
+          });
           return { error: datasetResult.error };
         }
-        return datasetResult.data;
+        result = datasetResult.data;
+        break;
 
       case 'token_analyzer':
         const tokenResult = await executeTool('token_analyzer', { ...args, userId }, '', undefined, userId, authClient);
         if (tokenResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: tokenResult.error,
+          });
           return { error: tokenResult.error };
         }
-        return tokenResult.data;
+        result = tokenResult.data;
+        break;
 
       case 'analytics_export':
         const exportResult = await executeTool('analytics_export', args, '', undefined, userId, authClient);
         if (exportResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: exportResult.error,
+          });
           return { error: exportResult.error };
         }
-        return exportResult.data;
+        result = exportResult.data;
+        break;
 
       case 'query_knowledge_graph':
         const graphResult = await executeTool('query_knowledge_graph', args, '', undefined, userId, authClient);
         if (graphResult.error) {
+          await failToolLog(logId, {
+            errorType: 'tool_error',
+            errorMessage: graphResult.error,
+          });
           return { error: graphResult.error };
         }
-        return graphResult.data;
+        result = graphResult.data;
+        break;
 
       case 'get_traces':
-        return await executeGetTraces(args, userId, authHeader, authClient);
+        result = await executeGetTraces(args, userId, authHeader, authClient);
+        break;
 
       default:
+        await failToolLog(logId, {
+          errorType: 'unknown_tool',
+          errorMessage: `Unknown tool: ${toolName}`,
+        });
         return { error: `Unknown tool: ${toolName}` };
     }
+
+    // COMPLETE LOGGING
+    await completeToolLog(logId, {
+      resultSummary: summarizeResult(result, toolName),
+    });
+
+    return result;
+
   } catch (error) {
     console.error('[AnalyticsAPI] Tool execution error:', error);
+
+    // FAIL LOGGING
+    await failToolLog(logId, {
+      errorType: categorizeError(error),
+      errorMessage: error instanceof Error ? error.message : 'Tool execution failed',
+    });
+
     return { error: error instanceof Error ? error.message : 'Tool execution failed' };
   }
+}
+
+/**
+ * Summarize tool result for logging
+ * Extract only high-level info to avoid bloat
+ */
+function summarizeResult(result: unknown, toolName: string): Record<string, unknown> {
+  if (!result || typeof result !== 'object') {
+    return { hasResult: !!result };
+  }
+
+  const summary: Record<string, unknown> = {};
+
+  // Handle common result patterns
+  if ('evaluations' in result && Array.isArray((result as {evaluations: unknown[]}).evaluations)) {
+    summary.evaluation_count = (result as {evaluations: unknown[]}).evaluations.length;
+  }
+
+  if ('conversations' in result && Array.isArray((result as {conversations: unknown[]}).conversations)) {
+    summary.conversation_count = (result as {conversations: unknown[]}).conversations.length;
+  }
+
+  if ('traces' in result && Array.isArray((result as {traces: unknown[]}).traces)) {
+    summary.trace_count = (result as {traces: unknown[]}).traces.length;
+  }
+
+  if ('pagination' in result) {
+    summary.pagination = (result as {pagination: unknown}).pagination;
+  }
+
+  if ('statistics' in result) {
+    summary.has_statistics = true;
+  }
+
+  if ('error' in result) {
+    summary.has_error = true;
+    summary.error = (result as {error: unknown}).error;
+  }
+
+  // Add tool-specific summaries
+  summary.tool_name = toolName;
+
+  return summary;
 }
 
 export async function POST(req: NextRequest) {
@@ -1309,8 +1679,8 @@ export async function POST(req: NextRequest) {
       return new Response('Invalid messages format', { status: 400 });
     }
 
-    // Allow experimentName to be empty string, but sessionId and conversationIds must exist
-    if (!sessionId || experimentName === undefined || experimentName === null || !conversationIds || !Array.isArray(conversationIds) || conversationIds.length === 0) {
+    // Allow experimentName to be empty string, sessionId and conversationIds can be empty for general queries
+    if (!sessionId || experimentName === undefined || experimentName === null || !conversationIds || !Array.isArray(conversationIds)) {
       console.error('[AnalyticsAPI] Missing session context:', {
         hasSessionId: !!sessionId,
         experimentName: experimentName,
@@ -1321,23 +1691,25 @@ export async function POST(req: NextRequest) {
       return new Response('Missing session context', { status: 400 });
     }
 
-    // Validate conversation IDs are valid UUIDs
-    console.log('[AnalyticsAPI] Validating conversation IDs:', conversationIds);
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const invalidIds = conversationIds.filter((id: string) => !uuidRegex.test(id));
-    if (invalidIds.length > 0) {
-      console.error('[AnalyticsAPI] Invalid conversation IDs detected:', invalidIds);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Invalid conversation IDs',
-          details: `The following conversation IDs are not valid UUIDs: ${invalidIds.join(', ')}`,
-          invalidIds: invalidIds
-        }), 
-        { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+    // Validate conversation IDs are valid UUIDs (only if conversationIds is not empty)
+    if (conversationIds.length > 0) {
+      console.log('[AnalyticsAPI] Validating conversation IDs:', conversationIds);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const invalidIds = conversationIds.filter((id: string) => !uuidRegex.test(id));
+      if (invalidIds.length > 0) {
+        console.error('[AnalyticsAPI] Invalid conversation IDs detected:', invalidIds);
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid conversation IDs',
+            details: `The following conversation IDs are not valid UUIDs: ${invalidIds.join(', ')}`,
+            invalidIds: invalidIds
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
     }
     
     console.log('[AnalyticsAPI] Request for session:', sessionId, '/', experimentName, 'with', conversationIds.length, 'conversations');
@@ -1374,61 +1746,86 @@ You help users analyze their training sessions by:
 4. Diagnosing issues (errors, quality drops, cost spikes)
 5. Providing actionable recommendations for improvement
 
-## CURRENT SESSION CONTEXT
-Session ID: ${sessionId}
+## AVAILABLE SESSIONS
+
+You have access to ALL tagged batch test sessions and experiments.
+
+### How to Access Sessions:
+
+1. **Discover sessions:** Call \`list_available_sessions()\` to see all available sessions
+   - Returns: session_id, experiment_name, conversation_ids, conversation_count, created_at
+   - Optional filters: model_filter, date_from, date_to, limit
+
+2. **Analyze sessions:** Use the conversation_ids from step 1 with these tools:
+   - \`get_session_metrics(conversationIds)\` - Token usage, costs, performance
+   - \`get_session_evaluations(conversationIds)\` - Ratings, feedback, success rates
+   - \`get_session_conversations(conversationIds)\` - Full message content
+
+### Example Workflows:
+
+**Compare last 3 Qwen tests:**
+1. \`list_available_sessions(model_filter: "Qwen", limit: 3)\`
+2. Extract conversation_ids from each session
+3. \`get_session_metrics(conversationIds: [...])\` for each session
+4. Compare results
+
+**Overall success rate:**
+1. \`list_available_sessions(limit: 100)\`
+2. Combine all conversation_ids
+3. \`get_session_evaluations(conversationIds: [all UUIDs])\`
+4. Calculate aggregate metrics
+
+**Current session (selected in UI):**
+${conversationIds.length > 0 ? `Session ID: ${sessionId}
 Experiment Name: ${experimentName || '(unnamed)'}
-Total Conversations: ${conversationIds.length}
+Conversation IDs: ${JSON.stringify(conversationIds)}` : `⚠️ NO SESSION SELECTED
+The user has not selected a specific session yet.
 
-CONVERSATION IDS FOR THIS SESSION:
-${JSON.stringify(conversationIds)}
+To answer questions, you MUST:
+1. Call \`list_available_sessions()\` to discover available sessions
+2. Use the returned conversation_ids with analysis tools
+3. Or guide the user to select a session in the sidebar
 
-⚠️ CRITICAL TOOL USAGE INSTRUCTION ⚠️
-When calling ANY of these tools (get_session_evaluations, get_session_metrics, get_session_conversations):
-- ALWAYS use this exact conversationIds array: ${JSON.stringify(conversationIds)}
-- DO NOT use ["1"] or ["${conversationIds.length}"] or any number
-- DO NOT invent or guess conversation IDs
-- COPY the exact UUID array shown above
+Example: If asked "What are my overall metrics?", call \`list_available_sessions()\` first to get all sessions.`}
 
-EXAMPLE CORRECT TOOL CALL:
-{
-  "name": "get_session_metrics",
-  "arguments": {
-    "conversationIds": ${JSON.stringify(conversationIds)}
-  }
-}
-
-## YOUR 17 TOOLS
+## YOUR 18 TOOLS
 
 ### Session Data Tools (Start Here)
-1. **get_session_evaluations** - Get ratings, feedback, and success/failure data
-   - USE FIRST when asked about quality, ratings, or user feedback
+1. **list_available_sessions** - Discover all tagged sessions (batch tests, experiments)
+   - USE FIRST to discover which sessions exist
+   - Returns: session_id, experiment_name, conversation_ids, conversation_count, created_at
+   - Optional filters: model_filter, date_from, date_to, limit
+   - Example: list_available_sessions(model_filter: "Qwen", limit: 5)
+
+2. **get_session_evaluations** - Get ratings, feedback, and success/failure data
+   - USE when asked about quality, ratings, or user feedback
    - Returns: evaluation scores (1-5), success boolean, feedback comments
-   - Parameter: conversationIds (use the array from CURRENT SESSION CONTEXT above)
+   - Parameter: conversationIds (from list_available_sessions or current session)
 
-2. **get_session_metrics** - Get token usage, costs, response times, tool usage
-   - USE FIRST when asked about costs, performance, or tool usage
+3. **get_session_metrics** - Get token usage, costs, response times, tool usage
+   - USE when asked about costs, performance, or tool usage
    - Returns: token counts, estimated costs, average response times, tool statistics
-   - Parameter: conversationIds (use the array from CURRENT SESSION CONTEXT above)
+   - Parameter: conversationIds (from list_available_sessions or current session)
 
-3. **get_session_conversations** - Get full conversation messages and content
+4. **get_session_conversations** - Get full conversation messages and content
    - USE when user wants to see actual conversation content or patterns
    - Returns: message history, metadata, timestamps
-   - Parameter: conversationIds (use the array from CURRENT SESSION CONTEXT above)
+   - Parameter: conversationIds (from list_available_sessions or current session)
 
 ### Analysis Tools (Use After Getting Data)
-4. **calculator** - Perform exact mathematical calculations
+5. **calculator** - Perform exact mathematical calculations
    - USE to compute percentages, averages, ratios, cost per conversation
    - Example: "(successful_count / total_count) * 100" for success rate
    - ALWAYS use calculator for math instead of estimating
 
-5. **evaluate_messages** - LLM-as-judge quality evaluation (NEW!)
+6. **evaluate_messages** - LLM-as-judge quality evaluation (NEW!)
    - USE when user asks "evaluate quality", "how good are the responses", or "rate the messages"
    - First call get_session_conversations to get message IDs (filter to assistant messages only)
    - Returns: detailed scores (0-10) for helpfulness, accuracy, clarity, safety, completeness
    - Includes reasoning, pass/fail status, and improvement suggestions
    - Example: User asks "Evaluate this session" → get conversations → filter assistant messages → evaluate_messages
 
-6. **evaluation_metrics** - Advanced quality analysis with 13 operations
+7. **evaluation_metrics** - Advanced quality analysis with 13 operations
    - get_metrics: Overall quality statistics
    - quality_trends: Rating trends over time
    - success_analysis: Success/failure breakdown
@@ -1443,25 +1840,25 @@ EXAMPLE CORRECT TOOL CALL:
    - predictive_quality_modeling: Forecast future trends
    - anomaly_detection: Detect outliers
 
-7. **datetime** - Date/time operations and formatting
+8. **datetime** - Date/time operations and formatting
    - USE for temporal analysis, timezone conversions, date formatting
    - Helps analyze when sessions ran, how recent data is
 
-8. **system_monitor** - System health and performance monitoring
+9. **system_monitor** - System health and performance monitoring
    - USE when checking system status, resource usage, or infrastructure health
    - Operations: health_check, resource_usage, performance_metrics, analyze_logs
 
 ### Training Tools (NEW - Full Training Access)
-9. **training_metrics** - Access training job status, metrics, and history
-   - USE when asked about training jobs, progress, loss curves, or GPU usage
-   - Operations:
-     - get_job_status: Current status, progress, epoch, step, real-time metrics
-     - get_job_metrics: Detailed metrics (loss, perplexity, GPU, throughput)
-     - list_jobs: All training jobs with status filters (pending/running/completed/failed)
-     - get_job_details: Full config, hyperparameters, checkpoint info
-   - Returns: Job status, progress %, loss/eval_loss, GPU metrics, timing estimates
+10. **training_metrics** - Access training job status, metrics, and history
+    - USE when asked about training jobs, progress, loss curves, or GPU usage
+    - Operations:
+      - get_job_status: Current status, progress, epoch, step, real-time metrics
+      - get_job_metrics: Detailed metrics (loss, perplexity, GPU, throughput)
+      - list_jobs: All training jobs with status filters (pending/running/completed/failed)
+      - get_job_details: Full config, hyperparameters, checkpoint info
+    - Returns: Job status, progress %, loss/eval_loss, GPU metrics, timing estimates
 
-10. **training_predictions** - Access model predictions from training
+11. **training_predictions** - Access model predictions from training
     - USE when asked about prediction quality, epoch improvements, or training samples
     - Operations:
       - get_predictions: Get predictions for a job with pagination
@@ -1470,7 +1867,7 @@ EXAMPLE CORRECT TOOL CALL:
       - list_available_epochs: Which epochs have predictions stored
     - Returns: Predictions, ground truth, epoch info, quality statistics
 
-11. **advanced_analytics** - Pre-computed analytics and comparisons
+12. **advanced_analytics** - Pre-computed analytics and comparisons
     - USE for high-level analysis across models and time periods
     - Operations:
       - model_comparison: Compare performance across models
@@ -1482,30 +1879,48 @@ EXAMPLE CORRECT TOOL CALL:
     - Returns: Aggregated metrics, trends, comparisons, forecasts
 
 ### General Purpose Tools
-12. **web_search** - Search the web for current information
+13. **web_search** - Search the web for current information
     - USE when user needs up-to-date info, news, or research from the internet
     - Returns: Search results with titles, snippets, and URLs
     - Can enable deep search for full content or AI summaries
 
-13. **dataset_manager** - Manage training datasets
+14. **dataset_manager** - Manage training datasets
     - USE when user wants to work with their conversation data for training
     - Operations: list, stats, export, validate, delete, merge
     - Supports JSONL/JSON/CSV export formats
 
-14. **token_analyzer** - Analyze token usage and costs
+15. **token_analyzer** - Analyze token usage and costs
     - USE when user asks about token consumption or cost optimization
     - Operations: usage_stats, cost_analysis, model_comparison, optimization_tips
     - Provides detailed cost breakdown by model and time period
 
-15. **analytics_export** - Create downloadable analytics reports
+16. **analytics_export** - Create downloadable analytics reports
     - USE when user wants to export or download analytics data
     - Operations: create_export, list_exports, get_download_link
     - Formats: CSV, JSON, or formatted reports
 
-16. **query_knowledge_graph** - Search user's documents
+17. **query_knowledge_graph** - Search user's documents
     - USE when user asks about their uploaded documents or knowledge base
     - Searches GraphRAG knowledge graph for relevant entities and facts
     - Returns facts, entities, and relationships with confidence scores
+
+18. **get_traces** - Retrieve and analyze LLM execution traces
+    - USE for debugging issues, analyzing performance, comparing models, tracking costs
+    - Operations:
+      - get_traces: Retrieve filtered traces with extensive filtering options
+      - get_trace_details: Single trace with full hierarchy and child traces
+      - compare_traces: Compare metrics across multiple traces
+      - get_trace_summary: Aggregate statistics for filtered traces
+      - get_rag_metrics: RAG-specific analysis (retrieval, groundedness, relevance)
+      - get_performance_stats: Performance profiling (latency, throughput, errors)
+      - **get_traces_by_conversations**: Get all traces for session conversations at once
+    - Filtering: conversation_id, message_id, operation_type, model, provider, status, dates, duration, cost, RAG usage
+    - **NEW - Session Analysis**: Use get_traces_by_conversations with conversationIds from CURRENT SESSION CONTEXT
+      * Pass conversationIds array (same as other session tools)
+      * Returns traces grouped by conversation with per-conversation stats
+      * Shows cost, duration, errors, operation breakdown per conversation
+      * Max 100 conversations at once
+      * Example: "Analyze traces for this session" → get_traces_by_conversations(conversationIds)
 
 ## ANALYSIS WORKFLOWS
 
@@ -1680,6 +2095,20 @@ Now, help the user analyze their session. If they're starting fresh, offer: "I c
     } else {
       finalResponse = llmResponse as string;
     }
+
+    // DEPRECATED: OLD usage tracking system
+    // Now using usage_meters table via increment_root_trace_count()
+    // await recordUsageEvent({
+    //   userId: user.id,
+    //   metricType: 'analytics_assistant',
+    //   value: 1,
+    //   resourceType: 'analytics_session',
+    //   metadata: {
+    //     toolsUsed: toolsCalled?.map((t: any) => t.name) || [],
+    //     inputTokens: tokenUsage?.input_tokens || 0,
+    //     outputTokens: tokenUsage?.output_tokens || 0,
+    //   },
+    // });
 
     // Create streaming response
     const encoder = new TextEncoder();

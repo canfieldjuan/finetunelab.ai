@@ -24,6 +24,8 @@ import { createClient } from '@supabase/supabase-js';
 import { isTimeDue, calculateNextRun } from '../lib/evaluation/schedule-calculator';
 import type { ScheduledEvaluation } from '../lib/batch-testing/types';
 import { recordUsageEvent } from '../lib/usage/checker';
+import { sendScheduledEvaluationAlert } from '../lib/alerts/alert.service';
+import type { ScheduledEvaluationAlertData } from '../lib/alerts/alert.types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -142,17 +144,36 @@ async function executeSchedule(
     });
 
     // Trigger batch test via API
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/batch-testing/run`, {
+    // Use NEXT_PUBLIC_BASE_URL (defined in render.yaml) for worker-to-web communication
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    console.log(`[Scheduler] Calling batch test API at: ${baseUrl}/api/batch-testing/run`);
+
+    const requestConfig = {
+      config: {
+        ...schedule.batch_test_config,
+        model_id: schedule.model_id,
+        test_suite_id: schedule.test_suite_id,
+      },
+      userId: schedule.user_id,
+      scheduledEvaluationRunId: run.id,
+    };
+
+    // DEBUG: Log what we're sending to the API
+    console.log('[Scheduler] DEBUG - Request config:', JSON.stringify({
+      scheduleName: schedule.name,
+      scheduleModelId: schedule.model_id,
+      batchTestConfig: schedule.batch_test_config,
+      finalConfig: requestConfig.config,
+    }, null, 2));
+
+    const response = await fetch(`${baseUrl}/api/batch-testing/run`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'x-service-role-key': supabaseServiceKey,
+        'x-user-id': schedule.user_id,
       },
-      body: JSON.stringify({
-        config: schedule.batch_test_config,
-        userId: schedule.user_id,
-        scheduledEvaluationRunId: run.id,
-      }),
+      body: JSON.stringify(requestConfig),
     });
 
     if (!response.ok) {
@@ -208,8 +229,35 @@ async function executeSchedule(
       })
       .eq('id', schedule.id);
 
+    // Send failure alert
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const alertData: ScheduledEvaluationAlertData = {
+      scheduledEvaluationId: schedule.id,
+      userId: schedule.user_id,
+      scheduleName: schedule.name,
+      modelId: schedule.model_id,
+      status: 'failed',
+      errorMessage,
+      consecutiveFailures: newFailureCount,
+    };
+
+    try {
+      await sendScheduledEvaluationAlert('scheduled_eval_failed', alertData);
+      console.log(`[Scheduler] Sent scheduled_eval_failed alert for: ${schedule.name}`);
+    } catch (alertError) {
+      console.error(`[Scheduler] Failed to send alert:`, alertError);
+    }
+
     if (shouldDisable) {
       console.log(`[Scheduler] Auto-disabled schedule ${schedule.name} after 3 failures`);
+
+      // Send auto-disabled alert
+      try {
+        await sendScheduledEvaluationAlert('scheduled_eval_disabled', alertData);
+        console.log(`[Scheduler] Sent scheduled_eval_disabled alert for: ${schedule.name}`);
+      } catch (alertError) {
+        console.error(`[Scheduler] Failed to send disabled alert:`, alertError);
+      }
     }
 
     throw error;

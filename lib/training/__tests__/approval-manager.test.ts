@@ -13,10 +13,25 @@ jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(),
 }));
 
+interface MockSupabaseClient {
+  from: jest.Mock;
+  insert: jest.Mock;
+  select: jest.Mock;
+  update: jest.Mock;
+  eq: jest.Mock;
+  or: jest.Mock;
+  gte: jest.Mock;
+  lte: jest.Mock;
+  limit: jest.Mock;
+  range: jest.Mock;
+  order: jest.Mock;
+  single: jest.Mock;
+}
+
 describe('ApprovalManager', () => {
   let approvalManager: ApprovalManager;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockSupabase: any;
+
+  let mockSupabase: MockSupabaseClient;
 
   beforeEach(() => {
     // Reset mocks

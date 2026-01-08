@@ -18,7 +18,7 @@ import { validateRequestWithScope } from '@/lib/auth/api-key-validator';
 import { unifiedLLMClient } from '@/lib/llm/unified-client';
 import { modelManager } from '@/lib/models/model-manager.service';
 import { logApiKeyUsage, extractClientInfo } from '@/lib/auth/api-key-usage-logger';
-import { recordUsageEvent } from '@/lib/usage/checker';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 export const runtime = 'nodejs';
 
@@ -168,24 +168,25 @@ export async function POST(request: NextRequest) {
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
 
-            // Record inference call usage (fire-and-forget, streaming)
-            if (validation.userId) {
-              recordUsageEvent({
-                userId: validation.userId,
-                metricType: 'inference_call',
-                value: 1,
-                resourceType: 'inference',
-                resourceId: completionId,
-                metadata: {
-                  model_id: body.model,
-                  provider: modelConfig.provider,
-                  is_streaming: true,
-                  api_key_id: validation.keyId || null,
-                }
-              }).catch(err => {
-                console.error('[PredictAPI] Failed to record usage (streaming):', err);
-              });
-            }
+            // DEPRECATED: OLD usage tracking system
+            // Now using usage_meters table via increment_root_trace_count()
+            // if (validation.userId) {
+            //   recordUsageEvent({
+            //     userId: validation.userId,
+            //     metricType: 'inference_call',
+            //     value: 1,
+            //     resourceType: 'inference',
+            //     resourceId: completionId,
+            //     metadata: {
+            //       model_id: body.model,
+            //       provider: modelConfig.provider,
+            //       is_streaming: true,
+            //       api_key_id: validation.keyId || null,
+            //     }
+            //   }).catch(err => {
+            //     console.error('[PredictAPI] Failed to record usage (streaming):', err);
+            //   });
+            // }
           } catch (err) {
             console.error('[PredictAPI] Stream error:', err);
             controller.error(err);
@@ -240,27 +241,28 @@ export async function POST(request: NextRequest) {
 
     console.log('[PredictAPI] Completion successful, latency:', latencyMs, 'ms');
 
-    // Record inference call usage (fire-and-forget)
-    if (validation.userId) {
-      recordUsageEvent({
-        userId: validation.userId,
-        metricType: 'inference_call',
-        value: 1,
-        resourceType: 'inference',
-        resourceId: `chatcmpl-${Date.now()}`,
-        metadata: {
-          model_id: body.model,
-          provider: modelConfig.provider,
-          is_streaming: false,
-          api_key_id: validation.keyId || null,
-          input_tokens: response.usage?.input_tokens || 0,
-          output_tokens: response.usage?.output_tokens || 0,
-          latency_ms: latencyMs,
-        }
-      }).catch(err => {
-        console.error('[PredictAPI] Failed to record usage:', err);
-      });
-    }
+    // DEPRECATED: OLD usage tracking system
+    // Now using usage_meters table via increment_root_trace_count()
+    // if (validation.userId) {
+    //   recordUsageEvent({
+    //     userId: validation.userId,
+    //     metricType: 'inference_call',
+    //     value: 1,
+    //     resourceType: 'inference',
+    //     resourceId: `chatcmpl-${Date.now()}`,
+    //     metadata: {
+    //       model_id: body.model,
+    //       provider: modelConfig.provider,
+    //       is_streaming: false,
+    //       api_key_id: validation.keyId || null,
+    //       input_tokens: response.usage?.input_tokens || 0,
+    //       output_tokens: response.usage?.output_tokens || 0,
+    //       latency_ms: latencyMs,
+    //     }
+    //   }).catch(err => {
+    //     console.error('[PredictAPI] Failed to record usage:', err);
+    //   });
+    // }
 
     // Log successful request (fire-and-forget)
     if (validation.keyId && validation.userId) {

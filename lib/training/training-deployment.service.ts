@@ -38,7 +38,7 @@ export class TrainingDeploymentService {
     config: TrainingConfig,
     modelName: string,
     datasetPath: string,
-    options?: any
+    options?: unknown
   ): Promise<string> {
     const provider = this.getProvider(providerName);
     return provider.deploy(config, modelName, datasetPath, options);

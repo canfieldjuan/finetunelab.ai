@@ -11,6 +11,21 @@ import { createClient } from '@supabase/supabase-js';
 import { calculateNextRun } from '@/lib/evaluation/schedule-calculator';
 import type { ScheduledEvaluation, ScheduleType } from '@/lib/batch-testing/types';
 
+interface ScheduleUpdatePayload {
+  name?: string;
+  description?: string;
+  schedule_type?: ScheduleType;
+  cron_expression?: string;
+  timezone?: string;
+  model_id?: string;
+  batch_test_config?: unknown;
+  is_active?: boolean;
+  alert_on_failure?: boolean;
+  alert_on_regression?: boolean;
+  regression_threshold_percent?: number;
+  next_run_at?: string;
+}
+
 // Supabase configuration
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MjAsImV4cCI6MTk2MDc2ODgyMH0.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
@@ -144,13 +159,13 @@ export async function PATCH(
 
     // Block 3: Parse and prepare update payload
     const body = await req.json();
-    const updates: any = {};
+    const updates: ScheduleUpdatePayload = {};
 
     // Allow updating these fields
     if (body.name !== undefined) updates.name = body.name;
     if (body.description !== undefined) updates.description = body.description;
     if (body.schedule_type !== undefined) {
-      const validScheduleTypes: ScheduleType[] = ['hourly', 'daily', 'weekly', 'custom'];
+      const validScheduleTypes: ScheduleType[] = ['every_5_minutes', 'hourly', 'daily', 'weekly', 'custom'];
       if (!validScheduleTypes.includes(body.schedule_type)) {
         return NextResponse.json(
           { error: `Invalid schedule_type. Must be one of: ${validScheduleTypes.join(', ')}` },

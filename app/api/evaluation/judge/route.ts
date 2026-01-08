@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { LLMJudge, STANDARD_CRITERIA, LLMJudgeCriterion, LLMJudgmentResult } from '@/lib/evaluation/llm-judge';
 import { graphragService } from '@/lib/graphrag';
+// DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
 export const runtime = 'nodejs';
 
@@ -52,9 +53,10 @@ export async function POST(request: NextRequest) {
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    }: { data: { user: any }; error: any } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      console.error('[EvaluationJudge] Authentication failed:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -96,13 +98,14 @@ async function handleSingleEvaluation(
 
   if (!messageContent) {
     // Get the assistant message with conversation context
-    const { data: message, error } = await supabase
+    const { data: message, error }: { data: any; error: any } = await supabase
       .from('messages')
       .select('content, conversation_id, created_at')
       .eq('id', request.message_id)
       .single();
 
     if (error || !message) {
+      console.error('[EvaluationJudge] Message not found:', request.message_id, error);
       return NextResponse.json(
         { error: 'Message not found or access denied' },
         { status: 404 }
@@ -113,7 +116,7 @@ async function handleSingleEvaluation(
     conversationId = message.conversation_id;
 
     // Fetch the user message that preceded this assistant response
-    const { data: prevMessage } = await supabase
+    const { data: prevMessage }: { data: any } = await supabase
       .from('messages')
       .select('content')
       .eq('conversation_id', conversationId)
@@ -212,6 +215,21 @@ IMPORTANT: If the response aligns with these facts, it is ACCURATE. Do NOT penal
     await saveJudgmentsToDatabase(supabase, results);
   }
 
+  // DEPRECATED: OLD usage tracking system
+  // Now using usage_meters table via increment_root_trace_count()
+  // await recordUsageEvent({
+  //   userId,
+  //   metricType: 'evaluation_run',
+  //   value: 1,
+  //   resourceType: 'message',
+  //   resourceId: request.message_id,
+  //   metadata: {
+  //     judgeModel: request.judge_model || 'gpt-4.1',
+  //     criteriaCount: criteria.length,
+  //     passedCount: results.filter((r) => r.passed).length,
+  //   },
+  // });
+
   return NextResponse.json({
     success: true,
     message_id: request.message_id,
@@ -237,38 +255,66 @@ async function handleBatchEvaluation(
   console.log('[EvaluationJudge] Batch evaluation:', request.message_ids.length, 'messages');
 
   // Fetch messages with conversation context
-  const { data: messages, error } = await supabase
+  const { data: messages, error }: { data: any; error: any } = await supabase
     .from('messages')
     .select('id, content, conversation_id, created_at, role')
     .in('id', request.message_ids);
 
   if (error || !messages || messages.length === 0) {
+    console.error('[EvaluationJudge] Messages not found:', request.message_ids, error);
     return NextResponse.json(
       { error: 'Messages not found or access denied' },
       { status: 404 }
     );
   }
 
-  // For each assistant message, find the preceding user question
+  // Optimize: Fetch all user messages for all conversations in a single query
+  // This reduces O(n) queries to just 1 query
+  const conversationIds = [...new Set(messages
+    .filter((m: any) => m.role === 'assistant' && m.conversation_id)
+    .map((m: any) => m.conversation_id)
+  )];
+
   const messageContextMap = new Map<string, { userPrompt: string; conversationId: string }>();
 
-  for (const msg of messages) {
-    if (msg.role === 'assistant' && msg.conversation_id) {
-      const { data: prevMessage } = await supabase
-        .from('messages')
-        .select('content')
-        .eq('conversation_id', msg.conversation_id)
-        .eq('role', 'user')
-        .lt('created_at', msg.created_at)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+  if (conversationIds.length > 0) {
+    // Fetch all user messages for these conversations
+    const { data: userMessages }: { data: any } = await supabase
+      .from('messages')
+      .select('content, conversation_id, created_at')
+      .in('conversation_id', conversationIds)
+      .eq('role', 'user')
+      .order('created_at', { ascending: false });
 
-      if (prevMessage) {
-        messageContextMap.set(msg.id, {
-          userPrompt: prevMessage.content,
-          conversationId: msg.conversation_id
-        });
+    if (userMessages && userMessages.length > 0) {
+      // Build a map of conversation_id → sorted user messages
+      const userMsgsByConversation = new Map<string, any[]>();
+      for (const userMsg of userMessages) {
+        const convId = userMsg.conversation_id;
+        if (!userMsgsByConversation.has(convId)) {
+          userMsgsByConversation.set(convId, []);
+        }
+        userMsgsByConversation.get(convId)!.push(userMsg);
+      }
+
+      // For each assistant message, find the preceding user question
+      for (const msg of messages) {
+        if (msg.role === 'assistant' && msg.conversation_id) {
+          const userMsgs = userMsgsByConversation.get(msg.conversation_id);
+          if (userMsgs) {
+            // Find the first user message before this assistant message
+            const prevMessage = userMsgs.find((um: any) =>
+              new Date(um.created_at) < new Date(msg.created_at)
+            );
+
+            if (prevMessage) {
+              messageContextMap.set(msg.id, {
+                userPrompt: prevMessage.content,
+                conversationId: msg.conversation_id
+              });
+            }
+          }
+        }
       }
     }
   }
@@ -340,6 +386,21 @@ IMPORTANT: If response aligns with these facts, it is ACCURATE.`;
     const allJudgments = Array.from(results.values()).flat();
     await saveJudgmentsToDatabase(supabase, allJudgments);
   }
+
+  // DEPRECATED: OLD usage tracking system
+  // Now using usage_meters table via increment_root_trace_count()
+  // await recordUsageEvent({
+  //   userId,
+  //   metricType: 'evaluation_run',
+  //   value: request.message_ids.length,
+  //   resourceType: 'batch_evaluation',
+  //   resourceId: request.message_ids[0],
+  //   metadata: {
+  //     judgeModel: request.judge_model || 'gpt-4.1',
+  //     criteriaCount: criteria.length,
+  //     messagesEvaluated: request.message_ids.length,
+  //   },
+  // });
 
   // Calculate summary statistics
   const allJudgments = Array.from(results.values()).flat();

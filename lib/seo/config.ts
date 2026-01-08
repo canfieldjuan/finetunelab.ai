@@ -39,6 +39,13 @@ export const publicPages = [
   { path: '/lab-academy', priority: 0.9, changeFreq: 'weekly' as const },
   { path: '/case-studies', priority: 0.9, changeFreq: 'weekly' as const },
 
+  // Comparison pages (high-intent keywords)
+  { path: '/alternatives', priority: 0.95, changeFreq: 'weekly' as const },
+  { path: '/alternatives/weights-and-biases', priority: 0.9, changeFreq: 'monthly' as const },
+  { path: '/alternatives/langsmith', priority: 0.9, changeFreq: 'monthly' as const },
+  { path: '/alternatives/airflow', priority: 0.9, changeFreq: 'monthly' as const },
+  { path: '/alternatives/mlflow', priority: 0.9, changeFreq: 'monthly' as const },
+
   // Auth pages (for brand searches)
   { path: '/login', priority: 0.5, changeFreq: 'monthly' as const },
   { path: '/signup', priority: 0.6, changeFreq: 'monthly' as const },
@@ -208,5 +215,31 @@ export function generateBreadcrumbSchema(items: Array<{ name: string; path: stri
       "name": item.name,
       "item": `${siteConfig.url}${item.path}`
     }))
+  };
+}
+
+/**
+ * Generate Dataset schema for training data
+ * Helps with "training dataset" and "fine-tuning data" queries
+ */
+export function generateDatasetSchema(dataset: {
+  name: string;
+  description: string;
+  format: string;
+  size?: number;
+  examples?: string[];
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    "name": dataset.name,
+    "description": dataset.description,
+    "encodingFormat": dataset.format,
+    "variableMeasured": "Training examples for LLM fine-tuning",
+    "distribution": {
+      "@type": "DataDownload",
+      "encodingFormat": dataset.format,
+      "contentSize": dataset.size ? `${dataset.size} examples` : undefined
+    }
   };
 }

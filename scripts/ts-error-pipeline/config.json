@@ -1,0 +1,55 @@
+{
+  "models": {
+    "tier1": {
+      "model": "qwen2.5-coder:32b",
+      "provider": "local"
+    },
+    "tier2": {
+      "model": "deepseek-r1:32b",
+      "provider": "local"
+    },
+    "tier3": {
+      "model": "deepseek-r1:70b",
+      "provider": "local"
+    }
+  },
+  "cloud_models": {
+    "tier2": {
+      "model": "qwen3-coder:480b",
+      "provider": "cloud"
+    },
+    "tier3": {
+      "model": "deepseek-v3.2",
+      "provider": "cloud"
+    }
+  },
+  "confidence_thresholds": {
+    "auto_approve_tier1": 0.85,
+    "tier1_to_tier2": 0.85,
+    "tier2_to_tier3": 0.6
+  },
+  "batch_sizes": {
+    "categorize": 10,
+    "generate": 1
+  },
+  "ollama": {
+    "local": {
+      "base_url": "http://localhost:11434",
+      "timeout_ms": 300000
+    },
+    "cloud": {
+      "base_url": "https://ollama.com",
+      "api_key": "YOUR_API_KEY_HERE",
+      "timeout_ms": 600000
+    }
+  },
+  "execution": {
+    "mode": "parallel",
+    "use_cloud_fallback": true,
+    "max_parallel_requests": 3
+  },
+  "git": {
+    "auto_commit": true,
+    "commit_prefix": "fix: auto-fix"
+  }
+}

@@ -89,7 +89,7 @@ export function Hero() {
 
         {/* Social Proof */}
         <p className="text-sm text-muted-foreground pt-4">
-          Experience the power of Fine Tune Lab's closed-loop AI platform with production analytics and real-time feedback.
+          Experience the power of Fine Tune Lab&apos;s closed-loop AI platform with production analytics and real-time feedback.
         </p>
       </div>
       </div>

@@ -431,7 +431,7 @@ export class RunPodService {
     modelName: string,
     datasetPath: string,
     trainingConfig: TrainingConfig
-  ): any {
+  ): unknown {
     const training = trainingConfig.training as AdvancedTrainingConfig;
     const data = trainingConfig.data;
     const model = trainingConfig.model;

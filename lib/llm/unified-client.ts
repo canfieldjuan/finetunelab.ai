@@ -33,6 +33,9 @@ export class UnifiedLLMClient {
       ['runpod', new OpenAIAdapter()], // RunPod vLLM pods use OpenAI-compatible API
       ['azure', new OpenAIAdapter()], // Azure OpenAI uses OpenAI-compatible API
       ['fireworks', new OpenAIAdapter()], // Fireworks.ai uses OpenAI-compatible API
+      ['openrouter', new OpenAIAdapter()], // OpenRouter uses OpenAI-compatible API
+      ['together', new OpenAIAdapter()], // Together.ai uses OpenAI-compatible API
+      ['groq', new OpenAIAdapter()], // Groq uses OpenAI-compatible API
       ['custom', new OpenAIAdapter()], // Custom endpoints typically use OpenAI format
     ]);
 
@@ -136,6 +139,12 @@ export class UnifiedLLMClient {
     const { url, headers, body } = adapter.formatRequest(request);
 
     console.log('[UnifiedLLMClient] Sending request to:', url);
+    console.log('[UnifiedLLMClient] Headers:', {
+      hasAuthorization: !!headers['Authorization'],
+      hasReferer: !!headers['HTTP-Referer'],
+      hasTitle: !!headers['X-Title'],
+      provider: config.provider,
+    });
 
     // Make API call with extended timeout for serverless/slow providers
     const isServerless = url.includes('runpod.net') || url.includes('runpod.io');

@@ -1,0 +1,191 @@
+[
+  {
+    "file": "app/account/page.tsx",
+    "line": 269,
+    "column": 56,
+    "code": "TS2345",
+    "message": "Argument of type 'string' is not assignable to parameter of type 'SetStateAction<UsageTier | undefined>'.",
+    "context": {
+      "before": [
+        "                  {showTierSelector ? 'Hide Tiers' : 'Change Tier'}",
+        "                </Button>",
+        "              </div>",
+        "              <UsageDashboard ",
+        "                sessionToken={session.access_token}"
+      ],
+      "errorLine": "                onTierLoaded={(tier) => setCurrentTier(tier)}",
+      "after": [
+        "              />",
+        "              ",
+        "              {showTierSelector && (",
+        "                <div className=\"mt-8 pt-8 border-t border-border\">",
+        "                  <TierSelector"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Type mismatch - straightforward type annotation fix"
+  },
+  {
+    "file": "app/api/evaluate-message/route.ts",
+    "line": 107,
+    "column": 58,
+    "code": "TS2304",
+    "message": "Cannot find name 'ContentJson'.",
+    "context": {
+      "before": [
+        "    // 4. Save citations (async, don't block)",
+        "    if (contentJson && typeof contentJson === 'object' && 'citations' in contentJson) {",
+        "      const citations = (contentJson as Record<string, unknown>).citations;",
+        "      if (Array.isArray(citations) && citations.length > 0) {",
+        "         "
+      ],
+      "errorLine": "citationsService.saveCitations(messageId, contentJson as ContentJson).catch((err: Error) => {",
+      "after": [
+        "          console.error('[EvaluateMessage] Error saving citations:', err);",
+        "        });",
+        "      }",
+        "    }",
+        ""
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Missing type definition for 'ContentJson' - straightforward fix by defining or importing the type"
+  },
+  {
+    "file": "app/models/page.tsx",
+    "line": 410,
+    "column": 19,
+    "code": "TS2322",
+    "message": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'.",
+    "context": {
+      "before": [
+        "                <ModelCard",
+        "                  model={model}",
+        "                  onEdit={handleEditModel}",
+        "                  onDelete={handleDeleteModel}",
+        "                  currentUserId={user?.id}"
+      ],
+      "errorLine": "                  serverInfo={servers[model.id]}",
+      "after": [
+        "                  sessionToken={session?.access_token}",
+        "                  onServerChanged={fetchServers}",
+        "                />",
+        "              </div>",
+        "            ))}"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Type 'ServerInfo' is not assignable to type 'ServerInfo | undefined'. This can be fixed by ensuring that the value being assigned to serverInfo is either ServerInfo or explicitly undefined."
+  },
+  {
+    "file": "lib/inference/fireworks-deployment-service.ts",
+    "line": 82,
+    "column": 7,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'BodyInit | null | undefined'.",
+    "context": {
+      "before": [
+        "    }",
+        "",
+        "    const options: RequestInit = {",
+        "      method,",
+        "      headers,"
+      ],
+      "errorLine": "      body: (body instanceof FormData || body instanceof Buffer) ? (body as unknown) : JSON.stringify(body),",
+      "after": [
+        "    };",
+        "",
+        "    if (body instanceof Buffer) {",
+        "      options.headers = { ...headers, 'Content-Type': 'application/octet-stream' };",
+        "    }"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "The error indicates that an unknown type cannot be assigned to a specific type. Casting body as BodyInit, null, or undefined should resolve this issue."
+  },
+  {
+    "file": "lib/inference/runpod-serverless-service.ts",
+    "line": 434,
+    "column": 9,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "        },\r",
+        "      };\r",
+        "\r",
+        "      if (networkVolumeIdToAttach) {\r",
+        "        console.log(`[RunPodServerlessService] Attaching volume ${networkVolumeIdToAttach} to the pod.`);\r"
+      ],
+      "errorLine": "        (variables.input as unknown).networkVolumeId = networkVolumeIdToAttach;\r",
+      "after": [
+        "        variables.input.volumeMountPath = volumeMountPath;\r",
+        "        const modelFolderName = request.model_id.split('/').pop();\r",
+        "        variables.input.dockerArgs = `vllm serve --model ${volumeMountPath}/${modelFolderName} ${vllmArgs.join(' ')}`;\r",
+        "      }\r",
+        "      \r"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "The error is due to an object being of type 'unknown'. Adding a type assertion or check will fix it."
+  },
+  {
+    "file": "lib/services/training-providers/local.provider.ts",
+    "line": 163,
+    "column": 15,
+    "code": "TS2571",
+    "message": "Object is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      let payload: TrainingJobRequest = request;\r",
+        "      try {\r",
+        "        if (request && request.config) {\r",
+        "          // Check if already normalized (has 'lora' key at top level)\r",
+        "          // ScriptBuilder output always includes 'lora' key\r"
+      ],
+      "errorLine": "          if ((request.config as unknown).lora) {\r",
+      "after": [
+        "            console.log('[LocalProvider] Config appears already normalized, skipping normalization');\r",
+        "            payload = request;\r",
+        "          } else {\r",
+        "            console.log('[LocalProvider] Normalizing config for backend');\r",
+        "            const normalized = normalizeForBackend(request.config as unknown as TrainingConfig);\r"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "Similar to the previous error, this one also involves an object of type 'unknown'. A type assertion is needed here as well."
+  },
+  {
+    "file": "lib/tools/web-search/research.controller.ts",
+    "line": 58,
+    "column": 13,
+    "code": "TS18046",
+    "message": "'data' is of type 'unknown'.",
+    "context": {
+      "before": [
+        "      res.setHeader('Content-Type', 'text/event-stream');",
+        "      res.setHeader('Cache-Control', 'no-cache');",
+        "      res.setHeader('Connection', 'keep-alive');",
+        "      ",
+        "      const handler = (data: unknown) => {"
+      ],
+      "errorLine": "        if (data.jobId === jobId) {",
+      "after": [
+        "           res.write(`data: ${JSON.stringify(data)}\\n\\n`);",
+        "        }",
+        "      };",
+        "      ",
+        "      sseService.on('research_event', handler);"
+      ]
+    },
+    "tier": "TIER1",
+    "confidence": 0.95,
+    "categorizationReason": "The variable data is of type 'unknown'. Adding a type assertion or check will fix this issue, ensuring that data has the expected structure before accessing its properties."
+  }
+]

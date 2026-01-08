@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MjAsImV4cCI6MTk2MDc2ODgyMH0.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
@@ -47,7 +47,7 @@ function getDateRange(timeRange: TimeRange): { startDate: Date; endDate: Date } 
  * Aggregate success rate by day from evaluations
  */
 async function aggregateSuccessRateByDay(
-  supabase: any,
+  supabase: SupabaseClient<any>,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -97,7 +97,7 @@ async function aggregateSuccessRateByDay(
  * Aggregate average rating by day from evaluations
  */
 async function aggregateAvgRatingByDay(
-  supabase: any,
+  supabase: SupabaseClient<any>,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -144,7 +144,7 @@ async function aggregateAvgRatingByDay(
  * Aggregate P95 response time by day from messages
  */
 async function aggregateResponseTimeP95ByDay(
-  supabase: any,
+  supabase: SupabaseClient<any>,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -197,7 +197,7 @@ async function aggregateResponseTimeP95ByDay(
  * Aggregate SLA breach rate by day (% of responses > 2000ms)
  */
 async function aggregateSLABreachRateByDay(
-  supabase: any,
+  supabase: SupabaseClient<any>,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -307,8 +307,8 @@ export async function GET(req: NextRequest) {
     // Fetch appropriate metric data
     let historical: HistoricalDataPoint[] = [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabaseAny = supabase as any;
+     
+    const supabaseAny = supabase as SupabaseClient<any>;
 
     switch (metric) {
       case 'success_rate':

@@ -928,8 +928,8 @@ export async function POST(req: NextRequest) {
     // ========================================================================
     function getDisplayModelId(
       modelPath: string,
-      job: any,
-      config: any
+      job: { model_name?: string } | null,
+      config: { model_path?: string } | null | undefined
     ): string {
       // Priority 1: Training job's base model (best for analytics)
       if (job?.model_name) {
@@ -965,13 +965,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Use UPDATE if model exists, INSERT if new
-    let modelEntry: any;
-    let modelError: any;
+    let modelEntry: { id: string } | null = null;
+    let modelError: { message: string } | null = null;
 
     if (shouldUpdateModel && existingModel) {
       // UPDATE existing model entry
       console.log('[DeployAPI] Updating existing model entry:', existingModel.id);
-      const { data, error } = await supabase
+      const { data, error }: { data: { id: string } | null; error: { message: string } | null } = await supabase
         .from('llm_models')
         .update({
           provider: server_type,
@@ -1004,7 +1004,7 @@ export async function POST(req: NextRequest) {
     } else {
       // INSERT new model entry
       console.log('[DeployAPI] Creating new model entry');
-      const { data, error } = await supabase
+      const { data, error }: { data: { id: string } | null; error: { message: string } | null } = await supabase
         .from('llm_models')
         .insert({
           user_id: userId,
@@ -1057,7 +1057,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log('[DeployAPI] Model entry saved:', modelEntry.id);
+    console.log('[DeployAPI] Model entry saved:', modelEntry!.id);
 
     // ========================================================================
     // Step 6: Return success
@@ -1068,7 +1068,7 @@ export async function POST(req: NextRequest) {
       status: serverReady ? STATUS.RUNNING : STATUS.STARTING,
       base_url: serverInfo.baseUrl,
       port: serverInfo.port,
-      model_id: modelEntry.id,
+      model_id: modelEntry!.id,
       model_name: modelName,
       message: serverReady
         ? 'Model deployed successfully!'

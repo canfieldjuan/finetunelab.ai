@@ -6,11 +6,6 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    // Initialize OpenAI client lazily to avoid build-time errors
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build',
-    });
-
     const { message } = await req.json();
 
     if (!message || typeof message !== 'string') {
@@ -19,6 +14,16 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn('[GenerateTitle] OPENAI_API_KEY not configured, using fallback');
+      const fallbackTitle = message.charAt(0).toUpperCase() + message.slice(1, 47);
+      return NextResponse.json({ title: fallbackTitle }, { status: 200 });
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
 
     console.log('[GenerateTitle] Generating title for message:', message.substring(0, 50));
 

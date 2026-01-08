@@ -25,6 +25,8 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: ENCRYPTION_KEY
+        sync: false  # Used for encrypting API keys in scheduled evaluations
       - key: NODE_OPTIONS
         value: --max-old-space-size=4096
       - key: NEXT_PUBLIC_BASE_URL
@@ -68,7 +70,7 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
-    autoDeploy: true  # Auto-deploy from develop branch
+    autoDeploy: false  # Manual deploy to save build minutes
 
   # Redis Cache (Optional - if using Redis)
   # - type: redis
@@ -94,11 +96,16 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: ENCRYPTION_KEY
+        fromService:
+          name: finetunelab-production
+          type: web
+          envVarKey: ENCRYPTION_KEY
       - key: NEXT_PUBLIC_APP_URL
         value: https://finetunelab.ai
       - key: NEXT_PUBLIC_BASE_URL
         value: https://finetunelab.ai
-    autoDeploy: true
+    autoDeploy: false  # Manual deploy to save build minutes
 
   # BYOM Cron Job - Cleanup Expired Demo Sessions
   - type: cron

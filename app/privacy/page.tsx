@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -132,7 +133,7 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
               <li><strong>Access:</strong> Request a copy of your personal data</li>
               <li><strong>Correction:</strong> Update or correct inaccurate information</li>
-              <li><strong>Deletion:</strong> Request deletion of your data ("right to be forgotten")</li>
+              <li><strong>Deletion:</strong> Request deletion of your data (&quot;right to be forgotten&quot;)</li>
               <li><strong>Portability:</strong> Export your data in a machine-readable format</li>
               <li><strong>Objection:</strong> Object to processing of your data</li>
               <li><strong>Restriction:</strong> Request restriction of processing</li>
@@ -180,7 +181,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">11. Children's Privacy</h2>
+            <h2 className="text-2xl font-bold mb-4">11. Children&apos;s Privacy</h2>
             <p className="text-muted-foreground leading-relaxed">
               Our service is not intended for users under 18. We do not knowingly collect information from children. If you believe we have collected data from a child, contact us immediately.
             </p>

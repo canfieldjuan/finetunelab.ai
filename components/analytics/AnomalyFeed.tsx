@@ -396,7 +396,7 @@ export default function AnomalyFeed({
         body: JSON.stringify({
           anomaly_id: anomalyId,
           acknowledged: true,
-          resolution_status: 'acknowledged'
+          resolution_status: 'investigating'
         }),
       });
 

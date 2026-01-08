@@ -14,6 +14,7 @@ import {
   Search,
   Zap,
   AlertCircle,
+  ArrowRight,
 } from 'lucide-react';
 
 interface Message {
@@ -25,6 +26,12 @@ interface DemoAtlasChatProps {
   sessionId: string;
   modelName?: string;
   onExportRequest?: () => void;
+}
+
+interface QuestionLimit {
+  questions_used: number;
+  questions_limit: number;
+  questions_remaining: number;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -39,6 +46,8 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [questionLimit, setQuestionLimit] = useState<QuestionLimit | null>(null);
+  const [limitReached, setLimitReached] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -58,7 +67,7 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
       setMessages([
         {
           role: 'assistant',
-          content: `Hi! I can help you analyze your batch test results for ${modelName || 'your model'}.\n\nTry asking me about your success rate, latency percentiles, or which prompts performed best or worst. What would you like to know?`,
+          content: `Hi! I'm Atlas, your analytics assistant. I can help you understand how ${modelName || 'your model'} performed during the batch test.\n\nI can analyze:\n- Success rate and failure patterns\n- Latency performance (p50, p95, p99)\n- Token usage and efficiency\n- Specific prompts that performed best or worst\n\nWhat would you like to know about your results?`,
         },
       ]);
     }
@@ -79,11 +88,11 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
       : [userMessage];
 
     try {
-      const response = await fetch('/api/demo/v2/atlas', {
+      const response = await fetch('/api/demo/v2/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          session_id: sessionId,
+          sessionId: sessionId,
           messages: conversationHistory.map(m => ({
             role: m.role,
             content: m.content,
@@ -93,6 +102,14 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
 
       if (!response.ok) {
         const data = await response.json();
+
+        // Handle question limit reached
+        if (data.error === 'question_limit_reached') {
+          setLimitReached(true);
+          setError(data.message || 'Question limit reached');
+          return;
+        }
+
         throw new Error(data.error || 'Failed to get response');
       }
 
@@ -120,6 +137,17 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
 
             try {
               const parsed = JSON.parse(data);
+
+              // Handle question count metadata
+              if (parsed.type === 'question_count') {
+                setQuestionLimit({
+                  questions_used: parsed.questions_used,
+                  questions_limit: parsed.questions_limit,
+                  questions_remaining: parsed.questions_remaining,
+                });
+              }
+
+              // Handle content
               if (parsed.content) {
                 assistantMessage += parsed.content;
                 // Update the last message (assistant message)
@@ -168,13 +196,23 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-500" />
-            Results Analysis
+            Atlas Analysis
           </CardTitle>
-          {modelName && (
-            <Badge variant="outline" className="text-xs">
-              {modelName}
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {questionLimit && (
+              <Badge
+                variant={questionLimit.questions_remaining <= 2 ? 'destructive' : 'outline'}
+                className="text-xs"
+              >
+                {questionLimit.questions_remaining} / {questionLimit.questions_limit} questions left
+              </Badge>
+            )}
+            {modelName && (
+              <Badge variant="outline" className="text-xs">
+                {modelName}
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
 
@@ -241,26 +279,48 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
 
         {/* Input Area */}
         <div className="flex-none border-t p-4">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder="Ask about your test results..."
-                className="pl-9"
-                disabled={isLoading}
-              />
-            </div>
-            <Button type="submit" disabled={isLoading || !input.trim()}>
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
+          {limitReached ? (
+            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4 text-center">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
+                Demo Limit Reached
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
+                You've used all 10 questions in this demo session. Export your results below or contact us for full access!
+              </p>
+              {onExportRequest && (
+                <Button
+                  onClick={onExportRequest}
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                >
+                  Continue to Export
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
               )}
-            </Button>
-          </form>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={inputRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="Ask about your test results..."
+                  className="pl-9"
+                  disabled={isLoading}
+                />
+              </div>
+              <Button type="submit" disabled={isLoading || !input.trim()}>
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </form>
+          )}
 
           {/* Export hint */}
           {messages.length > 2 && onExportRequest && (

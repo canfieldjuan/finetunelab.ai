@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
     };
   }
 
-  static getDerivedStateFromError(error: any): Partial<State> {
+  static getDerivedStateFromError(error: unknown): Partial<State> {
     // Update state so next render shows fallback UI
     // Normalize error to ensure it's always a proper Error object
     const normalizedError = error instanceof Error
@@ -50,7 +50,7 @@ export class ErrorBoundary extends Component<Props, State> {
     };
   }
 
-  componentDidCatch(error: any, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: unknown, errorInfo: React.ErrorInfo) {
     // Normalize error to ensure it's always a proper Error object
     const normalizedError = error instanceof Error
       ? error

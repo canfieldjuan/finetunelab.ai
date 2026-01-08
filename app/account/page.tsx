@@ -12,66 +12,18 @@ import { PageWrapper } from "../../components/layout/PageWrapper";
 import { PageHeader } from "../../components/layout/PageHeader";
 import type {
   SubscriptionPlan,
-  UserSubscription,
-  UsageMetrics,
-  PlanLimits
+  UserSubscription
 } from "@/lib/subscriptions/types";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { ScheduledEvaluationManager } from "@/components/evaluation/ScheduledEvaluationManager";
 import { UsageDashboard } from "@/components/billing/UsageDashboard";
 import { TierSelector } from "@/components/billing/TierSelector";
-import { UsageHistoryChart } from "@/components/billing/UsageHistoryChart";
-import { InvoiceHistoryTable } from "@/components/billing/InvoiceHistoryTable";
+import { UsageHistoryChart, type MonthlyUsage } from "@/components/billing/UsageHistoryChart";
+import { InvoiceHistoryTable, type Invoice } from "@/components/billing/InvoiceHistoryTable";
 import { safeJsonParse } from "@/lib/utils/safe-json";
+import type { UsageTier } from "@/lib/pricing/usage-based-config";
 
-// Usage Card Component
-interface UsageCardProps {
-  label: string;
-  current: number;
-  limit?: number;
-  percentage?: number;
-  unit?: string;
-}
-
-function UsageCard({ label, current, limit = -1, percentage, unit }: UsageCardProps) {
-  const isUnlimited = limit === -1;
-  const displayLimit = isUnlimited ? '∞' : limit?.toLocaleString();
-  const displayCurrent = unit ? `${current.toLocaleString()} ${unit}` : current.toLocaleString();
-  const displayLimitWithUnit = unit && !isUnlimited ? `${displayLimit} ${unit}` : displayLimit;
-
-  // Determine progress bar color based on percentage
-  const getProgressColor = () => {
-    if (isUnlimited || !percentage) return 'bg-primary';
-    if (percentage >= 90) return 'bg-red-500';
-    if (percentage >= 75) return 'bg-yellow-500';
-    return 'bg-primary';
-  };
-
-  return (
-    <div className="p-4 border border-border rounded-lg bg-background hover:bg-accent/50 transition-colors">
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
-      <div className="text-2xl font-bold text-foreground mt-1">
-        {displayCurrent}
-        <span className="text-sm text-muted-foreground font-normal">
-          {' '}/ {displayLimitWithUnit}
-        </span>
-      </div>
-      {percentage !== undefined && !isUnlimited && (
-        <div className="mt-2">
-          <div className="w-full bg-muted rounded-full h-2">
-            <div
-              className={`${getProgressColor()} h-2 rounded-full transition-all`}
-              style={{ width: `${Math.min(percentage, 100)}%` }}
-            />
-          </div>
-          <div className="text-xs text-muted-foreground mt-1">
-            {percentage.toFixed(1)}% used
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+// DEPRECATED: UsageCard component removed - no longer using OLD subscription-based usage tracking
 
 export default function AccountPage() {
   const { user, signOut, session } = useAuth();
@@ -81,29 +33,17 @@ export default function AccountPage() {
   const [plan, setPlan] = useState<SubscriptionPlan | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
 
-  // Usage state
-  const [usage, setUsage] = useState<UsageMetrics | null>(null);
-  const [limits, setLimits] = useState<PlanLimits | null>(null);
-  const [percentages, setPercentages] = useState<{
-    api_calls: number;
-    storage: number;
-    models: number;
-    batch_test_runs: number;
-    scheduled_eval_runs: number;
-    chat_messages: number;
-    inference_calls: number;
-    compute_minutes: number;
-  } | null>(null);
-  const [loadingUsage, setLoadingUsage] = useState(true);
+  // DEPRECATED: OLD usage tracking system removed
+  // Now using usage_meters table via /api/billing/usage
 
   // Subscription management state
   const [managingSubscription, setManagingSubscription] = useState(false);
 
   // Usage-based pricing state
-  const [currentTier, setCurrentTier] = useState<string | undefined>(undefined);
+  const [currentTier, setCurrentTier] = useState<UsageTier | undefined>(undefined);
   const [showTierSelector, setShowTierSelector] = useState(false);
-  const [usageHistory, setUsageHistory] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [usageHistory, setUsageHistory] = useState<MonthlyUsage[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
 
@@ -142,38 +82,7 @@ export default function AccountPage() {
     fetchSubscription();
   }, [user, session?.access_token]);
 
-  // Fetch user's usage metrics
-  useEffect(() => {
-    const fetchUsage = async () => {
-      if (!user || !session?.access_token) {
-        setLoadingUsage(false);
-        return;
-      }
-
-      try {
-        const response = await fetch('/api/usage/current', {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch usage');
-        }
-
-        const data = await safeJsonParse(response, { usage: null, limits: null, percentages: null });
-        setUsage(data.usage);
-        setLimits(data.limits);
-        setPercentages(data.percentages);
-      } catch (error) {
-        console.error('[AccountPage] Error fetching usage:', error);
-      } finally {
-        setLoadingUsage(false);
-      }
-    };
-
-    fetchUsage();
-  }, [user, session?.access_token]);
+  // DEPRECATED: Removed fetchUsage - now using /api/billing/usage
 
   // Fetch usage history
   useEffect(() => {
@@ -192,7 +101,10 @@ export default function AccountPage() {
 
         if (response.ok) {
           const data = await safeJsonParse(response, { history: [] });
+          console.log('[AccountPage] Usage history received:', data.history?.length || 0, 'months');
           setUsageHistory(data.history);
+        } else {
+          console.error('[AccountPage] Failed to fetch usage history:', response.status);
         }
       } catch (error) {
         console.error('[AccountPage] Error fetching usage history:', error);
@@ -354,13 +266,13 @@ export default function AccountPage() {
               </div>
               <UsageDashboard 
                 sessionToken={session.access_token}
-                onTierLoaded={(tier) => setCurrentTier(tier)}
+                onTierLoaded={(tier: UsageTier | undefined) => setCurrentTier(tier)}
               />
               
               {showTierSelector && (
                 <div className="mt-8 pt-8 border-t border-border">
                   <TierSelector
-                    currentTier={currentTier as any}
+                    currentTier={currentTier}
                     sessionToken={session.access_token}
                     onTierSelect={(tier) => {
                       console.log('[AccountPage] Tier selected:', tier);
@@ -420,90 +332,7 @@ export default function AccountPage() {
             </div>
           )}
 
-          {/* Usage Summary (if loaded) */}
-          {!loadingUsage && usage && limits && (
-            <div className="bg-card border border-border rounded-lg shadow-sm p-6 mb-8">
-              <h2 className="text-xl font-semibold text-foreground mb-4">Current Usage</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {/* API & Inference */}
-                <UsageCard
-                  label="API Calls"
-                  current={usage.api_calls || 0}
-                  limit={limits.api_calls_per_month}
-                  percentage={percentages?.api_calls}
-                />
-                <UsageCard
-                  label="Inference Calls"
-                  current={usage.inference_calls || 0}
-                  limit={limits.inference_calls_per_month}
-                  percentage={percentages?.inference_calls}
-                />
-
-                {/* Operations */}
-                <UsageCard
-                  label="Chat Messages"
-                  current={usage.chat_messages || 0}
-                  limit={limits.chat_messages_per_month}
-                  percentage={percentages?.chat_messages}
-                />
-                <UsageCard
-                  label="Batch Tests"
-                  current={usage.batch_test_runs || 0}
-                  limit={limits.batch_test_runs_per_month}
-                  percentage={percentages?.batch_test_runs}
-                />
-                <UsageCard
-                  label="Scheduled Evals"
-                  current={usage.scheduled_eval_runs || 0}
-                  limit={limits.scheduled_eval_runs_per_month}
-                  percentage={percentages?.scheduled_eval_runs}
-                />
-
-                {/* Resources */}
-                <UsageCard
-                  label="Storage"
-                  current={usage.storage_mb || 0}
-                  limit={limits.storage_mb}
-                  percentage={percentages?.storage}
-                  unit="MB"
-                />
-                <UsageCard
-                  label="Models"
-                  current={usage.models || 0}
-                  limit={limits.models_limit}
-                  percentage={percentages?.models}
-                />
-                <UsageCard
-                  label="Compute Time"
-                  current={usage.compute_minutes || 0}
-                  limit={limits.compute_minutes_per_month}
-                  percentage={percentages?.compute_minutes}
-                  unit="min"
-                />
-              </div>
-
-              {/* Hidden metrics (tracking but not displayed prominently) */}
-              <details className="mt-6">
-                <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
-                  View additional metrics
-                </summary>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-border">
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">Training Jobs</span>
-                    <div className="text-lg font-semibold text-foreground mt-1">
-                      {usage.training_jobs || 0}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">Tokens Used</span>
-                    <div className="text-lg font-semibold text-foreground mt-1">
-                      {usage.tokens?.toLocaleString() || 0}
-                    </div>
-                  </div>
-                </div>
-              </details>
-            </div>
-          )}
+          {/* DEPRECATED: Removed "Current Usage" section - now using Usage & Billing card above */}
 
           {/* Notification Settings */}
           {session?.access_token && (

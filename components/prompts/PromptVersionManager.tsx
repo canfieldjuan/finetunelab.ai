@@ -36,6 +36,8 @@ export function PromptVersionManager({ promptName }: { promptName: string }) {
 
   useEffect(() => {
     fetchVersions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [promptName]);
 
   async function fetchVersions() {

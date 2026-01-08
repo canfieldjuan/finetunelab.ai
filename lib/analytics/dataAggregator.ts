@@ -17,6 +17,15 @@ import {
 } from './types';
 import type { AnalyticsExportFilters } from './export/types';
 
+interface MessageEvaluation {
+  id: string;
+  message_id: string;
+  created_at: string;
+  rating: number | null;
+  success: boolean | null;
+  notes: string | null;
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
@@ -248,7 +257,7 @@ export async function aggregateQualityMetrics(
     console.log('[DataAggregator] Querying message_evaluations in', batches.length, 'batches');
 
     // Query each batch and combine results
-    const allEvaluations: any[] = [];
+    const allEvaluations: MessageEvaluation[] = [];
     for (const batch of batches) {
       const { data, error } = await supabase
         .from('message_evaluations')
@@ -294,7 +303,7 @@ export async function aggregateQualityMetrics(
         rating: evaluation.rating || 0,
         successStatus: evaluation.success ? 'success' : 'failure',
         evaluationType: 'manual',
-        notes: evaluation.notes,
+        notes: evaluation.notes ?? undefined,
       };
     });
 

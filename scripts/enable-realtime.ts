@@ -88,7 +88,7 @@ async function enableRealtime() {
         }
       });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }
