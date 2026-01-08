@@ -27,7 +27,7 @@ export async function GET(
       );
     }
 
-    const version = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.2.0';
+    const version = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.2.1';
     const baseUrl = `https://github.com/FineTune-Lab/training-agent/releases/download/${version}`;
 
     const fileMap: Record<string, string> = {

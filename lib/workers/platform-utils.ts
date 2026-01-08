@@ -22,10 +22,10 @@ export function detectPlatform(): Platform {
 
 /**
  * Get download information for all platforms
- * @param version - Training agent version (defaults to env var or 'v0.2.0')
+ * @param version - Training agent version (defaults to env var or 'v0.2.1')
  */
 export function getPlatformDownloads(
-  version: string = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.2.0'
+  version: string = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.2.1'
 ): PlatformDownload[] {
   return [
     {
