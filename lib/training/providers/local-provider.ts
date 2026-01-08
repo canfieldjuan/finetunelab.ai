@@ -5,12 +5,6 @@ import { DeploymentStatus, DeploymentMetrics } from '../deployment.types';
 import { LocalTrainingProvider } from '../../services/training-providers/local.provider';
 import { ScriptBuilder } from '../script-builder';
 
-interface LocalDeployOptions {
-  jobId: string;
-  userId?: string;
-  accessToken?: string;
-}
-
 export class LocalProvider implements DeploymentProvider {
   name = 'local';
   private provider: LocalTrainingProvider;
@@ -28,10 +22,10 @@ export class LocalProvider implements DeploymentProvider {
     config: TrainingConfig,
     modelName: string,
     datasetPath: string,
-    options?: LocalDeployOptions
+    options?: any
   ): Promise<string> {
-    if (!options?.jobId) throw new Error('Job ID is required for Local deployment');
-    const jobId = options.jobId;
+    const jobId = options?.jobId;
+    if (!jobId) throw new Error('Job ID is required for Local deployment');
 
     // Generate secure job_token for metrics authentication
     const jobToken = crypto.randomBytes(32).toString('base64url');
@@ -80,22 +74,33 @@ export class LocalProvider implements DeploymentProvider {
     // Generate config using ScriptBuilder
     const trainingConfigJson = ScriptBuilder.generateTrainingConfig(modelName, datasetPath, config);
 
-    // Execute training with job_token for metrics authentication
-    const result = await this.provider.executeTraining({
-        config: trainingConfigJson as Record<string, unknown>,
-        dataset_path: datasetPath,
-        execution_id: jobId,
-        name: modelName,
-        user_id: options.userId,
-        access_token: options.accessToken,
-        job_token: jobToken,  // Pass token to agent for metrics reporting
-    });
+    // Check if we should dispatch directly to agent or let agent poll
+    const agentUrl = options?.agentUrl || process.env.NEXT_PUBLIC_TRAINING_BACKEND_URL || '';
+    const isLocalAgent = this.isLocalUrl(agentUrl);
 
-    if (!result.success) {
-        throw new Error(result.error || 'Failed to start local training job');
+    if (isLocalAgent) {
+      // Local development: call agent directly
+      console.log('[LocalProvider] Local agent detected, dispatching job directly');
+      const result = await this.provider.executeTraining({
+          config: trainingConfigJson,
+          dataset_path: datasetPath,
+          execution_id: jobId,
+          name: modelName,
+          user_id: options?.userId,
+          access_token: options?.accessToken,
+          job_token: jobToken,
+      });
+
+      if (!result.success) {
+          throw new Error(result.error || 'Failed to start local training job');
+      }
+
+      return result.job_id;
+    } else {
+      // Remote deployment: agent will poll for the job
+      console.log('[LocalProvider] Remote deployment, job queued for agent polling');
+      return jobId;
     }
-
-    return result.job_id;
   }
 
   async getStatus(jobId: string): Promise<{
@@ -137,5 +142,21 @@ export class LocalProvider implements DeploymentProvider {
 
   async getLogs(jobId: string): Promise<string[]> {
     return this.provider.getLogs(jobId, 1000); // Get last 1000 lines
+  }
+
+  /**
+   * Check if URL points to a local agent (localhost or 127.0.0.1)
+   */
+  private isLocalUrl(url: string): boolean {
+    if (!url) return true; // Default to local if no URL
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname.toLowerCase();
+      return hostname === 'localhost' || hostname === '127.0.0.1';
+    } catch {
+      // If URL parsing fails, check for localhost patterns
+      const lower = url.toLowerCase();
+      return lower.includes('localhost') || lower.includes('127.0.0.1');
+    }
   }
 }

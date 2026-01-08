@@ -1,7 +1,7 @@
 /**
- * Workers Page
- * Manage local worker agents for training
- * Date: 2025-12-30
+ * Training Agent Page
+ * Download, configure, and monitor local training agents
+ * Date: 2026-01-07
  */
 
 'use client';
@@ -10,7 +10,8 @@ import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { WorkerAgentManagement } from '@/components/workers/WorkerAgentManagement';
+import { TrainingAgentSetup } from '@/components/workers/TrainingAgentSetup';
+import { TrainingAgentStatus } from '@/components/workers/TrainingAgentStatus';
 
 export default function WorkersPage() {
   const { user, signOut, session } = useAuth();
@@ -18,7 +19,7 @@ export default function WorkersPage() {
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Please log in to view worker agents.</p>
+        <p className="text-muted-foreground">Please log in to manage training agents.</p>
       </div>
     );
   }
@@ -26,16 +27,21 @@ export default function WorkersPage() {
   return (
     <PageWrapper currentPage="workers" user={user} signOut={signOut}>
       <PageHeader
-        title="Worker Agents"
-        description="Download, configure, and manage local training agents"
+        title="Training Agent"
+        description="Download and run a local training agent to execute fine-tuning jobs on your own hardware"
       />
 
-      {session?.access_token && (
-        <WorkerAgentManagement
-          userId={user.id}
-          sessionToken={session.access_token}
-        />
-      )}
+      <div className="space-y-8">
+        {/* Agent Status Section */}
+        {session?.access_token && (
+          <TrainingAgentStatus sessionToken={session.access_token} />
+        )}
+
+        {/* Setup Section */}
+        {session?.access_token && (
+          <TrainingAgentSetup sessionToken={session.access_token} />
+        )}
+      </div>
     </PageWrapper>
   );
 }

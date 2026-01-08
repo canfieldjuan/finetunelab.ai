@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OS_NAME=$(uname -s)
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.finetunelab/training-agent}"
+SERVICE_NAME="finetunelab-training-agent"
+PLIST_NAME="com.finetunelab.training-agent"
+LOG_FILE="$INSTALL_DIR/logs/agent.log"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") {start|stop|restart|status|logs}
+
+Environment:
+  INSTALL_DIR  Override install directory (default: $INSTALL_DIR)
+EOF
+}
+
+start_linux() { systemctl --user start ${SERVICE_NAME}.service; }
+stop_linux() { systemctl --user stop ${SERVICE_NAME}.service; }
+restart_linux() { systemctl --user restart ${SERVICE_NAME}.service; }
+status_linux() { systemctl --user status ${SERVICE_NAME}.service; }
+logs_linux() {
+  if command -v journalctl >/dev/null 2>&1; then
+    journalctl --user -u ${SERVICE_NAME}.service -n 200 -f
+  else
+    tail -n 200 -f "$LOG_FILE"
+  fi
+}
+
+start_macos() { launchctl start $PLIST_NAME; }
+stop_macos() { launchctl stop $PLIST_NAME; }
+restart_macos() { launchctl stop $PLIST_NAME || true; launchctl start $PLIST_NAME; }
+status_macos() { launchctl list | grep "$PLIST_NAME" || true; }
+logs_macos() { tail -n 200 -f "$LOG_FILE"; }
+
+case "${1-}" in
+  start|stop|restart|status|logs) CMD="$1" ;;
+  *) usage; exit 1 ;;
+esac
+
+case "$OS_NAME" in
+  Linux)
+    "${CMD}_linux"
+    ;;
+  Darwin)
+    "${CMD}_macos"
+    ;;
+  *)
+    echo "Unsupported OS: $OS_NAME" >&2
+    exit 1
+    ;;
+esac

@@ -1,24 +1,22 @@
 """
 FineTune Lab Training Agent - Main Application
 """
+import asyncio
 import sys
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import asyncio
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from src.api.routes import router
-from src.api.worker_client import worker_client
 from src.config import settings
 from src.monitoring.gpu_monitor import gpu_monitor
-from src.monitoring.system_monitor import system_monitor
-from src.training.executor import training_executor
+from src.services.job_poller import job_poller, get_or_create_agent_id
 
 
 # Configure logging
@@ -56,47 +54,6 @@ app.add_middleware(
 app.include_router(router)
 
 
-# ============================================================================
-# Background Tasks
-# ============================================================================
-
-async def heartbeat_loop():
-    """
-    Background task that sends heartbeat to platform every N seconds
-    Includes current load and system metrics
-    """
-    logger.info("Starting heartbeat loop")
-
-    while True:
-        try:
-            # Get current load (number of active training jobs)
-            current_load = len(training_executor.jobs)
-
-            # Get system metrics
-            metrics = system_monitor.get_metrics()
-
-            # Send heartbeat
-            success = await worker_client.send_heartbeat(
-                current_load=current_load,
-                metrics=metrics
-            )
-
-            if not success:
-                logger.warning("Heartbeat failed, will retry")
-
-            # Wait for heartbeat interval
-            await asyncio.sleep(worker_client.heartbeat_interval)
-
-        except Exception as e:
-            logger.error(f"Error in heartbeat loop: {e}")
-            # Wait a bit before retrying
-            await asyncio.sleep(5)
-
-
-# ============================================================================
-# Application Lifecycle Events
-# ============================================================================
-
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup"""
@@ -122,30 +79,22 @@ async def startup_event():
     else:
         logger.warning("No CUDA devices found - training will run on CPU")
 
-    logger.info("=" * 60)
+    # Initialize agent ID if not configured
+    if not settings.agent_id:
+        settings.agent_id = get_or_create_agent_id()
+        job_poller.agent_id = settings.agent_id
+    logger.info(f"Agent ID: {settings.agent_id}")
 
-    # Register worker with platform
-    logger.info("Registering worker with platform...")
-    success = await worker_client.register()
-
-    if not success:
-        logger.error("=" * 60)
-        logger.error("WORKER REGISTRATION FAILED")
-        logger.error("=" * 60)
-        logger.error("Cannot start without platform connection")
-        logger.error("Please check:")
-        logger.error("  1. API_KEY is set in .env")
-        logger.error("  2. BACKEND_URL is correct")
-        logger.error("  3. Platform is reachable")
-        logger.error("=" * 60)
-        raise RuntimeError("Worker registration failed")
-
-    logger.info(f"Worker ID: {worker_client.worker_id}")
-    logger.info(f"Heartbeat Interval: {worker_client.heartbeat_interval}s")
-
-    # Start heartbeat background task
-    asyncio.create_task(heartbeat_loop())
-    logger.info("Heartbeat loop started")
+    # Start job poller if enabled
+    if settings.poll_enabled and settings.api_key:
+        job_poller.agent_id = settings.agent_id
+        job_poller.api_key = settings.api_key
+        asyncio.create_task(job_poller.run())
+        logger.info("Job poller started")
+    elif not settings.api_key:
+        logger.warning("No API key configured - job polling disabled")
+    elif not settings.poll_enabled:
+        logger.info("Job polling disabled by configuration")
 
     logger.info("=" * 60)
     logger.info("Training Agent Ready")
@@ -156,6 +105,11 @@ async def startup_event():
 async def shutdown_event():
     """Run on application shutdown"""
     logger.info("Training Agent Shutting Down")
+
+    # Stop job poller
+    if job_poller.is_running():
+        job_poller.stop()
+        logger.info("Job poller stopped")
 
 
 def main():

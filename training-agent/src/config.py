@@ -11,13 +11,12 @@ class Settings(BaseSettings):
 
     # Backend Configuration
     backend_url: str = "http://localhost:3000"
-    api_key: str  # Worker API key (required, starts with wak_)
+    api_key: str = ""  # API key with 'training' scope for job polling
+    agent_id: str = ""  # Unique agent identifier (auto-generated if empty)
 
-    # Worker Identification
-    worker_hostname: Optional[str] = None  # Auto-detect if None
-    worker_platform: Optional[str] = None  # Auto-detect if None (linux/darwin/windows)
-    worker_version: str = "0.1.0"
-    worker_capabilities: list[str] = ["training"]
+    # Polling Configuration
+    poll_enabled: bool = True  # Enable job polling (set False for local dev)
+    poll_interval_seconds: int = 10  # How often to poll for jobs
 
     # Server Configuration
     host: str = "0.0.0.0"

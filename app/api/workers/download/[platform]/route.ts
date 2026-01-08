@@ -1,8 +1,8 @@
 /**
- * Worker Agent Download Proxy
+ * Training Agent Download Proxy
  * Fetches training-agent releases from GitHub and streams to user
  * Enables direct downloads without GitHub redirects
- * Date: 2025-12-31
+ * Date: 2026-01-07
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -27,7 +27,7 @@ export async function GET(
       );
     }
 
-    const version = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.1.2';
+    const version = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.2.1';
     const baseUrl = `https://github.com/FineTune-Lab/training-agent/releases/download/${version}`;
 
     const fileMap: Record<string, string> = {
@@ -39,7 +39,7 @@ export async function GET(
     const filename = fileMap[platform];
     const githubUrl = `${baseUrl}/${filename}`;
 
-    console.log('[Worker Download] Fetching:', githubUrl);
+    console.log('[Training Agent Download] Fetching:', githubUrl);
 
     const response = await fetch(githubUrl, {
       method: 'GET',
@@ -47,7 +47,7 @@ export async function GET(
     });
 
     if (!response.ok) {
-      console.error('[Worker Download] GitHub fetch failed:', response.status);
+      console.error('[Training Agent Download] GitHub fetch failed:', response.status);
       return NextResponse.json(
         { error: 'Failed to fetch training agent from GitHub' },
         { status: response.status === 404 ? 404 : 500 }
@@ -58,7 +58,7 @@ export async function GET(
       ? 'application/zip'
       : 'application/gzip';
 
-    console.log('[Worker Download] Streaming:', filename);
+    console.log('[Training Agent Download] Streaming:', filename);
 
     return new NextResponse(response.body, {
       status: 200,
@@ -70,7 +70,7 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('[Worker Download] Error:', error);
+    console.error('[Training Agent Download] Error:', error);
     return NextResponse.json(
       {
         error: 'Failed to download training agent',

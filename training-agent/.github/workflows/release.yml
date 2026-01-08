@@ -1,0 +1,127 @@
+name: Release Training Agent
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create build directory
+        run: mkdir -p build
+
+      - name: Create Linux/macOS tarball
+        run: |
+          tar -czf build/training-agent-linux-amd64.tar.gz \
+            --exclude='.git' \
+            --exclude='venv' \
+            --exclude='__pycache__' \
+            --exclude='build' \
+            --exclude='*.pyc' \
+            --exclude='.env' \
+            src/ scripts/ requirements.txt .env.example README.md LICENSE QUICK_START.md
+
+      - name: Create macOS tarball (copy of Linux)
+        run: |
+          cp build/training-agent-linux-amd64.tar.gz build/training-agent-darwin-amd64.tar.gz
+
+      - name: Create Windows zip
+        run: |
+          zip -q -r build/training-agent-windows-amd64.zip \
+            src/ scripts/ requirements.txt .env.example README.md LICENSE QUICK_START.md \
+            -x '*.git*' '*venv*' '*__pycache__*' '*build*' '*.pyc' '*.env'
+
+      - name: Verify archives
+        run: |
+          ls -lh build/
+          echo "Archive sizes:"
+          du -h build/*
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat > build/release-notes.md <<EOF
+          # Training Agent ${{ steps.version.outputs.VERSION }}
+
+          ## Installation
+
+          Download the appropriate archive for your platform:
+
+          ### Linux
+          \`\`\`bash
+          curl -sSL https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/training-agent-linux-amd64.tar.gz | tar -xz
+          cd training-agent
+          ./scripts/install.sh
+          \`\`\`
+
+          ### macOS
+          \`\`\`bash
+          curl -sSL https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/training-agent-darwin-amd64.tar.gz | tar -xz
+          cd training-agent
+          ./scripts/install.sh
+          \`\`\`
+
+          ### Windows
+          \`\`\`powershell
+          Invoke-WebRequest https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/training-agent-windows-amd64.zip -OutFile agent.zip
+          Expand-Archive agent.zip -DestinationPath training-agent
+          cd training-agent
+          scripts\install.ps1
+          \`\`\`
+
+          ## Configuration
+
+          After installation, edit your \`.env\` file:
+          - **Linux/macOS**: \`~/.finetunelab/training-agent/.env\`
+          - **Windows**: \`%LOCALAPPDATA%\FineTuneLab\training-agent\.env\`
+
+          Set \`BACKEND_URL\` and \`API_KEY\`, then restart the service:
+          - **Linux/macOS**: \`./scripts/agentctl restart\`
+          - **Windows**: Re-run the scheduled task or reboot
+
+          ## Requirements
+
+          - Python 3.10+
+          - CUDA-compatible GPU (NVIDIA recommended)
+          - 16GB+ RAM
+          - 50GB+ free disk space
+
+          ## What's Changed
+
+          See full changelog: https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.VERSION }}
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Training Agent ${{ steps.version.outputs.VERSION }}
+          body_path: build/release-notes.md
+          files: |
+            build/training-agent-linux-amd64.tar.gz
+            build/training-agent-darwin-amd64.tar.gz
+            build/training-agent-windows-amd64.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf build

@@ -20,6 +20,7 @@ interface LossChartProps {
   autoRefresh?: boolean; // Deprecated
 }
 
+
 interface MetricDataPoint {
   step: number;
   train_loss: number | null;

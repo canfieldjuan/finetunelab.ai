@@ -1,7 +1,7 @@
 /**
  * Platform Detection and Utilities
  * Helper functions for platform detection and download management
- * Date: 2025-12-30
+ * Date: 2026-01-07
  */
 
 import type { Platform, PlatformDownload } from './types';
@@ -22,10 +22,10 @@ export function detectPlatform(): Platform {
 
 /**
  * Get download information for all platforms
- * @param version - Training agent version (defaults to env var or 'v0.1.2')
+ * @param version - Training agent version (defaults to env var or 'v0.2.1')
  */
 export function getPlatformDownloads(
-  version: string = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.1.3'
+  version: string = process.env.NEXT_PUBLIC_TRAINING_AGENT_VERSION || 'v0.2.1'
 ): PlatformDownload[] {
   return [
     {
@@ -54,8 +54,9 @@ export function getPlatformDownloads(
 
 /**
  * Get setup instructions for a platform
+ * Instructions include both API_KEY and BACKEND_URL for poll-based system
  */
-export function getSetupInstructions(platform: Platform, apiKey: string): string {
+export function getSetupInstructions(platform: Platform, apiKey: string, backendUrl: string = 'https://app.finetunelab.ai'): string {
   const instructions = {
     linux: `# Step 1: Extract the downloaded file
 cd ~/Downloads
@@ -63,12 +64,14 @@ mkdir -p training-agent
 tar -xzf training-agent-linux-amd64.tar.gz -C training-agent
 cd training-agent
 
-# Step 2: Run installer with API key
+# Step 2: Run installer with API key and backend URL
 chmod +x scripts/install.sh
-API_KEY="${apiKey}" ./scripts/install.sh
+API_KEY="${apiKey}" BACKEND_URL="${backendUrl}" ./scripts/install.sh
 
 # Step 3: Start the agent
-~/.finetunelab/training-agent/scripts/agentctl start`,
+~/.finetunelab/training-agent/scripts/agentctl start
+
+# The agent will automatically poll for training jobs`,
 
     darwin: `# Step 1: Extract the downloaded file
 cd ~/Downloads
@@ -76,12 +79,14 @@ mkdir -p training-agent
 tar -xzf training-agent-darwin-amd64.tar.gz -C training-agent
 cd training-agent
 
-# Step 2: Run installer with API key
+# Step 2: Run installer with API key and backend URL
 chmod +x scripts/install.sh
-API_KEY="${apiKey}" ./scripts/install.sh
+API_KEY="${apiKey}" BACKEND_URL="${backendUrl}" ./scripts/install.sh
 
 # Step 3: Start the agent
-~/.finetunelab/training-agent/scripts/agentctl start`,
+~/.finetunelab/training-agent/scripts/agentctl start
+
+# The agent will automatically poll for training jobs`,
 
     windows: `# Step 1: Extract the downloaded file (PowerShell)
 cd $env:USERPROFILE\\Downloads
@@ -89,11 +94,13 @@ New-Item -ItemType Directory -Force -Path training-agent
 Expand-Archive -Path training-agent-windows-amd64.zip -DestinationPath training-agent
 cd training-agent
 
-# Step 2: Run installer with API key
-$env:API_KEY="${apiKey}"; .\\scripts\\install.ps1
+# Step 2: Run installer with API key and backend URL
+$env:API_KEY="${apiKey}"; $env:BACKEND_URL="${backendUrl}"; .\\scripts\\install.ps1
 
 # Step 3: Start the agent (will run as scheduled task)
-.\\scripts\\agentctl.ps1 start`,
+.\\scripts\\agentctl.ps1 start
+
+# The agent will automatically poll for training jobs`,
   };
 
   return instructions[platform];
