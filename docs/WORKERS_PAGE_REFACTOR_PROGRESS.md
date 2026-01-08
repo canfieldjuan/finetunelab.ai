@@ -94,11 +94,12 @@ See: `docs/WORKERS_PAGE_REFACTOR_PLAN.md`
 - [x] TypeScript compiles (npm run type-check passes)
 
 ### Checkpoint 4: Phase 3 Complete
-- [ ] Workers page created
-- [ ] TrainingAgentSetup component created
-- [ ] TrainingAgentStatus component created
-- [ ] API key generation uses `training` scope
-- [ ] Real-time status updates work
+- [x] Workers page created (`app/workers/page.tsx`)
+- [x] TrainingAgentSetup component created (download + API key generation)
+- [x] TrainingAgentStatus component created (real-time agent status)
+- [x] Added to AppSidebar navigation (Training Agent in Training group)
+- [x] API key generation uses `training` scope
+- [x] TypeScript compiles (npm run type-check passes)
 
 ### Checkpoint 5: Phase 4 Complete
 - [ ] Setup instructions updated with BACKEND_URL

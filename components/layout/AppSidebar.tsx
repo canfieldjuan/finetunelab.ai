@@ -35,7 +35,8 @@ import {
   Database,
   TrendingUp,
   FlaskConical,
-  Network
+  Network,
+  Cpu,
 } from 'lucide-react';
 import type { NavItem } from './CollapsibleNavGroup';
 import { CollapsibleNavGroup } from './CollapsibleNavGroup';
@@ -103,7 +104,7 @@ export function AppSidebar({
     const newExpanded = new Set<string>();
 
     // Training group pages
-    if (['training', 'training-monitor', 'finetuned-models', 'training-analytics'].includes(currentPage)) {
+    if (['training', 'training-monitor', 'workers', 'finetuned-models', 'training-analytics'].includes(currentPage)) {
       newExpanded.add('training');
     }
 
@@ -153,6 +154,7 @@ export function AppSidebar({
   const trainingItems: NavItem[] = [
     { id: 'training', href: '/training', icon: GraduationCap, label: 'Training Lab' },
     { id: 'training-monitor', href: '/training/monitor', icon: Activity, label: 'Monitor Training' },
+    { id: 'workers', href: '/workers', icon: Cpu, label: 'Training Agent' },
     { id: 'training-analytics', href: '/training/analytics', icon: TrendingUp, label: 'Training Analytics' },
     { id: 'finetuned-models', href: '/finetuned-models', icon: Rocket, label: 'Finetuned Models' },
   ];
