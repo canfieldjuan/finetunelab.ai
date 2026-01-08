@@ -68,8 +68,34 @@ export async function GET(request: NextRequest) {
 
     console.log('[Agent Poll] Agent ID:', agentId);
 
+    // Get optional agent metadata from headers
+    const hostname = request.headers.get('x-agent-hostname') || null;
+    const platform = request.headers.get('x-agent-platform') || null;
+    const version = request.headers.get('x-agent-version') || null;
+
     // Create Supabase client with service role
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Upsert agent record to track polling activity
+    const { error: upsertError } = await supabase
+      .from('training_agents')
+      .upsert({
+        user_id: userId,
+        agent_id: agentId,
+        hostname: hostname,
+        platform: platform,
+        version: version,
+        status: 'online',
+        last_poll_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,agent_id',
+        ignoreDuplicates: false
+      });
+
+    if (upsertError) {
+      // Log but don't fail - agent tracking is non-critical
+      console.warn('[Agent Poll] Failed to update agent status:', upsertError);
+    }
 
     // Query for next pending unclaimed job for this user
     // Order by created_at to get oldest pending job first (FIFO)

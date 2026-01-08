@@ -86,10 +86,12 @@ See: `docs/WORKERS_PAGE_REFACTOR_PLAN.md`
 - [x] Download endpoint verified
 
 ### Checkpoint 3: Phase 2 Complete
-- [ ] `training_agents` table migration created
-- [ ] Poll endpoint updates `last_poll_at`
-- [ ] GET `/api/training/agents` endpoint created
-- [ ] Agent online/offline status works
+- [x] `training_agents` table migration created (20260107000001)
+- [x] Poll endpoint updates `last_poll_at` via upsert
+- [x] GET `/api/training/agents` endpoint created
+- [x] GET/DELETE `/api/training/agents/[agentId]` endpoint created
+- [x] Agent online/offline status computed from last_poll_at
+- [x] TypeScript compiles (npm run type-check passes)
 
 ### Checkpoint 4: Phase 3 Complete
 - [ ] Workers page created
