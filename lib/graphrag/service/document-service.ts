@@ -8,6 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { documentStorage } from '../storage';
 import { parseDocument } from '../parsers';
 import { episodeService } from '../graphiti';
+import { getGraphitiClient } from '../graphiti/client';
 import { graphragConfig } from '../config';
 import type {
   Document,
@@ -608,6 +609,47 @@ export class DocumentService {
       processed: document.processed,
       episodeIds: document.neo4jEpisodeIds,
     };
+  }
+
+  /**
+   * Expire old episodes when updating a document
+   * Marks episodes as expired in Neo4j rather than deleting them
+   * This preserves history while excluding from search results
+   */
+  async expireOldEpisodes(
+    supabase: SupabaseClient,
+    documentId: string
+  ): Promise<{ expiredCount: number; errors: string[] }> {
+    console.log(`[DocumentService] Expiring old episodes for document: ${documentId}`);
+
+    const document = await documentStorage.getDocument(supabase, documentId);
+    if (!document) {
+      return { expiredCount: 0, errors: ['Document not found'] };
+    }
+
+    if (!document.neo4jEpisodeIds || document.neo4jEpisodeIds.length === 0) {
+      console.log(`[DocumentService] No episodes to expire`);
+      return { expiredCount: 0, errors: [] };
+    }
+
+    const client = getGraphitiClient();
+    const errors: string[] = [];
+    let expiredCount = 0;
+
+    for (const episodeId of document.neo4jEpisodeIds) {
+      try {
+        await client.expireEpisode(episodeId);
+        expiredCount++;
+        console.log(`[DocumentService] Expired episode: ${episodeId}`);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        errors.push(`Failed to expire ${episodeId}: ${msg}`);
+        console.warn(`[DocumentService] ${errors[errors.length - 1]}`);
+      }
+    }
+
+    console.log(`[DocumentService] Expired ${expiredCount}/${document.neo4jEpisodeIds.length} episodes`);
+    return { expiredCount, errors };
   }
 
   // ============================================================================
