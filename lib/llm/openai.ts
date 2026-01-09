@@ -69,6 +69,14 @@ export interface LLMResponse {
   usage: LLMUsage;
   toolsCalled?: ToolCallMetadata[];
   requestMetadata?: RequestMetadata;
+  // Guardrails fields
+  guardrailsBlocked?: boolean;
+  guardrailsViolations?: Array<{
+    type: string;
+    severity: string;
+    description: string;
+    confidence: number;
+  }>;
 }
 
 export async function* streamOpenAIResponse(

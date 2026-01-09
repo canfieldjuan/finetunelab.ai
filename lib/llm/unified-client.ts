@@ -12,6 +12,7 @@ import { OllamaAdapter } from './adapters/ollama-adapter';
 import { HuggingFaceAdapter } from './adapters/huggingface-adapter';
 import { RunPodAdapter } from './adapters/runpod-adapter';
 import type { ProviderAdapter, AdapterRequest } from './adapters/base-adapter';
+import { guardrailsService } from '@/lib/guardrails';
 
 // ============================================================================
 // Unified LLM Client
@@ -80,9 +81,30 @@ export class UnifiedLLMClient {
       userId?: string;
       toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
       enableThinking?: boolean;
+      skipGuardrails?: boolean;
     }
   ): Promise<LLMResponse> {
     console.log('[UnifiedLLMClient] Chat request for model:', modelId, 'userId:', options?.userId || 'not provided');
+
+    // Guardrails: Check input before processing
+    if (!options?.skipGuardrails && guardrailsService.isEnabled()) {
+      const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+      if (lastUserMessage?.content) {
+        const inputCheck = await guardrailsService.checkInput(lastUserMessage.content, {
+          userId: options?.userId,
+        });
+
+        if (inputCheck.blocked) {
+          console.warn('[UnifiedLLMClient] Input blocked by guardrails:', inputCheck.violations);
+          return {
+            content: inputCheck.sanitizedContent || 'Your request was blocked due to a policy violation.',
+            usage: { input_tokens: 0, output_tokens: 0 },
+            guardrailsBlocked: true,
+            guardrailsViolations: inputCheck.violations,
+          };
+        }
+      }
+    }
 
     // Load model configuration from database (with userId for provider secret lookup)
     const config = await modelManager.getModelConfig(modelId, options?.userId);
@@ -190,7 +212,7 @@ export class UnifiedLLMClient {
     const adapterResponse = await adapter.parseResponse(response, responseBody);
 
     // Convert to LLMResponse format
-    const llmResponse: LLMResponse = {
+    let llmResponse: LLMResponse = {
       content: adapterResponse.content,
       reasoning: adapterResponse.reasoning,
       usage: adapterResponse.usage || {
@@ -199,6 +221,23 @@ export class UnifiedLLMClient {
       },
       requestMetadata: adapterResponse.requestMetadata,
     };
+
+    // Guardrails: Check output before returning
+    if (guardrailsService.isEnabled()) {
+      const outputCheck = await guardrailsService.checkOutput(llmResponse.content);
+      if (outputCheck.blocked) {
+        console.warn('[UnifiedLLMClient] Output blocked by guardrails:', outputCheck.violations);
+        llmResponse = {
+          ...llmResponse,
+          content: outputCheck.sanitizedContent || 'Response blocked due to content policy.',
+          guardrailsBlocked: true,
+          guardrailsViolations: outputCheck.violations,
+        };
+      } else if (outputCheck.sanitizedContent) {
+        // PII redacted but not blocked
+        llmResponse.content = outputCheck.sanitizedContent;
+      }
+    }
 
     console.log('[UnifiedLLMClient] Response:', {
       contentLength: llmResponse.content.length,
@@ -382,12 +421,29 @@ export class UnifiedLLMClient {
           output_tokens: totalOutputTokens + (adapterResponse.usage?.output_tokens || 0),
         };
 
-        return {
+        let earlyResponse: LLMResponse = {
           content: adapterResponse.content,
           reasoning: adapterResponse.reasoning,
           usage: finalUsage,
           toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
         };
+
+        // Guardrails: Check output before returning
+        if (guardrailsService.isEnabled()) {
+          const outputCheck = await guardrailsService.checkOutput(earlyResponse.content);
+          if (outputCheck.blocked) {
+            earlyResponse = {
+              ...earlyResponse,
+              content: outputCheck.sanitizedContent || 'Response blocked due to content policy.',
+              guardrailsBlocked: true,
+              guardrailsViolations: outputCheck.violations,
+            };
+          } else if (outputCheck.sanitizedContent) {
+            earlyResponse.content = outputCheck.sanitizedContent;
+          }
+        }
+
+        return earlyResponse;
       }
 
       // Check for tool calls (without content - model wants to call tools)
@@ -481,18 +537,36 @@ export class UnifiedLLMClient {
         output_tokens: totalOutputTokens,
       };
 
-      console.log('[UnifiedLLMClient] Final response:', {
-        contentLength: adapterResponse.content.length,
-        usage: finalUsage,
-        toolCallCount: toolCallsTracking.length,
-      });
-
-      return {
+      let finalResponse: LLMResponse = {
         content: adapterResponse.content,
         reasoning: adapterResponse.reasoning,
         usage: finalUsage,
         toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
       };
+
+      // Guardrails: Check output before returning
+      if (guardrailsService.isEnabled()) {
+        const outputCheck = await guardrailsService.checkOutput(finalResponse.content);
+        if (outputCheck.blocked) {
+          console.warn('[UnifiedLLMClient] Output blocked by guardrails:', outputCheck.violations);
+          finalResponse = {
+            ...finalResponse,
+            content: outputCheck.sanitizedContent || 'Response blocked due to content policy.',
+            guardrailsBlocked: true,
+            guardrailsViolations: outputCheck.violations,
+          };
+        } else if (outputCheck.sanitizedContent) {
+          finalResponse.content = outputCheck.sanitizedContent;
+        }
+      }
+
+      console.log('[UnifiedLLMClient] Final response:', {
+        contentLength: finalResponse.content.length,
+        usage: finalUsage,
+        toolCallCount: toolCallsTracking.length,
+      });
+
+      return finalResponse;
     }
 
     // Max rounds reached
