@@ -3,12 +3,14 @@
  * Integrates document search with chat for context-aware responses
  */
 
-import { searchService } from '../graphiti';
+import { searchService, traversalService } from '../graphiti';
 import { getGraphitiClient, type EmbedderConfig } from '../graphiti/client';
 import { graphragConfig } from '../config';
 import { classifyQuery } from '../utils/query-classifier';
-import type { SearchSource, GraphRAGRetrievalMetadata } from '../types';
+import { queryDecomposer } from '../utils/query-decomposer';
+import type { SearchSource, SearchResult, GraphRAGRetrievalMetadata } from '../types';
 import type { TraceContext } from '@/lib/tracing/types';
+import { log } from '@/lib/utils/logger';
 
 // ============================================================================
 // Types
@@ -108,8 +110,24 @@ export class GraphRAGService {
         isToolSpecific: classification.isToolSpecific,
         action: 'SEARCH',
       });
-      // Pass trace context to search service for child span creation
-      const searchResult = await searchService.search(userMessage, userId, traceContext);
+
+      // Check for relationship-based queries that need traversal
+      const relationshipPattern = /\b(relationship|connected|path between|how.*related|link between)\b/i;
+      const isRelationshipQuery = relationshipPattern.test(userMessage);
+
+      // Handle search based on query complexity
+      let searchResult: SearchResult;
+
+      if (isRelationshipQuery) {
+        // Use traversal for relationship queries
+        searchResult = await this.handleRelationshipQuery(userMessage, userId, traceContext);
+      } else if (queryDecomposer.shouldDecompose(userMessage)) {
+        // Decompose complex query and merge results
+        searchResult = await this.handleComplexQuery(userMessage, userId, traceContext);
+      } else {
+        // Simple query - use standard search
+        searchResult = await searchService.search(userMessage, userId, traceContext);
+      }
 
       let filteredSources = searchResult.sources || [];
 
@@ -278,6 +296,170 @@ Instructions:
       content: source.fact,
       confidence: source.confidence,
     }));
+  }
+
+  /**
+   * Handle complex queries by decomposing into sub-queries and merging results
+   */
+  private async handleComplexQuery(
+    userMessage: string,
+    userId: string,
+    traceContext?: TraceContext
+  ): Promise<SearchResult> {
+    const decomposed = queryDecomposer.decompose(userMessage);
+
+    log.info('GraphRAG', 'Decomposing complex query', {
+      original: userMessage.slice(0, 50),
+      subQueryCount: decomposed.subQueries.length,
+      reason: decomposed.complexityReason,
+    });
+
+    // Execute searches for each sub-query in parallel
+    const searchPromises = decomposed.subQueries.map(sq =>
+      searchService.search(sq.query, userId, traceContext)
+    );
+
+    const results = await Promise.all(searchPromises);
+
+    // Merge all sources with deduplication
+    const allSources: SearchSource[] = [];
+    const seen = new Set<string>();
+
+    for (const result of results) {
+      for (const source of result.sources) {
+        const fingerprint = source.fact.slice(0, 100).toLowerCase().replace(/\s+/g, ' ').trim();
+        if (!seen.has(fingerprint)) {
+          allSources.push(source);
+          seen.add(fingerprint);
+        }
+      }
+    }
+
+    // Sort by confidence descending
+    allSources.sort((a, b) => b.confidence - a.confidence);
+
+    // Merge contexts
+    const mergedContext = results
+      .map(r => r.context)
+      .filter(Boolean)
+      .join('\n\n');
+
+    // Calculate aggregated metrics
+    const totalQueryTime = results.reduce((sum, r) => sum + (r.metadata.queryTime || 0), 0);
+    const avgRelevance = allSources.length > 0
+      ? allSources.reduce((sum, s) => sum + s.confidence, 0) / allSources.length
+      : 0;
+
+    log.info('GraphRAG', 'Complex query merged', {
+      subQueries: decomposed.subQueries.length,
+      totalSources: allSources.length,
+      totalQueryTime,
+    });
+
+    return {
+      context: mergedContext,
+      sources: allSources,
+      metadata: {
+        searchMethod: 'decomposed',
+        resultsCount: allSources.length,
+        queryTime: totalQueryTime,
+        graph_used: allSources.length > 0,
+        nodes_retrieved: allSources.length,
+        context_chunks_used: allSources.length,
+        retrieval_time_ms: totalQueryTime,
+        context_relevance_score: avgRelevance,
+        answer_grounded_in_graph: allSources.length > 0,
+        decomposed: true,
+        subQueryCount: decomposed.subQueries.length,
+      } as unknown as GraphRAGRetrievalMetadata,
+    };
+  }
+
+  /**
+   * Handle relationship queries using graph traversal
+   */
+  private async handleRelationshipQuery(
+    userMessage: string,
+    userId: string,
+    traceContext?: TraceContext
+  ): Promise<SearchResult> {
+    // Extract potential entity names from query
+    const entities = this.extractEntitiesFromQuery(userMessage);
+
+    log.info('GraphRAG', 'Processing relationship query', {
+      query: userMessage.slice(0, 50),
+      extractedEntities: entities,
+    });
+
+    // If we have at least 2 entities, try to find paths between them
+    if (entities.length >= 2) {
+      try {
+        const pathResult = await traversalService.findShortestPath({
+          startEntity: entities[0],
+          endEntity: entities[1],
+          groupId: userId,
+          maxHops: 4,
+        });
+
+        if (pathResult.found && pathResult.path) {
+          // Convert path to context and sources
+          const pathContext = traversalService.formatAsContext({
+            paths: [pathResult.path],
+            queryTimeMs: pathResult.queryTimeMs,
+          });
+
+          const pathSources: SearchSource[] = pathResult.path.path.map(step => ({
+            entity: step.entity.name,
+            relation: step.relation?.type || 'related',
+            fact: step.relation?.fact || `Entity: ${step.entity.name}`,
+            confidence: 0.8,
+            sourceDescription: `Graph path: ${step.entity.name}`,
+          }));
+
+          log.info('GraphRAG', 'Relationship path found', {
+            pathLength: pathResult.path.length,
+            entities: pathResult.path.path.map(s => s.entity.name),
+          });
+
+          return {
+            context: pathContext,
+            sources: pathSources,
+            metadata: {
+              searchMethod: 'traversal',
+              resultsCount: pathSources.length,
+              queryTime: pathResult.queryTimeMs,
+              graph_used: true,
+              nodes_retrieved: pathSources.length,
+              context_chunks_used: pathSources.length,
+              retrieval_time_ms: pathResult.queryTimeMs,
+              context_relevance_score: 0.8,
+              answer_grounded_in_graph: true,
+              traversalUsed: true,
+            } as unknown as GraphRAGRetrievalMetadata,
+          };
+        }
+      } catch (err) {
+        log.warn('GraphRAG', 'Traversal failed, falling back to standard search', { error: err });
+      }
+    }
+
+    // Fallback to standard search if traversal fails or not enough entities
+    return searchService.search(userMessage, userId, traceContext);
+  }
+
+  /**
+   * Extract potential entity names from a query
+   */
+  private extractEntitiesFromQuery(query: string): string[] {
+    // Extract capitalized words/phrases that might be entity names
+    const capitalizedPattern = /\b[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)*\b/g;
+    const matches = query.match(capitalizedPattern) || [];
+
+    // Filter out common words that are capitalized at sentence start
+    const commonWords = new Set(['What', 'How', 'Why', 'When', 'Where', 'Who', 'Is', 'Are', 'The', 'A', 'An']);
+    const entities = matches.filter(m => !commonWords.has(m) && m.length > 1);
+
+    return [...new Set(entities)];
   }
 }
 

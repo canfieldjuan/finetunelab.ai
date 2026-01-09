@@ -29,3 +29,15 @@ export {
   SearchService,
   searchService,
 } from './search-service';
+
+// Traversal Service
+export {
+  TraversalService,
+  traversalService,
+  type TraversalOptions,
+  type GraphPath,
+  type GraphPathStep,
+  type TraversalResult,
+  type ShortestPathOptions,
+  type ShortestPathResult,
+} from './traversal-service';

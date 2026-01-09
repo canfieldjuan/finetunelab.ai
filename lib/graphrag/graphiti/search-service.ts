@@ -9,6 +9,9 @@ import type { SearchResult, SearchSource, GraphRAGRetrievalMetadata } from '../t
 import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext, RAGOutputData } from '@/lib/tracing/types';
 import { log } from '@/lib/utils/logger';
+import { createReranker, type IReranker } from '../reranking';
+import { fallbackService } from '../service/fallback-service';
+import { temporalClassifier } from '../utils/temporal-classifier';
 
 // ============================================================================
 // Search Service
@@ -16,6 +19,23 @@ import { log } from '@/lib/utils/logger';
 
 export class SearchService {
   private client = getGraphitiClient();
+  private reranker: IReranker | null = null;
+
+  constructor() {
+    // Initialize reranker if enabled
+    if (graphragConfig.reranking?.enabled) {
+      this.reranker = createReranker({
+        type: graphragConfig.reranking.type,
+        model: graphragConfig.reranking.model,
+        topK: graphragConfig.reranking.topK,
+        endpoint: graphragConfig.reranking.endpoint,
+      });
+      log.info('GraphRAG', 'Reranker initialized', {
+        type: graphragConfig.reranking.type,
+        topK: graphragConfig.reranking.topK,
+      });
+    }
+  }
 
   /**
    * Search knowledge graph with hybrid search
@@ -38,13 +58,33 @@ export class SearchService {
       }
     }
 
+    // Detect temporal intent from query
+    const temporalIntent = temporalClassifier.detect(query);
+
     const params: GraphitiSearchParams = {
       query,
       group_ids: [userId],
       num_results: graphragConfig.search.topK,
     };
 
-    log.debug('GraphRAG', 'Calling Graphiti search', { params });
+    // Apply temporal filters if detected
+    if (temporalIntent.isHistorical !== undefined) {
+      params.is_historical = temporalIntent.isHistorical;
+    }
+    if (temporalIntent.dateFrom) {
+      params.date_from = temporalIntent.dateFrom;
+    }
+    if (temporalIntent.dateTo) {
+      params.date_to = temporalIntent.dateTo;
+    }
+    if (temporalIntent.dataSourceType) {
+      params.data_source_type = temporalIntent.dataSourceType;
+    }
+
+    log.debug('GraphRAG', 'Calling Graphiti search', {
+      params,
+      temporalIntent: Object.keys(temporalIntent).length > 0 ? temporalIntent : 'none',
+    });
 
     const graphitiResult = await this.client.search(params);
 
@@ -65,9 +105,39 @@ export class SearchService {
       afterCount: filteredEdges.length
     });
 
-    // Build context and sources from filtered results
-    const context = this.buildContextFromEdges(filteredEdges);
-    const rawSources = this.extractSourcesFromEdges(filteredEdges);
+    // Apply reranking if enabled
+    let finalEdges = filteredEdges;
+    if (this.reranker && filteredEdges.length > 0) {
+      try {
+        const candidates = filteredEdges.map(edge => ({
+          text: edge.fact,
+          score: edge.score || 0,
+          metadata: {
+            uuid: edge.uuid,
+            sourceDescription: edge.source_description,
+            createdAt: edge.created_at,
+          },
+        }));
+
+        const reranked = await this.reranker.rerank(query, candidates);
+
+        // Map reranked results back to edges
+        finalEdges = reranked.map(r => filteredEdges[r.originalIndex]);
+
+        log.debug('GraphRAG', 'Reranking applied', {
+          before: filteredEdges.length,
+          after: finalEdges.length,
+          topScore: reranked[0]?.score,
+        });
+      } catch (rerankError) {
+        log.error('GraphRAG', 'Reranking failed, using filtered edges', { error: rerankError });
+        // Fall back to filtered edges on error
+      }
+    }
+
+    // Build context and sources from final results
+    const context = this.buildContextFromEdges(finalEdges);
+    const rawSources = this.extractSourcesFromEdges(finalEdges);
     const sources = this.deduplicateSourcesByContent(rawSources);
 
     log.debug('GraphRAG', 'Sources deduplicated', {
@@ -75,8 +145,8 @@ export class SearchService {
       after: sources.length
     });
 
-    // Calculate relevance score from filtered edges
-    const relevanceScores = filteredEdges.map(e => e.score || 0);
+    // Calculate relevance score from final edges (after reranking)
+    const relevanceScores = finalEdges.map(e => e.score || 0);
     const avgRelevance = relevanceScores.length > 0
       ? relevanceScores.reduce((a, b) => a + b, 0) / relevanceScores.length
       : 0;
@@ -96,7 +166,7 @@ export class SearchService {
 
         const outputData: RAGOutputData = {
           topChunks: truncateRAGChunks(
-            filteredEdges.map(edge => ({
+            finalEdges.map(edge => ({
               fact: edge.fact,
               score: edge.score || 0,
               sourceDescription: edge.source_description,
@@ -135,12 +205,12 @@ export class SearchService {
       metadata: {
         // Existing fields
         searchMethod: graphragConfig.search.searchMethod,
-        resultsCount: filteredEdges.length,
+        resultsCount: finalEdges.length,
         queryTime,
 
         // New GraphRAG analytics fields
-        graph_used: filteredEdges.length > 0,
-        nodes_retrieved: filteredEdges.length,
+        graph_used: finalEdges.length > 0,
+        nodes_retrieved: finalEdges.length,
         context_chunks_used: sources.length,
         retrieval_time_ms: queryTime,
         context_relevance_score: avgRelevance,
@@ -318,6 +388,73 @@ export class SearchService {
     });
 
     return `\n\nSources:\n${citations.join('\n')}`;
+  }
+
+  /**
+   * Search with automatic fallback when results are insufficient
+   */
+  async searchWithFallback(
+    query: string,
+    userId: string,
+    parentContext?: TraceContext
+  ): Promise<SearchResult> {
+    // Execute primary search
+    const primaryResult = await this.search(query, userId, parentContext);
+
+    // Check if fallback should be triggered
+    if (!fallbackService.shouldTriggerFallback(primaryResult.sources.length)) {
+      return primaryResult;
+    }
+
+    log.info('GraphRAG', 'Triggering fallback search', {
+      primaryResults: primaryResult.sources.length,
+      threshold: graphragConfig.fallback?.minResultsThreshold,
+    });
+
+    // Execute fallback
+    const fallbackResult = await fallbackService.executeFallback({
+      userId,
+      query,
+    });
+
+    // Merge results
+    const mergedSources = this.mergeAndDeduplicateSources([
+      ...primaryResult.sources,
+      ...fallbackResult.sources,
+    ]);
+
+    const mergedContext = [
+      primaryResult.context,
+      fallbackResult.context,
+    ].filter(Boolean).join('\n\n---\n\n');
+
+    return {
+      context: mergedContext,
+      sources: mergedSources,
+      metadata: {
+        ...primaryResult.metadata,
+        fallbackUsed: true,
+        fallbackStrategy: fallbackResult.strategy,
+        fallbackResults: fallbackResult.sources.length,
+      } as any,
+    };
+  }
+
+  /**
+   * Merge and deduplicate sources from multiple search methods
+   */
+  private mergeAndDeduplicateSources(sources: SearchSource[]): SearchSource[] {
+    const seen = new Set<string>();
+    return sources.filter(source => {
+      const fingerprint = source.fact
+        .slice(0, 100)
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (seen.has(fingerprint)) return false;
+      seen.add(fingerprint);
+      return true;
+    });
   }
 
   /**

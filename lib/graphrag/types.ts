@@ -157,6 +157,8 @@ export interface GraphRAGConfig {
   neo4j: Neo4jConfig;
   search: SearchConfig;
   processing: ProcessingConfig;
+  reranking?: RerankingConfig;
+  fallback?: FallbackConfig;
 }
 
 export interface Neo4jConfig {
@@ -181,6 +183,20 @@ export interface ProcessingConfig {
   chunkOverlap: number;
   maxChunkChars: number;
   supportedTypes: DocumentFileType[];
+}
+
+export interface RerankingConfig {
+  enabled: boolean;
+  type: 'cross-encoder' | 'heuristic' | 'none';
+  model?: string;
+  topK: number;
+  endpoint?: string;
+}
+
+export interface FallbackConfig {
+  enabled: boolean;
+  strategy: 'vector' | 'keyword' | 'cascade';
+  minResultsThreshold: number;
 }
 
 // ============================================================================

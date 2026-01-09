@@ -20,10 +20,27 @@ export {
   getGraphitiClient,
   episodeService,
   searchService,
+  traversalService,
   type GraphitiEpisode,
   type GraphitiSearchParams,
   type AddEpisodeResult,
+  type TraversalOptions,
+  type GraphPath,
+  type TraversalResult,
 } from './graphiti';
+
+// Utils
+export {
+  temporalClassifier,
+  detectTemporalIntent,
+  type TemporalIntent,
+} from './utils/temporal-classifier';
+
+export {
+  queryDecomposer,
+  type SubQuery,
+  type DecomposedQuery,
+} from './utils/query-decomposer';
 
 // Storage
 export {

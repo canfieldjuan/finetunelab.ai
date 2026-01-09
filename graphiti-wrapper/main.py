@@ -105,6 +105,40 @@ class TemporalIntent(BaseModel):
     date_to: str | None = None
 
 
+class TraversalRequest(BaseModel):
+    start_entity_name: str
+    relation_types: list[str] = []
+    max_hops: int = 3
+    direction: str = "both"  # outgoing, incoming, both
+    group_id: str
+
+
+class PathStep(BaseModel):
+    entity: dict
+    relation: dict | None = None
+
+
+class GraphPath(BaseModel):
+    steps: list[PathStep]
+    length: int
+
+
+class TraversalResponse(BaseModel):
+    paths: list[GraphPath]
+
+
+class ShortestPathRequest(BaseModel):
+    start_entity: str
+    end_entity: str
+    group_id: str
+    max_hops: int = 5
+
+
+class ShortestPathResponse(BaseModel):
+    path: GraphPath | None = None
+    found: bool = False
+
+
 class SentimentRequest(BaseModel):
     text: str = Field(..., min_length=1, description="Text to analyze for sentiment")
 
@@ -738,6 +772,158 @@ async def get_entity_edges(
     except Exception as e:
         logger.error(f"Error getting entity edges: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/traverse', response_model=TraversalResponse)
+async def traverse_graph(
+    request: TraversalRequest,
+    graphiti: GraphitiDep
+) -> TraversalResponse:
+    """
+    Traverse graph from starting entity following specified relation types.
+    Returns paths found up to max_hops distance.
+    """
+    try:
+        logger.info(
+            "Traversal request: start=%s, max_hops=%d, direction=%s",
+            request.start_entity_name,
+            request.max_hops,
+            request.direction
+        )
+
+        # Build direction clause for Cypher
+        direction_clause = "-[r]-"
+        if request.direction == "outgoing":
+            direction_clause = "-[r]->"
+        elif request.direction == "incoming":
+            direction_clause = "<-[r]-"
+
+        # Build relation type filter
+        rel_filter = ""
+        if request.relation_types:
+            rel_types = "|".join(request.relation_types)
+            rel_filter = f":{rel_types}"
+
+        # Execute traversal query
+        cypher = f"""
+        MATCH path = (start:Entity {{name: $start_name, group_id: $group_id}})
+        {direction_clause.replace('[r]', f'[r{rel_filter}*1..{request.max_hops}]')}
+        (end:Entity)
+        RETURN path
+        LIMIT 100
+        """
+
+        result = await graphiti.driver.execute_query(
+            cypher,
+            start_name=request.start_entity_name,
+            group_id=request.group_id
+        )
+
+        paths = []
+        for record in result.records:
+            path_data = record['path']
+            formatted_path = format_neo4j_path(path_data)
+            if formatted_path:
+                paths.append(formatted_path)
+
+        logger.info("Traversal found %d paths", len(paths))
+        return TraversalResponse(paths=paths)
+
+    except Exception as e:
+        logger.error(f"Traversal error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/shortest-path', response_model=ShortestPathResponse)
+async def find_shortest_path(
+    request: ShortestPathRequest,
+    graphiti: GraphitiDep
+) -> ShortestPathResponse:
+    """
+    Find shortest path between two entities.
+    Returns the path if found, or None if no path exists.
+    """
+    try:
+        logger.info(
+            "Shortest path request: %s -> %s (max_hops=%d)",
+            request.start_entity,
+            request.end_entity,
+            request.max_hops
+        )
+
+        cypher = """
+        MATCH path = shortestPath(
+            (start:Entity {name: $start_name, group_id: $group_id})
+            -[*1..%d]-
+            (end:Entity {name: $end_name, group_id: $group_id})
+        )
+        RETURN path
+        """ % request.max_hops
+
+        result = await graphiti.driver.execute_query(
+            cypher,
+            start_name=request.start_entity,
+            end_name=request.end_entity,
+            group_id=request.group_id
+        )
+
+        if not result.records:
+            logger.info("No path found between %s and %s", request.start_entity, request.end_entity)
+            return ShortestPathResponse(path=None, found=False)
+
+        path_data = result.records[0]['path']
+        formatted_path = format_neo4j_path(path_data)
+
+        logger.info(
+            "Found path of length %d between %s and %s",
+            formatted_path.length if formatted_path else 0,
+            request.start_entity,
+            request.end_entity
+        )
+
+        return ShortestPathResponse(path=formatted_path, found=True)
+
+    except Exception as e:
+        logger.error(f"Shortest path error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def format_neo4j_path(path_data) -> GraphPath | None:
+    """Format Neo4j path object into GraphPath response model."""
+    try:
+        if path_data is None:
+            return None
+
+        steps = []
+        nodes = list(path_data.nodes)
+        relationships = list(path_data.relationships)
+
+        for i, node in enumerate(nodes):
+            step = PathStep(
+                entity={
+                    'name': node.get('name', ''),
+                    'uuid': node.get('uuid', ''),
+                    'labels': list(node.labels) if hasattr(node, 'labels') else [],
+                },
+                relation=None
+            )
+
+            # Add relation info if not the last node
+            if i < len(relationships):
+                rel = relationships[i]
+                step.relation = {
+                    'type': rel.type if hasattr(rel, 'type') else '',
+                    'fact': rel.get('fact', '') if hasattr(rel, 'get') else '',
+                    'uuid': rel.get('uuid', '') if hasattr(rel, 'get') else '',
+                }
+
+            steps.append(step)
+
+        return GraphPath(steps=steps, length=len(relationships))
+
+    except Exception as e:
+        logger.warning(f"Failed to format path: {e}")
+        return None
 
 
 @app.post('/analyze/sentiment', response_model=SentimentResponse)

@@ -76,6 +76,28 @@ export const processingConfig = {
 };
 
 // ============================================================================
+// Reranking Configuration
+// ============================================================================
+
+export const rerankingConfig = {
+  enabled: getEnvBoolean('GRAPHRAG_RERANKING_ENABLED', false),
+  type: (getEnvVar('GRAPHRAG_RERANKING_TYPE', 'heuristic') as 'cross-encoder' | 'heuristic' | 'none'),
+  model: process.env.GRAPHRAG_RERANK_MODEL,
+  topK: getEnvNumber('GRAPHRAG_RERANKING_TOP_K', 10),
+  endpoint: process.env.GRAPHRAG_RERANK_ENDPOINT,
+};
+
+// ============================================================================
+// Fallback Configuration
+// ============================================================================
+
+export const fallbackConfig = {
+  enabled: getEnvBoolean('GRAPHRAG_FALLBACK_ENABLED', true),
+  strategy: (getEnvVar('GRAPHRAG_FALLBACK_STRATEGY', 'cascade') as 'vector' | 'keyword' | 'cascade'),
+  minResultsThreshold: getEnvNumber('GRAPHRAG_FALLBACK_MIN_RESULTS', 3),
+};
+
+// ============================================================================
 // Global GraphRAG Configuration
 // ============================================================================
 
@@ -84,6 +106,8 @@ export const graphragConfig: GraphRAGConfig = {
   neo4j: neo4jConfig,
   search: searchConfig,
   processing: processingConfig,
+  reranking: rerankingConfig,
+  fallback: fallbackConfig,
 };
 
 // ============================================================================

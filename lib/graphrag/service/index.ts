@@ -24,6 +24,13 @@ export type {
   Citation,
 } from './graphrag-service';
 
+export {
+  FallbackService,
+  fallbackService,
+  type FallbackOptions,
+  type FallbackResult,
+} from './fallback-service';
+
 // Re-export types from parent types module for convenience
 export type {
   GraphRAGRetrievalMetadata,

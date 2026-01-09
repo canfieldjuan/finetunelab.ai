@@ -57,6 +57,11 @@ export interface GraphitiSearchParams {
   query: string;
   group_ids: string[];
   num_results?: number;
+  // Temporal filters
+  is_historical?: boolean;
+  data_source_type?: string;
+  date_from?: string; // ISO 8601
+  date_to?: string; // ISO 8601
 }
 
 export interface GraphitiSearchResult {
@@ -269,8 +274,26 @@ export class GraphitiClient {
     const queryParams = new URLSearchParams({
       query: params.query,
       group_ids: params.group_ids.join(','),
-      ...(params.num_results && { num_results: params.num_results.toString() }),
     });
+
+    // Add optional parameters
+    if (params.num_results) {
+      queryParams.set('num_results', params.num_results.toString());
+    }
+
+    // Add temporal filters
+    if (params.is_historical !== undefined) {
+      queryParams.set('is_historical', params.is_historical.toString());
+    }
+    if (params.data_source_type) {
+      queryParams.set('data_source_type', params.data_source_type);
+    }
+    if (params.date_from) {
+      queryParams.set('date_from', params.date_from);
+    }
+    if (params.date_to) {
+      queryParams.set('date_to', params.date_to);
+    }
 
     const url = `/search?${queryParams.toString()}`;
     console.log('[GraphitiClient] Search URL:', `${this.baseUrl}${url}`);
