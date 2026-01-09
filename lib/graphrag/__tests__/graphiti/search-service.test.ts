@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { GraphitiSearchResult } from '../../graphiti/client';
+import type { GraphRAGRetrievalMetadata } from '../../types';
 
 // Use vi.hoisted to define mocks before they're hoisted
 const { mockSearch, mockGetEntityEdges, mockClientInstance } = vi.hoisted(() => {
@@ -316,8 +317,9 @@ describe('SearchService', () => {
       expect(result.metadata.searchMethod).toBe('hybrid');
       expect(result.metadata.resultsCount).toBe(2);
       expect(result.metadata.queryTime).toBeGreaterThanOrEqual(0);
-      expect(result.metadata.graph_used).toBe(true);
-      expect(result.metadata.nodes_retrieved).toBe(2);
+      const extendedMeta = result.metadata as GraphRAGRetrievalMetadata;
+      expect(extendedMeta.graph_used).toBe(true);
+      expect(extendedMeta.nodes_retrieved).toBe(2);
     });
 
     it('should calculate average relevance score', async () => {
@@ -333,7 +335,8 @@ describe('SearchService', () => {
       const result = await searchService.search('test query', 'user-123');
 
       // Average of 0.9 and 0.8 = 0.85
-      expect(result.metadata.context_relevance_score).toBeCloseTo(0.85, 2);
+      const extendedMeta = result.metadata as GraphRAGRetrievalMetadata;
+      expect(extendedMeta.context_relevance_score).toBeCloseTo(0.85, 2);
     });
 
     it('should set graph_used to false when no results', async () => {
@@ -345,8 +348,9 @@ describe('SearchService', () => {
 
       const result = await searchService.search('test query', 'user-123');
 
-      expect(result.metadata.graph_used).toBe(false);
-      expect(result.metadata.nodes_retrieved).toBe(0);
+      const extendedMeta = result.metadata as GraphRAGRetrievalMetadata;
+      expect(extendedMeta.graph_used).toBe(false);
+      expect(extendedMeta.nodes_retrieved).toBe(0);
     });
   });
 
