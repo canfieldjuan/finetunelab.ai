@@ -412,42 +412,8 @@ export class UnifiedLLMClient {
         totalOutputTokens += adapterResponse.usage.output_tokens;
       }
 
-      // If model provides BOTH content and tool calls, it's giving a final answer
-      // Return the content and track the tool calls
-      if (adapterResponse.content && adapterResponse.toolCalls && adapterResponse.toolCalls.length > 0) {
-        console.log('[UnifiedLLMClient] Model provided both content and tool calls - returning final answer');
-
-        const finalUsage: LLMUsage = {
-          input_tokens: totalInputTokens + (adapterResponse.usage?.input_tokens || 0),
-          output_tokens: totalOutputTokens + (adapterResponse.usage?.output_tokens || 0),
-        };
-
-        let earlyResponse: LLMResponse = {
-          content: adapterResponse.content,
-          reasoning: adapterResponse.reasoning,
-          usage: finalUsage,
-          toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
-        };
-
-        // Guardrails: Check output before returning
-        if (guardrailsService.isEnabled()) {
-          const outputCheck = await guardrailsService.checkOutput(earlyResponse.content);
-          if (outputCheck.blocked) {
-            earlyResponse = {
-              ...earlyResponse,
-              content: outputCheck.sanitizedContent || 'Response blocked due to content policy.',
-              guardrailsBlocked: true,
-              guardrailsViolations: outputCheck.violations,
-            };
-          } else if (outputCheck.sanitizedContent) {
-            earlyResponse.content = outputCheck.sanitizedContent;
-          }
-        }
-
-        return earlyResponse;
-      }
-
-      // Check for tool calls (without content - model wants to call tools)
+      // Check for tool calls - execute them whether or not there's initial content
+      // Model may say "Let me calculate..." AND call calculator - we need to execute the tool
       if (adapterResponse.toolCalls && adapterResponse.toolCalls.length > 0) {
         console.log('[UnifiedLLMClient] Executing', adapterResponse.toolCalls.length, 'tool calls');
 
