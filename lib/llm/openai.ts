@@ -115,6 +115,15 @@ export async function* streamOpenAIResponse(
   }
 }
 
+/**
+ * Direct OpenAI API call - BYPASSES GUARDRAILS
+ *
+ * WARNING: This function does not go through the guardrails system.
+ * Use for internal/trusted operations only (e.g., PII detection, summarization).
+ * For user-facing chat, use UnifiedLLMClient.chat() which includes guardrails.
+ *
+ * @internal Used by: email security, web search summarization, query refinement
+ */
 export async function getOpenAIResponse(
   messages: ChatMessage[],
   model: string = DEFAULT_MODEL,

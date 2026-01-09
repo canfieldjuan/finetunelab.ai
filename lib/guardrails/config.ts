@@ -101,6 +101,12 @@ export const guardrailsConfig: GuardrailsConfig = {
     logAllChecks: getEnvBoolean('GUARDRAILS_LOG_ALL_CHECKS', false),
     redactSensitiveData: getEnvBoolean('GUARDRAILS_REDACT_LOGS', true),
   },
+
+  // Severity thresholds for violation classification
+  severityThresholds: {
+    critical: getEnvNumber('GUARDRAILS_SEVERITY_CRITICAL', 0.9),
+    high: getEnvNumber('GUARDRAILS_SEVERITY_HIGH', 0.7),
+  },
 };
 
 // ============================================================================

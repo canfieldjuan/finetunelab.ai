@@ -126,6 +126,12 @@ export interface GuardrailsConfig {
   piiRedaction: PIIRedactionConfig;
   blocking: BlockingConfig;
   logging: LoggingConfig;
+  severityThresholds: SeverityThresholdsConfig;
+}
+
+export interface SeverityThresholdsConfig {
+  critical: number; // Score >= this = critical severity (default 0.9)
+  high: number;     // Score >= this = high severity (default 0.7)
 }
 
 export interface PromptInjectionConfig {

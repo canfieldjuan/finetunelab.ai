@@ -597,9 +597,26 @@ export class UnifiedLLMClient {
       maxTokens?: number;
       userId?: string;
       onMetadata?: (metadata: RequestMetadata) => void;
+      skipGuardrails?: boolean;
     }
   ): AsyncGenerator<string, void, unknown> {
     console.log('[UnifiedLLMClient] Stream request for model:', modelId);
+
+    // Guardrails: Check input before processing
+    if (!options?.skipGuardrails && guardrailsService.isEnabled()) {
+      const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+      if (lastUserMessage?.content) {
+        const inputCheck = await guardrailsService.checkInput(lastUserMessage.content, {
+          userId: options?.userId,
+        });
+
+        if (inputCheck.blocked) {
+          console.warn('[UnifiedLLMClient] Stream input blocked by guardrails:', inputCheck.violations);
+          yield inputCheck.sanitizedContent || 'Your request was blocked due to a policy violation.';
+          return;
+        }
+      }
+    }
 
     // Load model configuration (with userId for provider secret lookup)
     const config = await modelManager.getModelConfig(modelId, options?.userId);

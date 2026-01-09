@@ -57,7 +57,7 @@ export class GuardrailsService {
       if (injectionResult.isInjection) {
         violations.push({
           type: injectionResult.category === 'jailbreak' ? 'jailbreak_attempt' : 'prompt_injection',
-          severity: injectionResult.confidence >= 0.9 ? 'critical' : 'high',
+          severity: this.calculateSeverity(injectionResult.confidence),
           description: promptInjectionDetector.getExplanation(injectionResult),
           evidence: injectionResult.patterns.slice(0, 3).join('; '),
           confidence: injectionResult.confidence,
@@ -84,7 +84,7 @@ export class GuardrailsService {
 
             violations.push({
               type: this.mapCategoryToViolationType(category),
-              severity: score >= 0.9 ? 'critical' : score >= 0.7 ? 'high' : 'medium',
+              severity: this.calculateSeverity(score),
               description: `Content flagged for ${category}`,
               confidence: score,
               metadata: { category, score, provider: moderationResult.provider },
@@ -167,7 +167,7 @@ export class GuardrailsService {
 
             violations.push({
               type: this.mapCategoryToViolationType(category),
-              severity: score >= 0.9 ? 'critical' : score >= 0.7 ? 'high' : 'medium',
+              severity: this.calculateSeverity(score),
               description: `Output flagged for ${category}`,
               confidence: score,
               metadata: { category, score, provider: moderationResult.provider },
@@ -250,6 +250,16 @@ export class GuardrailsService {
     if (category.startsWith('sexual')) return 'sexual_content';
     if (category.startsWith('violence')) return 'violence';
     return 'policy_violation';
+  }
+
+  /**
+   * Calculate severity based on confidence score using configurable thresholds
+   */
+  private calculateSeverity(score: number): Violation['severity'] {
+    const thresholds = this.config.severityThresholds;
+    if (score >= thresholds.critical) return 'critical';
+    if (score >= thresholds.high) return 'high';
+    return 'medium';
   }
 
   /**

@@ -81,3 +81,11 @@ Implementing a comprehensive guardrails system for LLM safety and content modera
 - Created `lib/guardrails/index.ts` - Public exports
 - Updated `lib/llm/openai.ts` - Added guardrails fields to LLMResponse
 - Updated `lib/llm/unified-client.ts` - Integrated input/output checking
+
+### 2026-01-08 - Gap Fixes
+- Added configurable severity thresholds via env vars (GUARDRAILS_SEVERITY_CRITICAL, GUARDRAILS_SEVERITY_HIGH)
+- Added SeverityThresholdsConfig type to types.ts
+- Added calculateSeverity() helper method to use configurable thresholds
+- Added guardrails input checking to stream() method
+- Added skipGuardrails option to stream() method
+- Added JSDoc warning to getOpenAIResponse() documenting guardrails bypass
