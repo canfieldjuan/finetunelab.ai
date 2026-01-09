@@ -62,14 +62,12 @@ describe('Error Recovery - Sequential Processing', () => {
   describe('Partial Success Handling', () => {
     it('should continue processing when some chunks fail', async () => {
       // Simulate 3 chunks: 1st succeeds, 2nd fails, 3rd succeeds
-      const mockAddEpisode = episodeService.addDocument as ReturnType<typeof vi.fn>;
-      mockAddEpisode
-        .mockResolvedValueOnce({ episode_id: 'ep-1', entities_created: 2, relations_created: 1 })
+      const mockAddDocument = episodeService.addDocument as ReturnType<typeof vi.fn>;
+      mockAddDocument
+        .mockResolvedValueOnce({ episodeId: 'ep-1', entitiesCreated: 2, relationsCreated: 1 })
         .mockRejectedValueOnce(new Error('Graphiti timeout'))
-        .mockResolvedValueOnce({ episode_id: 'ep-3', entities_created: 1, relations_created: 0 });
+        .mockResolvedValueOnce({ episodeId: 'ep-3', entitiesCreated: 1, relationsCreated: 0 });
 
-      // We need to test the sequential processing behavior
-      // Since processChunksSequentially is private, we test through the public API
       const results: string[] = [];
       const chunks = [
         { content: 'Chunk 1 content', filename: 'doc_chunk_1' },
@@ -77,17 +75,15 @@ describe('Error Recovery - Sequential Processing', () => {
         { content: 'Chunk 3 content', filename: 'doc_chunk_3' },
       ];
 
-      // Simulate sequential processing
+      // Simulate sequential processing with correct signature
       for (const chunk of chunks) {
         try {
-          const result = await episodeService.addDocument({
-            name: chunk.filename,
-            episode_body: chunk.content,
-            source_description: 'Test document',
-            reference_time: new Date().toISOString(),
-            group_id: 'user-123',
-          });
-          results.push(result.episode_id);
+          const result = await episodeService.addDocument(
+            chunk.content,
+            'user-123',
+            chunk.filename
+          );
+          results.push(result.episodeId);
         } catch {
           // Continue processing - this is the expected behavior
         }
@@ -96,12 +92,12 @@ describe('Error Recovery - Sequential Processing', () => {
       expect(results.length).toBe(2);
       expect(results).toContain('ep-1');
       expect(results).toContain('ep-3');
-      expect(mockAddEpisode).toHaveBeenCalledTimes(3);
+      expect(mockAddDocument).toHaveBeenCalledTimes(3);
     });
 
     it('should throw when ALL chunks fail', async () => {
-      const mockAddEpisode = episodeService.addDocument as ReturnType<typeof vi.fn>;
-      mockAddEpisode
+      const mockAddDocument = episodeService.addDocument as ReturnType<typeof vi.fn>;
+      mockAddDocument
         .mockRejectedValueOnce(new Error('Graphiti error 1'))
         .mockRejectedValueOnce(new Error('Graphiti error 2'))
         .mockRejectedValueOnce(new Error('Graphiti error 3'));
@@ -116,14 +112,12 @@ describe('Error Recovery - Sequential Processing', () => {
 
       for (const chunk of chunks) {
         try {
-          const result = await episodeService.addDocument({
-            name: chunk.filename,
-            episode_body: chunk.content,
-            source_description: 'Test',
-            reference_time: new Date().toISOString(),
-            group_id: 'user-123',
-          });
-          results.push(result.episode_id);
+          const result = await episodeService.addDocument(
+            chunk.content,
+            'user-123',
+            chunk.filename
+          );
+          results.push(result.episodeId);
         } catch {
           // Continue
         }
@@ -133,13 +127,13 @@ describe('Error Recovery - Sequential Processing', () => {
     });
 
     it('should track success and failure counts', async () => {
-      const mockAddEpisode = episodeService.addDocument as ReturnType<typeof vi.fn>;
-      mockAddEpisode
-        .mockResolvedValueOnce({ episode_id: 'ep-1' })
+      const mockAddDocument = episodeService.addDocument as ReturnType<typeof vi.fn>;
+      mockAddDocument
+        .mockResolvedValueOnce({ episodeId: 'ep-1', entitiesCreated: 1, relationsCreated: 0 })
         .mockRejectedValueOnce(new Error('Failed'))
-        .mockResolvedValueOnce({ episode_id: 'ep-2' })
+        .mockResolvedValueOnce({ episodeId: 'ep-2', entitiesCreated: 1, relationsCreated: 0 })
         .mockRejectedValueOnce(new Error('Failed'))
-        .mockResolvedValueOnce({ episode_id: 'ep-3' });
+        .mockResolvedValueOnce({ episodeId: 'ep-3', entitiesCreated: 1, relationsCreated: 0 });
 
       const chunks = Array.from({ length: 5 }, (_, i) => ({
         content: `Chunk ${i + 1}`,
@@ -151,13 +145,7 @@ describe('Error Recovery - Sequential Processing', () => {
 
       for (const chunk of chunks) {
         try {
-          await episodeService.addDocument({
-            name: chunk.filename,
-            episode_body: chunk.content,
-            source_description: 'Test',
-            reference_time: new Date().toISOString(),
-            group_id: 'user-123',
-          });
+          await episodeService.addDocument(chunk.content, 'user-123', chunk.filename);
           successCount++;
         } catch {
           failCount++;
@@ -171,26 +159,20 @@ describe('Error Recovery - Sequential Processing', () => {
 
   describe('Retry Logic', () => {
     it('should retry failed chunks with exponential backoff', async () => {
-      const mockAddEpisode = episodeService.addDocument as ReturnType<typeof vi.fn>;
+      const mockAddDocument = episodeService.addDocument as ReturnType<typeof vi.fn>;
       // First two attempts fail, third succeeds
-      mockAddEpisode
+      mockAddDocument
         .mockRejectedValueOnce(new Error('Transient error'))
         .mockRejectedValueOnce(new Error('Transient error'))
-        .mockResolvedValueOnce({ episode_id: 'ep-1' });
+        .mockResolvedValueOnce({ episodeId: 'ep-1', entitiesCreated: 1, relationsCreated: 0 });
 
       const maxRetries = 3;
       let result: string | null = null;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          const response = await episodeService.addDocument({
-            name: 'test_chunk',
-            episode_body: 'Content',
-            source_description: 'Test',
-            reference_time: new Date().toISOString(),
-            group_id: 'user-123',
-          });
-          result = response.episode_id;
+          const response = await episodeService.addDocument('Content', 'user-123', 'test_chunk');
+          result = response.episodeId;
           break;
         } catch {
           if (attempt === maxRetries) {
@@ -201,25 +183,19 @@ describe('Error Recovery - Sequential Processing', () => {
       }
 
       expect(result).toBe('ep-1');
-      expect(mockAddEpisode).toHaveBeenCalledTimes(3);
+      expect(mockAddDocument).toHaveBeenCalledTimes(3);
     });
 
     it('should give up after max retries', async () => {
-      const mockAddEpisode = episodeService.addDocument as ReturnType<typeof vi.fn>;
-      mockAddEpisode.mockRejectedValue(new Error('Persistent failure'));
+      const mockAddDocument = episodeService.addDocument as ReturnType<typeof vi.fn>;
+      mockAddDocument.mockRejectedValue(new Error('Persistent failure'));
 
       const maxRetries = 3;
       let lastError: Error | null = null;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          await episodeService.addDocument({
-            name: 'test_chunk',
-            episode_body: 'Content',
-            source_description: 'Test',
-            reference_time: new Date().toISOString(),
-            group_id: 'user-123',
-          });
+          await episodeService.addDocument('Content', 'user-123', 'test_chunk');
         } catch (error) {
           lastError = error as Error;
         }
@@ -227,52 +203,41 @@ describe('Error Recovery - Sequential Processing', () => {
 
       expect(lastError).not.toBeNull();
       expect(lastError?.message).toBe('Persistent failure');
-      expect(mockAddEpisode).toHaveBeenCalledTimes(3);
+      expect(mockAddDocument).toHaveBeenCalledTimes(3);
     });
   });
 
   describe('Bulk to Sequential Fallback', () => {
     it('should fall back to sequential when bulk fails', async () => {
       const mockBulkAdd = episodeService.addDocumentsBulk as ReturnType<typeof vi.fn>;
-      const mockAddEpisode = episodeService.addDocument as ReturnType<typeof vi.fn>;
+      const mockAddDocument = episodeService.addDocument as ReturnType<typeof vi.fn>;
 
       // Bulk fails
       mockBulkAdd.mockRejectedValue(new Error('Bulk processing failed'));
 
       // Sequential succeeds
-      mockAddEpisode.mockResolvedValue({ episode_id: 'ep-seq-1' });
+      mockAddDocument.mockResolvedValue({ episodeId: 'ep-seq-1', entitiesCreated: 1, relationsCreated: 0 });
 
       // Simulate the fallback logic
-      let results: string[] = [];
+      const results: string[] = [];
       const chunks = [
         { content: 'Chunk 1', filename: 'chunk_1' },
         { content: 'Chunk 2', filename: 'chunk_2' },
       ];
 
       try {
-        // Try bulk first
-        await episodeService.addDocumentsBulk({
-          episodes: chunks.map(c => ({
-            name: c.filename,
-            episode_body: c.content,
-            source_description: 'Test',
-            reference_time: new Date().toISOString(),
-            group_id: 'user-123',
-          })),
-          group_id: 'user-123',
-        });
+        // Try bulk first - using correct signature (chunks, userId)
+        await episodeService.addDocumentsBulk(chunks, 'user-123');
       } catch {
         // Bulk failed, fall back to sequential
         for (const chunk of chunks) {
           try {
-            const result = await episodeService.addDocument({
-              name: chunk.filename,
-              episode_body: chunk.content,
-              source_description: 'Test',
-              reference_time: new Date().toISOString(),
-              group_id: 'user-123',
-            });
-            results.push(result.episode_id);
+            const result = await episodeService.addDocument(
+              chunk.content,
+              'user-123',
+              chunk.filename
+            );
+            results.push(result.episodeId);
           } catch {
             // Continue
           }
@@ -280,7 +245,7 @@ describe('Error Recovery - Sequential Processing', () => {
       }
 
       expect(mockBulkAdd).toHaveBeenCalledTimes(1);
-      expect(mockAddEpisode).toHaveBeenCalledTimes(2);
+      expect(mockAddDocument).toHaveBeenCalledTimes(2);
       expect(results.length).toBe(2);
     });
   });
@@ -348,35 +313,23 @@ describe('Error Recovery - Sequential Processing', () => {
 
   describe('Error Message Handling', () => {
     it('should extract meaningful error messages', async () => {
-      const mockAddEpisode = episodeService.addDocument as ReturnType<typeof vi.fn>;
+      const mockAddDocument = episodeService.addDocument as ReturnType<typeof vi.fn>;
 
       // Test connection timeout error
-      mockAddEpisode.mockRejectedValueOnce(new Error('Connection timeout'));
+      mockAddDocument.mockRejectedValueOnce(new Error('Connection timeout'));
 
       try {
-        await episodeService.addDocument({
-          name: 'test',
-          episode_body: 'content',
-          source_description: 'Test',
-          reference_time: new Date().toISOString(),
-          group_id: 'user-123',
-        });
+        await episodeService.addDocument('content', 'user-123', 'test');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         expect(message).toContain('Connection timeout');
       }
 
       // Test rate limit error
-      mockAddEpisode.mockRejectedValueOnce(new Error('Rate limit exceeded'));
+      mockAddDocument.mockRejectedValueOnce(new Error('Rate limit exceeded'));
 
       try {
-        await episodeService.addDocument({
-          name: 'test2',
-          episode_body: 'content',
-          source_description: 'Test',
-          reference_time: new Date().toISOString(),
-          group_id: 'user-123',
-        });
+        await episodeService.addDocument('content', 'user-123', 'test2');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         expect(message).toContain('Rate limit exceeded');
@@ -398,7 +351,7 @@ describe('Error Recovery - Sequential Processing', () => {
       expect(getErrorMessage('String error')).toBe('String error');
       expect(getErrorMessage(null)).toBe('Unknown error occurred');
       expect(getErrorMessage(undefined)).toBe('Unknown error occurred');
-      expect(getErrorMessage({ custom: 'object' })).toBe('Unknown error occurred');
+      expect(getErrorMessage({ custom: 'error' })).toBe('Unknown error occurred');
     });
   });
 });
