@@ -12,6 +12,7 @@ import { log } from '@/lib/utils/logger';
 import { createReranker, type IReranker } from '../reranking';
 import { fallbackService } from '../service/fallback-service';
 import { temporalClassifier } from '../utils/temporal-classifier';
+import { expandQuery, shouldExpandQuery, getBestVariant } from '../utils/query-expansion';
 
 // ============================================================================
 // Search Service
@@ -58,11 +59,26 @@ export class SearchService {
       }
     }
 
+    // Expand query to improve search recall
+    let searchQuery = query;
+    if (shouldExpandQuery(query)) {
+      const expanded = expandQuery(query);
+      searchQuery = getBestVariant(expanded);
+      if (searchQuery !== query) {
+        log.debug('GraphRAG', 'Query expanded', {
+          original: query,
+          expanded: searchQuery,
+          variants: expanded.variants,
+          transformations: expanded.transformationsApplied,
+        });
+      }
+    }
+
     // Detect temporal intent from query
     const temporalIntent = temporalClassifier.detect(query);
 
     const params: GraphitiSearchParams = {
-      query,
+      query: searchQuery,
       group_ids: [userId],
       num_results: graphragConfig.search.topK,
     };

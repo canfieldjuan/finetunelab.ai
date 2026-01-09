@@ -104,6 +104,23 @@ export function expandQuery(query: string): ExpandedQuery {
     }
   }
 
+  // Handle "when was X released/announced/launched" - extract entity name
+  // This helps temporal queries match entity-focused documents
+  const whenWasMatch = trimmed.match(/^when\s+(?:was|were|did)\s+(?:the\s+)?(.+?)\s+(?:released|announced|launched|introduced|created|founded|established|made|built)(?:\?)?$/i);
+  if (whenWasMatch && whenWasMatch[1]) {
+    const entity = whenWasMatch[1].trim();
+    if (entity.length > 2 && !variants.includes(entity)) {
+      variants.push(entity);
+      transformationsApplied.push('extract_entity_from_temporal');
+    }
+    // Also add "entity release" variant
+    const entityRelease = `${entity} release`;
+    if (!variants.includes(entityRelease)) {
+      variants.push(entityRelease);
+      transformationsApplied.push('add_release_variant');
+    }
+  }
+
   // Extract quoted terms as a separate variant
   const quotedMatch = trimmed.match(/"([^"]+)"/);
   if (quotedMatch && quotedMatch[1]) {
@@ -158,6 +175,7 @@ export function shouldExpandQuery(query: string): boolean {
     /^find\s+/i,
     /^tell\s+me\s+/i,
     /^what\s+(?:is|are)\s+/i,
+    /^when\s+(?:was|were|did)\s+/i,
     /in\s+my\s+documents?\s*$/i,
     /"[^"]+"/,
   ];
