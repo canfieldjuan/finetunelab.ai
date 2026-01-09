@@ -920,9 +920,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
     }
 
-    // Branch: Use non-streaming for tool-enabled requests (except OpenAI which supports streaming + tools)
-    // OpenAI can stream with tools, Anthropic cannot yet
-    const requiresNonStreaming = forceNonStreaming || (tools.length > 0 && provider !== 'openai');
+    // Branch: Use non-streaming for ALL tool-enabled requests
+    // NOTE: OpenAI technically supports streaming + tools, but our streaming adapter's parseStreamChunk
+    // only extracts delta.content and ignores delta.tool_calls. When the model decides to call a tool
+    // (e.g., calculator for "50*2"), no content is generated and the response appears empty.
+    // To properly handle mixed queries (math + RAG), we must use non-streaming for tool requests.
+    const requiresNonStreaming = forceNonStreaming || tools.length > 0;
     
     if (requiresNonStreaming) {
       // NON-STREAMING PATH: Execute tools and get complete response

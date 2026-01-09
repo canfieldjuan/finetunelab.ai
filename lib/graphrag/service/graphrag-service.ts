@@ -264,7 +264,7 @@ export class GraphRAGService {
    * Enhanced for code-related queries
    */
   private injectContext(userMessage: string, context: string): string {
-    return `You have access to the user's uploaded documents and code. Use this context to provide accurate answers.
+    return `You have access to the user's uploaded documents and code. Use this context to provide accurate, well-sourced answers.
 
 CONTEXT FROM USER'S DOCUMENTS AND CODE:
 ${context}
@@ -272,19 +272,30 @@ ${context}
 USER'S QUESTION:
 ${userMessage}
 
-Instructions:
-- Answer the question using the provided context
-- For code-related questions:
-  * Provide specific file paths and line numbers when available
-  * Show relevant code snippets from the context
-  * Explain imports, dependencies, and relationships between code entities
-  * Reference function signatures, class definitions, and type information
-  * If the context shows relationships (extends, implements, calls), explain the connections
-- For document-related questions:
-  * Use the facts and information from the context
-  * Cite sources and confidence scores when applicable
-- If the context doesn't help answer the question, say so and provide a general answer
-- Be specific and cite facts/code from the context when applicable`;
+CRITICAL INSTRUCTIONS - You MUST follow these:
+
+1. ALWAYS cite your sources using [1], [2], etc. matching the context numbers above
+2. Be EXPLICIT about what you found - start responses with "Based on your documents..." or "According to [source]..."
+3. Quote specific facts, numbers, and details from the context - don't paraphrase vaguely
+4. If multiple sources provide information, reference each one
+
+For code-related questions:
+- Provide specific file paths and line numbers when available
+- Show relevant code snippets from the context
+- Explain imports, dependencies, and relationships between code entities
+- Reference function signatures, class definitions, and type information
+
+For document-related questions:
+- Lead with the specific data you found (e.g., "The RTX 4090 has 16,384 CUDA cores [1]")
+- Include exact values, dates, names from the context
+- Show relationships between entities when relevant
+
+For questions the context doesn't answer:
+- Clearly state "Your documents don't contain information about X"
+- Then optionally provide general knowledge, clearly marked as such
+
+BAD example: "The GPU has good specs"
+GOOD example: "According to your documents [1], the RTX 4090 has 16,384 CUDA cores, 24GB GDDR6X memory, and a TDP of 450W"`;
   }
 
   /**
