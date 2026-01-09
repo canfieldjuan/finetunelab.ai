@@ -37,6 +37,17 @@ export function MessageMetadata({
   graphragGrounded,
   graphragMethod,
 }: MessageMetadataProps) {
+  // Debug: log when graphragUsed prop is received
+  if (graphragUsed !== undefined) {
+    console.log('[MessageMetadata] GraphRAG props:', {
+      graphragUsed,
+      graphragNodes,
+      graphragChunks,
+      graphragRetrievalMs,
+      graphragRelevance,
+    });
+  }
+
   // Only display if we have at least one piece of metadata
   const hasMetadata = modelName || inputTokens || outputTokens || latencyMs || graphragUsed;
   

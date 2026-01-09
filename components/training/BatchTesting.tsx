@@ -65,6 +65,30 @@ interface BatchTestRun {
   };
 }
 
+interface BatchTestResultCitation {
+  source: string;
+  content: string;
+  confidence: number;
+}
+
+interface BatchTestResultDetail {
+  id: string;
+  prompt_index: number;
+  response: string;
+  latency_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  success: boolean;
+  graphrag: {
+    graph_used: boolean;
+    nodes_retrieved: number;
+    context_chunks_used: number;
+    retrieval_time_ms: number;
+    context_relevance_score: number;
+  } | null;
+  citations: BatchTestResultCitation[];
+}
+
 
 export function BatchTesting({ sessionToken }: BatchTestingProps) {
   // Form state
@@ -105,6 +129,11 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'failed' | 'running'>('all');
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
+
+  // Expanded results state
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [expandedResults, setExpandedResults] = useState<BatchTestResultDetail[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
 
   // Hook for archive operations
   const batchTestRunsHook = useBatchTestRuns();
@@ -698,6 +727,39 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
       setSelectedRunIds([]);
     } else {
       setSelectedRunIds(filtered.map(run => run.id));
+    }
+  }
+
+  // Fetch detailed results with GraphRAG citations
+  async function toggleExpandedResults(runId: string) {
+    if (expandedRunId === runId) {
+      setExpandedRunId(null);
+      setExpandedResults([]);
+      return;
+    }
+
+    setExpandedRunId(runId);
+    setLoadingResults(true);
+    setExpandedResults([]);
+
+    try {
+      const response = await fetch(`/api/batch-testing/status/${runId}`, {
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch results');
+      }
+
+      const data = await response.json();
+      setExpandedResults(data.results || []);
+    } catch (err) {
+      log.error('BatchTesting', 'Error fetching results', { error: err });
+      setExpandedResults([]);
+    } finally {
+      setLoadingResults(false);
     }
   }
 
@@ -1308,6 +1370,87 @@ export function BatchTesting({ sessionToken }: BatchTestingProps) {
                           )}
                           {run.error && (
                             <p className="text-xs text-red-600">Error: {run.error}</p>
+                          )}
+
+                          {/* View Results Button */}
+                          {run.status === 'completed' && (
+                            <Button
+                              onClick={() => toggleExpandedResults(run.id)}
+                              variant="ghost"
+                              size="sm"
+                              className="mt-2 h-7 px-2 text-xs"
+                            >
+                              {expandedRunId === run.id ? (
+                                <ChevronDown className="h-3 w-3 mr-1" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3 mr-1" />
+                              )}
+                              {expandedRunId === run.id ? 'Hide Results' : 'View Results & Citations'}
+                            </Button>
+                          )}
+
+                          {/* Expanded Results with GraphRAG Citations */}
+                          {expandedRunId === run.id && (
+                            <div className="mt-3 border-t pt-3 space-y-2">
+                              {loadingResults ? (
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Loading results...
+                                </div>
+                              ) : expandedResults.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No results found</p>
+                              ) : (
+                                <div className="space-y-3 max-h-80 overflow-y-auto">
+                                  {expandedResults.map((result, idx) => (
+                                    <div key={result.id || idx} className="p-2 bg-muted/50 rounded text-xs">
+                                      <div className="flex justify-between items-start mb-1">
+                                        <span className="font-medium">Response {idx + 1}</span>
+                                        <span className="text-muted-foreground">
+                                          {result.latency_ms}ms | {result.output_tokens} tokens
+                                        </span>
+                                      </div>
+                                      <p className="text-muted-foreground line-clamp-2 mb-2">
+                                        {result.response}
+                                      </p>
+
+                                      {/* GraphRAG Metadata */}
+                                      {result.graphrag?.graph_used && (
+                                        <div className="flex gap-3 text-[10px] text-blue-600 mb-2">
+                                          <span>Graph: Yes</span>
+                                          <span>Nodes: {result.graphrag.nodes_retrieved}</span>
+                                          <span>Chunks: {result.graphrag.context_chunks_used}</span>
+                                          <span>Relevance: {(result.graphrag.context_relevance_score * 100).toFixed(0)}%</span>
+                                        </div>
+                                      )}
+
+                                      {/* Citations */}
+                                      {result.citations && result.citations.length > 0 && (
+                                        <div className="border-t pt-1 mt-1">
+                                          <p className="font-medium text-[10px] text-green-700 mb-1">
+                                            Sources ({result.citations.length}):
+                                          </p>
+                                          <div className="space-y-1">
+                                            {result.citations.slice(0, 3).map((citation, cidx) => (
+                                              <div key={cidx} className="flex items-start gap-1 text-[10px]">
+                                                <span className="text-green-600 font-medium">[{cidx + 1}]</span>
+                                                <span className="text-muted-foreground truncate">
+                                                  {citation.source} ({(citation.confidence * 100).toFixed(0)}%)
+                                                </span>
+                                              </div>
+                                            ))}
+                                            {result.citations.length > 3 && (
+                                              <p className="text-[10px] text-muted-foreground">
+                                                +{result.citations.length - 3} more sources
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>

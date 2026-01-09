@@ -205,6 +205,41 @@ export async function GET(
       ? batchTestRun.completed_prompts / batchTestRun.total_prompts
       : 0;
 
+    // Fetch messages with GraphRAG metadata for this batch test
+    let results: any[] = [];
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Find conversation linked to this batch test
+    const { data: conversation } = await adminClient
+      .from('conversations')
+      .select('id')
+      .eq('batch_test_run_id', id)
+      .single();
+
+    if (conversation) {
+      // Fetch assistant messages with metadata
+      const { data: messages } = await adminClient
+        .from('messages')
+        .select('id, content, metadata, latency_ms, input_tokens, output_tokens, created_at')
+        .eq('conversation_id', conversation.id)
+        .eq('role', 'assistant')
+        .order('created_at', { ascending: true });
+
+      if (messages) {
+        results = messages.map((msg: any, index: number) => ({
+          id: msg.id,
+          prompt_index: index,
+          response: msg.content?.slice(0, 500),
+          latency_ms: msg.latency_ms,
+          input_tokens: msg.input_tokens,
+          output_tokens: msg.output_tokens,
+          success: true,
+          graphrag: msg.metadata?.graphrag || null,
+          citations: msg.metadata?.graphrag?.citations || [],
+        }));
+      }
+    }
+
     // Build response
     const response = {
       id: batchTestRun.id,
@@ -216,7 +251,8 @@ export async function GET(
       progress: Math.round(progress * 100) / 100,
       started_at: batchTestRun.started_at,
       completed_at: batchTestRun.completed_at,
-      error: batchTestRun.error
+      error: batchTestRun.error,
+      results,
     };
 
     const elapsedTime = Date.now() - startTime;

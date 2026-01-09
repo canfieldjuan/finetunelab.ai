@@ -970,6 +970,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               context_relevance_score: graphRAGMetadata.metadata.context_relevance_score,
               answer_grounded_in_graph: graphRAGMetadata.metadata.answer_grounded_in_graph,
               retrieval_method: graphRAGMetadata.metadata.searchMethod,
+              // Store citations for batch testing display
+              ...(graphRAGMetadata.sources && {
+                citations: graphRAGMetadata.sources.slice(0, 10).map(s => ({
+                  source: s.sourceDescription || s.entity || 'Unknown',
+                  content: (s.fact || '').slice(0, 200),
+                  confidence: s.confidence,
+                }))
+              })
             }
           })
         };
@@ -1065,6 +1073,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     context_relevance_score: graphRAGMetadata.metadata.context_relevance_score,
                     answer_grounded_in_graph: graphRAGMetadata.metadata.answer_grounded_in_graph,
                     retrieval_method: graphRAGMetadata.metadata.searchMethod,
+                    // Store citations for batch testing display
+                    ...(graphRAGMetadata.sources && {
+                      citations: graphRAGMetadata.sources.slice(0, 10).map(s => ({
+                        source: s.sourceDescription || s.entity || 'Unknown',
+                        content: (s.fact || '').slice(0, 200),
+                        confidence: s.confidence,
+                      }))
+                    })
                   }
                 })
               };
@@ -1174,6 +1190,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               context_relevance_score: graphRAGMetadata.metadata.context_relevance_score,
               answer_grounded_in_graph: graphRAGMetadata.metadata.answer_grounded_in_graph,
               retrieval_method: graphRAGMetadata.metadata.searchMethod,
+              // Store citations for batch testing display
+              ...(graphRAGMetadata.sources && {
+                citations: graphRAGMetadata.sources.slice(0, 10).map(s => ({
+                  source: s.sourceDescription || s.entity || 'Unknown',
+                  content: (s.fact || '').slice(0, 200),
+                  confidence: s.confidence,
+                }))
+              })
             }
           })
         };
@@ -1551,7 +1575,15 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 type: 'graphrag_metadata',
                 citations,
                 contextsUsed: graphRAGMetadata.sources?.length || 0,
-                graphrag_tokens: graphRAGMetadata.estimatedTokens || 0
+                graphrag_tokens: graphRAGMetadata.estimatedTokens || 0,
+                // Detailed GraphRAG retrieval analytics
+                graphrag_used: graphRAGMetadata.metadata?.graph_used ?? false,
+                graphrag_nodes: graphRAGMetadata.metadata?.nodes_retrieved ?? 0,
+                graphrag_chunks: graphRAGMetadata.metadata?.context_chunks_used ?? 0,
+                graphrag_retrieval_ms: graphRAGMetadata.metadata?.retrieval_time_ms ?? 0,
+                graphrag_relevance: graphRAGMetadata.metadata?.context_relevance_score ?? 0,
+                graphrag_grounded: graphRAGMetadata.metadata?.answer_grounded_in_graph ?? false,
+                graphrag_method: graphRAGMetadata.metadata?.searchMethod ?? 'hybrid',
               })}\n\n`;
               controller.enqueue(encoder.encode(metaData));
             }
@@ -1731,6 +1763,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             context_relevance_score: graphRAGMetadata.metadata.context_relevance_score,
             answer_grounded_in_graph: graphRAGMetadata.metadata.answer_grounded_in_graph,
             retrieval_method: graphRAGMetadata.metadata.searchMethod,
+            // Store citations for batch testing display
+            ...(graphRAGMetadata.sources && {
+              citations: graphRAGMetadata.sources.slice(0, 10).map(s => ({
+                source: s.sourceDescription || s.entity || 'Unknown',
+                content: (s.fact || '').slice(0, 200),
+                confidence: s.confidence,
+              }))
+            })
           }
         })
       };
@@ -1761,7 +1801,15 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 type: 'graphrag_metadata',
                 citations,
                 contextsUsed: graphRAGMetadata.sources?.length || 0,
-                graphrag_tokens: graphRAGMetadata.estimatedTokens || 0
+                graphrag_tokens: graphRAGMetadata.estimatedTokens || 0,
+                // Detailed GraphRAG retrieval analytics
+                graphrag_used: graphRAGMetadata.metadata?.graph_used ?? false,
+                graphrag_nodes: graphRAGMetadata.metadata?.nodes_retrieved ?? 0,
+                graphrag_chunks: graphRAGMetadata.metadata?.context_chunks_used ?? 0,
+                graphrag_retrieval_ms: graphRAGMetadata.metadata?.retrieval_time_ms ?? 0,
+                graphrag_relevance: graphRAGMetadata.metadata?.context_relevance_score ?? 0,
+                graphrag_grounded: graphRAGMetadata.metadata?.answer_grounded_in_graph ?? false,
+                graphrag_method: graphRAGMetadata.metadata?.searchMethod ?? 'hybrid',
               })}\n\n`;
               controller.enqueue(encoder.encode(metaData));
             }

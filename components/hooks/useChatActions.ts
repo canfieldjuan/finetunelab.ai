@@ -114,6 +114,14 @@ export function useChatActions({
     let assistantMessage = "";
     let graphragCitations: Citation[] | undefined;
     let graphragContextsUsed: number | undefined;
+    // Detailed GraphRAG retrieval analytics
+    let graphragUsed: boolean | undefined;
+    let graphragNodes: number | undefined;
+    let graphragChunks: number | undefined;
+    let graphragRetrievalMs: number | undefined;
+    let graphragRelevance: number | undefined;
+    let graphragGrounded: boolean | undefined;
+    let graphragMethod: string | undefined;
     let modelId: string | null = null;
     let provider: string | null = null;
     let modelName: string | null = null;
@@ -126,7 +134,19 @@ export function useChatActions({
         setMessages((prevMessages) =>
           prevMessages.map((m) =>
             m.id === tempMessageId
-              ? { ...m, content: assistantMessage, citations: graphragCitations, contextsUsed: graphragContextsUsed }
+              ? {
+                  ...m,
+                  content: assistantMessage,
+                  citations: graphragCitations,
+                  contextsUsed: graphragContextsUsed,
+                  graphrag_used: graphragUsed,
+                  graphrag_nodes: graphragNodes,
+                  graphrag_chunks: graphragChunks,
+                  graphrag_retrieval_ms: graphragRetrievalMs,
+                  graphrag_relevance: graphragRelevance,
+                  graphrag_grounded: graphragGrounded,
+                  graphrag_method: graphragMethod,
+                }
               : m
           )
         );
@@ -150,12 +170,32 @@ export function useChatActions({
             const parsed = JSON.parse(data);
 
             if (parsed.type === "graphrag_metadata") {
+              console.log('[useChatActions] Received graphrag_metadata:', parsed);
               graphragCitations = parsed.citations;
               graphragContextsUsed = parsed.contextsUsed;
+              // Capture detailed GraphRAG retrieval analytics
+              graphragUsed = parsed.graphrag_used;
+              graphragNodes = parsed.graphrag_nodes;
+              graphragChunks = parsed.graphrag_chunks;
+              graphragRetrievalMs = parsed.graphrag_retrieval_ms;
+              graphragRelevance = parsed.graphrag_relevance;
+              graphragGrounded = parsed.graphrag_grounded;
+              graphragMethod = parsed.graphrag_method;
               setMessages((prevMessages) =>
                 prevMessages.map((m) =>
                   m.id === tempMessageId
-                    ? { ...m, citations: graphragCitations, contextsUsed: graphragContextsUsed }
+                    ? {
+                        ...m,
+                        citations: graphragCitations,
+                        contextsUsed: graphragContextsUsed,
+                        graphrag_used: graphragUsed,
+                        graphrag_nodes: graphragNodes,
+                        graphrag_chunks: graphragChunks,
+                        graphrag_retrieval_ms: graphragRetrievalMs,
+                        graphrag_relevance: graphragRelevance,
+                        graphrag_grounded: graphragGrounded,
+                        graphrag_method: graphragMethod,
+                      }
                     : m
                 )
               );
@@ -230,7 +270,18 @@ export function useChatActions({
       setMessages((prevMessages) =>
         prevMessages.map((m) =>
           m.id === tempMessageId
-            ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed }
+            ? {
+                ...aiMsg,
+                citations: graphragCitations,
+                contextsUsed: graphragContextsUsed,
+                graphrag_used: graphragUsed,
+                graphrag_nodes: graphragNodes,
+                graphrag_chunks: graphragChunks,
+                graphrag_retrieval_ms: graphragRetrievalMs,
+                graphrag_relevance: graphragRelevance,
+                graphrag_grounded: graphragGrounded,
+                graphrag_method: graphragMethod,
+              }
             : m
         )
       );
