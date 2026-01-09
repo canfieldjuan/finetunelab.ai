@@ -190,11 +190,23 @@ export interface UploadResponse {
   message: string;
 }
 
+export type ProcessingState =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'partial_failure'
+  | 'failed';
+
 export interface ProcessingStatus {
   documentId: string;
   processed: boolean;
   episodeIds: string[];
   error?: string;
+  // Enhanced tracking fields
+  status?: ProcessingState;
+  totalChunks?: number;
+  successfulChunks?: number;
+  failedChunks?: number;
 }
 
 export interface DeleteResponse {

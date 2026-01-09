@@ -370,6 +370,7 @@ export class DocumentService {
         documentId: document.id,
         processed: true,
         episodeIds,
+        status: 'completed' as const,
       };
     } catch (error) {
       const errorMessage =
@@ -380,6 +381,7 @@ export class DocumentService {
         processed: false,
         episodeIds: [],
         error: errorMessage,
+        status: 'failed' as const,
       };
     }
   }
@@ -811,7 +813,7 @@ export class DocumentService {
 
   /**
    * Process text as episodes, chunking if necessary for large documents
-   * Uses BULK processing for multiple chunks (much faster than sequential)
+   * Uses BULK processing first, falls back to sequential on failure
    */
   private async processAsSingleEpisode(
     text: string,
@@ -825,7 +827,7 @@ export class DocumentService {
     if (text.length > this.MAX_CHUNK_CHARS) {
       console.log(`[GraphRAG] Document too large (${text.length} chars), chunking into ~${this.MAX_CHUNK_CHARS} char pieces`);
       const chunks = this.chunkText(text, this.MAX_CHUNK_CHARS);
-      console.log(`[GraphRAG] Split into ${chunks.length} chunks - using BULK processing`);
+      console.log(`[GraphRAG] Split into ${chunks.length} chunks - trying BULK processing first`);
 
       // Build chunk objects with filenames
       const chunkData = chunks.map((chunk, i) => ({
@@ -833,19 +835,19 @@ export class DocumentService {
         filename: `${filename} (part ${i + 1}/${chunks.length})`,
       }));
 
-      // Use bulk processing with retry logic
-      let lastError: Error | null = null;
+      // Try bulk processing first (faster)
+      let bulkError: Error | null = null;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`[GraphRAG] Bulk attempt ${attempt}/${maxRetries}: Processing ${chunks.length} chunks`);
 
           const result = await episodeService.addDocumentsBulk(chunkData, userId);
 
-          console.log(`[GraphRAG] Bulk processing complete: ${result.episodeIds.length} episodes, ${result.totalEntities} entities, ${result.totalRelations} relations`);
+          console.log(`[GraphRAG] Bulk processing complete: ${result.episodeIds.length} episodes`);
           return result.episodeIds;
         } catch (error) {
-          lastError = error instanceof Error ? error : new Error('Unknown error');
-          console.error(`[GraphRAG] Bulk attempt ${attempt}/${maxRetries} failed:`, lastError.message);
+          bulkError = error instanceof Error ? error : new Error('Unknown error');
+          console.error(`[GraphRAG] Bulk attempt ${attempt}/${maxRetries} failed:`, bulkError.message);
 
           if (attempt < maxRetries) {
             const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
@@ -855,11 +857,56 @@ export class DocumentService {
         }
       }
 
-      throw lastError || new Error('Bulk processing failed after all retries');
+      // Bulk failed - fall back to sequential processing with partial recovery
+      console.warn(`[GraphRAG] Bulk processing failed, falling back to sequential with partial recovery`);
+      return this.processChunksSequentially(chunkData, userId, maxRetries);
     }
 
     // Small enough for single episode
     return this.processChunk(text, userId, filename, maxRetries);
+  }
+
+  /**
+   * Process chunks sequentially with partial success tracking
+   * Continues processing even if some chunks fail
+   */
+  private async processChunksSequentially(
+    chunkData: Array<{ content: string; filename: string }>,
+    userId: string,
+    maxRetries: number
+  ): Promise<string[]> {
+    const episodeIds: string[] = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < chunkData.length; i++) {
+      const chunk = chunkData[i];
+      console.log(`[GraphRAG] Sequential chunk ${i + 1}/${chunkData.length}: ${chunk.filename}`);
+
+      try {
+        const ids = await this.processChunk(chunk.content, userId, chunk.filename, maxRetries);
+        episodeIds.push(...ids);
+        successCount++;
+        console.log(`[GraphRAG] Chunk ${i + 1} succeeded`);
+      } catch (error) {
+        failCount++;
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[GraphRAG] Chunk ${i + 1} failed after retries: ${msg}`);
+        // Continue processing remaining chunks
+      }
+    }
+
+    console.log(`[GraphRAG] Sequential processing complete: ${successCount}/${chunkData.length} succeeded, ${failCount} failed`);
+
+    if (episodeIds.length === 0) {
+      throw new Error(`All ${chunkData.length} chunks failed to process`);
+    }
+
+    if (failCount > 0) {
+      console.warn(`[GraphRAG] Partial success: ${failCount} chunks failed but ${successCount} succeeded`);
+    }
+
+    return episodeIds;
   }
 
   /**
