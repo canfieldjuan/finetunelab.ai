@@ -8,6 +8,7 @@ import { graphragConfig } from '../config';
 import type { SearchResult, SearchSource, GraphRAGRetrievalMetadata } from '../types';
 import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext, RAGOutputData } from '@/lib/tracing/types';
+import { log } from '@/lib/utils/logger';
 
 // ============================================================================
 // Search Service
@@ -31,9 +32,9 @@ export class SearchService {
           'graphrag.retrieve',
           'retrieval'
         );
-        console.log('[SearchService] Started GraphRAG retrieval trace');
+        log.debug('GraphRAG', 'Started retrieval trace');
       } catch (traceErr) {
-        console.error('[SearchService] Failed to start retrieval trace:', traceErr);
+        log.error('GraphRAG', 'Failed to start retrieval trace', { error: traceErr });
       }
     }
 
@@ -43,26 +44,39 @@ export class SearchService {
       num_results: graphragConfig.search.topK,
     };
 
-    console.log('[SearchService] Calling Graphiti with params:', params);
+    log.debug('GraphRAG', 'Calling Graphiti search', { params });
 
     const graphitiResult = await this.client.search(params);
 
-    console.log('[SearchService] Graphiti returned:', {
+    log.debug('GraphRAG', 'Graphiti search returned', {
       edgesCount: graphitiResult.edges?.length || 0,
-      firstEdge: graphitiResult.edges?.[0] ? {
-        fact: graphitiResult.edges[0].fact?.slice(0, 100),
-        score: graphitiResult.edges[0].score
-      } : null
+      firstEdgeScore: graphitiResult.edges?.[0]?.score
     });
 
-    // Build context and sources from results
-    const context = this.buildContext(graphitiResult);
-    const sources = this.extractSources(graphitiResult);
+    // Apply threshold filtering from config
+    const threshold = graphragConfig.search.threshold;
+    const filteredEdges = graphitiResult.edges.filter(
+      edge => (edge.score || 0) >= threshold
+    );
 
-    console.log('[SearchService] Extracted sources:', sources.length);
+    log.debug('GraphRAG', 'Threshold filtering applied', {
+      threshold,
+      beforeCount: graphitiResult.edges.length,
+      afterCount: filteredEdges.length
+    });
 
-    // Calculate relevance score from edges
-    const relevanceScores = graphitiResult.edges.map(e => e.score || 0);
+    // Build context and sources from filtered results
+    const context = this.buildContextFromEdges(filteredEdges);
+    const rawSources = this.extractSourcesFromEdges(filteredEdges);
+    const sources = this.deduplicateSourcesByContent(rawSources);
+
+    log.debug('GraphRAG', 'Sources deduplicated', {
+      before: rawSources.length,
+      after: sources.length
+    });
+
+    // Calculate relevance score from filtered edges
+    const relevanceScores = filteredEdges.map(e => e.score || 0);
     const avgRelevance = relevanceScores.length > 0
       ? relevanceScores.reduce((a, b) => a + b, 0) / relevanceScores.length
       : 0;
@@ -82,7 +96,7 @@ export class SearchService {
 
         const outputData: RAGOutputData = {
           topChunks: truncateRAGChunks(
-            graphitiResult.edges.map(edge => ({
+            filteredEdges.map(edge => ({
               fact: edge.fact,
               score: edge.score || 0,
               sourceDescription: edge.source_description,
@@ -90,7 +104,7 @@ export class SearchService {
             })),
             5
           ),
-          totalCandidates: graphitiResult.edges.length,
+          totalCandidates: graphitiResult.edges.length, // Original count before filtering
           avgConfidence: avgRelevance,
         };
 
@@ -109,9 +123,9 @@ export class SearchService {
             cacheHitCount: 0, // No caching layer yet
           }
         });
-        console.log('[SearchService] Ended GraphRAG retrieval trace (success)');
+        log.debug('GraphRAG', 'Ended retrieval trace successfully');
       } catch (traceErr) {
-        console.error('[SearchService] Failed to end retrieval trace:', traceErr);
+        log.error('GraphRAG', 'Failed to end retrieval trace', { error: traceErr });
       }
     }
 
@@ -121,16 +135,16 @@ export class SearchService {
       metadata: {
         // Existing fields
         searchMethod: graphragConfig.search.searchMethod,
-        resultsCount: graphitiResult.edges.length,
+        resultsCount: filteredEdges.length,
         queryTime,
 
         // New GraphRAG analytics fields
-        graph_used: graphitiResult.edges.length > 0,
-        nodes_retrieved: graphitiResult.edges.length,
+        graph_used: filteredEdges.length > 0,
+        nodes_retrieved: filteredEdges.length,
         context_chunks_used: sources.length,
         retrieval_time_ms: queryTime,
         context_relevance_score: avgRelevance,
-        answer_grounded_in_graph: sources.length > 0, // Will be refined post-response if needed
+        answer_grounded_in_graph: sources.length > 0,
       } as GraphRAGRetrievalMetadata,
     };
   }
@@ -153,16 +167,15 @@ export class SearchService {
 
     const graphitiResult = await this.client.search(params);
 
-    // Filter by threshold if provided
-    let filteredEdges = graphitiResult.edges;
-    if (options?.threshold) {
-      filteredEdges = graphitiResult.edges.filter(
-        edge => (edge.score || 0) >= (options.threshold || 0)
-      );
-    }
+    // Apply threshold filtering (use option or config default)
+    const threshold = options?.threshold ?? graphragConfig.search.threshold;
+    const filteredEdges = graphitiResult.edges.filter(
+      edge => (edge.score || 0) >= threshold
+    );
 
     const context = this.buildContextFromEdges(filteredEdges);
-    const sources = this.extractSourcesFromEdges(filteredEdges);
+    const rawSources = this.extractSourcesFromEdges(filteredEdges);
+    const sources = this.deduplicateSourcesByContent(rawSources);
 
     // Calculate relevance score from filtered edges
     const relevanceScores = filteredEdges.map(e => e.score || 0);
@@ -260,6 +273,33 @@ export class SearchService {
       confidence: edge.score || 0,
       sourceDescription: edge.source_description,
     }));
+  }
+
+  /**
+   * Deduplicate similar facts using content fingerprinting
+   * Prevents token waste from redundant results
+   */
+  private deduplicateSourcesByContent(sources: SearchSource[]): SearchSource[] {
+    if (sources.length <= 1) return sources;
+
+    const unique: SearchSource[] = [];
+    const seen = new Set<string>();
+
+    for (const source of sources) {
+      // Create fingerprint from first 100 chars normalized
+      const fingerprint = source.fact
+        .slice(0, 100)
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!seen.has(fingerprint)) {
+        unique.push(source);
+        seen.add(fingerprint);
+      }
+    }
+
+    return unique;
   }
 
   /**

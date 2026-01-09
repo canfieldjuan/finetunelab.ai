@@ -308,6 +308,27 @@ export class GraphitiClient {
   }
 
   /**
+   * Expire an episode (mark as expired rather than deleting)
+   * Expired episodes are excluded from search results but preserved for history
+   */
+  async expireEpisode(episodeId: string): Promise<void> {
+    try {
+      await this.request<void>(`/episodes/${episodeId}/expire`, {
+        method: 'POST',
+      });
+    } catch (error) {
+      // Fall back to deletion if expire endpoint not supported
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('404') || message.includes('not found')) {
+        console.log(`[GraphitiClient] Expire not supported, falling back to delete for ${episodeId}`);
+        await this.deleteEpisode(episodeId);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Add multiple episodes in bulk (much faster than sequential)
    */
   async addEpisodesBulk(request: GraphitiBulkEpisodeRequest): Promise<GraphitiBulkEpisodeResponse> {
