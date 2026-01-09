@@ -70,6 +70,8 @@ export const searchConfig = {
 export const processingConfig = {
   maxFileSize: getEnvNumber('GRAPHRAG_MAX_FILE_SIZE', 10 * 1024 * 1024), // 10MB default
   chunkSize: getEnvNumber('GRAPHRAG_CHUNK_SIZE', 2000), // Characters per section
+  chunkOverlap: getEnvNumber('GRAPHRAG_CHUNK_OVERLAP', 200), // Overlap between chunks
+  maxChunkChars: getEnvNumber('GRAPHRAG_MAX_CHUNK_CHARS', 4000), // Max chars per chunk for LLM
   supportedTypes: ['pdf', 'txt', 'md', 'docx', 'ts', 'tsx', 'js', 'jsx', 'py'] as ('pdf' | 'txt' | 'md' | 'docx' | 'ts' | 'tsx' | 'js' | 'jsx' | 'py')[],
 };
 

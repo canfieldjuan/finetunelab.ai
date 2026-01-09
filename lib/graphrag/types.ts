@@ -178,6 +178,8 @@ export interface SearchConfig {
 export interface ProcessingConfig {
   maxFileSize: number;
   chunkSize: number;
+  chunkOverlap: number;
+  maxChunkChars: number;
   supportedTypes: DocumentFileType[];
 }
 

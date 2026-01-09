@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Upload, File, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, File, X, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
 interface DocumentUploadProps {
@@ -32,6 +32,12 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isHistorical, setIsHistorical] = useState(false);
+
+  // Advanced chunking settings (empty string = use server defaults)
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [chunkSize, setChunkSize] = useState<string>('');
+  const [chunkOverlap, setChunkOverlap] = useState<string>('');
+  const [maxChunkChars, setMaxChunkChars] = useState<string>('');
 
   // Per-file tracking
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
@@ -161,6 +167,17 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
 
       const formData = new FormData();
       formData.append('file', file);
+
+      // Add chunking settings if provided (otherwise server uses defaults)
+      if (chunkSize) {
+        formData.append('chunkSize', chunkSize);
+      }
+      if (chunkOverlap) {
+        formData.append('chunkOverlap', chunkOverlap);
+      }
+      if (maxChunkChars) {
+        formData.append('maxChunkChars', maxChunkChars);
+      }
 
       const uploadUrl = '/api/graphrag/upload';
       console.log('[DocumentUpload] Uploading to:', uploadUrl);
@@ -309,6 +326,80 @@ export function DocumentUpload({ userId, onUploadComplete }: DocumentUploadProps
             </p>
           </div>
         </label>
+      </div>
+
+      {/* Advanced Chunking Settings */}
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          disabled={isUploading}
+          className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
+        >
+          {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <span>Advanced Chunking Settings</span>
+        </button>
+
+        {showAdvanced && (
+          <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              Leave empty to use server defaults. Chunk overlap preserves context between chunks.
+            </p>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Chunk Size
+                </label>
+                <input
+                  type="number"
+                  value={chunkSize}
+                  onChange={(e) => setChunkSize(e.target.value)}
+                  placeholder="2000"
+                  min="100"
+                  max="10000"
+                  disabled={isUploading}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 disabled:opacity-50"
+                />
+                <p className="text-xs text-gray-400 mt-0.5">chars/section</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Chunk Overlap
+                </label>
+                <input
+                  type="number"
+                  value={chunkOverlap}
+                  onChange={(e) => setChunkOverlap(e.target.value)}
+                  placeholder="200"
+                  min="0"
+                  max="1000"
+                  disabled={isUploading}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 disabled:opacity-50"
+                />
+                <p className="text-xs text-gray-400 mt-0.5">context chars</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Max Chunk Chars
+                </label>
+                <input
+                  type="number"
+                  value={maxChunkChars}
+                  onChange={(e) => setMaxChunkChars(e.target.value)}
+                  placeholder="4000"
+                  min="500"
+                  max="16000"
+                  disabled={isUploading}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 disabled:opacity-50"
+                />
+                <p className="text-xs text-gray-400 mt-0.5">for LLM</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* File Input */}

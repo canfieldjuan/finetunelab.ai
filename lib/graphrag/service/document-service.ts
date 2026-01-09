@@ -31,6 +31,8 @@ export interface UploadOptions {
 export interface ProcessingOptions {
   maxRetries?: number;
   chunkSize?: number;
+  chunkOverlap?: number;
+  maxChunkChars?: number;
   groupId?: string;
 }
 
@@ -47,10 +49,12 @@ export class DocumentService {
   private readonly STORAGE_BUCKET = 'documents';
   private readonly DEFAULT_MAX_RETRIES = 3;
   private readonly DEFAULT_CHUNK_SIZE = graphragConfig.processing.chunkSize;
-  // Max characters per chunk for LLM processing
-  // Reduced from 8000 to 4000 - graphiti entity extraction prompts include
-  // existing graph context which can accumulate significantly
-  private readonly MAX_CHUNK_CHARS = 4000;
+  private readonly MAX_CHUNK_CHARS = graphragConfig.processing.maxChunkChars;
+  private readonly CHUNK_OVERLAP = graphragConfig.processing.chunkOverlap;
+
+  // Per-request overrides (set during processDocument)
+  private currentChunkOverlap: number = this.CHUNK_OVERLAP;
+  private currentMaxChunkChars: number = this.MAX_CHUNK_CHARS;
 
   /**
    * Upload a document without processing (async processing)
@@ -290,9 +294,14 @@ export class DocumentService {
 
     const {
       maxRetries = this.DEFAULT_MAX_RETRIES,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       chunkSize = this.DEFAULT_CHUNK_SIZE,
+      chunkOverlap = this.CHUNK_OVERLAP,
+      maxChunkChars = this.MAX_CHUNK_CHARS,
     } = processingOptions;
+
+    // Store options for use in chunking methods
+    this.currentChunkOverlap = chunkOverlap;
+    this.currentMaxChunkChars = maxChunkChars;
 
     try {
       // Get document
@@ -716,9 +725,12 @@ export class DocumentService {
 
   /**
    * Split text into semantic chunks preserving document structure
-   * Priority: sections (headers) → paragraphs → sentences → words
+   * Priority: sections (headers) -> paragraphs -> sentences -> words
+   * Uses configurable overlap to preserve context between chunks
    */
   private chunkText(text: string, maxChunkSize: number): string[] {
+    console.log(`[GraphRAG] Chunking config: size=${maxChunkSize}, overlap=${this.currentChunkOverlap}`);
+
     if (text.length <= maxChunkSize) {
       return [text];
     }
@@ -757,10 +769,13 @@ export class DocumentService {
 
   /**
    * Process semantic chunks: merge small ones, split large ones
+   * Adds overlap between chunks to preserve context
    */
   private processSemanticChunks(chunks: string[], maxChunkSize: number): string[] {
     const result: string[] = [];
+    const overlap = this.currentChunkOverlap;
     let currentChunk = '';
+    let previousChunkEnd = '';
 
     for (const chunk of chunks) {
       const trimmedChunk = chunk.trim();
@@ -771,6 +786,8 @@ export class DocumentService {
         // Save current chunk if it has content
         if (currentChunk.trim()) {
           result.push(currentChunk.trim());
+          // Store end of chunk for overlap with next
+          previousChunkEnd = currentChunk.slice(-overlap);
         }
 
         // If this single chunk is too large, split it further
@@ -778,8 +795,12 @@ export class DocumentService {
           const subChunks = this.splitBySize(trimmedChunk, maxChunkSize);
           result.push(...subChunks);
           currentChunk = '';
+          previousChunkEnd = '';
         } else {
-          currentChunk = trimmedChunk;
+          // Start new chunk with overlap from previous
+          currentChunk = previousChunkEnd
+            ? previousChunkEnd + '\n\n' + trimmedChunk
+            : trimmedChunk;
         }
       } else {
         // Add to current chunk with paragraph separator
@@ -799,6 +820,7 @@ export class DocumentService {
 
   /**
    * Split text by size, preferring natural boundaries
+   * Includes configurable overlap to preserve context between chunks
    */
   private splitBySize(text: string, maxChunkSize: number): string[] {
     if (text.length <= maxChunkSize) {
@@ -806,19 +828,27 @@ export class DocumentService {
     }
 
     const chunks: string[] = [];
-    let remaining = text;
+    const overlap = this.currentChunkOverlap;
+    let position = 0;
 
-    while (remaining.length > 0) {
-      if (remaining.length <= maxChunkSize) {
-        chunks.push(remaining.trim());
+    while (position < text.length) {
+      const remaining = text.length - position;
+
+      if (remaining <= maxChunkSize) {
+        chunks.push(text.slice(position).trim());
         break;
       }
 
       // Find best break point (prefer sentence > paragraph > word)
-      const breakPoint = this.findBestBreakPoint(remaining, maxChunkSize);
+      const chunkText = text.slice(position, position + maxChunkSize);
+      const breakPoint = this.findBestBreakPoint(chunkText, maxChunkSize);
 
-      chunks.push(remaining.slice(0, breakPoint).trim());
-      remaining = remaining.slice(breakPoint).trim();
+      chunks.push(chunkText.slice(0, breakPoint).trim());
+
+      // Move position forward, but subtract overlap to preserve context
+      // Ensure we always make progress (at least 1 char)
+      const advance = Math.max(breakPoint - overlap, 1);
+      position += advance;
     }
 
     return chunks.filter(chunk => chunk.length > 0);

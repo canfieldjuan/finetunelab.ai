@@ -10,6 +10,16 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
+    // Extract optional chunking settings from form data
+    const chunkSizeStr = formData.get('chunkSize') as string | null;
+    const chunkOverlapStr = formData.get('chunkOverlap') as string | null;
+    const maxChunkCharsStr = formData.get('maxChunkChars') as string | null;
+
+    // Parse chunking options (undefined if not provided = use server defaults)
+    const chunkSize = chunkSizeStr ? parseInt(chunkSizeStr, 10) : undefined;
+    const chunkOverlap = chunkOverlapStr ? parseInt(chunkOverlapStr, 10) : undefined;
+    const maxChunkChars = maxChunkCharsStr ? parseInt(maxChunkCharsStr, 10) : undefined;
+
     if (!file) {
       return NextResponse.json(
         { error: 'No file provided' },
@@ -83,8 +93,15 @@ export async function POST(request: NextRequest) {
 
     if (!document.processed) {
       console.log(`[GraphRAG Upload] Processing document synchronously...`);
+      if (chunkSize || chunkOverlap || maxChunkChars) {
+        console.log(`[GraphRAG Upload] Custom chunking settings:`, { chunkSize, chunkOverlap, maxChunkChars });
+      }
 
-      const result = await documentService.processDocument(supabase, document.id);
+      const result = await documentService.processDocument(supabase, document.id, {
+        chunkSize,
+        chunkOverlap,
+        maxChunkChars,
+      });
 
       if (result.error) {
         console.error(`[GraphRAG Upload] Processing failed:`, result.error);
