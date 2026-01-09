@@ -76,26 +76,33 @@ export function classifyQuery(query: string): QueryClassification {
 // ============================================================================
 
 /**
- * Detect if query is a mathematical calculation
+ * Detect if query is a PURE mathematical calculation
+ * Mixed queries (math + knowledge) should NOT skip search
  */
 function detectMathQuery(query: string): boolean {
-  // Pattern 1: Direct math operators (50*2, 100/4, 23+5)
-  if (/\d+\s*[\+\-\*\/\%]\s*\d+/.test(query)) {
-    return true;
+  // First check: If query has knowledge-seeking keywords, don't treat as pure math
+  // This handles mixed queries like "What is 50*2 and tell me about RTX 4090"
+  const knowledgeKeywords = /\b(tell me about|what is .{10,}|explain|describe|about|information|details|how does|why|who|where)\b/i;
+  if (knowledgeKeywords.test(query)) {
+    // Check if this is truly mixed (has both math AND substantial text)
+    const hasSubstantialText = query.replace(/[\d\s\+\-\*\/\%\(\)\.]+/g, '').trim().length > 20;
+    if (hasSubstantialText) {
+      return false; // Mixed query - don't skip search
+    }
   }
 
-  // Pattern 2: Percentage calculations (23% of 456)
-  if (/\d+\s*%\s*of\s*\d+/i.test(query)) {
-    return true;
-  }
-
-  // Pattern 3: Calculate/compute keywords with math
-  if (/^(calculate|compute|what is|how much is)\s+[\d\s\+\-\*\/\%\(\)\.]+/i.test(query)) {
-    return true;
-  }
-
-  // Pattern 4: Pure arithmetic expressions
+  // Pattern 1: Pure arithmetic expressions (just numbers and operators)
   if (/^[\d\s\+\-\*\/\%\(\)\.]+$/.test(query)) {
+    return true;
+  }
+
+  // Pattern 2: Simple math with "what is" prefix (what is 50*2)
+  if (/^(what is|how much is|calculate|compute)\s+[\d\s\+\-\*\/\%\(\)\.]+\??$/i.test(query)) {
+    return true;
+  }
+
+  // Pattern 3: Percentage calculations (23% of 456) - only if no other content
+  if (/^\d+\s*%\s*of\s*\d+\??$/i.test(query)) {
     return true;
   }
 

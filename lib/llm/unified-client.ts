@@ -284,8 +284,9 @@ export class UnifiedLLMClient {
     let totalOutputTokens = 0;
     const toolCallsTracking: ToolCallMetadata[] = [];
 
-    // Allow up to 3 rounds of tool calls
-    for (let round = 0; round < 3; round++) {
+    // Allow configurable rounds of tool calls (default: 5 for complex queries)
+    const maxToolRounds = parseInt(process.env.MAX_TOOL_CALL_ROUNDS || '5', 10);
+    for (let round = 0; round < maxToolRounds; round++) {
       console.log('[UnifiedLLMClient] Tool call round:', round + 1);
 
       // Format request
