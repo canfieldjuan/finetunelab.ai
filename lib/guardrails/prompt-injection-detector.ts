@@ -213,7 +213,7 @@ export class PromptInjectionDetector {
 
     const matchedPatterns: string[] = [];
     let totalWeight = 0;
-    let categoryCount: Record<string, number> = {};
+    const categoryCount: Record<string, number> = {};
 
     // Normalize content for matching
     const normalizedContent = this.normalizeContent(content);
