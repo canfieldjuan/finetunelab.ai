@@ -4,7 +4,7 @@ Exposes native graphiti-core API for Next.js client
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -635,10 +635,20 @@ async def search(
                         if data_source_type and record['data_source_type'] != data_source_type:
                             should_include = False
                         if date_from and record['ingestion_date']:
-                            if record['ingestion_date'] < datetime.fromisoformat(date_from.replace('Z', '+00:00')):
+                            ingestion_dt = record['ingestion_date']
+                            # Ensure both datetimes are timezone-aware for comparison
+                            if ingestion_dt.tzinfo is None:
+                                ingestion_dt = ingestion_dt.replace(tzinfo=timezone.utc)
+                            date_from_dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+                            if ingestion_dt < date_from_dt:
                                 should_include = False
                         if date_to and record['ingestion_date']:
-                            if record['ingestion_date'] > datetime.fromisoformat(date_to.replace('Z', '+00:00')):
+                            ingestion_dt = record['ingestion_date']
+                            # Ensure both datetimes are timezone-aware for comparison
+                            if ingestion_dt.tzinfo is None:
+                                ingestion_dt = ingestion_dt.replace(tzinfo=timezone.utc)
+                            date_to_dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+                            if ingestion_dt > date_to_dt:
                                 should_include = False
                 except Exception as e:
                     logger.warning(f"Could not get metadata for edge {edge.uuid}: {e}")
