@@ -643,6 +643,9 @@ async def search(
                             if ingestion_dt.tzinfo is None:
                                 ingestion_dt = ingestion_dt.replace(tzinfo=timezone.utc)
                             date_from_dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+                            # Ensure date_from_dt is also timezone-aware (LLM may return just date like '2025-12-12')
+                            if date_from_dt.tzinfo is None:
+                                date_from_dt = date_from_dt.replace(tzinfo=timezone.utc)
                             if ingestion_dt < date_from_dt:
                                 should_include = False
                         if date_to and record['ingestion_date']:
@@ -654,6 +657,9 @@ async def search(
                             if ingestion_dt.tzinfo is None:
                                 ingestion_dt = ingestion_dt.replace(tzinfo=timezone.utc)
                             date_to_dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+                            # Ensure date_to_dt is also timezone-aware (LLM may return just date like '2025-12-31')
+                            if date_to_dt.tzinfo is None:
+                                date_to_dt = date_to_dt.replace(tzinfo=timezone.utc)
                             if ingestion_dt > date_to_dt:
                                 should_include = False
                 except Exception as e:
