@@ -636,16 +636,22 @@ async def search(
                             should_include = False
                         if date_from and record['ingestion_date']:
                             ingestion_dt = record['ingestion_date']
+                            logger.info(f"[DATETIME DEBUG] edge={edge.uuid[:8]} raw ingestion_dt={ingestion_dt} type={type(ingestion_dt).__name__}")
                             # Convert Neo4j DateTime to Python datetime if needed
                             if hasattr(ingestion_dt, 'to_native'):
                                 ingestion_dt = ingestion_dt.to_native()
+                                logger.info(f"[DATETIME DEBUG] after to_native: {ingestion_dt} type={type(ingestion_dt).__name__} tzinfo={ingestion_dt.tzinfo}")
                             # Ensure timezone-aware for comparison
                             if ingestion_dt.tzinfo is None:
                                 ingestion_dt = ingestion_dt.replace(tzinfo=timezone.utc)
+                                logger.info(f"[DATETIME DEBUG] after UTC fix: {ingestion_dt} tzinfo={ingestion_dt.tzinfo}")
                             date_from_dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+                            logger.info(f"[DATETIME DEBUG] date_from={date_from} parsed={date_from_dt} tzinfo={date_from_dt.tzinfo}")
                             # Ensure date_from_dt is also timezone-aware (LLM may return just date like '2025-12-12')
                             if date_from_dt.tzinfo is None:
                                 date_from_dt = date_from_dt.replace(tzinfo=timezone.utc)
+                                logger.info(f"[DATETIME DEBUG] date_from_dt after UTC fix: {date_from_dt} tzinfo={date_from_dt.tzinfo}")
+                            logger.info(f"[DATETIME DEBUG] COMPARING: {ingestion_dt} (tz={ingestion_dt.tzinfo}) < {date_from_dt} (tz={date_from_dt.tzinfo})")
                             if ingestion_dt < date_from_dt:
                                 should_include = False
                         if date_to and record['ingestion_date']:
@@ -663,7 +669,9 @@ async def search(
                             if ingestion_dt > date_to_dt:
                                 should_include = False
                 except Exception as e:
+                    import traceback
                     logger.warning(f"Could not get metadata for edge {edge.uuid}: {e}")
+                    logger.warning(f"[DATETIME DEBUG] Traceback: {traceback.format_exc()}")
 
             # Only include if passes temporal filters
             if not should_include:
