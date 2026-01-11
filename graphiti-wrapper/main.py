@@ -636,7 +636,10 @@ async def search(
                             should_include = False
                         if date_from and record['ingestion_date']:
                             ingestion_dt = record['ingestion_date']
-                            # Ensure both datetimes are timezone-aware for comparison
+                            # Convert Neo4j DateTime to Python datetime if needed
+                            if hasattr(ingestion_dt, 'to_native'):
+                                ingestion_dt = ingestion_dt.to_native()
+                            # Ensure timezone-aware for comparison
                             if ingestion_dt.tzinfo is None:
                                 ingestion_dt = ingestion_dt.replace(tzinfo=timezone.utc)
                             date_from_dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
@@ -644,7 +647,10 @@ async def search(
                                 should_include = False
                         if date_to and record['ingestion_date']:
                             ingestion_dt = record['ingestion_date']
-                            # Ensure both datetimes are timezone-aware for comparison
+                            # Convert Neo4j DateTime to Python datetime if needed
+                            if hasattr(ingestion_dt, 'to_native'):
+                                ingestion_dt = ingestion_dt.to_native()
+                            # Ensure timezone-aware for comparison
                             if ingestion_dt.tzinfo is None:
                                 ingestion_dt = ingestion_dt.replace(tzinfo=timezone.utc)
                             date_to_dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
