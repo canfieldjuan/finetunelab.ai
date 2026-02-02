@@ -142,12 +142,23 @@ class PredictionsGenerator:
         """Generate prediction for single prompt"""
         if sample.get('messages') and hasattr(tokenizer, 'apply_chat_template'):
             user_messages = [msg for msg in sample['messages'] if msg.get('role') != 'assistant']
+
+            # Build template kwargs - tools required for function-calling models
+            template_kwargs = {
+                'tokenize': True,
+                'add_generation_prompt': True,
+                'return_tensors': 'pt',
+                'return_dict': True
+            }
+
+            # Include tools if present (required for FunctionGemma and similar models)
+            tools = sample.get('tools')
+            if tools:
+                template_kwargs['tools'] = tools
+
             inputs = tokenizer.apply_chat_template(
                 user_messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_tensors='pt',
-                return_dict=True
+                **template_kwargs
             )
         else:
             prompt = sample.get('prompt', '')
