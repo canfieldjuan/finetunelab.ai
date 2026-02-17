@@ -192,8 +192,8 @@ export function TraceExplorer() {
       // Map metadata to top-level fields
       const mappedTraces = (data.traces || []).map((t: RawTraceWithMetadata): TraceListItem => ({
         ...t,
-        session_tag: t.metadata?.tags?.[0] || t.metadata?.session_id,
-        environment: t.metadata?.environment
+        session_tag: t.session_tag ?? t.metadata?.tags?.[0] ?? t.metadata?.session_id,
+        environment: t.environment ?? t.metadata?.environment
       }));
 
       // Filters are now applied server-side for better performance

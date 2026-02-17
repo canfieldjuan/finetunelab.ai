@@ -738,6 +738,21 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
             </div>
           ) : null}
 
+          {/* Raw Metadata */}
+          {selectedTrace.metadata && Object.keys(selectedTrace.metadata).length > 0 ? (
+            <div className="mt-4 border rounded-lg overflow-hidden bg-white shadow-sm">
+              <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Trace Metadata</span>
+                <span className="text-[10px] text-gray-400">JSON</span>
+              </div>
+              <div className="p-0">
+                <pre className="p-3 text-xs bg-gray-50/30 overflow-x-auto max-h-[320px] overflow-y-auto font-mono text-gray-800">
+                  {JSON.stringify(selectedTrace.metadata, null, 2)}
+                </pre>
+              </div>
+            </div>
+          ) : null}
+
           {/* Quality Evaluation Section */}
           {(selectedTrace.judgments && selectedTrace.judgments.length > 0) || selectedTrace.user_rating ? (
             <div className="mt-4 p-3 bg-purple-50/50 rounded border border-purple-100">
