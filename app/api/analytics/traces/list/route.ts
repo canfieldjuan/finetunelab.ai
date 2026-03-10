@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
     const {
       data: { user },
       error: authError,
-    }: { data: { user: any }; error: any } = await supabase.auth.getUser();
+    }: { data: { user: unknown }; error: unknown } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -125,6 +125,9 @@ export async function GET(req: NextRequest) {
     const sessionTag = searchParams.get('session_tag');
     const search = searchParams.get('search');
     const startDate = searchParams.get('start_date');
+    const workflow = searchParams.get('workflow');
+    const crmProvider = searchParams.get('crm_provider');
+    const reportType = searchParams.get('report_type');
 
     // Advanced filter parameters
     const minCost = searchParams.get('min_cost');
@@ -180,6 +183,18 @@ export async function GET(req: NextRequest) {
 
     if (startDate) {
       query = query.gte('start_time', startDate);
+    }
+
+    if (workflow) {
+      query = query.filter('metadata->business->>workflow', 'ilike', `%${workflow}%`);
+    }
+
+    if (crmProvider) {
+      query = query.filter('metadata->business->>crm_provider', 'ilike', `%${crmProvider}%`);
+    }
+
+    if (reportType) {
+      query = query.filter('metadata->business->>report_type', 'ilike', `%${reportType}%`);
     }
 
     // Advanced filters
@@ -242,7 +257,7 @@ export async function GET(req: NextRequest) {
       data: traces,
       error: tracesError,
       count,
-    }: { data: TraceData[] | null; error: any; count: number | null } = await query;
+    }: { data: TraceData[] | null; error: unknown; count: number | null } = await query;
 
     if (tracesError) {
       console.error('[Traces List API] Error fetching traces:', tracesError);
@@ -322,7 +337,7 @@ async function enrichTracesWithQuality(
   const {
     data: judgments,
     error: judgmentsError,
-  }: { data: Judgment[] | null; error: any } = await judgmentsQuery;
+  }: { data: Judgment[] | null; error: unknown } = await judgmentsQuery;
 
   if (judgmentsError) {
     console.error('[Traces List] Error fetching judgments:', judgmentsError);

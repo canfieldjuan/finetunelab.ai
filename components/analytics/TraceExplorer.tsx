@@ -7,7 +7,7 @@
  * Provides filtering, search, and detailed trace visualization
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import TraceView, { type Trace } from './TraceView';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Filter, RefreshCw, Clock, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronRight, Zap, DollarSign, TrendingUp, Radio, Share2, Save, BookmarkPlus, GitCompare } from 'lucide-react';
+import { Search, Filter, RefreshCw, Clock, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronRight, Zap, DollarSign, Radio, Share2, Save, BookmarkPlus, GitCompare } from 'lucide-react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 
 interface TraceListItem {
@@ -44,6 +44,20 @@ interface TraceListItem {
   passed_validations?: number;
   total_validations?: number;
   has_user_feedback?: boolean;
+  reasoning?: string | null;
+  workflow?: string;
+  crm_provider?: string;
+  report_type?: string;
+}
+
+interface TraceBusinessContext {
+  workflow?: string;
+  crm_provider?: string;
+  report_type?: string;
+  tenant_id?: string;
+  vendor_id?: string;
+  company_id?: string;
+  report_id?: string;
 }
 
 interface RawTraceWithMetadata extends TraceListItem {
@@ -51,7 +65,13 @@ interface RawTraceWithMetadata extends TraceListItem {
     tags?: string[];
     session_id?: string;
     environment?: string;
-  };
+    business?: TraceBusinessContext;
+    reasoning?: {
+      summary?: string;
+      triage?: string;
+      raw_preview?: string;
+    };
+  } & Record<string, unknown>;
 }
 
 interface SavedPreset {
@@ -62,6 +82,9 @@ interface SavedPreset {
     operationFilter?: string;
     statusFilter?: string;
     timeRange?: string;
+    workflowFilter?: string;
+    crmProviderFilter?: string;
+    reportTypeFilter?: string;
     minCost?: number | null;
     maxCost?: number | null;
     minDuration?: number | null;
@@ -70,6 +93,72 @@ interface SavedPreset {
     maxThroughput?: number | null;
   };
 }
+
+interface TraceSummaryBucket {
+  label: string;
+  count: number;
+}
+
+const toRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+};
+
+const toText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const truncateText = (value: string | undefined, max = 180): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  return value.length > max ? `${value.slice(0, max - 3)}...` : value;
+};
+
+const getBusinessContext = (trace: RawTraceWithMetadata): TraceBusinessContext => {
+  const metadata = toRecord(trace.metadata);
+  const business = toRecord(metadata?.business);
+  return {
+    workflow: toText(business?.workflow),
+    crm_provider: toText(business?.crm_provider),
+    report_type: toText(business?.report_type),
+    tenant_id: toText(business?.tenant_id),
+    vendor_id: toText(business?.vendor_id),
+    company_id: toText(business?.company_id),
+    report_id: toText(business?.report_id),
+  };
+};
+
+const getReasoningSummary = (trace: RawTraceWithMetadata): string | undefined => {
+  const metadata = toRecord(trace.metadata);
+  const reasoning = toRecord(metadata?.reasoning);
+  return truncateText(
+    toText(trace.reasoning)
+      ?? toText(reasoning?.summary)
+      ?? toText(reasoning?.triage)
+      ?? toText(reasoning?.raw_preview)
+  );
+};
+
+const buildSummaryBuckets = (values: Array<string | undefined>, limit = 6): TraceSummaryBucket[] => {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([label, count]) => ({ label, count }));
+};
 
 export function TraceExplorer() {
   const { session } = useAuth();
@@ -102,11 +191,13 @@ export function TraceExplorer() {
   const [searchQuery, setSearchQuery] = useState('');
   const [operationFilter, setOperationFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [providerFilter, setProviderFilter] = useState<string>('all');
   const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('30d');
   
   // Advanced filters
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [workflowFilter, setWorkflowFilter] = useState('');
+  const [crmProviderFilter, setCrmProviderFilter] = useState('');
+  const [reportTypeFilter, setReportTypeFilter] = useState('');
   const [minCost, setMinCost] = useState<number | null>(null);
   const [maxCost, setMaxCost] = useState<number | null>(null);
   const [minDuration, setMinDuration] = useState<number | null>(null);
@@ -121,6 +212,14 @@ export function TraceExplorer() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(100);
   const [totalCount, setTotalCount] = useState(0);
+
+  const topWorkflows = useMemo(() => {
+    return buildSummaryBuckets(traces.map((trace) => trace.workflow));
+  }, [traces]);
+
+  const topProviders = useMemo(() => {
+    return buildSummaryBuckets(traces.map((trace) => trace.crm_provider));
+  }, [traces]);
 
   // Fetch traces list
   const fetchTraces = async () => {
@@ -160,6 +259,9 @@ export function TraceExplorer() {
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
 
       // Add advanced filters to API request (server-side filtering)
+      if (workflowFilter.trim()) params.append('workflow', workflowFilter.trim());
+      if (crmProviderFilter.trim()) params.append('crm_provider', crmProviderFilter.trim());
+      if (reportTypeFilter.trim()) params.append('report_type', reportTypeFilter.trim());
       if (minCost !== null) params.append('min_cost', minCost.toString());
       if (maxCost !== null) params.append('max_cost', maxCost.toString());
       if (minDuration !== null) params.append('min_duration', minDuration.toString());
@@ -190,11 +292,18 @@ export function TraceExplorer() {
       });
       
       // Map metadata to top-level fields
-      const mappedTraces = (data.traces || []).map((t: RawTraceWithMetadata): TraceListItem => ({
-        ...t,
-        session_tag: t.session_tag ?? t.metadata?.tags?.[0] ?? t.metadata?.session_id,
-        environment: t.environment ?? t.metadata?.environment
-      }));
+      const mappedTraces = (data.traces || []).map((t: RawTraceWithMetadata): TraceListItem => {
+        const business = getBusinessContext(t);
+        return {
+          ...t,
+          session_tag: t.session_tag ?? t.metadata?.tags?.[0] ?? t.metadata?.session_id,
+          environment: t.environment ?? t.metadata?.environment,
+          reasoning: getReasoningSummary(t) ?? null,
+          workflow: business.workflow,
+          crm_provider: business.crm_provider,
+          report_type: business.report_type,
+        };
+      });
 
       // Filters are now applied server-side for better performance
       // The API returns already-filtered traces with correct pagination count
@@ -248,6 +357,9 @@ export function TraceExplorer() {
     if (operationFilter !== 'all') params.set('operation', operationFilter);
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (timeRange !== '30d') params.set('time', timeRange);
+    if (workflowFilter) params.set('workflow', workflowFilter);
+    if (crmProviderFilter) params.set('crmProvider', crmProviderFilter);
+    if (reportTypeFilter) params.set('reportType', reportTypeFilter);
     if (minCost !== null) params.set('minCost', minCost.toString());
     if (maxCost !== null) params.set('maxCost', maxCost.toString());
     if (minDuration !== null) params.set('minDuration', minDuration.toString());
@@ -283,6 +395,9 @@ export function TraceExplorer() {
         operationFilter,
         statusFilter,
         timeRange,
+        workflowFilter,
+        crmProviderFilter,
+        reportTypeFilter,
         minCost,
         maxCost,
         minDuration,
@@ -305,6 +420,9 @@ export function TraceExplorer() {
     if (preset.filters.operationFilter) setOperationFilter(preset.filters.operationFilter);
     if (preset.filters.statusFilter) setStatusFilter(preset.filters.statusFilter);
     if (preset.filters.timeRange) setTimeRange(preset.filters.timeRange as '1h' | '24h' | '7d' | '30d');
+    if (preset.filters.workflowFilter !== undefined) setWorkflowFilter(preset.filters.workflowFilter);
+    if (preset.filters.crmProviderFilter !== undefined) setCrmProviderFilter(preset.filters.crmProviderFilter);
+    if (preset.filters.reportTypeFilter !== undefined) setReportTypeFilter(preset.filters.reportTypeFilter);
     if (preset.filters.minCost !== undefined) setMinCost(preset.filters.minCost);
     if (preset.filters.maxCost !== undefined) setMaxCost(preset.filters.maxCost);
     if (preset.filters.minDuration !== undefined) setMinDuration(preset.filters.minDuration);
@@ -353,6 +471,9 @@ export function TraceExplorer() {
     const operation = searchParams.get('operation');
     const status = searchParams.get('status');
     const time = searchParams.get('time');
+    const workflow = searchParams.get('workflow');
+    const crmProvider = searchParams.get('crmProvider');
+    const reportType = searchParams.get('reportType');
     const minCostParam = searchParams.get('minCost');
     const maxCostParam = searchParams.get('maxCost');
     const minDurationParam = searchParams.get('minDuration');
@@ -364,6 +485,9 @@ export function TraceExplorer() {
     if (operation) setOperationFilter(operation);
     if (status) setStatusFilter(status);
     if (time) setTimeRange(time as '1h' | '24h' | '7d' | '30d');
+    if (workflow) setWorkflowFilter(workflow);
+    if (crmProvider) setCrmProviderFilter(crmProvider);
+    if (reportType) setReportTypeFilter(reportType);
     if (minCostParam) setMinCost(parseFloat(minCostParam));
     if (maxCostParam) setMaxCost(parseFloat(maxCostParam));
     if (minDurationParam) setMinDuration(parseInt(minDurationParam));
@@ -376,7 +500,7 @@ export function TraceExplorer() {
   useEffect(() => {
     fetchTraces();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, page, timeRange, operationFilter, statusFilter, minCost, maxCost, minDuration, maxDuration, minThroughput, maxThroughput, hasError, hasQualityScore, minQualityScore]);
+  }, [session, page, timeRange, operationFilter, statusFilter, workflowFilter, crmProviderFilter, reportTypeFilter, minCost, maxCost, minDuration, maxDuration, minThroughput, maxThroughput, hasError, hasQualityScore, minQualityScore]);
 
   // Auto-expand trace from URL params (e.g., from anomaly navigation)
   useEffect(() => {
@@ -528,6 +652,9 @@ export function TraceExplorer() {
   };
 
   const clearAdvancedFilters = () => {
+    setWorkflowFilter('');
+    setCrmProviderFilter('');
+    setReportTypeFilter('');
     setMinCost(null);
     setMaxCost(null);
     setMinDuration(null);
@@ -917,6 +1044,33 @@ export function TraceExplorer() {
               <h4 className="text-sm font-semibold">Advanced Filters</h4>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Workflow</label>
+                  <Input
+                    placeholder="e.g., intel.report.generate"
+                    value={workflowFilter}
+                    onChange={(e) => setWorkflowFilter(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">CRM Provider</label>
+                  <Input
+                    placeholder="e.g., hubspot"
+                    value={crmProviderFilter}
+                    onChange={(e) => setCrmProviderFilter(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Report Type</label>
+                  <Input
+                    placeholder="e.g., tenant_report"
+                    value={reportTypeFilter}
+                    onChange={(e) => setReportTypeFilter(e.target.value)}
+                  />
+                </div>
+
                 {/* Cost Range */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Cost Range ($)</label>
@@ -1051,6 +1205,66 @@ export function TraceExplorer() {
         </CardContent>
       </Card>
 
+      {(topWorkflows.length > 0 || topProviders.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Operational Summary</CardTitle>
+            <CardDescription>Most common workflows and CRM providers in the current trace result set</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {topWorkflows.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Top Workflows</div>
+                <div className="flex flex-wrap gap-2">
+                  {topWorkflows.map((item) => (
+                    <Button
+                      key={item.label}
+                      variant={workflowFilter === item.label ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        setWorkflowFilter(item.label);
+                        setPage(1);
+                      }}
+                      className="gap-2"
+                    >
+                      <span>{item.label}</span>
+                      <Badge variant="secondary" className="h-5 min-w-5 px-1.5">
+                        {item.count}
+                      </Badge>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {topProviders.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Top CRM Providers</div>
+                <div className="flex flex-wrap gap-2">
+                  {topProviders.map((item) => (
+                    <Button
+                      key={item.label}
+                      variant={crmProviderFilter === item.label ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        setCrmProviderFilter(item.label);
+                        setPage(1);
+                      }}
+                      className="gap-2"
+                    >
+                      <span>{item.label}</span>
+                      <Badge variant="secondary" className="h-5 min-w-5 px-1.5">
+                        {item.count}
+                      </Badge>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Traces List */}
       <Card>
         <CardHeader>
@@ -1139,12 +1353,36 @@ export function TraceExplorer() {
                               </>
                             )}
                             {trace.session_tag && (
-                                <>
-                                  <span>•</span>
-                                  <span className="font-medium text-primary">{trace.session_tag}</span>
-                                </>
+                              <>
+                                <span>•</span>
+                                <span className="font-medium text-primary">{trace.session_tag}</span>
+                              </>
                             )}
                           </div>
+                          {(trace.workflow || trace.crm_provider || trace.report_type) && (
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              {trace.workflow && (
+                                <Badge variant="outline" className="h-5 px-1.5 py-0 font-normal">
+                                  workflow: {trace.workflow}
+                                </Badge>
+                              )}
+                              {trace.report_type && (
+                                <Badge variant="outline" className="h-5 px-1.5 py-0 font-normal">
+                                  report: {trace.report_type}
+                                </Badge>
+                              )}
+                              {trace.crm_provider && (
+                                <Badge variant="outline" className="h-5 px-1.5 py-0 font-normal">
+                                  crm: {trace.crm_provider}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                          {trace.reasoning && (
+                            <p className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">Reasoning:</span> {trace.reasoning}
+                            </p>
+                          )}
                         </div>
 
                         {/* Metrics - Compact Row */}

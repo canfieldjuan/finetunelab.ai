@@ -27,6 +27,7 @@ export interface Trace {
   model_provider?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   error_message?: string;
+  reasoning?: string | null;
   input_tokens?: number;
   output_tokens?: number;
   total_tokens?: number;
@@ -103,6 +104,63 @@ const toNonEmptyRecord = (value: unknown): Record<string, unknown> | null => {
   return record;
 };
 
+const toText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+interface SelectedTraceBusinessContext {
+  workflow?: string;
+  crmProvider?: string;
+  reportType?: string;
+  tenantId?: string;
+  companyId?: string;
+  vendorId?: string;
+  reportId?: string;
+  campaignId?: string;
+  alertType?: string;
+}
+
+interface SelectedTraceReasoningContext {
+  summary?: string;
+  triage?: string;
+  rawPreview?: string;
+}
+
+const getSelectedTraceBusinessContext = (trace: Trace | null): SelectedTraceBusinessContext | null => {
+  const business = toRecord(toRecord(trace?.metadata)?.business);
+  if (!business) {
+    return null;
+  }
+  return {
+    workflow: toText(business.workflow),
+    crmProvider: toText(business.crm_provider),
+    reportType: toText(business.report_type),
+    tenantId: toText(business.tenant_id),
+    companyId: toText(business.company_id),
+    vendorId: toText(business.vendor_id),
+    reportId: toText(business.report_id),
+    campaignId: toText(business.campaign_id),
+    alertType: toText(business.alert_type),
+  };
+};
+
+const getSelectedTraceReasoning = (trace: Trace | null): SelectedTraceReasoningContext | null => {
+  if (!trace) {
+    return null;
+  }
+  const reasoning = toRecord(toRecord(trace.metadata)?.reasoning);
+  const result = {
+    summary: toText(trace.reasoning) ?? toText(reasoning?.summary),
+    triage: toText(reasoning?.triage),
+    rawPreview: toText(reasoning?.raw_preview),
+  };
+  return Object.values(result).some(Boolean) ? result : null;
+};
+
 export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(new Set());
   const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
@@ -170,6 +228,14 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
     uniqueTraces.forEach(processTrace);
     return { start: minTime, end: maxTime };
   }, [uniqueTraces]);
+
+  const selectedTraceBusiness = useMemo(() => {
+    return getSelectedTraceBusinessContext(selectedTrace);
+  }, [selectedTrace]);
+
+  const selectedTraceReasoning = useMemo(() => {
+    return getSelectedTraceReasoning(selectedTrace);
+  }, [selectedTrace]);
 
   const selectedTraceMetrics = useMemo(() => {
     if (!selectedTrace) {
@@ -553,6 +619,41 @@ export default function TraceView({ traces, onTraceClick }: TraceViewProps) {
               </div>
             </div>
           ) : null}
+
+          {(selectedTraceBusiness || selectedTraceReasoning) && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {selectedTraceBusiness && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-emerald-50 px-3 py-2 border-b">
+                    <span className="text-xs font-semibold text-emerald-900 uppercase tracking-wider">Business Context</span>
+                  </div>
+                  <div className="p-3 grid grid-cols-2 gap-2">
+                    {selectedTraceBusiness.workflow && <div><span className="text-[10px] text-gray-500 uppercase">Workflow</span><div className="text-xs font-medium">{selectedTraceBusiness.workflow}</div></div>}
+                    {selectedTraceBusiness.reportType && <div><span className="text-[10px] text-gray-500 uppercase">Report Type</span><div className="text-xs font-medium">{selectedTraceBusiness.reportType}</div></div>}
+                    {selectedTraceBusiness.crmProvider && <div><span className="text-[10px] text-gray-500 uppercase">CRM Provider</span><div className="text-xs font-medium">{selectedTraceBusiness.crmProvider}</div></div>}
+                    {selectedTraceBusiness.tenantId && <div><span className="text-[10px] text-gray-500 uppercase">Tenant</span><div className="text-xs font-mono font-medium">{selectedTraceBusiness.tenantId}</div></div>}
+                    {selectedTraceBusiness.companyId && <div><span className="text-[10px] text-gray-500 uppercase">Company</span><div className="text-xs font-mono font-medium">{selectedTraceBusiness.companyId}</div></div>}
+                    {selectedTraceBusiness.vendorId && <div><span className="text-[10px] text-gray-500 uppercase">Vendor</span><div className="text-xs font-mono font-medium">{selectedTraceBusiness.vendorId}</div></div>}
+                    {selectedTraceBusiness.reportId && <div><span className="text-[10px] text-gray-500 uppercase">Report ID</span><div className="text-xs font-mono font-medium">{selectedTraceBusiness.reportId}</div></div>}
+                    {selectedTraceBusiness.campaignId && <div><span className="text-[10px] text-gray-500 uppercase">Campaign</span><div className="text-xs font-mono font-medium">{selectedTraceBusiness.campaignId}</div></div>}
+                    {selectedTraceBusiness.alertType && <div><span className="text-[10px] text-gray-500 uppercase">Alert Type</span><div className="text-xs font-medium">{selectedTraceBusiness.alertType}</div></div>}
+                  </div>
+                </div>
+              )}
+              {selectedTraceReasoning && (
+                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="bg-slate-50 px-3 py-2 border-b">
+                    <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Reasoning</span>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {selectedTraceReasoning.summary && <div><span className="text-[10px] text-gray-500 uppercase block mb-1">Summary</span><p className="text-xs text-gray-800 whitespace-pre-wrap">{selectedTraceReasoning.summary}</p></div>}
+                    {selectedTraceReasoning.triage && <div><span className="text-[10px] text-gray-500 uppercase block mb-1">Triage</span><p className="text-xs text-gray-800 whitespace-pre-wrap">{selectedTraceReasoning.triage}</p></div>}
+                    {selectedTraceReasoning.rawPreview && <div><span className="text-[10px] text-gray-500 uppercase block mb-1">Preview</span><pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap bg-slate-50 p-2 rounded border">{selectedTraceReasoning.rawPreview}</pre></div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Technical Details & Metadata */}
           {(selectedTraceMetrics?.apiEndpoint || selectedTraceMetrics?.requestHeaders || selectedTrace.queue_time_ms != null || selectedTraceMetrics?.contextTokens != null || selectedTraceMetrics?.retrievalLatencyMs != null) && (
