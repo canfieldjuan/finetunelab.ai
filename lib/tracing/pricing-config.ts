@@ -90,6 +90,8 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
  * @param outputTokens - Number of output tokens generated
  * @param cacheCreationInputTokens - Cache creation tokens (Anthropic: 1.25x input rate)
  * @param cacheReadInputTokens - Cache read tokens (Anthropic: 0.1x input rate; OpenAI: 0.5x input rate)
+ * @param provider - Optional provider hint (e.g. 'openai'). When omitted, the provider is
+ *   inferred from the matched pricing key.
  * @returns Total cost in USD
  */
 export function calculateCost(
@@ -97,7 +99,8 @@ export function calculateCost(
   inputTokens: number,
   outputTokens: number,
   cacheCreationInputTokens?: number,
-  cacheReadInputTokens?: number
+  cacheReadInputTokens?: number,
+  provider?: string
 ): number {
   const pricing = MODEL_PRICING[modelName] || MODEL_PRICING['_default'];
 
@@ -106,9 +109,12 @@ export function calculateCost(
 
   // Cache-read discount differs by provider's prompt-caching model:
   // Anthropic cache reads are ~90% off (0.1x input rate); OpenAI's automatic
-  // prompt caching is ~50% off (0.5x input rate). modelName here is the matched
-  // pricing key, so OpenAI models resolve to a "gpt*" key.
-  const cacheReadMultiplier = modelName.startsWith('gpt') ? 0.5 : 0.1;
+  // prompt caching is ~50% off (0.5x input rate). Prefer the explicit provider hint;
+  // otherwise infer from the matched pricing key (OpenAI models resolve to a "gpt*" key).
+  const isOpenAI = provider
+    ? provider.toLowerCase() === 'openai'
+    : modelName.startsWith('gpt');
+  const cacheReadMultiplier = isOpenAI ? 0.5 : 0.1;
 
   let cacheCreationCost = 0;
   let cacheReadCost = 0;
@@ -141,6 +147,14 @@ export function matchModelToPricing(modelNameOrId: string): string {
   if (modelNameOrId.includes('gpt-4o')) return 'gpt-4o';
   if (modelNameOrId.includes('gpt-4-turbo')) return 'gpt-4-turbo';
   if (modelNameOrId.includes('gpt-3.5-turbo')) return 'gpt-3.5-turbo';
+
+  // Newer OpenAI families (gpt-4.1, gpt-5, o-series, chatgpt, fine-tuned ft:gpt-*) aren't
+  // priced individually yet. Map them to the closest known OpenAI key so they resolve to a
+  // "gpt*" pricing key (approximate pricing) AND are correctly treated as OpenAI for the
+  // cache-read discount (0.5x) rather than falling through to '_default' (Anthropic 0.1x).
+  if (/gpt-4\.1-mini|gpt-5-(mini|nano)|o[0-9]-mini/.test(modelNameOrId)) return 'gpt-4o-mini';
+  if (/gpt-4\.1|gpt-5|chatgpt|(^|[^a-z])o[0-9]([^a-z]|$)/.test(modelNameOrId)) return 'gpt-4o';
+  if (modelNameOrId.startsWith('gpt') || modelNameOrId.startsWith('ft:gpt')) return 'gpt-4o';
 
   if (modelNameOrId.includes('claude-3-5-sonnet')) return 'claude-3-5-sonnet-20241022';
   if (modelNameOrId.includes('claude-3-5-haiku')) return 'claude-3-5-haiku-20241022';

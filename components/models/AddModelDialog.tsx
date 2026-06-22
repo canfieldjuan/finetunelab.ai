@@ -68,6 +68,9 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
   const [discovering, setDiscovering] = useState(false);
   const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
   const [discoverError, setDiscoverError] = useState<string | null>(null);
+  // Whether the user opted out of the discovered-models dropdown (lifted here so it
+  // resets when connection params change, e.g. after a fresh fetch on a new endpoint).
+  const [manualModelEntry, setManualModelEntry] = useState(false);
 
   console.log('[AddModelDialog] Render:', { isOpen, activeTab, selectedTemplate: selectedTemplate?.name });
 
@@ -167,14 +170,20 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         // Local servers don't require auth; default cloud providers to bearer.
         // (Avoids the confusing "no API key needed" helper sitting next to a Bearer auth type.)
         updated.auth_type = provider === 'vllm' || provider === 'ollama' ? 'none' : 'bearer';
-
-        // Discovered models are provider-specific; clear them when the provider changes.
-        setDiscoveredModels([]);
-        setDiscoverError(null);
       }
 
       return updated;
     });
+
+    // Discovered models are tied to the exact endpoint + auth, not just the provider.
+    // Reset discovery (and the manual-entry toggle) whenever any connection parameter changes,
+    // so a stale dropdown can't submit a model ID that doesn't exist on the new endpoint.
+    if (field === 'provider' || field === 'base_url' || field === 'auth_type' || field === 'api_key') {
+      setDiscoveredModels([]);
+      setDiscoverError(null);
+      setManualModelEntry(false);
+    }
+
     setError(null);
   };
 
@@ -187,6 +196,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     setDiscovering(true);
     setDiscoverError(null);
     setDiscoveredModels([]);
+    setManualModelEntry(false);
 
     try {
       const response = await fetch('/api/models/discover', {
@@ -397,6 +407,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setTestResult(null);
       setDiscoveredModels([]);
       setDiscoverError(null);
+      setManualModelEntry(false);
       setLocalDeploymentConfig({
         server_type: 'vllm',
         model_path: '',
@@ -431,6 +442,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setTestResult(null);
       setDiscoveredModels([]);
       setDiscoverError(null);
+      setManualModelEntry(false);
       onClose();
     }
   };
@@ -546,6 +558,8 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
             discovering={discovering}
             discoveredModels={discoveredModels}
             discoverError={discoverError}
+            manualModelEntry={manualModelEntry}
+            onManualModelEntry={() => setManualModelEntry(true)}
           />
         </div>
       </div>
@@ -1078,6 +1092,8 @@ interface ManualFormProps {
   discovering: boolean;
   discoveredModels: DiscoveredModel[];
   discoverError: string | null;
+  manualModelEntry: boolean;
+  onManualModelEntry: () => void;
 }
 
 // Providers exposing an OpenAI-compatible GET {base_url}/models list endpoint.
@@ -1099,9 +1115,11 @@ function ManualForm({
   discovering,
   discoveredModels,
   discoverError,
+  manualModelEntry,
+  onManualModelEntry,
 }: ManualFormProps) {
   // When the endpoint returns models, show a dropdown; allow falling back to manual entry.
-  const [manualModelEntry, setManualModelEntry] = useState(false);
+  // `manualModelEntry` is owned by the parent so it resets when connection params change.
   const canDiscover = DISCOVERY_SUPPORTED_PROVIDERS.includes(formData.provider as ModelProvider);
   const showModelDropdown = discoveredModels.length > 0 && !manualModelEntry;
 
@@ -1679,7 +1697,7 @@ function ManualForm({
               </select>
               <button
                 type="button"
-                onClick={() => setManualModelEntry(true)}
+                onClick={onManualModelEntry}
                 className="text-xs text-primary hover:underline mt-1"
               >
                 Enter manually instead

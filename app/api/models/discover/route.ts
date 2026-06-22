@@ -23,8 +23,46 @@ const DISCOVERY_SUPPORTED = new Set([
   'custom',
 ]);
 
-function isLocalUrl(url: string): boolean {
-  return /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(url);
+const PRIVATE_HOST_HINT =
+  'FineTune Lab runs in the cloud and cannot reach localhost or private-network addresses — expose your server with a public URL (RunPod proxy, Cloudflare Tunnel, or ngrok).';
+
+// Block requests to loopback / private / link-local hosts to prevent SSRF against
+// internal services and cloud metadata endpoints (e.g. 169.254.169.254).
+function isBlockedHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')) return true;
+  if (h === '0.0.0.0' || h === '::' || h === '::1') return true;
+  // IPv6 link-local (fe80::/10) and unique-local (fc00::/7)
+  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true;
+
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (a === 0 || a === 127) return true;                 // current/loopback
+    if (a === 10) return true;                             // 10/8 private
+    if (a === 192 && b === 168) return true;               // 192.168/16 private
+    if (a === 172 && b >= 16 && b <= 31) return true;      // 172.16/12 private
+    if (a === 169 && b === 254) return true;               // link-local + cloud metadata
+  }
+  return false;
+}
+
+// Validate a user-supplied base URL before issuing a server-side request.
+function validateDiscoveryUrl(rawUrl: string): { ok: true; url: URL } | { ok: false; reason: string } {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return { ok: false, reason: 'Base URL is not a valid URL.' };
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return { ok: false, reason: 'Base URL must use http or https.' };
+  }
+  if (isBlockedHostname(url.hostname)) {
+    return { ok: false, reason: PRIVATE_HOST_HINT };
+  }
+  return { ok: true, url };
 }
 
 export async function POST(request: NextRequest) {
@@ -48,6 +86,15 @@ export async function POST(request: NextRequest) {
         unsupported: true,
         message: `Automatic model discovery isn't available for "${provider}". Enter the Model ID manually.`,
       });
+    }
+
+    // SSRF guard: validate the user-supplied base URL before any server-side fetch.
+    const urlCheck = validateDiscoveryUrl(baseUrl);
+    if (!urlCheck.ok) {
+      return NextResponse.json(
+        { success: false, error: 'invalid_base_url', message: urlCheck.reason },
+        { status: 400 }
+      );
     }
 
     // API key resolution: use provided key, else look up the user's provider secret.
@@ -78,9 +125,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Build auth headers the same way the runtime adapters do: api_key uses the
+    // `api-key` header, bearer uses `Authorization: Bearer`, none sends no auth.
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (apiKey && authType !== 'none') {
-      headers['Authorization'] = `Bearer ${apiKey}`;
+      if (authType === 'api_key') {
+        headers['api-key'] = apiKey;
+      } else {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
     }
 
     const url = `${baseUrl.replace(/\/+$/, '')}/models`;
@@ -93,13 +146,10 @@ export async function POST(request: NextRequest) {
       response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
       clearTimeout(timeoutId);
     } catch (error) {
-      const hint = isLocalUrl(baseUrl)
-        ? ' FineTune Lab runs in the cloud and cannot reach localhost — expose your server with a public URL (RunPod proxy, Cloudflare Tunnel, or ngrok).'
-        : '';
       return NextResponse.json({
         success: false,
         error: 'discovery_failed',
-        message: `Could not reach ${url}.${hint}`,
+        message: `Could not reach ${url}.`,
         details: error instanceof Error ? error.message : 'Network error',
       });
     }
