@@ -14,7 +14,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Sparkles, Zap, Eye } from 'lucide-react';
 import { ALL_TEMPLATES } from '@/lib/models/model-templates';
-import type { CreateModelDTO, ModelProvider, AuthType, ModelTemplate } from '@/lib/models/llm-model.types';
+import type { CreateModelDTO, ModelProvider, AuthType, ModelTemplate, DiscoveredModel } from '@/lib/models/llm-model.types';
 import { apiConfig } from '@/lib/config/api';
 
 interface AddModelDialogProps {
@@ -63,6 +63,11 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; latency?: number } | null>(null);
   const [testing, setTesting] = useState(false);
+
+  // Model auto-discovery state (fetch available models from an OpenAI-compatible endpoint)
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
 
   console.log('[AddModelDialog] Render:', { isOpen, activeTab, selectedTemplate: selectedTemplate?.name });
 
@@ -158,11 +163,60 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
             updated.base_url = 'http://localhost:11434/v1';
             break;
         }
+
+        // Local servers don't require auth; default cloud providers to bearer.
+        // (Avoids the confusing "no API key needed" helper sitting next to a Bearer auth type.)
+        updated.auth_type = provider === 'vllm' || provider === 'ollama' ? 'none' : 'bearer';
+
+        // Discovered models are provider-specific; clear them when the provider changes.
+        setDiscoveredModels([]);
+        setDiscoverError(null);
       }
 
       return updated;
     });
     setError(null);
+  };
+
+  const handleDiscover = async () => {
+    if (!formData.base_url?.trim()) {
+      setDiscoverError('Enter a Base URL first');
+      return;
+    }
+
+    setDiscovering(true);
+    setDiscoverError(null);
+    setDiscoveredModels([]);
+
+    try {
+      const response = await fetch('/api/models/discover', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          provider: formData.provider,
+          base_url: formData.base_url,
+          auth_type: formData.auth_type,
+          api_key: formData.api_key,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && Array.isArray(data.models) && data.models.length > 0) {
+        setDiscoveredModels(data.models as DiscoveredModel[]);
+      } else if (data.success) {
+        setDiscoverError('No models returned by the endpoint. Enter the Model ID manually.');
+      } else {
+        setDiscoverError(data.message || data.error || 'Could not fetch models');
+      }
+    } catch (err) {
+      setDiscoverError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setDiscovering(false);
+    }
   };
 
   const validateForm = (): string | null => {
@@ -341,6 +395,8 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       });
       setSelectedTemplate(null);
       setTestResult(null);
+      setDiscoveredModels([]);
+      setDiscoverError(null);
       setLocalDeploymentConfig({
         server_type: 'vllm',
         model_path: '',
@@ -373,6 +429,8 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       });
       setError(null);
       setTestResult(null);
+      setDiscoveredModels([]);
+      setDiscoverError(null);
       onClose();
     }
   };
@@ -484,6 +542,10 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
             submitting={submitting}
             onTest={handleTestConnection}
             onSubmit={handleSubmit}
+            onDiscover={handleDiscover}
+            discovering={discovering}
+            discoveredModels={discoveredModels}
+            discoverError={discoverError}
           />
         </div>
       </div>
@@ -1012,7 +1074,17 @@ interface ManualFormProps {
   submitting: boolean;
   onTest: () => void;
   onSubmit: () => void;
+  onDiscover: () => void;
+  discovering: boolean;
+  discoveredModels: DiscoveredModel[];
+  discoverError: string | null;
 }
+
+// Providers exposing an OpenAI-compatible GET {base_url}/models list endpoint.
+// Mirrors DISCOVERY_SUPPORTED in app/api/models/discover/route.ts.
+const DISCOVERY_SUPPORTED_PROVIDERS: ModelProvider[] = [
+  'openai', 'vllm', 'ollama', 'together', 'groq', 'openrouter', 'fireworks', 'runpod', 'custom',
+];
 
 function ManualForm({
   formData,
@@ -1023,7 +1095,23 @@ function ManualForm({
   submitting,
   onTest,
   onSubmit,
+  onDiscover,
+  discovering,
+  discoveredModels,
+  discoverError,
 }: ManualFormProps) {
+  // When the endpoint returns models, show a dropdown; allow falling back to manual entry.
+  const [manualModelEntry, setManualModelEntry] = useState(false);
+  const canDiscover = DISCOVERY_SUPPORTED_PROVIDERS.includes(formData.provider as ModelProvider);
+  const showModelDropdown = discoveredModels.length > 0 && !manualModelEntry;
+
+  const handleModelSelect = (modelId: string) => {
+    onChange('model_id', modelId);
+    const selected = discoveredModels.find(m => m.id === modelId);
+    if (selected?.max_model_len) {
+      onChange('context_length', selected.max_model_len);
+    }
+  };
   // All supported providers (includes OpenAI/Anthropic for fine-tuned models)
   const providers: ModelProvider[] = [
     'openai',      // For fine-tuned OpenAI models
@@ -1547,6 +1635,28 @@ function ManualForm({
           {providerHelp.hint && (
             <p className="text-xs text-muted-foreground mt-1">{providerHelp.hint}</p>
           )}
+          {/* Auto-discover models from an OpenAI-compatible /models endpoint */}
+          {canDiscover && (
+            <div className="mt-2 flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onDiscover}
+                disabled={discovering || submitting || !formData.base_url?.trim()}
+              >
+                {discovering ? 'Fetching models…' : 'Fetch available models'}
+              </Button>
+              {discoveredModels.length > 0 && (
+                <span className="text-xs text-green-700">
+                  Found {discoveredModels.length} model{discoveredModels.length === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+          )}
+          {discoverError && (
+            <p className="text-xs text-amber-700 mt-1">{discoverError}</p>
+          )}
         </div>
 
         {/* Model ID */}
@@ -1554,14 +1664,37 @@ function ManualForm({
           <label className="block text-sm font-medium mb-2">
             Model ID <span className="text-destructive">*</span>
           </label>
-          <input
-            type="text"
-            value={formData.model_id || ''}
-            onChange={(e) => onChange('model_id', e.target.value)}
-            placeholder="gpt-4o-mini"
-            className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
-            disabled={submitting}
-          />
+          {showModelDropdown ? (
+            <>
+              <select
+                value={formData.model_id || ''}
+                onChange={(e) => handleModelSelect(e.target.value)}
+                className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                disabled={submitting}
+              >
+                <option value="">Select a model…</option>
+                {discoveredModels.map(m => (
+                  <option key={m.id} value={m.id}>{m.id}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setManualModelEntry(true)}
+                className="text-xs text-primary hover:underline mt-1"
+              >
+                Enter manually instead
+              </button>
+            </>
+          ) : (
+            <input
+              type="text"
+              value={formData.model_id || ''}
+              onChange={(e) => onChange('model_id', e.target.value)}
+              placeholder="gpt-4o-mini"
+              className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+              disabled={submitting}
+            />
+          )}
         </div>
 
         {/* API Key */}

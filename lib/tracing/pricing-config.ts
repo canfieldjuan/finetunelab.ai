@@ -89,7 +89,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
  * @param inputTokens - Number of input tokens consumed
  * @param outputTokens - Number of output tokens generated
  * @param cacheCreationInputTokens - Cache creation tokens (Anthropic: 1.25x input rate)
- * @param cacheReadInputTokens - Cache read tokens (Anthropic: 0.1x input rate)
+ * @param cacheReadInputTokens - Cache read tokens (Anthropic: 0.1x input rate; OpenAI: 0.5x input rate)
  * @returns Total cost in USD
  */
 export function calculateCost(
@@ -104,6 +104,12 @@ export function calculateCost(
   const inputCost = (inputTokens / 1_000_000) * pricing.inputPricePer1M;
   const outputCost = (outputTokens / 1_000_000) * pricing.outputPricePer1M;
 
+  // Cache-read discount differs by provider's prompt-caching model:
+  // Anthropic cache reads are ~90% off (0.1x input rate); OpenAI's automatic
+  // prompt caching is ~50% off (0.5x input rate). modelName here is the matched
+  // pricing key, so OpenAI models resolve to a "gpt*" key.
+  const cacheReadMultiplier = modelName.startsWith('gpt') ? 0.5 : 0.1;
+
   let cacheCreationCost = 0;
   let cacheReadCost = 0;
 
@@ -112,7 +118,7 @@ export function calculateCost(
   }
 
   if (cacheReadInputTokens) {
-    cacheReadCost = (cacheReadInputTokens / 1_000_000) * pricing.inputPricePer1M * 0.1;
+    cacheReadCost = (cacheReadInputTokens / 1_000_000) * pricing.inputPricePer1M * cacheReadMultiplier;
   }
 
   return inputCost + outputCost + cacheCreationCost + cacheReadCost;
