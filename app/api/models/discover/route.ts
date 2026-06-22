@@ -28,8 +28,6 @@ function isLocalUrl(url: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('[ModelsAPI] POST /api/models/discover');
-
   try {
     const body = await request.json();
     const provider: string | undefined = body.provider;
@@ -71,11 +69,10 @@ export async function POST(request: NextRequest) {
             const providerKey = await secretsManager.getDecryptedApiKey(user.id, provider as ModelProvider, supabase);
             if (providerKey) {
               apiKey = providerKey;
-              console.log('[ModelsAPI] discover: using provider secret');
             }
           }
         } catch (error) {
-          console.log('[ModelsAPI] discover: provider secret lookup failed:', error);
+          console.warn('[ModelsAPI] discover: provider secret lookup failed:', error);
           // Continue without a key - the endpoint may not require auth (e.g. local vLLM).
         }
       }
@@ -147,8 +144,6 @@ export async function POST(request: NextRequest) {
         };
       })
       .filter((m): m is DiscoveredModel => m !== null);
-
-    console.log('[ModelsAPI] discover: found', models.length, 'models in', Date.now() - startTime, 'ms');
 
     return NextResponse.json({
       success: true,
