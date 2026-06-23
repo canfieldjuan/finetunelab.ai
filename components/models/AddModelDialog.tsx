@@ -198,6 +198,11 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     setDiscoveredModels([]);
     setManualModelEntry(false);
 
+    // Abort if the request stalls, so the UI can't get stuck on "Fetching models…".
+    // Mirrors handleTestConnection's use of apiConfig.timeouts.modelOperation.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), apiConfig.timeouts.modelOperation);
+
     try {
       const response = await fetch('/api/models/discover', {
         method: 'POST',
@@ -211,6 +216,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
           auth_type: formData.auth_type,
           api_key: formData.api_key,
         }),
+        signal: controller.signal,
       });
 
       const data = await response.json();
@@ -223,8 +229,13 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         setDiscoverError(data.message || data.error || 'Could not fetch models');
       }
     } catch (err) {
-      setDiscoverError(err instanceof Error ? err.message : 'Network error');
+      if (err instanceof Error && err.name === 'AbortError') {
+        setDiscoverError('Fetching models timed out. Check the Base URL and try again.');
+      } else {
+        setDiscoverError(err instanceof Error ? err.message : 'Network error');
+      }
     } finally {
+      clearTimeout(timeoutId);
       setDiscovering(false);
     }
   };

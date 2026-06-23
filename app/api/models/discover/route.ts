@@ -32,8 +32,9 @@ function isBlockedHostname(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')) return true;
   if (h === '0.0.0.0' || h === '::' || h === '::1') return true;
-  // IPv6 link-local (fe80::/10) and unique-local (fc00::/7)
-  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true;
+  // IPv6 literals only: link-local (fe80::/10) and unique-local (fc00::/7).
+  // Guard on the presence of ':' so public domains like "fc.example.com" aren't blocked.
+  if (h.includes(':') && (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd'))) return true;
 
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m) {
@@ -143,7 +144,9 @@ export async function POST(request: NextRequest) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
-      response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
+      // redirect: 'manual' so the backend never follows a redirect to a (possibly
+      // internal) host that bypassed the initial hostname validation (SSRF via redirect).
+      response = await fetch(url, { method: 'GET', headers, redirect: 'manual', signal: controller.signal });
       clearTimeout(timeoutId);
     } catch (error) {
       return NextResponse.json({
@@ -151,6 +154,15 @@ export async function POST(request: NextRequest) {
         error: 'discovery_failed',
         message: `Could not reach ${url}.`,
         details: error instanceof Error ? error.message : 'Network error',
+      });
+    }
+
+    // A redirect response is not followed; treat it as a failure rather than chasing it.
+    if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+      return NextResponse.json({
+        success: false,
+        error: 'discovery_failed',
+        message: 'The endpoint responded with a redirect, which is not allowed for model discovery. Enter the final URL directly.',
       });
     }
 
