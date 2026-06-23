@@ -43,6 +43,13 @@ expect(((init as RequestInit)?.headers as Record<string, string>)['X-API-Key']).
 
     vi.doMock('@/lib/alerts', () => ({
       sendBatchTestAlert: vi.fn(async () => undefined),
+      sendScheduledEvaluationAlert: vi.fn(async () => undefined),
+    }));
+
+    // The background task generates a session tag (real module hits the DB); stub it so
+    // the path to the /api/chat fetch is deterministic.
+    vi.doMock('@/lib/session-tagging/generator', () => ({
+      generateSessionTag: vi.fn(async () => null),
     }));
 
     const testSuiteQuery = {
@@ -80,12 +87,21 @@ expect(((init as RequestInit)?.headers as Record<string, string>)['X-API-Key']).
 
     const conversationsQuery = { insert: conversationsInsert };
 
+    // Background processing looks up the model's provider before calling /api/chat.
+    // Returning no provider keeps it off the tools path (no `tools` query needed).
+    const llmModelsQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn(async () => ({ data: null, error: null })),
+    };
+
     const supabase = {
       from: vi.fn((table: string) => {
         if (table === 'test_suites') return testSuiteQuery;
         if (table === 'batch_test_runs') return batchTestRunsQuery;
         if (table === 'runs') return runsQuery;
         if (table === 'conversations') return conversationsQuery;
+        if (table === 'llm_models') return llmModelsQuery;
         throw new Error(`Unexpected table: ${table}`);
       }),
     };
@@ -116,8 +132,11 @@ expect(((init as RequestInit)?.headers as Record<string, string>)['X-API-Key']).
     expect(payload.success).toBe(true);
     expect(payload.test_run_id).toBe('test-run-1');
 
-    // Allow the background task to run.
-    await new Promise((r) => setTimeout(r, 0));
+    // The background task runs through several awaits (conversation insert, model
+    // lookup, session tag) before reaching the /api/chat fetch; poll until it lands.
+    for (let i = 0; i < 50 && fetchMock.mock.calls.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
     expect(fetchMock).toHaveBeenCalled();
   });
 

@@ -34,15 +34,32 @@ describe('GET app/api/batch-testing/status/[id]', () => {
       error: null,
     };
 
-    const query = {
+    const batchRunQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn(async () => ({ data: batchTestRun, error: null })),
     };
 
+    // The route also looks up a linked conversation (and its messages) to enrich
+    // results. Returning no conversation keeps results empty and exercises the
+    // happy path without needing message fixtures.
+    const conversationQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn(async () => ({ data: null, error: null })),
+    };
+
+    const messagesQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn(async () => ({ data: [], error: null })),
+    };
+
     const supabase = {
       from: vi.fn((table: string) => {
-        if (table === 'batch_test_runs') return query;
+        if (table === 'batch_test_runs') return batchRunQuery;
+        if (table === 'conversations') return conversationQuery;
+        if (table === 'messages') return messagesQuery;
         throw new Error(`Unexpected table: ${table}`);
       }),
     };
