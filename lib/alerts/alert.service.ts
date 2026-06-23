@@ -4,7 +4,7 @@
  * Date: 2025-12-12
  */
 
-import { createClient, SupabaseClient, type PostgrestError } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient, type PostgrestError } from '@supabase/supabase-js';
 import {
   AlertPayload,
   AlertDeliveryResult,
