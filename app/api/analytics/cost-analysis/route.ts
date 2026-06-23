@@ -174,19 +174,29 @@ function calculateCacheSavings(traces: TraceRecord[]) {
   let totalCacheCreationTokens = 0;
   let tracesWithCacheHits = 0;
   let tracesWithCacheCreation = 0;
+  let estimatedSavings = 0;
+
+  // Cache-read discount differs by provider: Anthropic prompt caching is ~90% off,
+  // OpenAI automatic prompt caching is ~50% off. Use a rough blended input price and
+  // the provider-appropriate discount so OpenAI savings aren't over-counted.
+  const baseInputPricePer1k = 0.003;
+  const cacheReadDiscount = (provider: string | null): number =>
+    provider === 'openai' ? 0.5 : 0.9;
 
   for (const trace of traces) {
     if (trace.cache_read_input_tokens && trace.cache_read_input_tokens > 0) {
       totalCacheReadTokens += trace.cache_read_input_tokens;
       tracesWithCacheHits += 1;
+      estimatedSavings +=
+        (trace.cache_read_input_tokens / 1000) *
+        baseInputPricePer1k *
+        cacheReadDiscount(trace.model_provider);
     }
     if (trace.cache_creation_input_tokens && trace.cache_creation_input_tokens > 0) {
       totalCacheCreationTokens += trace.cache_creation_input_tokens;
       tracesWithCacheCreation += 1;
     }
   }
-
-  const estimatedSavings = totalCacheReadTokens * 0.003 * 0.9 / 1000;
 
   return {
     totalCacheReadTokens,

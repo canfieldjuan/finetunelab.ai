@@ -80,7 +80,10 @@ export const processingConfig = {
 // ============================================================================
 
 export const rerankingConfig = {
-  enabled: getEnvBoolean('GRAPHRAG_RERANKING_ENABLED', false),
+  // Enabled by default with the heuristic reranker, which needs no external service.
+  // Set GRAPHRAG_RERANKING_ENABLED=false to disable, or GRAPHRAG_RERANKING_TYPE=cross-encoder
+  // (plus GRAPHRAG_RERANK_ENDPOINT to a reachable URL) for neural reranking.
+  enabled: getEnvBoolean('GRAPHRAG_RERANKING_ENABLED', true),
   type: (getEnvVar('GRAPHRAG_RERANKING_TYPE', 'heuristic') as 'cross-encoder' | 'heuristic' | 'none'),
   model: process.env.GRAPHRAG_RERANK_MODEL,
   topK: getEnvNumber('GRAPHRAG_RERANKING_TOP_K', 10),

@@ -199,6 +199,25 @@ export interface ConnectionTestResult {
 }
 
 // ============================================================================
+// MODEL DISCOVERY TYPES (auto-listing models from an OpenAI-compatible endpoint)
+// ============================================================================
+
+export interface DiscoveredModel {
+  id: string;             // Model ID as returned by GET {base_url}/models
+  max_model_len?: number; // vLLM reports this; used to auto-fill context_length
+}
+
+export interface DiscoverModelsResult {
+  success: boolean;
+  models?: DiscoveredModel[];
+  count?: number;
+  latency?: number;
+  unsupported?: boolean;  // Provider has no OpenAI-compatible /models list endpoint
+  error?: string;
+  message?: string;
+}
+
+// ============================================================================
 // MODEL CONFIG (for runtime use with decrypted credentials)
 // ============================================================================
 

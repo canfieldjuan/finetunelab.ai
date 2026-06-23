@@ -176,7 +176,22 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       const u = rb.usage as Record<string, unknown>;
       const inputTokens = typeof u.prompt_tokens === 'number' ? u.prompt_tokens : 0;
       const outputTokens = typeof u.completion_tokens === 'number' ? u.completion_tokens : 0;
-      usage = { input_tokens: inputTokens, output_tokens: outputTokens };
+      // OpenAI reports automatically-cached prompt tokens under
+      // usage.prompt_tokens_details.cached_tokens, and prompt_tokens already INCLUDES them.
+      // Subtract cached tokens from input_tokens (so they aren't billed at the full rate)
+      // and report them separately as cache_read_input_tokens, matching the Anthropic path
+      // and the assumptions in calculateCost (lib/tracing/pricing-config.ts).
+      const promptDetails = u.prompt_tokens_details as Record<string, unknown> | undefined;
+      const cachedTokens =
+        promptDetails && typeof promptDetails.cached_tokens === 'number'
+          ? promptDetails.cached_tokens
+          : 0;
+      const nonCachedInputTokens = cachedTokens > 0 ? Math.max(0, inputTokens - cachedTokens) : inputTokens;
+      usage = {
+        input_tokens: nonCachedInputTokens,
+        output_tokens: outputTokens,
+        ...(cachedTokens > 0 ? { cache_read_input_tokens: cachedTokens } : {}),
+      };
     }
 
     // Extract tool calls if present
