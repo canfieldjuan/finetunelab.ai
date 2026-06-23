@@ -71,7 +71,8 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
 
     // Dynamic imports to avoid circular dependencies
     const { truncateString } = await import('@/lib/tracing/trace-utils');
-    const { calculateCost, matchModelToPricing } = await import('@/lib/tracing/pricing-config');
+    const { calculateCost, matchModelToPricing, inferProviderFromModel } =
+      await import('@/lib/tracing/pricing-config');
 
     console.log(`[Trace Helper] Imports successful, processing ${enhancedMessages?.length || 0} messages`);
 
@@ -128,7 +129,8 @@ export async function completeTraceWithFullData(params: TraceCompletionParams): 
         tokenUsage.input_tokens,
         tokenUsage.output_tokens,
         tokenUsage.cache_creation_input_tokens,
-        tokenUsage.cache_read_input_tokens
+        tokenUsage.cache_read_input_tokens,
+        inferProviderFromModel(selectedModelId)
       );
       console.log(`[Trace] Calculated cost: $${costUsd.toFixed(6)} for ${tokenUsage.input_tokens} + ${tokenUsage.output_tokens} tokens`);
     }
