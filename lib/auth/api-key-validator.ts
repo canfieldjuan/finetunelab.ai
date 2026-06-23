@@ -3,7 +3,7 @@
 // Date: 2025-10-17
 // Updated: 2025-12-12 - Added scopes and usage tracking
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { validateApiKeyFormat, verifyApiKeyHash } from './api-key-generator';
 import { apiConfig } from '@/lib/config/api';
 
@@ -11,7 +11,7 @@ import { apiConfig } from '@/lib/config/api';
 // TYPE DEFINITIONS
 // ============================================================================
 
-export type ApiKeyScope = 'training' | 'production' | 'testing' | 'all';
+export type ApiKeyScope = 'training' | 'production' | 'testing' | 'all' | 'worker';
 
 export const API_KEY_SCOPES: Record<ApiKeyScope, { label: string; description: string; endpoints: string[] }> = {
   all: {
@@ -49,6 +49,14 @@ export const API_KEY_SCOPES: Record<ApiKeyScope, { label: string; description: s
       '/api/batch-testing/*',
       '/api/evaluation/*',
       '/api/test-suites/*',
+    ],
+  },
+  worker: {
+    label: 'Worker',
+    description: 'Worker agent registration, heartbeats, and command execution',
+    endpoints: [
+      '/api/workers',
+      '/api/workers/*',
     ],
   },
 };
@@ -403,8 +411,7 @@ export async function validateRequestWithScope(
  * @param keyId - The API key ID to update
  */
 async function updateApiKeyUsage(
-   
-  supabase: unknown,
+  supabase: SupabaseClient,
   keyId: string
 ): Promise<void> {
   try {
@@ -428,10 +435,9 @@ async function updateApiKeyUsage(
           console.warn('[API Key Usage] Direct update failed:', updateError.message);
         } else {
           // Increment request_count separately using raw query
+          // If exec_sql doesn't exist, that's fine - we at least updated last_used_at
           await supabase.rpc('exec_sql', {
             query: `UPDATE user_api_keys SET request_count = COALESCE(request_count, 0) + 1 WHERE id = '${keyId}'`
-          }).catch(() => {
-            // If exec_sql doesn't exist, that's fine - we at least updated last_used_at
           });
         }
       } else {

@@ -243,7 +243,7 @@ export function DemoExportModal({
           {showPersonaSelection && (
             <div>
               <label className="text-sm font-semibold mb-3 block">
-                Report Template (Who's Reading?)
+                Report Template (Who&apos;s Reading?)
               </label>
               <div className="space-y-3">
                 {PERSONA_OPTIONS.map((persona) => {

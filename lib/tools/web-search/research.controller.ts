@@ -6,14 +6,16 @@ import { sseService } from './sse.service';
 type RequestBody = { query?: string };
 type RequestParams = { jobId?: string };
 type RequestUser = { id?: string };
-type Request = { body: RequestBody; params: RequestParams; user?: RequestUser };
-type Response = {
+export type ResearchRequest = { body: RequestBody; params: RequestParams; user?: RequestUser };
+export type ResearchResponse = {
   json: (data: unknown) => void;
-  status: (code: number) => Response;
+  status: (code: number) => ResearchResponse;
   setHeader: (name: string, value: string) => void;
   write: (data: string) => void;
   on: (event: string, callback: () => void) => void;
 };
+type Request = ResearchRequest;
+type Response = ResearchResponse;
 
 class ResearchController {
   async startResearch(req: Request, res: Response) {
@@ -55,7 +57,12 @@ class ResearchController {
       res.setHeader('Connection', 'keep-alive');
       
       const handler = (data: unknown) => {
-if ((data as any).jobId === jobId) {
+        if (
+          typeof data === 'object' &&
+          data !== null &&
+          'jobId' in data &&
+          (data as { jobId: unknown }).jobId === jobId
+        ) {
            res.write(`data: ${JSON.stringify(data)}\n\n`);
         }
       };

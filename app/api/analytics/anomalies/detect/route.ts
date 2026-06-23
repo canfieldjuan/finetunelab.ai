@@ -3,6 +3,36 @@ import { createClient } from '@supabase/supabase-js';
 import { detectAnomalies } from '@/lib/services/anomaly-detection.service';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 
+interface QueryError {
+  message: string;
+  [key: string]: unknown;
+}
+
+type TraceData = {
+  id: string;
+  span_id: string;
+  trace_id: string;
+  start_time: string;
+  duration_ms: number | null;
+  ttft_ms: number | null;
+  tokens_per_second: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
+  cache_read_input_tokens: number | null;
+  cost_usd: number | null;
+  retrieval_latency_ms: number | null;
+  rag_relevance_score: number | null;
+  context_tokens: number | null;
+  queue_time_ms: number | null;
+  inference_time_ms: number | null;
+  status: string | null;
+  error_category: string | null;
+  operation_type: string | null;
+  model_name: string | null;
+  model_provider: string | null;
+};
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MjAsImV4cCI6MTk2MDc2ODgyMH0.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
 
@@ -21,7 +51,7 @@ export async function POST(req: NextRequest) {
     const {
       data: { user },
       error: authError,
-    }: { data: { user: any }; error: any } = await supabase.auth.getUser();
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -30,7 +60,7 @@ export async function POST(req: NextRequest) {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     // Fetch trace data for the last 24 hours
-    const { data: traces, error: traceError }: { data: any; error: any } = await supabase
+    const { data: traces, error: traceError } = await (supabase
       .from('llm_traces')
       .select(`
         id,
@@ -59,36 +89,12 @@ export async function POST(req: NextRequest) {
       .eq('user_id', user.id)
       .gte('start_time', oneDayAgo)
       .not('duration_ms', 'is', null)
-      .order('start_time', { ascending: true });
+      .order('start_time', { ascending: true })) as { data: TraceData[] | null; error: QueryError | null };
 
     if (traceError) throw traceError;
 
     // Type-safe traces array
-    type TraceData = {
-      id: string;
-      span_id: string;
-      trace_id: string;
-      start_time: string;
-      duration_ms: number | null;
-      ttft_ms: number | null;
-      tokens_per_second: number | null;
-      input_tokens: number | null;
-      output_tokens: number | null;
-      total_tokens: number | null;
-      cache_read_input_tokens: number | null;
-      cost_usd: number | null;
-      retrieval_latency_ms: number | null;
-      rag_relevance_score: number | null;
-      context_tokens: number | null;
-      queue_time_ms: number | null;
-      inference_time_ms: number | null;
-      status: string | null;
-      error_category: string | null;
-      operation_type: string | null;
-      model_name: string | null;
-      model_provider: string | null;
-    };
-    const typedTraces = (traces as TraceData[]) || [];
+    const typedTraces = traces || [];
 
     // OPTIMIZED: Single-pass data collection for all 10 anomaly types
     // Before: O(10n) - 10 separate filter/map iterations
@@ -96,7 +102,7 @@ export async function POST(req: NextRequest) {
     type DataPoint = {
       timestamp: string;
       value: number;
-      metadata: Record<string, any>;
+      metadata: Record<string, unknown>;
     };
 
     const durationPoints: DataPoint[] = [];
@@ -278,14 +284,14 @@ export async function POST(req: NextRequest) {
       ...contextBloatAnomalies,
       ...queueTimeAnomalies
     ];
-    const savedAnomalies: any[] = [];
+    const savedAnomalies: Record<string, unknown>[] = [];
 
     for (const anomaly of allAnomalies) {
       const traceId: string | undefined = anomaly.metadata?.trace_id as string | undefined;
       const modelName: string | undefined = anomaly.metadata?.model_name as string | undefined;
       const operationType: string | undefined = anomaly.metadata?.operation_type as string | undefined;
 
-      const { data, error }: { data: any; error: any } = await supabase
+      const { data, error } = await (supabase
         .from('anomaly_detections')
         .insert({
           user_id: user.id,
@@ -312,7 +318,7 @@ export async function POST(req: NextRequest) {
           detected_at: new Date().toISOString()
         })
         .select()
-        .single();
+        .single()) as { data: Record<string, unknown> | null; error: QueryError | null };
 
       if (!error && data) {
         savedAnomalies.push(data);

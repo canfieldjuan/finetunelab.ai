@@ -95,6 +95,10 @@ export interface SearchMetadata {
   searchMethod: 'semantic' | 'keyword' | 'hybrid';
   resultsCount: number;
   queryTime: number;
+  // Optional fallback search metadata (populated by searchWithFallback)
+  fallbackUsed?: boolean;
+  fallbackStrategy?: string;
+  fallbackResults?: number;
 }
 
 /**

@@ -6,6 +6,7 @@
  */
 
 import type { NextRequest } from 'next/server';
+import type { AnalyticsDataset } from '@/lib/analytics/types';
 
 export interface DemoExportRequest {
   sessionId: string;
@@ -49,7 +50,7 @@ export function transformDemoToAnalyticsDataset(
   metrics: DemoExportMetrics,
   results: DemoPromptResult[],
   audience: 'executive' | 'engineering' | 'onboarding' = 'executive'
-): any {
+): AnalyticsDataset {
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - 3600000);
 
@@ -65,47 +66,54 @@ export function transformDemoToAnalyticsDataset(
     metrics: {
       tokenUsage: results.map((r, idx) => ({
         timestamp: new Date(r.created_at),
+        messageId: r.id,
         inputTokens: r.input_tokens || 0,
         outputTokens: r.output_tokens || 0,
         totalTokens: (r.input_tokens || 0) + (r.output_tokens || 0),
-        cost: 0, // Demo mode, no cost tracking
-        estimatedCost: 0, // Required by some templates
+        estimatedCost: 0, // Demo mode, no cost tracking
         modelId: modelName,
         conversationId: `demo-conv-${idx}`,
       })),
       quality: results.map((r, idx) => ({
         timestamp: new Date(r.created_at),
-        rating: r.success ? 5 : 1,
-        successRate: r.success ? 100 : 0,
-        errorRate: r.success ? 0 : 100,
-        conversationId: `demo-conv-${idx}`,
         messageId: r.id,
+        conversationId: `demo-conv-${idx}`,
+        modelId: modelName,
+        rating: r.success ? 5 : 1,
+        successStatus: r.success ? 'success' : 'failure',
+        evaluationType: 'demo',
       })),
       tools: [], // Demo doesn't track tool usage
       conversations: [{
+        timestamp: oneHourAgo,
         conversationId: sessionId,
-        startTime: oneHourAgo.toISOString(),
-        endTime: now.toISOString(),
         messageCount: results.length,
-        avgRating: metrics.successRate / 20, // Convert % to 1-5 scale
-        completionRate: metrics.successRate,
-        modelIds: [modelName],
+        turnCount: results.length,
+        durationMs: now.getTime() - oneHourAgo.getTime(),
+        completionStatus: 'completed',
+        modelId: modelName,
       }],
       errors: results
         .filter(r => !r.success && r.error)
         .map(r => ({
           timestamp: new Date(r.created_at),
+          messageId: r.id,
+          conversationId: sessionId,
           errorType: 'execution_error',
           errorMessage: r.error || 'Unknown error',
-          conversationId: sessionId,
-          messageId: r.id,
+          fallbackUsed: false,
           modelId: modelName,
         })),
       latency: results.map((r, idx) => ({
         timestamp: new Date(r.created_at),
-        latencyMs: r.latency_ms,
-        modelId: modelName,
+        messageId: r.id,
         conversationId: `demo-conv-${idx}`,
+        modelId: modelName,
+        latencyMs: r.latency_ms,
+        tokenCount: (r.input_tokens || 0) + (r.output_tokens || 0),
+        tokensPerSecond: r.latency_ms > 0
+          ? ((r.input_tokens || 0) + (r.output_tokens || 0)) / (r.latency_ms / 1000)
+          : 0,
       })),
     },
     aggregations: {
@@ -133,7 +141,7 @@ export function transformDemoToAnalyticsDataset(
           confidence: 'medium' as const,
         },
         quality: {
-          direction: metrics.successRate >= 80 ? ('improving' as const) : ('declining' as const),
+          direction: metrics.successRate >= 80 ? ('up' as const) : ('down' as const),
           changePercent: 0,
           dataPoints: results.length,
           confidence: 'medium' as const,
@@ -145,7 +153,7 @@ export function transformDemoToAnalyticsDataset(
           confidence: 'medium' as const,
         },
         errorRate: {
-          direction: metrics.failedPrompts === 0 ? ('improving' as const) : ('stable' as const),
+          direction: metrics.failedPrompts === 0 ? ('up' as const) : ('stable' as const),
           changePercent: 0,
           dataPoints: results.length,
           confidence: 'medium' as const,

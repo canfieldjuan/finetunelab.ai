@@ -206,7 +206,29 @@ export async function GET(
       : 0;
 
     // Fetch messages with GraphRAG metadata for this batch test
-    let results: any[] = [];
+    interface MessageRecord {
+      id: string;
+      content: string | null;
+      metadata: { graphrag?: { citations?: unknown[] } | null } | null;
+      latency_ms: number | null;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      created_at: string;
+    }
+
+    interface BatchTestResult {
+      id: string;
+      prompt_index: number;
+      response: string | undefined;
+      latency_ms: number | null;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      success: boolean;
+      graphrag: { citations?: unknown[] } | null;
+      citations: unknown[];
+    }
+
+    let results: BatchTestResult[] = [];
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // Find conversation linked to this batch test
@@ -226,7 +248,7 @@ export async function GET(
         .order('created_at', { ascending: true });
 
       if (messages) {
-        results = messages.map((msg: any, index: number) => ({
+        results = (messages as MessageRecord[]).map((msg: MessageRecord, index: number) => ({
           id: msg.id,
           prompt_index: index,
           response: msg.content?.slice(0, 500),

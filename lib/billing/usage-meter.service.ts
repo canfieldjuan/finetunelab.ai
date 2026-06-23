@@ -1,4 +1,23 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type PostgrestError } from '@supabase/supabase-js';
+
+// Raw record shapes returned by the billing RPC functions
+interface CurrentUsageRecord {
+  period_month: number;
+  period_year: number;
+  root_traces: number;
+  payload_gb: string;
+  compressed_payload_gb: string;
+  retention_days: number;
+  last_updated: string;
+}
+
+interface EstimatedCostRecord {
+  base_minimum: string;
+  trace_overage: string;
+  payload_overage: string;
+  retention_multiplier: string;
+  estimated_total: string;
+}
 
 // Types for usage metering
 export interface RootTraceUsageParams {
@@ -91,7 +110,7 @@ export async function recordRootTraceUsage(params: RootTraceUsageParams): Promis
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { error }: { error: any } = await supabase.rpc('increment_root_trace_count', {
+    const { error }: { error: PostgrestError | null } = await supabase.rpc('increment_root_trace_count', {
       p_user_id: userId,
       p_payload_bytes: billingSize,
       p_compressed_bytes: isCompressed ? billingSize : 0
@@ -121,7 +140,7 @@ export async function getCurrentUsage(userId: string): Promise<UsageStats | null
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data, error }: { data: any; error: any } = await supabase.rpc('get_current_usage', {
+    const { data, error }: { data: CurrentUsageRecord[] | null; error: PostgrestError | null } = await supabase.rpc('get_current_usage', {
       p_user_id: userId
     });
 
@@ -134,7 +153,7 @@ export async function getCurrentUsage(userId: string): Promise<UsageStats | null
       return null;
     }
 
-    const record: any = data[0];
+    const record: CurrentUsageRecord = data[0];
     return {
       periodMonth: record.period_month,
       periodYear: record.period_year,
@@ -162,7 +181,7 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data, error }: { data: any; error: any } = await supabase.rpc('calculate_estimated_cost', {
+    const { data, error }: { data: EstimatedCostRecord[] | null; error: PostgrestError | null } = await supabase.rpc('calculate_estimated_cost', {
       p_user_id: userId
     });
 
@@ -175,7 +194,7 @@ export async function getEstimatedCost(userId: string): Promise<CostEstimate | n
       return null;
     }
 
-    const record: any = data[0];
+    const record: EstimatedCostRecord = data[0];
     return {
       baseMinimum: parseFloat(record.base_minimum),
       traceOverage: parseFloat(record.trace_overage),
@@ -218,7 +237,7 @@ export async function checkUsageWarnings(userId: string): Promise<UsageWarning |
       .select('*')
       .eq('user_id', userId)
       .eq('status', 'active')
-      .single() as { data: UsageCommitment | null; error: any };
+      .single() as { data: UsageCommitment | null; error: PostgrestError | null };
 
     if (commitmentError || !commitment) {
       console.warn('[UsageMeter] No active commitment found for user:', userId, commitmentError);

@@ -285,7 +285,7 @@ export function DemoAtlasChat({ sessionId, modelName, onExportRequest }: DemoAtl
                 Demo Limit Reached
               </p>
               <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
-                You've used all 10 questions in this demo session. Export your results below or contact us for full access!
+                You&apos;ve used all 10 questions in this demo session. Export your results below or contact us for full access!
               </p>
               {onExportRequest && (
                 <Button

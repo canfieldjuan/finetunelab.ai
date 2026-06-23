@@ -194,7 +194,7 @@ export function WorkerAgentSetupSection({ sessionToken, onWorkerRegistered }: Wo
                     Save this key now!
                   </p>
                   <p className="text-yellow-800 dark:text-yellow-300">
-                    This is the only time you'll see the full key. Make sure to copy and store it securely.
+                    This is the only time you&apos;ll see the full key. Make sure to copy and store it securely.
                   </p>
                 </div>
               </div>
@@ -273,7 +273,7 @@ export function WorkerAgentSetupSection({ sessionToken, onWorkerRegistered }: Wo
               <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-disc list-inside">
                 <li>The installer creates a background service</li>
                 <li>Your worker will automatically register with this platform</li>
-                <li>You'll see it appear in the "My Workers" tab</li>
+                <li>You&apos;ll see it appear in the &quot;My Workers&quot; tab</li>
                 <li>The agent will start accepting training jobs</li>
               </ul>
             </div>

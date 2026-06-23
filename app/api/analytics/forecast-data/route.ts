@@ -47,7 +47,7 @@ function getDateRange(timeRange: TimeRange): { startDate: Date; endDate: Date } 
  * Aggregate success rate by day from evaluations
  */
 async function aggregateSuccessRateByDay(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -97,7 +97,7 @@ async function aggregateSuccessRateByDay(
  * Aggregate average rating by day from evaluations
  */
 async function aggregateAvgRatingByDay(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -144,7 +144,7 @@ async function aggregateAvgRatingByDay(
  * Aggregate P95 response time by day from messages
  */
 async function aggregateResponseTimeP95ByDay(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -197,7 +197,7 @@ async function aggregateResponseTimeP95ByDay(
  * Aggregate SLA breach rate by day (% of responses > 2000ms)
  */
 async function aggregateSLABreachRateByDay(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   userId: string,
   startDate: Date,
   endDate: Date
@@ -308,7 +308,7 @@ export async function GET(req: NextRequest) {
     let historical: HistoricalDataPoint[] = [];
 
      
-    const supabaseAny = supabase as SupabaseClient<any>;
+    const supabaseAny = supabase as SupabaseClient;
 
     switch (metric) {
       case 'success_rate':

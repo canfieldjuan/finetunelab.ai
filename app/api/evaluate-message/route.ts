@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { structuredOutputValidator } from '@/lib/evaluation/validators/structured-output.validator';
 import { executeDomainValidation } from '@/lib/evaluation/domains/registry';
-import { citationsService } from '@/lib/evaluation/citations.service';
+import { citationsService, type ContentJson } from '@/lib/evaluation/citations.service';
 import { judgmentsService } from '@/lib/evaluation/judgments.service';
 import { supabase } from '@/lib/supabaseClient';
 

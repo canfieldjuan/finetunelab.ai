@@ -92,14 +92,17 @@ export async function PUT(request: NextRequest) {
       'timezone',
     ];
 
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
     for (const field of allowedFields) {
       if (field in body) {
         updates[field] = body[field];
       }
     }
 
-    const preferences = await alertService.upsertPreferences(user.id, updates);
+    const preferences = await alertService.upsertPreferences(
+      user.id,
+      updates as Parameters<typeof alertService.upsertPreferences>[1]
+    );
 
     if (!preferences) {
       return NextResponse.json(

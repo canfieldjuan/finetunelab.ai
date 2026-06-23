@@ -40,7 +40,7 @@ export function Pricing() {
         </div>
 
         <PricingTiers
-currentPlan={null as PlanTier | null}
+          currentPlan={null}
           onUpgrade={handleUpgrade}
           onContactSales={handleContactSales}
         />

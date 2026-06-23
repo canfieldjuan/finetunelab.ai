@@ -250,9 +250,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { runPodService } from '@/lib/training/runpod-service';
 import { trainingDeploymentService } from '@/lib/training/training-deployment.service';
+import type { TrainingConfig } from '@/lib/training/training-config.types';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
 import { decrypt } from '@/lib/models/encryption';
 import type { RunPodDeploymentRequest } from '@/lib/training/deployment.types';
@@ -539,7 +540,10 @@ export async function POST(request: NextRequest) {
       console.log('[RunPod API] Calculated total_steps:', totalSteps, `(${sampleCount} samples / ${effectiveBatch} batch * ${numEpochs} epochs)`);
     }
 
-    const { error: jobError } = await supabase
+    // local_training_jobs isn't in the generated Supabase types (insert resolves to
+    // `never`); cast to the base client so the payload is still validated against the
+    // `satisfies` shape without the type-erasing `as never`.
+    const { error: jobError } = await (supabase as SupabaseClient)
       .from('local_training_jobs')
       .insert({
         id: jobId,
@@ -554,7 +558,7 @@ export async function POST(request: NextRequest) {
         total_samples: sampleCount || null,
         // Add calculated total_steps
         total_steps: totalSteps,
-      } as any);
+      } satisfies Record<string, unknown>);
 
     if (jobError) {
       console.error('[RunPod API] Failed to create job:', jobError);
@@ -624,7 +628,7 @@ export async function POST(request: NextRequest) {
     // We ignore the returned ID as we already generated one and passed it in
     await trainingDeploymentService.deployJob(
       'runpod',
-      (trainingConfig.config_json || {}) as any,
+      (trainingConfig.config_json || {}) as unknown as TrainingConfig,
       modelName,
       datasetStoragePath,
       {
@@ -667,7 +671,7 @@ export async function POST(request: NextRequest) {
     console.log('[RunPod API] Pod created:', jobId);
 
     // Store deployment in database
-    const { error: insertError } = await supabase
+    const { error: insertError } = await (supabase as SupabaseClient)
       .from('cloud_deployments')
       .insert({
         user_id: user.id,
@@ -687,7 +691,7 @@ export async function POST(request: NextRequest) {
         estimated_cost: deployment.cost?.estimated_cost,
         cost_per_hour: deployment.cost?.cost_per_hour,
         budget_limit,
-      } as any)
+      } satisfies Record<string, unknown>)
       .select()
       .single();
 
@@ -717,13 +721,13 @@ export async function POST(request: NextRequest) {
     if (jobId && supabase) {
       console.log('[RunPod API] Marking job as failed:', jobId);
       try {
-        await (supabase as any)
+        await (supabase as SupabaseClient)
           .from('local_training_jobs')
           .update({
             status: 'failed',
             error: error instanceof Error ? error.message : 'Unknown error',
             completed_at: new Date().toISOString()
-          })
+          } satisfies Record<string, unknown>)
           .eq('id', jobId);
       } catch (updateError) {
         console.error('[RunPod API] Failed to update job status:', updateError);

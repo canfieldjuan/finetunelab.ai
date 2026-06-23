@@ -34,11 +34,11 @@ export interface ValidatorContext {
 /**
  * Helper to extract validator config for a specific validator
  */
-export function getValidatorConfig<T = unknown>(
+export function getValidatorConfig<T extends Record<string, unknown> = Record<string, unknown>>(
   context: ValidatorContext,
   validatorId: string,
   defaultConfig?: T
 ): T {
-  const config = context.validatorConfig?.[validatorId];
-return config || defaultConfig ? { ...defaultConfig, ...config } : undefined;
+  const config = context.validatorConfig?.[validatorId] as Partial<T> | undefined;
+  return { ...(defaultConfig ?? {}), ...(config ?? {}) } as T;
 }

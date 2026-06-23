@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       const {
         data: { user },
         error: authError,
-      }: { data: { user: any }; error: any } = await supabase.auth.getUser();
+      } = await supabase.auth.getUser();
       if (user && !authError) {
         userId = user.id;
         console.log(`[API /research/route] Authenticated user: ${userId}`);
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       console.warn('[API /research/route] Auth check failed, proceeding without userId:', authErr);
     }
 
-    const job: any = await researchService.startResearch(query, userId);
+    const job = await researchService.startResearch(query, userId);
 
     // Validate job was created successfully
     if (!job || !job.id) {
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'jobId is required' }, { status: 400 });
   }
 
-  const job: any = await researchService.getJob(jobId);
+  const job = await researchService.getJob(jobId);
 
   if (!job) {
     return NextResponse.json({ error: 'Job not found' }, { status: 404 });

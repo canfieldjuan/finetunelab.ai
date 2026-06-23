@@ -59,6 +59,29 @@ export interface TraversalResult {
   queryTimeMs: number;
 }
 
+// Shapes returned by the Graphiti traversal API (raw JSON)
+interface ApiPathEntity {
+  name?: string;
+  uuid?: string;
+  labels?: string[];
+}
+
+interface ApiPathRelation {
+  type?: string;
+  fact?: string;
+  uuid?: string;
+}
+
+interface ApiPathStep {
+  entity?: ApiPathEntity;
+  relation?: ApiPathRelation;
+}
+
+interface ApiPath {
+  steps?: ApiPathStep[];
+  length?: number;
+}
+
 export interface ShortestPathOptions {
   startEntity: string;
   endEntity: string;
@@ -188,14 +211,14 @@ export class TraversalService {
   /**
    * Map API paths to internal format
    */
-  private mapApiPaths(apiPaths: any[]): GraphPath[] {
+  private mapApiPaths(apiPaths: ApiPath[]): GraphPath[] {
     return apiPaths.map(p => this.mapApiPath(p));
   }
 
   /**
    * Map single API path to internal format
    */
-  private mapApiPath(apiPath: any): GraphPath {
+  private mapApiPath(apiPath: ApiPath): GraphPath {
     const steps: GraphPathStep[] = [];
 
     if (Array.isArray(apiPath.steps)) {

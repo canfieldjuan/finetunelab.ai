@@ -1,8 +1,48 @@
 import nextJest from 'next/jest.js';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const createJestConfig = nextJest({
   dir: './',
 });
+
+// Vitest-style suites (they `import ... from 'vitest'`) are run by the dedicated vitest
+// runner (`npm run test:vitest`), not jest. The jest<->vitest compat shim can't fully
+// emulate vitest semantics (vi.mock hoisting, import.meta, etc.), so collect those files
+// and exclude them from the jest run to keep `npm test` (jest) green and unambiguous.
+function collectVitestTestPatterns(root) {
+  const skipDirs = new Set(['node_modules', '.next', '.git', 'worktrees', 'coverage', 'dist', '.turbo']);
+  const patterns = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!skipDirs.has(entry.name)) walk(join(dir, entry.name));
+      } else if (/\.(test|spec)\.(ts|tsx|js|jsx|mjs)$/.test(entry.name)) {
+        const full = join(dir, entry.name);
+        try {
+          const src = readFileSync(full, 'utf8');
+          if (/from\s+['"]vitest['"]/.test(src) || /import\(\s*['"]vitest['"]\s*\)/.test(src)) {
+            const rel = full.slice(root.length + 1).replace(/\\/g, '/');
+            // Escape regex metacharacters (paths contain [id], [jobId], etc.)
+            patterns.push('/' + rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$');
+          }
+        } catch {
+          /* ignore unreadable files */
+        }
+      }
+    }
+  };
+  walk(root);
+  return patterns;
+}
+
+const vitestIgnorePatterns = collectVitestTestPatterns(process.cwd());
 
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
@@ -26,6 +66,8 @@ const customJestConfig = {
     '/lib/alerts/formatters/__tests__/',
     // Skip manual test scripts (not Jest tests)
     '/lib/tools/web-search/__tests__/test-storage.ts',
+    // Auto-excluded vitest-style suites (run via `npm run test:vitest`)
+    ...vitestIgnorePatterns,
     // Skip E2E and integration tests that require running server/Supabase
     ...(!process.env.RUN_INTEGRATION_TESTS ? [
       '/__tests__/integration/',

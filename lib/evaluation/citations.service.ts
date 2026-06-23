@@ -24,7 +24,7 @@ export interface CitationInsert {
   retriever_log_id?: string;
 }
 
-interface ContentJson {
+export interface ContentJson {
   citations?: {
     doc_id: string;
     span_start?: number;

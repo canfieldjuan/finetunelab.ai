@@ -113,7 +113,7 @@ export function ValidateInfrastructure() {
                 </div>
 
                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                  Generic benchmarks don't tell you how a model will handle <span className="font-semibold text-foreground">your specific edge cases</span>.
+                  Generic benchmarks don&apos;t tell you how a model will handle <span className="font-semibold text-foreground">your specific edge cases</span>.
                 </p>
 
                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
@@ -121,7 +121,7 @@ export function ValidateInfrastructure() {
                 </p>
 
                 <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                  It's a <span className="font-semibold text-orange-600">zero-risk way</span> to see if your model is ready for the "AI Workflow Crisis."
+                  It&apos;s a <span className="font-semibold text-orange-600">zero-risk way</span> to see if your model is ready for the &quot;AI Workflow Crisis.&quot;
                 </p>
 
                 {/* Stats */}

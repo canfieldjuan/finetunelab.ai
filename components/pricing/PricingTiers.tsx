@@ -11,7 +11,7 @@ import { PLANS, formatLimit, getYearlySavings, type PlanTier } from '@/lib/prici
 import { useState } from 'react';
 
 interface PricingTiersProps {
-  currentPlan: PlanTier;
+  currentPlan: PlanTier | null;
   onUpgrade: (tier: PlanTier, billing: 'monthly' | 'yearly', seats: number) => void;
   onContactSales: () => void;
 }
@@ -34,7 +34,7 @@ export function PricingTiers({ currentPlan, onUpgrade, onContactSales }: Pricing
   const isCurrentPlan = (tier: PlanTier) => tier === currentPlan;
 
   const canUpgrade = (tier: PlanTier) => {
-    const currentIndex = planOrder.indexOf(currentPlan);
+    const currentIndex = currentPlan ? planOrder.indexOf(currentPlan) : -1;
     const targetIndex = planOrder.indexOf(tier);
     return targetIndex > currentIndex;
   };

@@ -75,7 +75,7 @@ export function TwoMinuteCheck() {
             </span>
           </div>
           <h2 className="text-4xl md:text-5xl font-bold">
-            See Your Model's Blind Spots
+            See Your Model&apos;s Blind Spots
             <br />
             <span className="bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
               in 2 Minutes

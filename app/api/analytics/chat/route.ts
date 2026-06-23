@@ -1296,6 +1296,7 @@ async function evaluateMessages(
 
     // Calculate summary statistics
     interface Evaluation {
+      message_id?: string;
       criterion: string;
       score: number;
       passed: boolean;
@@ -1337,7 +1338,7 @@ async function evaluateMessages(
       },
       average_scores: averageScores,
       failed_evaluations: failedEvaluations.map((e) => ({
-        message_id: (e as any).message_id,
+        message_id: e.message_id,
         criterion: e.criterion,
         score: e.score,
         reasoning: e.reasoning || 'No reasoning provided',

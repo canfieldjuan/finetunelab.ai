@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type PostgrestError } from '@supabase/supabase-js';
 import {
   getCurrentUsage,
   getEstimatedCost,
@@ -72,12 +72,13 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Get current commitment/tier
-    let { data: commitment, error: commitmentError } = await supabase
+    const { data: initialCommitment, error: commitmentError } = await supabase
       .from('usage_commitments')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .single() as { data: UsageCommitment | null; error: any };
+      .single() as { data: UsageCommitment | null; error: PostgrestError | null };
+    let commitment: UsageCommitment | null = initialCommitment;
 
     // If no active commitment exists, create a default "starter" tier
     if (commitmentError || !commitment) {

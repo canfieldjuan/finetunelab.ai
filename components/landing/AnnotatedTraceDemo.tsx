@@ -192,7 +192,7 @@ export function AnnotatedTraceDemo() {
               </div>
             </div>
             <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-              User rated: "Helpful and accurate response"
+              User rated: &quot;Helpful and accurate response&quot;
             </div>
           </div>
 

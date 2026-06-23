@@ -145,9 +145,9 @@ export class TemporalClassifier {
    * Merge detected intent with search params
    */
   applyToSearchParams(
-    params: Record<string, any>,
+    params: Record<string, unknown>,
     intent: TemporalIntent
-  ): Record<string, any> {
+  ): Record<string, unknown> {
     const updated = { ...params };
 
     if (intent.isHistorical !== undefined) {
