@@ -395,6 +395,24 @@ export class SecurityManager {
   }
 
   /**
+   * Log execution cancellation
+   */
+  async logExecutionCancelled(
+    executionId: string,
+    duration: number,
+    totalJobs: number,
+    completedJobs: number,
+    failedJobs: number
+  ): Promise<void> {
+    await this.logAuditEvent(
+      AUDIT_EVENT_TYPES.EXECUTION_CANCELLED,
+      LOG_LEVELS.WARN,
+      { duration, totalJobs, completedJobs, failedJobs },
+      executionId
+    );
+  }
+
+  /**
    * Log job timeout
    */
   async logJobTimeout(executionId: string, jobId: string, timeoutMs: number): Promise<void> {

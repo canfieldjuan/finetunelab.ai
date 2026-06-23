@@ -447,24 +447,38 @@ export class DAGOrchestrator {
 
       execution.completedAt = new Date();
       // Don't overwrite a cancelled execution: cancel() may have fired mid-run.
-      if (execution.status !== 'cancelled') {
+      // (Cast through string: cancel() mutates this during the await, which TS
+      // control-flow narrowing can't see.)
+      const wasCancelled = (execution.status as string) === 'cancelled';
+      if (!wasCancelled) {
         execution.status = 'completed';
       }
 
       // Stop resource monitoring
       this.securityManager.stopResourceMonitoring(executionId);
 
-      // Log execution completion
+      // Log the terminal state. A run cancelled mid-flight must NOT be logged as a
+      // completion — that would make cancelled runs look successful in audit logs/metrics.
       const duration = execution.completedAt.getTime() - execution.startedAt.getTime();
       const completedJobs = Array.from(execution.jobs.values()).filter(j => j.status === 'completed').length;
       const failedJobs = Array.from(execution.jobs.values()).filter(j => j.status === 'failed').length;
-      await this.securityManager.logExecutionComplete(
-        executionId,
-        duration,
-        execution.jobs.size,
-        completedJobs,
-        failedJobs
-      );
+      if (wasCancelled) {
+        await this.securityManager.logExecutionCancelled(
+          executionId,
+          duration,
+          execution.jobs.size,
+          completedJobs,
+          failedJobs
+        );
+      } else {
+        await this.securityManager.logExecutionComplete(
+          executionId,
+          duration,
+          execution.jobs.size,
+          completedJobs,
+          failedJobs
+        );
+      }
 
       if (this.supabase) {
         await this.saveExecutionToDatabase(execution);
@@ -745,13 +759,17 @@ export class DAGOrchestrator {
         // these statuses during the await, which TS control-flow narrowing can't see.)
         const jobStatusNow = jobExecution.status as string;
         const execStatusNow = execution.status as string;
-        if (jobStatusNow !== 'cancelled' && execStatusNow !== 'cancelled') {
+        const completedWithoutCancellation =
+          jobStatusNow !== 'cancelled' && execStatusNow !== 'cancelled';
+        if (completedWithoutCancellation) {
           jobExecution.status = 'completed';
           jobExecution.completedAt = new Date();
         }
 
-        // Store in cache after successful execution
-        if (enableCache) {
+        // Store in cache only after a genuinely completed execution. Caching a
+        // cancelled job's output would let future runs hit cache for work the user
+        // explicitly cancelled.
+        if (enableCache && completedWithoutCancellation) {
           try {
             console.log('[DAG] Storing result in cache for job:', job.id);
 
