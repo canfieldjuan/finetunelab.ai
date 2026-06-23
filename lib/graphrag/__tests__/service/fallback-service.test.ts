@@ -91,7 +91,7 @@ describe('FallbackService', () => {
             })),
           })),
         })),
-      } as any);
+      } as unknown as ReturnType<typeof supabaseAdmin.from>);
 
       const result = await service.executeFallback({
         userId: 'user-123',
@@ -135,7 +135,7 @@ describe('FallbackService', () => {
           })),
         })),
       }));
-      mockFrom.mockReturnValue({ select: mockSelect } as any);
+      mockFrom.mockReturnValue({ select: mockSelect } as unknown as ReturnType<typeof supabaseAdmin.from>);
 
       await service.executeFallback({
         userId: 'user-123',
@@ -166,7 +166,7 @@ describe('FallbackService', () => {
             })),
           })),
         })),
-      } as any);
+      } as unknown as ReturnType<typeof supabaseAdmin.from>);
 
       const result = await service.executeFallback({
         userId: 'user-123',
@@ -229,7 +229,7 @@ describe('FallbackService', () => {
               }),
             })),
           })),
-        } as any;
+        } as unknown as ReturnType<typeof supabaseAdmin.from>;
       });
 
       await service.executeFallback({
@@ -275,7 +275,7 @@ describe('FallbackService', () => {
             })),
           })),
         })),
-      } as any);
+      } as unknown as ReturnType<typeof supabaseAdmin.from>);
 
       const result = await service.executeFallback({
         userId: 'user-123',
@@ -310,7 +310,7 @@ describe('FallbackService', () => {
             })),
           })),
         })),
-      } as any);
+      } as unknown as ReturnType<typeof supabaseAdmin.from>);
 
       const result = await service.executeFallback({
         userId: 'user-123',
@@ -357,7 +357,7 @@ describe('FallbackService', () => {
             })),
           })),
         })),
-      } as any);
+      } as unknown as ReturnType<typeof supabaseAdmin.from>);
 
       const result = await service.executeFallback({
         userId: 'user-123',
@@ -405,7 +405,7 @@ describe('FallbackService', () => {
             })),
           })),
         })),
-      } as any);
+      } as unknown as ReturnType<typeof supabaseAdmin.from>);
 
       const result = await service.executeFallback({
         userId: 'user-123',

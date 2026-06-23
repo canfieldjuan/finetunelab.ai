@@ -80,7 +80,7 @@ export function FullPlatform() {
           <h2 className="text-4xl md:text-5xl font-bold">
             That Was Just Testing.
             <br />
-            <span className="text-primary">Here's Everything Else.</span>
+            <span className="text-primary">Here&apos;s Everything Else.</span>
           </h2>
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
             The complete lifecycle, end-to-end. No duct tape required.

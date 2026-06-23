@@ -5,6 +5,13 @@ import { DeploymentStatus, DeploymentMetrics } from '../deployment.types';
 import { LocalTrainingProvider } from '../../services/training-providers/local.provider';
 import { ScriptBuilder } from '../script-builder';
 
+interface LocalDeployOptions {
+  jobId?: string;
+  userId?: string;
+  agentUrl?: string;
+  accessToken?: string;
+}
+
 export class LocalProvider implements DeploymentProvider {
   name = 'local';
   private provider: LocalTrainingProvider;
@@ -22,7 +29,7 @@ export class LocalProvider implements DeploymentProvider {
     config: TrainingConfig,
     modelName: string,
     datasetPath: string,
-    options?: any
+    options?: LocalDeployOptions
   ): Promise<string> {
     const jobId = options?.jobId;
     if (!jobId) throw new Error('Job ID is required for Local deployment');

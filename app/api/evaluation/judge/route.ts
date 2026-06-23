@@ -30,6 +30,19 @@ interface BatchEvaluationRequest {
   save_to_db?: boolean;
 }
 
+interface MessageRow {
+  id: string;
+  content: string;
+  conversation_id: string;
+  created_at: string;
+  role: string;
+}
+
+interface QueryError {
+  message: string;
+  [key: string]: unknown;
+}
+
 /**
  * POST /api/evaluation/judge
  * Evaluate single or multiple messages
@@ -53,7 +66,7 @@ export async function POST(request: NextRequest) {
     const {
       data: { user },
       error: authError,
-    }: { data: { user: any }; error: any } = await supabase.auth.getUser();
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       console.error('[EvaluationJudge] Authentication failed:', authError);
@@ -98,11 +111,11 @@ async function handleSingleEvaluation(
 
   if (!messageContent) {
     // Get the assistant message with conversation context
-    const { data: message, error }: { data: any; error: any } = await supabase
+    const { data: message, error } = await supabase
       .from('messages')
       .select('content, conversation_id, created_at')
       .eq('id', request.message_id)
-      .single();
+      .single() as { data: Pick<MessageRow, 'content' | 'conversation_id' | 'created_at'> | null; error: QueryError | null };
 
     if (error || !message) {
       console.error('[EvaluationJudge] Message not found:', request.message_id, error);
@@ -116,7 +129,7 @@ async function handleSingleEvaluation(
     conversationId = message.conversation_id;
 
     // Fetch the user message that preceded this assistant response
-    const { data: prevMessage }: { data: any } = await supabase
+    const { data: prevMessage }: { data: Pick<MessageRow, 'content'> | null } = await supabase
       .from('messages')
       .select('content')
       .eq('conversation_id', conversationId)
@@ -255,10 +268,10 @@ async function handleBatchEvaluation(
   console.log('[EvaluationJudge] Batch evaluation:', request.message_ids.length, 'messages');
 
   // Fetch messages with conversation context
-  const { data: messages, error }: { data: any; error: any } = await supabase
+  const { data: messages, error } = await supabase
     .from('messages')
     .select('id, content, conversation_id, created_at, role')
-    .in('id', request.message_ids);
+    .in('id', request.message_ids) as { data: MessageRow[] | null; error: QueryError | null };
 
   if (error || !messages || messages.length === 0) {
     console.error('[EvaluationJudge] Messages not found:', request.message_ids, error);
@@ -271,15 +284,15 @@ async function handleBatchEvaluation(
   // Optimize: Fetch all user messages for all conversations in a single query
   // This reduces O(n) queries to just 1 query
   const conversationIds = [...new Set(messages
-    .filter((m: any) => m.role === 'assistant' && m.conversation_id)
-    .map((m: any) => m.conversation_id)
+    .filter((m) => m.role === 'assistant' && m.conversation_id)
+    .map((m) => m.conversation_id)
   )];
 
   const messageContextMap = new Map<string, { userPrompt: string; conversationId: string }>();
 
   if (conversationIds.length > 0) {
     // Fetch all user messages for these conversations
-    const { data: userMessages }: { data: any } = await supabase
+    const { data: userMessages }: { data: Pick<MessageRow, 'content' | 'conversation_id' | 'created_at'>[] | null } = await supabase
       .from('messages')
       .select('content, conversation_id, created_at')
       .in('conversation_id', conversationIds)
@@ -288,7 +301,8 @@ async function handleBatchEvaluation(
 
     if (userMessages && userMessages.length > 0) {
       // Build a map of conversation_id → sorted user messages
-      const userMsgsByConversation = new Map<string, any[]>();
+      type UserMsg = Pick<MessageRow, 'content' | 'conversation_id' | 'created_at'>;
+      const userMsgsByConversation = new Map<string, UserMsg[]>();
       for (const userMsg of userMessages) {
         const convId = userMsg.conversation_id;
         if (!userMsgsByConversation.has(convId)) {
@@ -303,7 +317,7 @@ async function handleBatchEvaluation(
           const userMsgs = userMsgsByConversation.get(msg.conversation_id);
           if (userMsgs) {
             // Find the first user message before this assistant message
-            const prevMessage = userMsgs.find((um: any) =>
+            const prevMessage = userMsgs.find((um) =>
               new Date(um.created_at) < new Date(msg.created_at)
             );
 

@@ -308,7 +308,7 @@ export function TrainingAgentSetup({ sessionToken }: TrainingAgentSetupProps) {
                 </p>
                 <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-disc list-inside">
                   <li>The agent will start polling for training jobs</li>
-                  <li>You will see it appear in the "Connected Agents" section above</li>
+                  <li>You will see it appear in the &quot;Connected Agents&quot; section above</li>
                   <li>When you start a training job, the agent will pick it up automatically</li>
                   <li>Progress and metrics will stream back to the web UI in real-time</li>
                 </ul>

@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Reset all mocks before these integration tests
 beforeAll(() => {
@@ -139,7 +140,7 @@ describe('Integration: Error handling across modules', () => {
     // Try to validate an unsupported file type
     const mockFile = new File(['test content'], 'test.xyz', { type: 'application/xyz' });
 
-    const mockSupabase = {} as any;
+    const mockSupabase = {} as unknown as SupabaseClient;
 
     await expect(
       service.uploadOnly(mockSupabase, {

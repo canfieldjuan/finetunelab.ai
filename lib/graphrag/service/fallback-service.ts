@@ -25,6 +25,13 @@ export interface FallbackResult {
   queryTimeMs: number;
 }
 
+interface FallbackDocument {
+  id: string;
+  filename: string;
+  content: string;
+  metadata: Record<string, unknown>;
+}
+
 // ============================================================================
 // Fallback Service Implementation
 // ============================================================================
@@ -201,7 +208,7 @@ export class FallbackService {
    * Map database documents to SearchSource format
    */
   private mapDocumentsToSources(
-    documents: any[],
+    documents: FallbackDocument[],
     sourceType: string
   ): SearchSource[] {
     return documents.map(doc => {

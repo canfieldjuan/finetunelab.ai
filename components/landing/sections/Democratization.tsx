@@ -116,7 +116,7 @@ export function Democratization() {
         {/* Key Message */}
         <div className="text-center p-8 rounded-2xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-2 border-purple-500/20">
           <p className="text-2xl font-bold mb-2">
-            If your junior dev can't ship a production model,
+            If your junior dev can&apos;t ship a production model,
           </p>
           <p className="text-xl text-muted-foreground">
             your tools are the problem—not your team.

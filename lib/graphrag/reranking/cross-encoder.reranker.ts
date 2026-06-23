@@ -12,6 +12,22 @@ import type {
 import { log } from '@/lib/utils/logger';
 
 // ============================================================================
+// API Response Types
+// ============================================================================
+
+interface ApiRerankItem {
+  index?: number;
+  corpus_id?: number;
+  score?: number;
+  relevance_score?: number;
+}
+
+interface ApiRerankResponse {
+  results?: ApiRerankItem[];
+  rankings?: ApiRerankItem[];
+}
+
+// ============================================================================
 // Cross-Encoder Reranker Implementation
 // ============================================================================
 
@@ -68,17 +84,19 @@ export class CrossEncoderReranker implements IReranker {
   }
 
   private mapApiResponse(
-    apiResult: any,
+    apiResult: ApiRerankResponse | ApiRerankItem[],
     candidates: RerankCandidate[]
   ): RerankResult[] {
     // Handle different API response formats
-    const results = apiResult.results || apiResult.rankings || apiResult;
+    const results: ApiRerankItem[] = Array.isArray(apiResult)
+      ? apiResult
+      : apiResult.results || apiResult.rankings || [];
 
     if (!Array.isArray(results)) {
       throw new Error('Invalid reranker API response format');
     }
 
-    return results.map((r: any) => {
+    return results.map((r: ApiRerankItem) => {
       const index = typeof r.index === 'number' ? r.index : r.corpus_id;
       const score = typeof r.score === 'number' ? r.score : r.relevance_score;
 
@@ -88,7 +106,7 @@ export class CrossEncoderReranker implements IReranker {
 
       return {
         originalIndex: index,
-        score: score,
+        score: score ?? 0,
         text: candidates[index].text,
         metadata: candidates[index].metadata,
       };

@@ -220,6 +220,26 @@ interface TraceHierarchyEntry extends TraceRecord {
   children: TraceHierarchyEntry[];
 }
 
+interface QueryError {
+  message: string;
+  [key: string]: unknown;
+}
+
+type TraceUpsertRow = Omit<TracePayload, 'user_id'> & { user_id: string | null };
+
+interface UpsertResultBuilder {
+  select(): {
+    single(): Promise<{ data: TraceRecord | null; error: QueryError | null }>;
+  };
+}
+
+interface UpsertableTracesTable {
+  upsert(
+    values: TraceUpsertRow,
+    options?: { onConflict?: string; ignoreDuplicates?: boolean }
+  ): UpsertResultBuilder;
+}
+
 function debugLog(context: string, data: unknown) {
   if (process.env.NODE_ENV === 'development') {
     console.log(`[Traces API - ${context}]`, data);
@@ -370,8 +390,8 @@ export async function POST(req: NextRequest) {
 
     // Block 3: Upsert trace into database (use upsert to handle race conditions)
 
-    const { data: trace, error: insertError } = (await (supabase
-      .from('llm_traces') as any)
+    const { data: trace, error: insertError } = await (supabase
+      .from('llm_traces') as unknown as UpsertableTracesTable)
       .upsert({
         user_id: userId,
         conversation_id,
@@ -430,7 +450,7 @@ export async function POST(req: NextRequest) {
         ignoreDuplicates: false
       })
       .select()
-      .single()) as { data: TraceRecord | null; error: any };
+      .single();
 
     if (insertError || !trace) {
       debugLog('POST', `Insert error: ${insertError?.message || 'No trace data returned'}`);
@@ -622,7 +642,7 @@ export async function GET(req: NextRequest) {
 /**
  * Enrich traces with quality data (judgments and user ratings)
  */
-async function enrichTracesWithQualityData(supabase: SupabaseClient<any>, traces: TraceRecord[]): Promise<TraceRecord[]> {
+async function enrichTracesWithQualityData(supabase: SupabaseClient, traces: TraceRecord[]): Promise<TraceRecord[]> {
   if (!traces || traces.length === 0) return traces;
 
   const traceIds = traces.map(t => t.trace_id).filter(Boolean);

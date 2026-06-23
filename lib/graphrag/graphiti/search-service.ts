@@ -452,7 +452,7 @@ export class SearchService {
         fallbackUsed: true,
         fallbackStrategy: fallbackResult.strategy,
         fallbackResults: fallbackResult.sources.length,
-      } as any,
+      },
     };
   }
 

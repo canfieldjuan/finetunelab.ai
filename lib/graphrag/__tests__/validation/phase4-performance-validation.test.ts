@@ -7,6 +7,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { classifyQuery } from '../../utils/query-classifier';
 import { expandQuery } from '../../utils/query-expansion';
 
+// Shape of the mock sources used in these performance tests
+interface MockSource {
+  entity: string;
+  fact: string;
+  confidence: number;
+  sourceDescription: string;
+  uuid: string;
+}
+
+// Typed accessor for the private formatContext method under test
+interface FormatContextAccessor {
+  formatContext(sources: MockSource[], compress: boolean): string;
+}
+
 // ============================================================================
 // Performance Test 1: Query Classification Speed
 // ============================================================================
@@ -97,7 +111,7 @@ describe('Performance: Context formatting', () => {
 
     const start = performance.now();
     // Access private method via type assertion for testing
-    const formatted = (service as any).formatContext(mockSources, false);
+    const formatted = (service as unknown as FormatContextAccessor).formatContext(mockSources, false);
     const duration = performance.now() - start;
 
     expect(duration).toBeLessThan(10);
@@ -118,13 +132,13 @@ describe('Performance: Context formatting', () => {
     }));
 
     const start = performance.now();
-    const compressed = (service as any).formatContext(mockSources, true);
+    const compressed = (service as unknown as FormatContextAccessor).formatContext(mockSources, true);
     const duration = performance.now() - start;
 
     expect(duration).toBeLessThan(15);
     expect(compressed.length).toBeGreaterThan(0);
     // Compressed should be shorter than uncompressed
-    const uncompressed = (service as any).formatContext(mockSources, false);
+    const uncompressed = (service as unknown as FormatContextAccessor).formatContext(mockSources, false);
     expect(compressed.length).toBeLessThan(uncompressed.length);
     console.log(`Context compression: 20 sources in ${duration.toFixed(2)}ms`);
   });
@@ -176,7 +190,7 @@ describe('Performance: Context token estimation', () => {
       uuid: `uuid-${i}`,
     }));
 
-    const formatted = (service as any).formatContext(mockSources, false);
+    const formatted = (service as unknown as FormatContextAccessor).formatContext(mockSources, false);
 
     // Rough token estimation: ~4 chars per token
     const estimatedTokens = formatted.length / 4;
@@ -198,8 +212,8 @@ describe('Performance: Context token estimation', () => {
       uuid: `uuid-${i}`,
     }));
 
-    const uncompressed = (service as any).formatContext(mockSources, false);
-    const compressed = (service as any).formatContext(mockSources, true);
+    const uncompressed = (service as unknown as FormatContextAccessor).formatContext(mockSources, false);
+    const compressed = (service as unknown as FormatContextAccessor).formatContext(mockSources, true);
 
     // Compression groups by entity, reducing redundant entity labels
     // With 12 sources grouped into 3 entities, we go from 12 labels to 3

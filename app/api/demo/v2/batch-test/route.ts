@@ -343,7 +343,7 @@ function pLimit(concurrency: number) {
             resolve(res);
             next();
           },
-          (err: any) => {
+          (err: unknown) => {
             reject(err);
             next();
           }

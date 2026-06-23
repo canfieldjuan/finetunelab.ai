@@ -153,7 +153,7 @@ export function FragmentationProblem() {
         {/* Transition */}
         <div className="text-center mt-12">
           <p className="text-lg font-medium text-foreground">
-            There's a better way ↓
+            There&apos;s a better way ↓
           </p>
         </div>
       </div>

@@ -57,7 +57,12 @@ class ResearchController {
       res.setHeader('Connection', 'keep-alive');
       
       const handler = (data: unknown) => {
-if ((data as any).jobId === jobId) {
+        if (
+          typeof data === 'object' &&
+          data !== null &&
+          'jobId' in data &&
+          (data as { jobId: unknown }).jobId === jobId
+        ) {
            res.write(`data: ${JSON.stringify(data)}\n\n`);
         }
       };

@@ -4,7 +4,7 @@
  * Date: 2025-12-12
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, type PostgrestError } from '@supabase/supabase-js';
 import {
   AlertPayload,
   AlertDeliveryResult,
@@ -344,7 +344,7 @@ export class AlertService {
     limit: number = 50,
     offset: number = 0
   ): Promise<{ alerts: AlertHistoryEntry[]; total: number }> {
-    const { data, error, count }: { data: AlertHistoryEntry[] | null; error: any; count: number | null } = await this.supabase
+    const { data, error, count }: { data: AlertHistoryEntry[] | null; error: PostgrestError | null; count: number | null } = await this.supabase
       .from('alert_history')
       .select('*', { count: 'exact' })
       .eq('user_id', userId)
