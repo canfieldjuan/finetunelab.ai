@@ -1,8 +1,33 @@
 // jest.setup.js
 import '@testing-library/jest-dom';
 
+// Mock next/navigation so components/hooks that call useRouter() (e.g. AuthProvider)
+// don't throw "invariant expected app router to be mounted" under jsdom. The App Router
+// isn't mounted in unit tests, so provide inert stubs.
+jest.mock('next/navigation', () => {
+  const router = {
+    push: jest.fn(),
+    replace: jest.fn(),
+    refresh: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+    prefetch: jest.fn(),
+  };
+  return {
+    useRouter: () => router,
+    usePathname: () => '/',
+    useSearchParams: () => new URLSearchParams(),
+    useParams: () => ({}),
+    useSelectedLayoutSegment: () => null,
+    useSelectedLayoutSegments: () => [],
+    redirect: jest.fn(),
+    notFound: jest.fn(),
+  };
+});
+
 // Mock vitest imports to use jest instead
 // This allows running vitest-style tests with jest
+const _viGlobalStubs = [];
 global.vi = {
   fn: jest.fn,
   mock: jest.mock,
@@ -13,15 +38,50 @@ global.vi = {
   restoreAllMocks: jest.restoreAllMocks,
   resetModules: jest.resetModules,
   mocked: jest.mocked,
+  // ---- vitest API surface not covered by jest's globals ----
+  hoisted: (factory) => factory(),
+  importActual: (mod) => Promise.resolve(jest.requireActual(mod)),
+  importMock: (mod) => Promise.resolve(jest.requireMock(mod)),
+  stubGlobal: (name, value) => {
+    _viGlobalStubs.push([name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  },
+  unstubAllGlobals: () => {
+    while (_viGlobalStubs.length) {
+      const [name, desc] = _viGlobalStubs.pop();
+      if (desc) Object.defineProperty(globalThis, name, desc);
+      else delete globalThis[name];
+    }
+  },
+  stubEnv: (key, value) => {
+    process.env[key] = value;
+  },
+  unstubAllEnvs: () => {},
+  // Timer helpers map onto jest's fake timers
+  useFakeTimers: (...args) => jest.useFakeTimers(...args),
+  useRealTimers: () => jest.useRealTimers(),
+  advanceTimersByTime: (ms) => jest.advanceTimersByTime(ms),
+  advanceTimersByTimeAsync: async (ms) => jest.advanceTimersByTime(ms),
+  runAllTimers: () => jest.runAllTimers(),
+  runOnlyPendingTimers: () => jest.runOnlyPendingTimers(),
+  clearAllTimers: () => jest.clearAllTimers(),
+  setSystemTime: (time) => jest.setSystemTime(time),
+  getRealSystemTime: () => Date.now(),
 };
 
 // Mock Supabase createClient
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(() => ({
     auth: {
-      getUser: jest.fn(),
+      getUser: jest.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      getSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
       signIn: jest.fn(),
-      signOut: jest.fn(),
+      signInWithPassword: jest.fn().mockResolvedValue({ data: { user: null, session: null }, error: null }),
+      signOut: jest.fn().mockResolvedValue({ error: null }),
+      // AuthProvider subscribes to auth changes and expects a subscription it can unsubscribe.
+      onAuthStateChange: jest.fn(() => ({
+        data: { subscription: { unsubscribe: jest.fn() } },
+      })),
     },
     from: jest.fn(() => ({
       select: jest.fn().mockReturnThis(),
