@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-function makeRequest(body: unknown, headers?: Record<string, string>) {
+function makeRequest(body: unknown, headers?: Record<string, string>): NextRequest {
   const bodyText = JSON.stringify(body);
   const baseHeaders: Record<string, string> = {
     'content-type': 'application/json',
@@ -12,7 +12,7 @@ function makeRequest(body: unknown, headers?: Record<string, string>) {
   return {
     headers: new Headers(baseHeaders),
     json: async () => body,
-  } as unknown;
+  } as unknown as NextRequest;
 }
 
 describe('POST app/api/batch-testing/run', () => {
@@ -29,7 +29,7 @@ describe('POST app/api/batch-testing/run', () => {
     const fetchMock = vi.fn(async (_url: string, init?: unknown) => {
       // Ensure the background prompt processing uses API key auth.
       if (typeof _url === 'string' && _url.endsWith('/api/chat')) {
-expect((init as RequestInit)?.headers['X-API-Key']).toBe('wak_testkey');
+expect(((init as RequestInit)?.headers as Record<string, string>)['X-API-Key']).toBe('wak_testkey');
       }
       return { ok: true, text: async () => '' } as unknown;
     });

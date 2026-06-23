@@ -11,7 +11,7 @@ export class ScriptBuilder {
     modelName: string,
     datasetPath: string,
     trainingConfig: TrainingConfig
-  ): unknown {
+  ): Record<string, unknown> {
     const training = trainingConfig.training as AdvancedTrainingConfig;
     const data = trainingConfig.data;
     const model = trainingConfig.model;

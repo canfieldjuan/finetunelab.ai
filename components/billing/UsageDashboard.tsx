@@ -10,6 +10,7 @@ import React, { useEffect, useState } from "react";
 import { UsageMeterCard } from "./UsageMeterCard";
 import { CostEstimatorCard } from "./CostEstimatorCard";
 import { UsageWarningBanner } from "./UsageWarningBanner";
+import type { UsageTier } from "@/lib/pricing/usage-based-config";
 
 interface UsageData {
   period: {
@@ -44,7 +45,7 @@ interface UsageData {
 
 interface UsageDashboardProps {
   sessionToken: string;
-  onTierLoaded?: (tier: string) => void;
+  onTierLoaded?: (tier: UsageTier | undefined) => void;
 }
 
 export function UsageDashboard({ sessionToken, onTierLoaded }: UsageDashboardProps) {
@@ -72,7 +73,7 @@ export function UsageDashboard({ sessionToken, onTierLoaded }: UsageDashboardPro
         setError(null);
         
         if (onTierLoaded && data.tier) {
-          onTierLoaded(data.tier);
+          onTierLoaded(data.tier as UsageTier);
         }
       } catch (err) {
         console.error("[UsageDashboard] Error fetching usage:", err);

@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import {
   RefreshCw,
   AlertCircle,
@@ -30,6 +30,7 @@ import {
   Clock,
   TrendingDown,
   ExternalLink,
+  type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import type { ScheduledEvaluationRun } from '@/lib/batch-testing/types';
@@ -98,7 +99,7 @@ export function ScheduleRunHistory({
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { variant: unknown; icon: unknown; label: string }> = {
+    const statusConfig: Record<string, { variant: BadgeProps['variant']; icon: LucideIcon; label: string }> = {
       triggered: { variant: 'outline', icon: Clock, label: 'Triggered' },
       running: { variant: 'default', icon: RefreshCw, label: 'Running' },
       completed: { variant: 'outline', icon: CheckCircle, label: 'Completed' },

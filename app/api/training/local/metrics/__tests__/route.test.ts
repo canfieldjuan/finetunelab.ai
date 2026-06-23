@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 
 type SupabaseResponse<T> = { data: T | null; error: { message: string } | null };
 
-function makeRequest(body: unknown, headers?: Record<string, string>) {
+function makeRequest(body: unknown, headers?: Record<string, string>): NextRequest {
   const bodyText = JSON.stringify(body);
   const baseHeaders: Record<string, string> = {
     'content-type': 'application/json',
@@ -17,7 +18,7 @@ function makeRequest(body: unknown, headers?: Record<string, string>) {
     }),
   };
 
-  return request;
+  return request as unknown as NextRequest;
 }
 
 describe('POST app/api/training/local/metrics', () => {

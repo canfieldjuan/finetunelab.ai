@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
     const {
       data: { user },
       error: authError,
-    }: { data: { user: unknown }; error: unknown } = await supabase.auth.getUser();
+    }: { data: { user: { id: string } | null }; error: unknown } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -257,7 +257,7 @@ export async function GET(req: NextRequest) {
       data: traces,
       error: tracesError,
       count,
-    }: { data: TraceData[] | null; error: unknown; count: number | null } = await query;
+    }: { data: TraceData[] | null; error: { message?: string; hint?: string } | null; count: number | null } = await query;
 
     if (tracesError) {
       console.error('[Traces List API] Error fetching traces:', tracesError);

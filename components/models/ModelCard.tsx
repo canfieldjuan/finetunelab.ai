@@ -19,10 +19,11 @@ import { Sparkles, Zap, Eye, Edit, Trash2, Globe, User, PlayCircle, StopCircle, 
 import type { LLMModelDisplay } from '@/lib/models/llm-model.types';
 import { toast } from 'sonner';
 
-interface ServerInfo {
+export interface ServerInfo {
   id: string;
   status: 'running' | 'stopped' | 'starting' | 'error';
   port?: number;
+  model_id?: string | null;
 }
 
 interface ModelMetadata {

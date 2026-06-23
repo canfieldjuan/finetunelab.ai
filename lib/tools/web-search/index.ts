@@ -4,12 +4,14 @@ import { searchConfig } from './search.config';
 import { searchService } from './search.service';
 import { researchService } from './research.service';
 import { researchController } from './research.controller';
+import type { ResearchRequest, ResearchResponse } from './research.controller';
 import type { SortBy } from './types';
 
- 
+type ResearchHandler = (req: ResearchRequest, res: ResearchResponse) => void;
+
 interface ExpressRouter {
-  post: (path: string, handler: (req: unknown, res: unknown) => void) => void;
-  get: (path: string, handler: (req: unknown, res: unknown) => void) => void;
+  post: (path: string, handler: ResearchHandler) => void;
+  get: (path: string, handler: ResearchHandler) => void;
 }
 
 interface WebSearchToolDefinition extends ToolDefinition {

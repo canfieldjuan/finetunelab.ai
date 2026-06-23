@@ -48,6 +48,75 @@ export interface TrainingAgentWithStats extends TrainingAgent {
 }
 
 // ============================================================================
+// WORKER AGENT TYPES
+// ============================================================================
+
+/**
+ * Worker Agent
+ * Represents a remote worker agent that executes commands/jobs
+ */
+export interface WorkerAgent {
+  worker_id: string;
+  hostname: string;
+  platform: Platform;
+  version: string;
+
+  // Status
+  status: 'online' | 'offline' | 'error';
+  is_online: boolean;
+  last_heartbeat: string | null;
+  registered_at: string;
+
+  // Concurrency & load
+  current_load: number;
+  max_concurrency: number;
+
+  // Stats
+  total_commands_executed: number;
+  total_errors: number;
+
+  // Capabilities
+  capabilities?: string[];
+}
+
+/**
+ * Worker Metric
+ * A single resource-usage data point reported by a worker
+ */
+export interface WorkerMetric {
+  id: string;
+  timestamp: string;
+  cpu_percent: number | null;
+  memory_used_mb: number | null;
+  memory_total_mb: number | null;
+  disk_used_gb: number | null;
+}
+
+/**
+ * Worker Command
+ * A command/job dispatched to a worker
+ */
+export interface WorkerCommand {
+  id: string;
+  command_type: string;
+  status: 'pending' | 'executing' | 'completed' | 'failed' | 'timeout';
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+}
+
+/**
+ * Worker Details
+ * Full worker information including metrics and command history
+ */
+export interface WorkerDetails {
+  worker: WorkerAgent;
+  metrics: WorkerMetric[];
+  commands: WorkerCommand[];
+}
+
+// ============================================================================
 // PLATFORM TYPES
 // ============================================================================
 

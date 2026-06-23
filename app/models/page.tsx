@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ModelCard } from '@/components/models/ModelCard';
+import { ModelCard, type ServerInfo } from '@/components/models/ModelCard';
 import { AddModelDialog } from '@/components/models/AddModelDialog';
 import { EditModelDialog } from '@/components/models/EditModelDialog';
 import type { LLMModelDisplay } from '@/lib/models/llm-model.types';
@@ -34,11 +34,6 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { toast } from 'sonner';
 import { OWNERSHIP_FILTERS, type OwnershipFilter } from '@/lib/constants';
-
-type ServerInfo = {
-  model_id?: string | null;
-  status?: string | null;
-} & Record<string, unknown>;
 
 function ModelsPageContent() {
   const { user, session, signOut, loading: authLoading } = useAuth();

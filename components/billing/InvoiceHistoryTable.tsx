@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download, ExternalLink } from "lucide-react";
 
@@ -91,7 +91,7 @@ export function InvoiceHistoryTable({ invoices, loading }: InvoiceHistoryTablePr
   };
 
   const getStatusBadge = (status: Invoice["status"]) => {
-    const variants: Record<Invoice["status"], unknown> = {
+    const variants: Record<Invoice["status"], BadgeProps["variant"]> = {
       paid: "default",
       pending: "secondary",
       draft: "outline",

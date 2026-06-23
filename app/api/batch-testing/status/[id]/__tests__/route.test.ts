@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 
-function makeRequest(headers?: Record<string, string>) {
+function makeRequest(headers?: Record<string, string>): NextRequest {
   return {
     headers: new Headers(headers ?? {}),
-  } as unknown;
+  } as unknown as NextRequest;
 }
 
 describe('GET app/api/batch-testing/status/[id]', () => {
