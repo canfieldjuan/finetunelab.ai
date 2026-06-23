@@ -388,6 +388,11 @@ export class DAGOrchestrator {
 
       // Execute level by level
       for (const level of levels) {
+        // Stop launching new levels once the execution has been cancelled.
+        if (execution.status === 'cancelled') {
+          break;
+        }
+
         // Execute jobs in this level with limited parallelism
         await this.executeLevelWithParallelism(
           level,
@@ -440,8 +445,11 @@ export class DAGOrchestrator {
         }
       }
 
-      execution.status = 'completed';
       execution.completedAt = new Date();
+      // Don't overwrite a cancelled execution: cancel() may have fired mid-run.
+      if (execution.status !== 'cancelled') {
+        execution.status = 'completed';
+      }
 
       // Stop resource monitoring
       this.securityManager.stopResourceMonitoring(executionId);

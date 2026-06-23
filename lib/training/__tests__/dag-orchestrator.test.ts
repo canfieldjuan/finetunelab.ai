@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 /**
  * DAG Orchestrator Tests
  * 
@@ -207,7 +208,7 @@ describe('DAGOrchestrator', () => {
 
   describe('registerHandler', () => {
     it('should register job handlers', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       
       orchestrator.registerHandler('training', handler);
       
@@ -217,7 +218,7 @@ describe('DAGOrchestrator', () => {
 
   describe('execute', () => {
     it('should execute a simple DAG successfully', async () => {
-      const mockHandler = jest.fn().mockResolvedValue({ success: true });
+      const mockHandler = vi.fn().mockResolvedValue({ success: true });
       orchestrator.registerHandler('training', mockHandler);
 
       const jobs: JobConfig[] = [
@@ -256,7 +257,7 @@ describe('DAGOrchestrator', () => {
     it('should execute jobs in dependency order', async () => {
       const executionOrder: string[] = [];
       
-      const handler = jest.fn().mockImplementation(async (config: JobConfig) => {
+      const handler = vi.fn().mockImplementation(async (config: JobConfig) => {
         executionOrder.push(config.id);
         return { success: true };
       });
@@ -287,8 +288,8 @@ describe('DAGOrchestrator', () => {
     });
 
     it('should handle job failures and stop execution', async () => {
-      const failingHandler = jest.fn().mockRejectedValue(new Error('Job failed'));
-      const successHandler = jest.fn().mockResolvedValue({ success: true });
+      const failingHandler = vi.fn().mockRejectedValue(new Error('Job failed'));
+      const successHandler = vi.fn().mockResolvedValue({ success: true });
 
       orchestrator.registerHandler('preprocessing', failingHandler);
       orchestrator.registerHandler('training', successHandler);
@@ -318,7 +319,7 @@ describe('DAGOrchestrator', () => {
 
     it('should retry failed jobs', async () => {
       let attempts = 0;
-      const retriableHandler = jest.fn().mockImplementation(async () => {
+      const retriableHandler = vi.fn().mockImplementation(async () => {
         attempts++;
         if (attempts < 3) {
           throw new Error('Temporary failure');
@@ -349,10 +350,10 @@ describe('DAGOrchestrator', () => {
     });
 
     it('should call progress callbacks', async () => {
-      const onJobComplete = jest.fn();
-      const onProgress = jest.fn();
+      const onJobComplete = vi.fn();
+      const onProgress = vi.fn();
 
-      const handler = jest.fn().mockResolvedValue({ success: true });
+      const handler = vi.fn().mockResolvedValue({ success: true });
       orchestrator.registerHandler('training', handler);
 
       const jobs: JobConfig[] = [
@@ -385,7 +386,7 @@ describe('DAGOrchestrator', () => {
     it('should provide context to job handlers', async () => {
       let capturedContext: JobContext | null = null;
 
-      const handler = jest.fn().mockImplementation(
+      const handler = vi.fn().mockImplementation(
         async (config: JobConfig, context: JobContext) => {
           capturedContext = context;
           context.log('Test log message');
@@ -417,7 +418,7 @@ describe('DAGOrchestrator', () => {
 
   describe('cancel', () => {
     it('should cancel an execution and mark jobs as cancelled', async () => {
-      const slowHandler = jest.fn().mockImplementation(async () => {
+      const slowHandler = vi.fn().mockImplementation(async () => {
         // Job that takes a while
         await new Promise(resolve => setTimeout(resolve, 1000));
         return { success: true };
@@ -472,7 +473,7 @@ describe('DAGOrchestrator', () => {
   describe('caching', () => {
     it('should execute jobs even when cache fails', async () => {
       let executionCount = 0;
-      const handler = jest.fn().mockImplementation(async () => {
+      const handler = vi.fn().mockImplementation(async () => {
         executionCount++;
         return { result: `execution_${executionCount}`, timestamp: Date.now() };
       });
@@ -517,7 +518,7 @@ describe('DAGOrchestrator', () => {
 
     it('should bypass cache when forceRerun is true', async () => {
       let executionCount = 0;
-      const handler = jest.fn().mockImplementation(async () => {
+      const handler = vi.fn().mockImplementation(async () => {
         executionCount++;
         return { result: `execution_${executionCount}` };
       });
@@ -548,7 +549,7 @@ describe('DAGOrchestrator', () => {
 
     it('should invalidate cache when config changes', async () => {
       let executionCount = 0;
-      const handler = jest.fn().mockImplementation(async () => {
+      const handler = vi.fn().mockImplementation(async () => {
         executionCount++;
         return { result: `execution_${executionCount}` };
       });
@@ -590,7 +591,7 @@ describe('DAGOrchestrator', () => {
       const activeJobs = new Set<string>();
       let maxConcurrent = 0;
 
-      const handler = jest.fn().mockImplementation(async (config: JobConfig) => {
+      const handler = vi.fn().mockImplementation(async (config: JobConfig) => {
         activeJobs.add(config.id);
         maxConcurrent = Math.max(maxConcurrent, activeJobs.size);
         
@@ -650,7 +651,7 @@ describe('DAGOrchestrator', () => {
     it('should execute jobs in correct levels', async () => {
       const executionLog: Array<{ time: number; jobId: string; action: string }> = [];
       
-      const handler = jest.fn().mockImplementation(async (config: JobConfig) => {
+      const handler = vi.fn().mockImplementation(async (config: JobConfig) => {
         executionLog.push({ time: Date.now(), jobId: config.id, action: 'start' });
         await new Promise(resolve => setTimeout(resolve, 50));
         executionLog.push({ time: Date.now(), jobId: config.id, action: 'end' });
@@ -711,7 +712,7 @@ describe('DAGOrchestrator', () => {
 
   describe('timeout enforcement', () => {
     it('should timeout long-running jobs', async () => {
-      const slowHandler = jest.fn().mockImplementation(async () => {
+      const slowHandler = vi.fn().mockImplementation(async () => {
         await new Promise(resolve => setTimeout(resolve, 5000));
         return { success: true };
       });
@@ -739,7 +740,7 @@ describe('DAGOrchestrator', () => {
     });
 
     it('should allow jobs without timeout to run indefinitely', async () => {
-      const handler = jest.fn().mockImplementation(async () => {
+      const handler = vi.fn().mockImplementation(async () => {
         await new Promise(resolve => setTimeout(resolve, 300));
         return { success: true };
       });
@@ -770,7 +771,7 @@ describe('DAGOrchestrator', () => {
       let lastAttemptTime = 0;
       let attempts = 0;
 
-      const handler = jest.fn().mockImplementation(async () => {
+      const handler = vi.fn().mockImplementation(async () => {
         const now = Date.now();
         if (lastAttemptTime > 0) {
           retryDelays.push(now - lastAttemptTime);
@@ -821,12 +822,12 @@ describe('DAGOrchestrator', () => {
 
   describe('job context', () => {
     it('should allow jobs to access outputs from dependencies', async () => {
-      const preprocessHandler = jest.fn().mockResolvedValue({
+      const preprocessHandler = vi.fn().mockResolvedValue({
         datasetPath: '/tmp/processed',
         recordCount: 1000,
       });
 
-      const trainHandler = jest.fn().mockImplementation(
+      const trainHandler = vi.fn().mockImplementation(
         async (config: JobConfig, context: JobContext) => {
           const preprocessOutput = context.getJobOutput('preprocess') as {
             datasetPath: string;
@@ -867,7 +868,7 @@ describe('DAGOrchestrator', () => {
     });
 
     it('should track execution logs per job', async () => {
-      const handler = jest.fn().mockImplementation(
+      const handler = vi.fn().mockImplementation(
         async (config: JobConfig, context: JobContext) => {
           context.log('Starting job');
           context.log('Processing data');
@@ -900,7 +901,7 @@ describe('DAGOrchestrator', () => {
     it('should track progress updates', async () => {
       const progressUpdates: number[] = [];
       
-      const handler = jest.fn().mockImplementation(
+      const handler = vi.fn().mockImplementation(
         async (config: JobConfig, context: JobContext) => {
           await context.updateProgress(0);
           await context.updateProgress(25);
