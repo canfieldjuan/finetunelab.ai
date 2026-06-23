@@ -30,7 +30,6 @@ export default defineConfig({
       '**/__tests__/api/evaluation/judge.test.ts',
       '**/__tests__/api/benchmarks/[id]/route.test.ts',
       '**/__tests__/api/batch-testing/[id]/validators/route.test.ts',
-      '**/__tests__/lib/evaluation/llm-judge.test.ts',
       '**/app/api/analytics/data/__tests__/route.test.ts',
       '**/app/api/analytics/traces/__tests__/route.test.ts',
       '**/app/api/batch-testing/run/__tests__/route.test.ts',
