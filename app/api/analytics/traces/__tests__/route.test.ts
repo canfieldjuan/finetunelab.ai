@@ -38,16 +38,17 @@ describe('app/api/analytics/traces', () => {
       validateRequestWithScope: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
     }));
 
-    const insertSingle = vi.fn(async () => ({
-      data: { id: 'trace-row-1' },
+    // The route upserts (onConflict: span_id) then .select().single().
+    const upsertSingle = vi.fn(async () => ({
+      data: { id: 'trace-row-1', status: 'pending' },
       error: null,
-    } satisfies SupabaseResponse<{ id: string }>));
+    } satisfies SupabaseResponse<{ id: string; status: string }>));
 
-    const insertSelect = vi.fn(() => ({ single: insertSingle }));
-    const insert = vi.fn(() => ({ select: insertSelect }));
+    const upsertSelect = vi.fn(() => ({ single: upsertSingle }));
+    const upsert = vi.fn(() => ({ select: upsertSelect }));
 
     const supabase = {
-      from: vi.fn(() => ({ insert })),
+      from: vi.fn(() => ({ upsert })),
     };
 
     vi.doMock('@supabase/supabase-js', () => ({
@@ -71,9 +72,9 @@ describe('app/api/analytics/traces', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(insert).toHaveBeenCalledTimes(1);
-    const insertArg = (insert.mock.calls[0] as unknown[])?.[0] as { user_id: string };
-    expect(insertArg.user_id).toBe('user-123');
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const upsertArg = (upsert.mock.calls[0] as unknown[])?.[0] as { user_id: string };
+    expect(upsertArg.user_id).toBe('user-123');
   });
 
   it('GET accepts X-API-Key auth and returns traces', async () => {
