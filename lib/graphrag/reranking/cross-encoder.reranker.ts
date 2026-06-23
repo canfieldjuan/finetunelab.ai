@@ -87,10 +87,12 @@ export class CrossEncoderReranker implements IReranker {
     apiResult: ApiRerankResponse | ApiRerankItem[],
     candidates: RerankCandidate[]
   ): RerankResult[] {
-    // Handle different API response formats
-    const results: ApiRerankItem[] = Array.isArray(apiResult)
+    // Handle different API response formats. Do NOT default to [] for an unrecognized
+    // shape: SearchService.search() only falls back to the filtered Graphiti edges when
+    // reranking throws, so returning [] here would silently drop all retrieved context.
+    const results: ApiRerankItem[] | undefined = Array.isArray(apiResult)
       ? apiResult
-      : apiResult.results || apiResult.rankings || [];
+      : apiResult.results || apiResult.rankings;
 
     if (!Array.isArray(results)) {
       throw new Error('Invalid reranker API response format');
