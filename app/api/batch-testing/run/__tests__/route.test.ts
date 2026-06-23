@@ -37,7 +37,7 @@ expect(((init as RequestInit)?.headers as Record<string, string>)['X-API-Key']).
     globalThis.fetch = fetchMock;
 
     vi.doMock('@/lib/auth/api-key-validator', () => ({
-      validateRequest: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
+      validateRequestWithScope: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
       extractApiKeyFromHeaders: vi.fn(() => 'wak_testkey'),
     }));
 
@@ -123,7 +123,7 @@ expect(((init as RequestInit)?.headers as Record<string, string>)['X-API-Key']).
 
   it('rejects judge_config when using API key auth', async () => {
     vi.doMock('@/lib/auth/api-key-validator', () => ({
-      validateRequest: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
+      validateRequestWithScope: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
       extractApiKeyFromHeaders: vi.fn(() => 'wak_testkey'),
     }));
 

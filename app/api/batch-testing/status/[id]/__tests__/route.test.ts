@@ -18,7 +18,7 @@ describe('GET app/api/batch-testing/status/[id]', () => {
 
   it('accepts X-API-Key auth and returns status', async () => {
     vi.doMock('@/lib/auth/api-key-validator', () => ({
-      validateRequest: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
+      validateRequestWithScope: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
       extractApiKeyFromHeaders: vi.fn(() => 'wak_testkey'),
     }));
 

@@ -3,7 +3,6 @@
  * Tests the AI-powered evaluation capabilities
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
 import { LLMJudge, STANDARD_CRITERIA, createCustomCriterion } from '@/lib/evaluation/llm-judge';
 
 describe('LLM-Judge', () => {
@@ -14,8 +13,8 @@ describe('LLM-Judge', () => {
   });
 
   describe('Standard Criteria', () => {
-    it('should have 5 standard criteria', () => {
-      expect(STANDARD_CRITERIA).toHaveLength(5);
+    it('should have 6 standard criteria', () => {
+      expect(STANDARD_CRITERIA).toHaveLength(6);
     });
 
     it('should include helpfulness criterion', () => {

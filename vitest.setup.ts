@@ -14,17 +14,18 @@ process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-openai-key';
 
 // Mock the OpenAI SDK (mirrors jest.setup.js) so constructing a client in unit tests
 // doesn't require real credentials and returns a deterministic judge-style response.
+// Use a class so `new OpenAI()` works (an arrow mockImplementation isn't constructable).
 vi.mock('openai', () => {
-  const mockOpenAI = vi.fn().mockImplementation(() => ({
-    chat: {
+  class MockOpenAI {
+    chat = {
       completions: {
         create: vi.fn().mockResolvedValue({
           choices: [{ message: { content: JSON.stringify({ score: 8, reasoning: 'Test reasoning' }) } }],
         }),
       },
-    },
-  }));
-  return { __esModule: true, default: mockOpenAI, OpenAI: mockOpenAI };
+    };
+  }
+  return { __esModule: true, default: MockOpenAI, OpenAI: MockOpenAI };
 });
 
 // Mock console methods to reduce noise in tests
