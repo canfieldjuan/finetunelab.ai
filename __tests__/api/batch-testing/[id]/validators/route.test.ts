@@ -4,27 +4,57 @@
  * Coverage: Validator statistics, grouping, pass rate calculations
  */
 
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/batch-testing/[id]/validators/route';
 
-// Mock Supabase
-const mockEq = jest.fn();
-const mockNeq = jest.fn();
+// `mockEq` resolves the `messages` query, `mockNeq` resolves the `judgments` query.
+const { mockEq, mockNeq } = vi.hoisted(() => ({
+  mockEq: vi.fn(),
+  mockNeq: vi.fn(),
+}));
 
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
-    from: jest.fn((table) => {
+// Mock Supabase. The route always:
+//  1. Verifies ownership against `batch_test_runs` (.eq().eq().single())
+//  2. Loads `conversations` for the run (.eq())
+//  3. Loads `messages` for those conversations (.in())  -> resolved by mockEq
+//  4. Loads `judgments` for those messages (.in().neq()) -> resolved by mockNeq
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
+    from: vi.fn((table) => {
+      if (table === 'batch_test_runs') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(() =>
+                  Promise.resolve({ data: { id: 'run_123' }, error: null })
+                ),
+              })),
+            })),
+          })),
+        };
+      }
+      if (table === 'conversations') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() =>
+              Promise.resolve({ data: [{ id: 'conv_1' }], error: null })
+            ),
+          })),
+        };
+      }
       if (table === 'messages') {
         return {
-          select: jest.fn(() => ({
-            eq: mockEq,
+          select: vi.fn(() => ({
+            in: mockEq,
           })),
         };
       }
       if (table === 'judgments') {
         return {
-          select: jest.fn(() => ({
-            in: jest.fn(() => ({
+          select: vi.fn(() => ({
+            in: vi.fn(() => ({
               neq: mockNeq,
             })),
           })),
@@ -35,9 +65,24 @@ jest.mock('@supabase/supabase-js', () => ({
   })),
 }));
 
+// Mock API-key auth so the route takes the deterministic apiKey path.
+vi.mock('@/lib/auth/api-key-validator', () => ({
+  validateRequestWithScope: vi.fn(() =>
+    Promise.resolve({ isValid: true, userId: 'user_123' })
+  ),
+  extractApiKeyFromHeaders: vi.fn(() => 'wak_test_key'),
+}));
+
+function makeRequest() {
+  return new NextRequest(
+    'http://localhost:3000/api/batch-testing/run_123/validators',
+    { headers: { 'x-api-key': 'wak_test_key' } }
+  );
+}
+
 describe('/api/batch-testing/[id]/validators', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('GET - Validator Breakdown', () => {
@@ -47,7 +92,7 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: null,
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(200);
@@ -73,7 +118,7 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: null,
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(200);
@@ -124,16 +169,16 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: null,
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      
+
       expect(data.success).toBe(true);
       expect(data.total_messages).toBe(3);
       expect(data.validators).toHaveLength(1);
-      
+
       const validator = data.validators[0];
       expect(validator.judge_name).toBe('must_cite_if_claims');
       expect(validator.total).toBe(3);
@@ -189,14 +234,14 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: null,
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      
+
       expect(data.validators).toHaveLength(2);
-      
+
       // Should be sorted by pass_rate (lowest first)
       const [lowestPassRate, highestPassRate] = data.validators;
       expect(lowestPassRate.pass_rate).toBeLessThanOrEqual(highestPassRate.pass_rate);
@@ -232,12 +277,12 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: null,
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      
+
       const validator = data.validators[0];
       expect(validator.criteria).toBeDefined();
       expect(validator.criteria.has_citation).toEqual({
@@ -283,12 +328,12 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: null,
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      
+
       // Should only have 1 validator (not the basic one)
       expect(data.validators).toHaveLength(1);
       expect(data.validators[0].judge_name).toBe('must_cite_if_claims');
@@ -300,7 +345,7 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: new Error('Database error'),
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(500);
@@ -319,7 +364,7 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: new Error('Database error'),
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(500);
@@ -359,12 +404,12 @@ describe('/api/batch-testing/[id]/validators', () => {
         error: null,
       });
 
-      const request = new NextRequest('http://localhost:3000/api/batch-testing/run_123/validators');
+      const request = makeRequest();
       const response = await GET(request, { params: Promise.resolve({ id: 'run_123' }) });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      
+
       expect(data.validators).toHaveLength(3);
       expect(data.validators[0].judge_name).toBe('validator_low');
       expect(data.validators[0].pass_rate).toBe(33);
