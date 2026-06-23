@@ -178,17 +178,17 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       const outputTokens = typeof u.completion_tokens === 'number' ? u.completion_tokens : 0;
       // OpenAI reports automatically-cached prompt tokens under
       // usage.prompt_tokens_details.cached_tokens, and prompt_tokens already INCLUDES them.
-      // Subtract cached tokens from input_tokens (so they aren't billed at the full rate)
-      // and report them separately as cache_read_input_tokens, matching the Anthropic path
-      // and the assumptions in calculateCost (lib/tracing/pricing-config.ts).
+      // Report input_tokens as the full prompt_tokens (so total_tokens = input + output stays
+      // correct downstream) and surface the cached subset separately as cache_read_input_tokens.
+      // The cost split (full rate on the non-cached portion, discounted rate on the cached
+      // portion) is applied centrally in calculateCost (lib/tracing/pricing-config.ts).
       const promptDetails = u.prompt_tokens_details as Record<string, unknown> | undefined;
       const cachedTokens =
         promptDetails && typeof promptDetails.cached_tokens === 'number'
           ? promptDetails.cached_tokens
           : 0;
-      const nonCachedInputTokens = cachedTokens > 0 ? Math.max(0, inputTokens - cachedTokens) : inputTokens;
       usage = {
-        input_tokens: nonCachedInputTokens,
+        input_tokens: inputTokens,
         output_tokens: outputTokens,
         ...(cachedTokens > 0 ? { cache_read_input_tokens: cachedTokens } : {}),
       };

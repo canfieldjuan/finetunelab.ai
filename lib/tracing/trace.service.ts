@@ -173,14 +173,19 @@ export async function endTrace(context: TraceContext, result: TraceResult): Prom
       const modelName = result.metadata?.modelName as string | undefined;
       if (modelName) {
         try {
-          const { calculateCost, matchModelToPricing } = await import('./pricing-config');
+          const { calculateCost, matchModelToPricing, inferProviderFromModel } =
+            await import('./pricing-config');
           const pricingKey = matchModelToPricing(modelName);
+          const provider =
+            (result.metadata?.provider as string | undefined) ||
+            inferProviderFromModel(modelName);
           costUsd = calculateCost(
             pricingKey,
             result.inputTokens,
             result.outputTokens,
             result.cacheCreationInputTokens,
-            result.cacheReadInputTokens
+            result.cacheReadInputTokens,
+            provider
           );
           traceDebugLog('Auto-calculated cost', { modelName, costUsd });
         } catch (err) {
