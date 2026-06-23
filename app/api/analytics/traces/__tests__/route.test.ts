@@ -35,7 +35,7 @@ describe('app/api/analytics/traces', () => {
 
   it('POST accepts X-API-Key auth and inserts trace', async () => {
     vi.doMock('@/lib/auth/api-key-validator', () => ({
-      validateRequest: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
+      validateRequestWithScope: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
     }));
 
     const insertSingle = vi.fn(async () => ({
@@ -78,7 +78,7 @@ describe('app/api/analytics/traces', () => {
 
   it('GET accepts X-API-Key auth and returns traces', async () => {
     vi.doMock('@/lib/auth/api-key-validator', () => ({
-      validateRequest: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
+      validateRequestWithScope: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
     }));
 
     const range = vi.fn(async () => ({ data: [], error: null }));

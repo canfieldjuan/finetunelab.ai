@@ -18,7 +18,7 @@ describe('GET app/api/analytics/data', () => {
 
   it('accepts X-API-Key auth and returns dataset', async () => {
     vi.doMock('@/lib/auth/api-key-validator', () => ({
-      validateRequest: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
+      validateRequestWithScope: vi.fn(async () => ({ isValid: true, userId: 'user-123' })),
     }));
 
     vi.doMock('@/lib/analytics/dataAggregator', () => ({

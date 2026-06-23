@@ -30,15 +30,15 @@ export default defineConfig({
       '**/__tests__/api/evaluation/judge.test.ts',
       '**/__tests__/api/benchmarks/[id]/route.test.ts',
       '**/__tests__/api/batch-testing/[id]/validators/route.test.ts',
-      '**/app/api/analytics/data/__tests__/route.test.ts',
       '**/app/api/analytics/traces/__tests__/route.test.ts',
       '**/app/api/batch-testing/run/__tests__/route.test.ts',
       '**/app/api/batch-testing/status/[id]/__tests__/route.test.ts',
       '**/lib/tools/analytics-export/__tests__/analytics-export.service.test.ts',
       '**/lib/tools/system-monitor/__tests__/validate_db_stats.test.ts',
-      '**/lib/tools/web-search/__tests__/content.service.test.ts',
       '**/lib/training/__tests__/approval-handler.test.ts',
       '**/lib/training/__tests__/approval-manager.test.ts',
+      // Hits a live URL over the network — belongs in the e2e layer, not the unit gate.
+      '**/lib/tools/web-search/__tests__/content.service.test.ts',
       // Spawns child processes and uses jest's deprecated done() callback style, which
       // vitest treats as a hard error (tests pass but the run exits non-zero). Belongs
       // in the e2e/integration layer, not the unit gate.
