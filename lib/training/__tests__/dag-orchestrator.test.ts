@@ -463,8 +463,14 @@ describe('DAGOrchestrator', () => {
       
       // Execution should be marked as cancelled
       expect(finalExecution.status).toBe('cancelled');
-      
-      // At least one job should be cancelled or pending (job2 shouldn't run)
+
+      // The running job (job1) was cancelled mid-flight: when its handler resolves it
+      // must NOT be flipped back to 'completed'.
+      const job1Status = finalExecution.jobs.get('job1')?.status;
+      expect(job1Status).not.toBe('completed');
+      expect(job1Status).toBe('cancelled');
+
+      // job2 should never have started.
       const job2Status = finalExecution.jobs.get('job2')?.status;
       expect(['pending', 'cancelled']).toContain(job2Status);
     });
