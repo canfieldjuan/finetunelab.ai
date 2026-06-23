@@ -3,7 +3,6 @@
  * Tests the handleLocalProvider and helper functions
  */
 
-import { describe, it, expect, afterAll } from '@jest/globals';
 import { spawn } from 'child_process';
 import path from 'path';
 import { writeFile, unlink, readFile } from 'fs/promises';

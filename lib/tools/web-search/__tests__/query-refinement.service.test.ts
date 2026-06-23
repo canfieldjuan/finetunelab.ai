@@ -1,17 +1,18 @@
+import { vi } from 'vitest';
 import { queryRefinementService, POOR_RESULTS_THRESHOLD } from '../query-refinement.service';
 import type { WebSearchDocument } from '../types';
 
 // Mock the OpenAI response
-jest.mock('@/lib/llm/openai', () => ({
-  getOpenAIResponse: jest.fn(),
+vi.mock('@/lib/llm/openai', () => ({
+  getOpenAIResponse: vi.fn(),
 }));
 
 import { getOpenAIResponse } from '@/lib/llm/openai';
-const mockGetOpenAIResponse = getOpenAIResponse as jest.MockedFunction<typeof getOpenAIResponse>;
+const mockGetOpenAIResponse = getOpenAIResponse as ReturnType<typeof vi.fn>;
 
 describe('QueryRefinementService Unit Tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Poor Results Detection', () => {

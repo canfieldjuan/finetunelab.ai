@@ -6,8 +6,8 @@
 import { LLMJudge, LLMJudgeCriterion, LLMJudgmentRequest } from '@/lib/evaluation/llm-judge';
 
 // Mock the SDKs
-jest.mock('openai');
-jest.mock('@anthropic-ai/sdk');
+vi.mock('openai');
+vi.mock('@anthropic-ai/sdk');
 
 describe('LLM Judge Fixes', () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -15,7 +15,7 @@ describe('LLM Judge Fixes', () => {
   beforeEach(() => {
     // Save original env
     originalEnv = { ...process.env };
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -122,7 +122,7 @@ describe('LLM Judge Fixes', () => {
 
       // Mock judgeMessage to simulate partial failures
       const originalJudgeMessage = judge.judgeMessage.bind(judge);
-      jest.spyOn(judge, 'judgeMessage').mockImplementation(async (req) => {
+      vi.spyOn(judge, 'judgeMessage').mockImplementation(async (req) => {
         // Fail requests for message-2 and message-4
         if (req.message_id === 'message-2' || req.message_id === 'message-4') {
           throw new Error('Simulated evaluation failure');
