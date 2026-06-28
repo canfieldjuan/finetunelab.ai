@@ -1379,6 +1379,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
           sessionId={conversations.find(c => c.id === activeId)?.session_id}
           experimentName={conversations.find(c => c.id === activeId)?.experiment_name}
           onExport={() => setOpenModal('export-dialog')}
+          onCompareModels={() => setOpenModal('model-comparison')}
           modelSelector={
             <ModelSelector
               value={selectedModelId}
@@ -1830,6 +1831,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
           open={openModal === 'model-comparison'}
           onClose={() => setOpenModal(null)}
           sessionToken={session?.access_token}
+          userId={userId}
           initialPrompt={input}
         />
       )}
@@ -1880,7 +1882,6 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     </div>
   );
 }
-
 
 
 

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { MoreVertical, Download, Share2, Tag, Copy, Check } from 'lucide-react';
+import { MoreVertical, Download, Share2, Tag, Copy, Check, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ interface ChatHeaderProps {
   sessionId?: string | null;
   experimentName?: string | null;
   onExport?: () => void;
+  onCompareModels?: () => void;
   modelSelector?: React.ReactNode;
   modelControls?: React.ReactNode;
 }
@@ -28,6 +29,7 @@ export function ChatHeader({
   sessionId,
   experimentName,
   onExport,
+  onCompareModels,
   modelSelector,
   modelControls
 }: ChatHeaderProps) {
@@ -93,6 +95,14 @@ export function ChatHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={onCompareModels}
+                disabled={loading || !onCompareModels}
+                className="cursor-pointer"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                <span>Compare Models</span>
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={onExport}
                 disabled={!activeId || !onExport}
