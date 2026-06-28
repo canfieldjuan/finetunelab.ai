@@ -288,6 +288,8 @@ export function EditModelDialog({
     return null;
   }
 
+  const supportsServedModelName = model.provider === 'vllm' || model.provider === 'ollama';
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -358,7 +360,7 @@ export function EditModelDialog({
             </div>
 
             {/* Model ID */}
-            <div className={model.provider === 'vllm' ? '' : 'md:col-span-2'}>
+            <div className={supportsServedModelName ? '' : 'md:col-span-2'}>
               <label className="block text-sm font-medium mb-2">
                 Model ID <span className="text-destructive">*</span>
               </label>
@@ -372,7 +374,7 @@ export function EditModelDialog({
             </div>
 
             {/* Served Model Name */}
-            {model.provider === 'vllm' && (
+            {supportsServedModelName && (
               <div>
                 <label className="block text-sm font-medium mb-2">Served Model Name</label>
                 <input

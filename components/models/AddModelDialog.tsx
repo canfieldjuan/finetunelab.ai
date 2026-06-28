@@ -1100,7 +1100,7 @@ const DISCOVERY_SUPPORTED_PROVIDERS: ModelProvider[] = [
   'openai', 'vllm', 'ollama', 'together', 'groq', 'openrouter', 'fireworks', 'runpod', 'custom',
 ];
 
-const SERVED_MODEL_NAME_PROVIDERS: ModelProvider[] = ['vllm'];
+const SERVED_MODEL_NAME_PROVIDERS: ModelProvider[] = ['vllm', 'ollama'];
 
 function ManualForm({
   formData,

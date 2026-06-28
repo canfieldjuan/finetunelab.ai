@@ -95,6 +95,47 @@ describe('EditModelDialog serving fields', () => {
     expect(onUpdated).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('patches served_model_name for an existing Ollama model', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ model: { id: 'model-ollama' } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <EditModelDialog
+        isOpen
+        model={{
+          ...baseModel,
+          id: 'model-ollama',
+          name: 'Local Llama',
+          provider: 'ollama',
+          base_url: 'http://localhost:11434/v1',
+          model_id: '/models/llama3.2',
+          served_model_name: 'llama3.2',
+        }}
+        sessionToken="session-token"
+        onClose={vi.fn()}
+        onUpdated={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByDisplayValue('llama3.2'), {
+      target: { value: 'llama3.2:latest' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/models/model-ollama', expect.any(Object));
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+
+    expect(body).toEqual({
+      served_model_name: 'llama3.2:latest',
+    });
+  });
 });
 
 describe('ModelCard default marker', () => {
