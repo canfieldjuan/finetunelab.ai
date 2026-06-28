@@ -28,7 +28,6 @@ export function isPortalChatTool(tool: Pick<ToolDefinition, 'name'>): boolean {
 
 export function buildRegistryToolSeedRows(tools: ToolDefinition[]): RegistryToolSeedRow[] {
   return tools
-    .filter(isPortalChatTool)
     .map((tool) => ({
       name: tool.name,
       description: tool.description,

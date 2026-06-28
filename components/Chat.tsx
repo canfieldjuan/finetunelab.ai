@@ -29,7 +29,7 @@ import { Input } from "./ui/input";
 import { useAuth } from "../contexts/AuthContext";
 import { logSessionEvent } from "../lib/sessionLogs";
 import { supabase } from "../lib/supabaseClient";
-import { getEnabledTools } from "../lib/tools/toolManager";
+import { getEnabledPortalChatTools } from "../lib/tools/toolManager";
 import { AppSidebar } from "./layout/AppSidebar";
 import { useDocuments } from "../hooks/useDocuments";
 import { useArchive } from "../hooks/useArchive";
@@ -596,7 +596,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
 
   useEffect(() => {
     const loadTools = async () => {
-      const { data, error: toolsError } = await getEnabledTools();
+      const { data, error: toolsError } = await getEnabledPortalChatTools();
       if (toolsError) {
         log.error('Chat', 'Error loading tools', { error: toolsError });
         return;
@@ -1882,7 +1882,5 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     </div>
   );
 }
-
-
 
 

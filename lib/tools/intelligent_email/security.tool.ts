@@ -28,7 +28,7 @@ const emailSecurityTool: ToolDefinition = {
         description: 'The security analysis action to perform',
       },
       email: {
-        type: 'object',
+        type: ['object', 'string'],
         description: 'Email message to analyze (JSON string or object)',
       },
     },

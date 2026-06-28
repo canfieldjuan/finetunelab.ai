@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { getEnabledTools } from '../../lib/tools/toolManager';
+import { getEnabledPortalChatTools } from '../../lib/tools/toolManager';
 import { log } from '../../lib/utils/logger';
 
 
@@ -18,7 +18,7 @@ export function useTools() {
 
   useEffect(() => {
     const loadTools = async () => {
-      const { data, error: toolsError } = await getEnabledTools();
+      const { data, error: toolsError } = await getEnabledPortalChatTools();
       if (toolsError) {
         log.error('useTools', 'Error loading tools', { error: toolsError });
         return;

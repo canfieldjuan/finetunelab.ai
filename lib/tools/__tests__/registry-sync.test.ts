@@ -24,7 +24,7 @@ function tool(name: string, enabled = true, operationEnum: string[] = ['run']): 
 }
 
 describe('buildRegistryToolSeedRows', () => {
-  it('derives portal seed rows from registered tools', () => {
+  it('derives seed rows from all registered tools', () => {
     const rows = buildRegistryToolSeedRows([
       tool('query_knowledge_graph'),
       tool('intelligent_email'),
@@ -38,17 +38,21 @@ describe('buildRegistryToolSeedRows', () => {
     ]);
 
     expect(rows.map((row) => row.name)).toEqual([
+      'analytics_export',
+      'dataset_manager',
       'email_analysis',
       'email_security',
       'intelligent_email',
+      'prompt_tester',
       'query_knowledge_graph',
+      'training_control',
       'web_search',
     ]);
     expect(rows.find((row) => row.name === 'web_search')?.is_enabled).toBe(false);
     expect(rows.find((row) => row.name === 'web_search')?.parameters.properties.operation.enum).toEqual(['search']);
   });
 
-  it('excludes server-only tools from portal seed rows', () => {
+  it('includes server-side registry tools for non-portal consumers', () => {
     const rows = buildRegistryToolSeedRows([
       tool('calculator'),
       tool('filesystem'),
@@ -57,7 +61,13 @@ describe('buildRegistryToolSeedRows', () => {
       tool('training_control'),
     ]);
 
-    expect(rows.map((row) => row.name)).toEqual(['calculator']);
+    expect(rows.map((row) => row.name)).toEqual([
+      'calculator',
+      'dataset_manager',
+      'filesystem',
+      'system_monitor',
+      'training_control',
+    ]);
   });
 
   it('preserves existing enabled state when syncing an existing row', () => {

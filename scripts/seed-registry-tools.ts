@@ -3,10 +3,11 @@
 
 import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import { getAllTools } from '../lib/tools/registry';
-import { buildRegistryToolSeedRows, mergeRegistryToolSeedRow } from '../lib/tools/registry-sync';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-config();
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+config({ path: path.join(repoRoot, '.env') });
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -19,9 +20,13 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function syncTools() {
+  const [{ getAllTools }, { buildRegistryToolSeedRows, mergeRegistryToolSeedRow }] = await Promise.all([
+    import('../lib/tools/registry'),
+    import('../lib/tools/registry-sync'),
+  ]);
   const rows = buildRegistryToolSeedRows(getAllTools());
 
-  console.log('[SeedTools] Syncing registered chat tools');
+  console.log('[SeedTools] Syncing registered tools');
   console.log(`[SeedTools] Registry rows: ${rows.length}\n`);
 
   let inserted = 0;
@@ -49,6 +54,8 @@ async function syncTools() {
         .update({
           description: mergedRow.description,
           parameters: mergedRow.parameters,
+          // Registry-owned rows are canonical built-ins even if a legacy row
+          // was inserted with is_builtin=false.
           is_builtin: mergedRow.is_builtin,
           is_enabled: mergedRow.is_enabled,
           updated_at: new Date().toISOString(),
