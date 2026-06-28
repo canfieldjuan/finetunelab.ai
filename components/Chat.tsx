@@ -74,6 +74,7 @@ import { MessageList } from "./chat/MessageList";
 import { ScrollToBottomButton } from "./chat/ScrollToBottomButton";
 import { ChatCommandPalette } from "./chat/ChatCommandPalette";
 import { ChatHeader } from "./chat/ChatHeader";
+import { GenerationControls } from "./chat/GenerationControls";
 const ContextInspectorPanel = dynamic(() => import("./debug/ContextInspectorPanel").then(mod => ({ default: mod.ContextInspectorPanel })), {
   loading: () => null
 });
@@ -91,7 +92,7 @@ import { log } from "@/lib/utils/logger";
 import { useConversationValidation } from "@/hooks/useConversationValidation";
 import type { ConversationData, ConversationValidationResult } from "@/lib/validation/conversation-validator";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import type { ChatProps } from "./chat/types";
+import type { ChatProps, GenerationSettings } from "./chat/types";
 // New focused hooks for state management
 import {
   useModalState,
@@ -109,6 +110,7 @@ import {
   useMessages,
   useAutoScroll,
 } from '@/components/hooks';
+import type { SelectedModelInfo } from '@/components/hooks/useModelSelection';
 import { useContextInjection } from '@/components/hooks/useContextInjection';
 
 export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
@@ -267,6 +269,20 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Thinking mode state - for Qwen3 and similar models with <think> tags
   const [enableThinking, setEnableThinking] = useState(false);
 
+  const buildGenerationDefaults = useCallback((): GenerationSettings => ({
+    temperature: selectedModel?.default_temperature ?? 0.7,
+    maxOutputTokens: selectedModel?.max_output_tokens ?? 2000,
+  }), [selectedModel?.default_temperature, selectedModel?.max_output_tokens]);
+
+  const [generationSettings, setGenerationSettings] = useState<GenerationSettings>({
+    temperature: 0.7,
+    maxOutputTokens: 2000,
+  });
+
+  useEffect(() => {
+    setGenerationSettings(buildGenerationDefaults());
+  }, [buildGenerationDefaults, selectedModelId]);
+
   // Determine widget/demo mode early so it's available to hooks below
   const isWidgetMode = !!widgetConfig;
   const isDemoOrWidget = demoMode || isWidgetMode;
@@ -300,6 +316,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     setActiveResearchJob,
     contextInjectionEnabled,
     enableThinking,
+    generationSettings,
     allowAnonymous: isDemoOrWidget,
     widgetConfig: widgetConfig || null,
   });
@@ -1045,7 +1062,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // handleStop now provided by useChat hook
 
   // Wrap useModelSelection's handleModelChange to add context tracker logic
-  const handleModelChangeWithContext = (modelId: string, model?: { id: string; name: string; context_length: number }) => {
+  const handleModelChangeWithContext = (modelId: string, model?: SelectedModelInfo) => {
     log.debug('Chat', 'Model changed', { modelId, modelName: model?.name, contextLength: model?.context_length });
     handleModelChange(modelId, model);
 
@@ -1082,7 +1099,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
         onSelectModel={(id) => {
           const model = availableModels.find(m => m.id === id);
           if (model) {
-            handleModelChangeWithContext(id, { ...model, context_length: 128000 });
+            handleModelChangeWithContext(id, model);
           }
         }}
         onOpenArchive={() => setOpenModal('archive-manager')}
@@ -1366,6 +1383,16 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
               onChange={handleModelChangeWithContext}
               sessionToken={session?.access_token}
               disabled={loading}
+            />
+          }
+          modelControls={
+            <GenerationControls
+              settings={generationSettings}
+              modelName={selectedModel?.name}
+              contextLength={selectedModel?.context_length}
+              disabled={loading}
+              onChange={setGenerationSettings}
+              onReset={() => setGenerationSettings(buildGenerationDefaults())}
             />
           }
         />
@@ -1845,9 +1872,6 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     </div>
   );
 }
-
-
-
 
 
 

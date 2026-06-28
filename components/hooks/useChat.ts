@@ -3,6 +3,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
+import type { GenerationSettings } from '../chat/types';
 import type { Citation } from "@/lib/graphrag/service";
 import type { User } from '@supabase/supabase-js';
 import type { ContextTracker } from '../../lib/context/context-tracker';
@@ -55,6 +56,8 @@ interface UseChatOptions {
   contextInjectionEnabled: boolean;
   /** Whether thinking mode is enabled (for Qwen3 and similar models with <think> tags). */
   enableThinking?: boolean;
+  /** Per-chat generation controls. */
+  generationSettings?: GenerationSettings;
   /** Allow anonymous (demo/widget) usage without auth/DB writes. */
   allowAnonymous?: boolean;
   /** Optional widget config for API auth in widget mode. */
@@ -66,7 +69,7 @@ interface UseChatOptions {
  * @param options - The options for the hook.
  * @returns The chat state and actions.
  */
-export function useChat({ user, activeId, tools, enableDeepResearch, selectedModelId, contextTrackerRef, setContextUsage, isStreamingRef, researchProgress, setResearchProgress, setActiveResearchJob, contextInjectionEnabled, enableThinking, allowAnonymous, widgetConfig }: UseChatOptions) {
+export function useChat({ user, activeId, tools, enableDeepResearch, selectedModelId, contextTrackerRef, setContextUsage, isStreamingRef, researchProgress, setResearchProgress, setActiveResearchJob, contextInjectionEnabled, enableThinking, generationSettings, allowAnonymous, widgetConfig }: UseChatOptions) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -587,6 +590,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           enableDeepResearch,
           contextInjectionEnabled,
           enableThinking,
+          generationSettings,
         }),
         signal: controller.signal,
       });

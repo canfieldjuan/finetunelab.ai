@@ -4,11 +4,19 @@ import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import { useAuth } from '../../contexts/AuthContext';
 
+export interface SelectedModelInfo {
+  id: string;
+  name: string;
+  context_length: number;
+  max_output_tokens?: number;
+  default_temperature?: number;
+}
+
 export function useModelSelection() {
   const { user, session } = useAuth();
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<{ id: string; name: string; context_length: number } | null>(null);
-  const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedModel, setSelectedModel] = useState<SelectedModelInfo | null>(null);
+  const [availableModels, setAvailableModels] = useState<SelectedModelInfo[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Load user's default model from settings
@@ -52,7 +60,9 @@ export function useModelSelection() {
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const { data, error } = await supabase.from('llm_models').select('id, name, context_length');
+        const { data, error } = await supabase
+          .from('llm_models')
+          .select('id, name, context_length, max_output_tokens, default_temperature');
         if (error) {
           console.error('[useModelSelection] Supabase error:', error);
           throw error;
@@ -61,7 +71,7 @@ export function useModelSelection() {
 
         // If we have a selected model ID but no model object, find it
         if (selectedModelId && selectedModelId !== "__default__" && !selectedModel && data) {
-          const model = data.find((m: { id: string; name: string; context_length: number }) => m.id === selectedModelId);
+          const model = data.find((m: SelectedModelInfo) => m.id === selectedModelId);
           if (model) {
             setSelectedModel(model);
           }
@@ -90,7 +100,7 @@ export function useModelSelection() {
     fetchModels();
   }, [selectedModelId, selectedModel]);
 
-  const handleModelChange = (modelId: string, model?: { id: string; name: string; context_length: number }) => {
+  const handleModelChange = (modelId: string, model?: SelectedModelInfo) => {
     setSelectedModelId(modelId);
     setSelectedModel(model || null);
   };

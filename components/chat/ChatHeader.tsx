@@ -18,6 +18,7 @@ interface ChatHeaderProps {
   experimentName?: string | null;
   onExport?: () => void;
   modelSelector?: React.ReactNode;
+  modelControls?: React.ReactNode;
 }
 
 export function ChatHeader({
@@ -27,7 +28,8 @@ export function ChatHeader({
   sessionId,
   experimentName,
   onExport,
-  modelSelector
+  modelSelector,
+  modelControls
 }: ChatHeaderProps) {
   const [copied, setCopied] = useState(false);
 
@@ -51,8 +53,9 @@ export function ChatHeader({
     <div className="bg-transparent px-2 py-3">
       <div className="grid grid-cols-3 items-center w-full gap-4">
         {/* Left side: Model Selector - closer to sidebar, transparent background */}
-        <div className="flex justify-start ml-2">
+        <div className="flex justify-start ml-2 gap-1">
           {modelSelector}
+          {modelControls}
         </div>
 
         {/* Center: Title */}

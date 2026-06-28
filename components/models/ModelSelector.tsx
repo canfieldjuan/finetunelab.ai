@@ -19,6 +19,8 @@ interface LLMModelDisplay {
   supports_functions: boolean;
   supports_vision: boolean;
   context_length: number;
+  max_output_tokens: number;
+  default_temperature: number;
   enabled: boolean;
   is_global: boolean;
   is_default?: boolean;
