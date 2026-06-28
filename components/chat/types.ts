@@ -6,6 +6,7 @@
  */
 
 import type { Citation } from "@/lib/graphrag/service";
+import type { WebSearchDocument } from "@/lib/tools/web-search/types";
 
 /**
  * Represents a single chat message
@@ -28,6 +29,7 @@ export interface Message {
   metadata?: unknown;
   content_json?: unknown;
   tools_called?: unknown;
+  webSearchResults?: WebSearchDocument[];
   // Model name for display (persisted in metadata, computed for old messages via useMessages)
   model_name?: string;
   // GraphRAG retrieval metadata (extracted from metadata.graphrag)

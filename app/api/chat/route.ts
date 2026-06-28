@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
   let provider: string | null = null;
   // Track last web_search tool results for progressive doc summaries (SSE)
   let lastWebSearchDocs: WebSearchDocument[] | null = null;
+  let lastWebSearchQuery: string | null = null;
   // Track deep research job id explicitly (do not rely on model text echo)
   let lastDeepResearchJobId: string | null = null;
   const exportSigningSecret = process.env.EXPORT_SIGNING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -844,6 +845,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           const { results, status, jobId } = result.data;
           if (Array.isArray(results)) {
             lastWebSearchDocs = results;
+            lastWebSearchQuery = typeof args.query === 'string' ? args.query : null;
           }
           // Capture deep research job id directly when present
           if ((status === 'deep_research_started' || status === 'research_started') && jobId) {
@@ -1689,7 +1691,17 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               controller.enqueue(encoder.encode(reasoningData));
             }
 
-            // Phase 3: Progressive per-document summaries (emit previews before streaming full answer)
+            // Emit structured standard web-search results before the final answer text.
+            if (lastWebSearchDocs && Array.isArray(lastWebSearchDocs) && lastWebSearchDocs.length > 0) {
+              const resultsData = `data: ${JSON.stringify({
+                type: 'web_search_results',
+                query: lastWebSearchQuery,
+                results: lastWebSearchDocs,
+              })}\n\n`;
+              controller.enqueue(encoder.encode(resultsData));
+            }
+
+            // Phase 3: Progressive per-document summaries (legacy preview event)
             if (lastWebSearchDocs && Array.isArray(lastWebSearchDocs) && lastWebSearchDocs.length > 0) {
               try {
                 const previewCount = Math.min(3, lastWebSearchDocs.length);

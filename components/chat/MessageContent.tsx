@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useMemo, memo, useState, type ReactElement } from 'react';
-import { ChevronDown, Brain } from 'lucide-react';
+import React, { memo, useMemo, useState } from 'react';
+import ReactMarkdown, { type Components, type UrlTransform } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Brain, Check, ChevronDown, Copy } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
+import { copyTextToClipboard } from '@/lib/utils/clipboard';
 
 interface MessageContentProps {
   content: string;
@@ -13,6 +16,45 @@ interface ImageWithFallbackProps {
   src: string;
   alt: string;
 }
+
+const LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+const IMAGE_PROTOCOLS = new Set(['http:', 'https:']);
+
+function sanitizeMarkdownUrl(value: unknown, kind: 'link' | 'image'): string | undefined {
+  if (typeof value !== 'string') return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith('#')) {
+    return kind === 'link' ? trimmed : undefined;
+  }
+
+  if (trimmed.startsWith('/')) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith('//')) {
+    return `https:${trimmed}`;
+  }
+
+  const hasExplicitProtocol = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed);
+  if (!hasExplicitProtocol) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const allowedProtocols = kind === 'image' ? IMAGE_PROTOCOLS : LINK_PROTOCOLS;
+    return allowedProtocols.has(parsed.protocol.toLowerCase()) ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const safeUrlTransform: UrlTransform = (url, key) => {
+  return sanitizeMarkdownUrl(url, key === 'src' ? 'image' : 'link') ?? '';
+};
 
 const ImageWithFallback = memo(function ImageWithFallback({ src, alt }: ImageWithFallbackProps) {
   const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
@@ -49,8 +91,8 @@ const ImageWithFallback = memo(function ImageWithFallback({ src, alt }: ImageWit
 
   return (
     <>
-      <div 
-        className="my-2 relative inline-block max-w-full cursor-pointer hover:opacity-95 transition-opacity" 
+      <div
+        className="my-2 relative inline-block max-w-full cursor-pointer hover:opacity-95 transition-opacity"
         onClick={() => setLightboxOpen(true)}
         role="button"
         tabIndex={0}
@@ -76,24 +118,145 @@ const ImageWithFallback = memo(function ImageWithFallback({ src, alt }: ImageWit
           }}
         />
       </div>
-      
-      {/* Lightbox Modal */}
-      <ImageLightbox 
-        src={src} 
-        alt={alt} 
-        open={lightboxOpen} 
-        onOpenChange={setLightboxOpen} 
+
+      <ImageLightbox
+        src={src}
+        alt={alt}
+        open={lightboxOpen}
+        onOpenChange={setLightboxOpen}
       />
     </>
   );
 });
 
-// CRITICAL: These functions MUST be outside the component to prevent recreation on every render
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [copied, setCopied] = useState(false);
 
-/**
- * Parse thinking blocks from content
- * Extracts <think>...</think> tags and returns thinking blocks + cleaned response
- */
+  const handleCopy = async () => {
+    const ok = await copyTextToClipboard(code);
+    if (!ok) return;
+
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
+
+  return (
+    <div className="my-4 overflow-hidden rounded-lg border border-border bg-gray-950 text-gray-100">
+      <div className="flex h-9 items-center justify-between border-b border-gray-800 px-3">
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
+          {language || 'code'}
+        </span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-300 hover:bg-gray-800 hover:text-white"
+          aria-label="Copy code"
+          title="Copy code"
+        >
+          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        </button>
+      </div>
+      <pre className="overflow-x-auto p-4 text-sm leading-6">
+        <code className="font-mono whitespace-pre">{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+const markdownComponents: Components = {
+  a({ href, children }) {
+    const safeHref = sanitizeMarkdownUrl(href, 'link');
+    if (!safeHref) {
+      return <span className="break-words">{children}</span>;
+    }
+
+    return (
+      <a
+        href={safeHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline decoration-1 underline-offset-2 hover:decoration-2 transition-all break-words"
+      >
+        {children}
+      </a>
+    );
+  },
+  img({ src, alt }) {
+    const safeSrc = sanitizeMarkdownUrl(src, 'image');
+    if (!safeSrc) {
+      return (
+        <span className="text-sm text-muted-foreground">
+          {alt ? `Image omitted: ${alt}` : 'Image omitted'}
+        </span>
+      );
+    }
+
+    return <ImageWithFallback src={safeSrc} alt={alt || 'Image'} />;
+  },
+  pre({ children }) {
+    return <>{children}</>;
+  },
+  code({ className, children }) {
+    const rawCode = String(children).replace(/\n$/, '');
+    const language = /language-([\w-]+)/.exec(className || '')?.[1];
+    const isBlock = Boolean(language) || rawCode.includes('\n');
+
+    if (isBlock) {
+      return <CodeBlock code={rawCode} language={language} />;
+    }
+
+    return (
+      <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono border">
+        {children}
+      </code>
+    );
+  },
+  h1({ children }) {
+    return <h1 className="text-2xl font-bold mb-3 mt-4 first:mt-0">{children}</h1>;
+  },
+  h2({ children }) {
+    return <h2 className="text-xl font-bold mb-3 mt-4 first:mt-0">{children}</h2>;
+  },
+  h3({ children }) {
+    return <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h3>;
+  },
+  p({ children }) {
+    return <p className="mb-4 last:mb-0 leading-relaxed">{children}</p>;
+  },
+  ul({ children }) {
+    return <ul className="mb-4 space-y-2 pl-6 list-disc">{children}</ul>;
+  },
+  ol({ children }) {
+    return <ol className="mb-4 space-y-2 pl-6 list-decimal">{children}</ol>;
+  },
+  li({ children }) {
+    return <li className="leading-relaxed pl-1">{children}</li>;
+  },
+  table({ children }) {
+    return (
+      <div className="my-4 max-w-full overflow-x-auto rounded-lg border border-border">
+        <table className="min-w-full border-collapse text-sm">{children}</table>
+      </div>
+    );
+  },
+  thead({ children }) {
+    return <thead className="bg-muted/70">{children}</thead>;
+  },
+  th({ children }) {
+    return <th className="border-b border-border px-3 py-2 text-left font-semibold">{children}</th>;
+  },
+  td({ children }) {
+    return <td className="border-t border-border px-3 py-2 align-top">{children}</td>;
+  },
+  blockquote({ children }) {
+    return (
+      <blockquote className="my-4 border-l-4 border-border pl-4 text-muted-foreground">
+        {children}
+      </blockquote>
+    );
+  },
+};
+
 interface ParsedContent {
   thinkingBlocks: string[];
   responseContent: string;
@@ -101,11 +264,8 @@ interface ParsedContent {
 
 function parseThinkingBlocks(content: string): ParsedContent {
   const thinkingBlocks: string[] = [];
-
-  // Regex to match <think>...</think> (non-greedy, multiline, case-insensitive)
   const thinkingRegex = /<think>([\s\S]*?)<\/think>/gi;
 
-  // Extract all thinking blocks
   let match;
   while ((match = thinkingRegex.exec(content)) !== null) {
     const thinkingContent = match[1].trim();
@@ -114,270 +274,26 @@ function parseThinkingBlocks(content: string): ParsedContent {
     }
   }
 
-  // Remove thinking blocks from response
-  const responseContent = content.replace(thinkingRegex, '').trim();
-
   return {
     thinkingBlocks,
-    responseContent
+    responseContent: content.replace(thinkingRegex, '').trim()
   };
 }
 
-function parseInlineMarkdown(text: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  let remaining = text;
-  let partKey = 0;
-
-  while (remaining.length > 0) {
-    // Bold text: **text**
-    const boldMatch = remaining.match(/^\*\*([^*]+)\*\*/);
-    if (boldMatch) {
-      parts.push(
-        <strong key={`bold-${partKey++}`} className="font-semibold">
-          {boldMatch[1]}
-        </strong>
-      );
-      remaining = remaining.slice(boldMatch[0].length);
-      continue;
-    }
-
-    // Italic text: *text* or _text_
-    const italicMatch = remaining.match(/^[*_]([^*_]+)[*_]/);
-    if (italicMatch) {
-      parts.push(
-        <em key={`italic-${partKey++}`} className="italic">
-          {italicMatch[1]}
-        </em>
-      );
-      remaining = remaining.slice(italicMatch[0].length);
-      continue;
-    }
-
-    // Code: `code`
-    const codeMatch = remaining.match(/^`([^`]+)`/);
-    if (codeMatch) {
-      parts.push(
-        <code
-          key={`code-${partKey++}`}
-          className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono border"
-        >
-          {codeMatch[1]}
-        </code>
-      );
-      remaining = remaining.slice(codeMatch[0].length);
-      continue;
-    }
-
-    // Markdown images: ![alt](url)
-    const imgMatch = remaining.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
-    if (imgMatch) {
-      const altText = imgMatch[1] || 'Image';
-      const imgUrl = imgMatch[2];
-      parts.push(
-        <ImageWithFallback
-          key={`img-${partKey++}`}
-          src={imgUrl}
-          alt={altText}
-        />
-      );
-      remaining = remaining.slice(imgMatch[0].length);
-      continue;
-    }
-
-    // Markdown links: [text](url)
-    const mdLinkMatch = remaining.match(/^\[([^\]]+)\]\(([^)]+)\)/);
-    if (mdLinkMatch) {
-      const linkText = mdLinkMatch[1];
-      const linkUrl = mdLinkMatch[2];
-      parts.push(
-        <a
-          key={`link-${partKey++}`}
-          href={linkUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline decoration-1 underline-offset-2 hover:decoration-2 transition-all break-words"
-        >
-          {linkText}
-        </a>
-      );
-      remaining = remaining.slice(mdLinkMatch[0].length);
-      continue;
-    }
-
-    // URLs: https://... or http://...
-    const urlMatch = remaining.match(/^(https?:\/\/[^\s<>)"']+)/);
-    if (urlMatch) {
-      const url = urlMatch[1];
-      parts.push(
-        <a
-          key={`link-${partKey++}`}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline decoration-1 underline-offset-2 hover:decoration-2 transition-all break-all"
-        >
-          {url}
-        </a>
-      );
-      remaining = remaining.slice(url.length);
-      continue;
-    }
-
-    // Regular text - if we get here, no patterns matched at the start
-    // If there's a special char at position 0 that didn't match, consume it as text
-    const nextSpecial = remaining.search(/[*_`!\[]|https?:\/\//);
-    if (nextSpecial === 0) {
-      // Special char at start but no pattern matched - consume 1 char as text
-      parts.push(remaining[0]);
-      remaining = remaining.slice(1);
-    } else {
-      // No special char at start, or special char found later
-      const chunk = nextSpecial === -1 ? remaining : remaining.slice(0, nextSpecial);
-      if (chunk) {
-        parts.push(chunk);
-      }
-      remaining = nextSpecial === -1 ? '' : remaining.slice(nextSpecial);
-    }
-  }
-
-  return parts.length > 0 ? parts : text;
+function MarkdownContent({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={markdownComponents}
+      skipHtml
+      urlTransform={safeUrlTransform}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 }
 
-function parseMarkdown(text: string): ReactElement[] {
-  const lines = text.split('\n');
-  const elements: ReactElement[] = [];
-  let currentListItems: string[] = [];
-  let listType: 'ol' | 'ul' | null = null;
-  let key = 0;
-
-  const flushList = () => {
-    if (currentListItems.length > 0 && listType) {
-      if (listType === 'ol') {
-        elements.push(
-          <ol key={`list-${key++}`} className="mb-4 space-y-2 pl-6" style={{ counterReset: 'list-counter', listStyle: 'none' }}>
-            {currentListItems.map((item, idx) => (
-              <li key={idx} className="leading-relaxed" style={{ counterIncrement: 'list-counter', display: 'flex' }}>
-                <span style={{ minWidth: '1.5em', fontWeight: 500 }}>{idx + 1}.</span>
-                <span className="flex-1">{parseInlineMarkdown(item)}</span>
-              </li>
-            ))}
-          </ol>
-        );
-      } else {
-        elements.push(
-          <ul key={`list-${key++}`} className="mb-4 space-y-2 pl-6">
-            {currentListItems.map((item, idx) => (
-              <li key={idx} className="leading-relaxed flex">
-                <span className="mr-2" style={{ minWidth: '1em' }}>•</span>
-                <span className="flex-1">{parseInlineMarkdown(item)}</span>
-              </li>
-            ))}
-          </ul>
-        );
-      }
-      currentListItems = [];
-      listType = null;
-    }
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    // Numbered list: 1. item or 1) item (can be on same line or next line)
-    const numberedMatch = trimmed.match(/^(\d+)[.)]\s*(.*)$/);
-    if (numberedMatch) {
-      if (listType !== 'ol') {
-        flushList();
-        listType = 'ol';
-      }
-      // If content is empty, check next line
-      let content = numberedMatch[2].trim();
-      if (!content && i + 1 < lines.length) {
-        content = lines[++i].trim();
-      }
-      if (content) {
-        currentListItems.push(content);
-      }
-      continue;
-    }
-
-    // Bullet list: - item or * item (can be on same line or next line)
-    const bulletMatch = trimmed.match(/^[-*]\s*(.*)$/);
-    if (bulletMatch) {
-      if (listType !== 'ul') {
-        flushList();
-        listType = 'ul';
-      }
-      // If content is empty, check next line
-      let content = bulletMatch[1].trim();
-      if (!content && i + 1 < lines.length) {
-        content = lines[++i].trim();
-      }
-      if (content) {
-        currentListItems.push(content);
-      }
-      continue;
-    }
-
-    // Flush list if we hit non-list line
-    flushList();
-
-    // Empty line
-    if (!trimmed) {
-      elements.push(<br key={`br-${key++}`} />);
-      continue;
-    }
-
-    // Heading
-    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const text = headingMatch[2];
-      if (level === 1) {
-        elements.push(
-          <h1 key={`h-${key++}`} className="text-2xl font-bold mb-3 mt-4 first:mt-0">
-            {parseInlineMarkdown(text)}
-          </h1>
-        );
-      } else if (level === 2) {
-        elements.push(
-          <h2 key={`h-${key++}`} className="text-xl font-bold mb-3 mt-4 first:mt-0">
-            {parseInlineMarkdown(text)}
-          </h2>
-        );
-      } else {
-        elements.push(
-          <h3 key={`h-${key++}`} className="text-lg font-semibold mb-2 mt-3 first:mt-0">
-            {parseInlineMarkdown(text)}
-          </h3>
-        );
-      }
-      continue;
-    }
-
-    // Regular paragraph
-    elements.push(
-      <p key={`p-${key++}`} className="mb-4 last:mb-0 leading-relaxed">
-        {parseInlineMarkdown(trimmed)}
-      </p>
-    );
-  }
-
-  // Flush any remaining list
-  flushList();
-
-  return elements;
-}
-
-/**
- * ThinkingBlock component - displays model thinking/reasoning in collapsible UI
- */
-interface ThinkingBlockProps {
-  thinkingBlocks: string[];
-}
-
-function ThinkingBlock({ thinkingBlocks }: ThinkingBlockProps) {
+function ThinkingBlock({ thinkingBlocks }: { thinkingBlocks: string[] }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (thinkingBlocks.length === 0) {
@@ -386,7 +302,6 @@ function ThinkingBlock({ thinkingBlocks }: ThinkingBlockProps) {
 
   return (
     <div className="mb-4 border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden bg-blue-50 dark:bg-blue-950/20">
-      {/* Header - Always Visible */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full px-4 py-2 flex items-center justify-between text-sm font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
@@ -402,20 +317,19 @@ function ThinkingBlock({ thinkingBlocks }: ThinkingBlockProps) {
         />
       </button>
 
-      {/* Thinking Content - Collapsible */}
       {isExpanded && (
         <div className="px-4 py-3 border-t border-blue-200 dark:border-blue-800 space-y-3">
           {thinkingBlocks.map((block, index) => (
             <div
               key={index}
-              className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 rounded p-3 font-mono whitespace-pre-wrap"
+              className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 rounded p-3"
             >
               {thinkingBlocks.length > 1 && (
                 <div className="text-xs text-blue-600 dark:text-blue-400 font-semibold mb-2">
                   Thinking Block {index + 1}:
                 </div>
               )}
-              {parseMarkdown(block)}
+              <MarkdownContent content={block} />
             </div>
           ))}
         </div>
@@ -428,39 +342,29 @@ export const MessageContent = memo(function MessageContent({ content, role }: Me
   const [isExpanded, setIsExpanded] = useState(false);
   const TRUNCATE_THRESHOLD = 15000;
 
-  // Parse thinking blocks FIRST (before markdown parsing)
   const { thinkingBlocks, responseContent } = useMemo(() => {
     return parseThinkingBlocks(content);
   }, [content]);
 
-  // Apply truncation to response content (not thinking blocks)
   const shouldTruncate = responseContent.length > TRUNCATE_THRESHOLD && !isExpanded;
   const displayContent = shouldTruncate
     ? responseContent.substring(0, TRUNCATE_THRESHOLD)
     : responseContent;
 
-  // CRITICAL: useMemo dependency is ONLY displayContent - the parseMarkdown function is stable
-  const parsedContent = useMemo(() => {
-    return parseMarkdown(displayContent);
-  }, [displayContent]);
-
   return (
     <div className="text-base">
-      {/* Show thinking block ONLY for assistant messages */}
       {role === 'assistant' && <ThinkingBlock thinkingBlocks={thinkingBlocks} />}
 
-      {/* Main response content */}
-      {parsedContent}
+      {displayContent ? <MarkdownContent content={displayContent} /> : null}
 
-      {/* Truncation toggle */}
       {responseContent.length > TRUNCATE_THRESHOLD && (
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
         >
           {isExpanded
-            ? '▲ Show less'
-            : `▼ Show more (${Math.round((responseContent.length - TRUNCATE_THRESHOLD) / 1024)}KB hidden)`
+            ? 'Show less'
+            : `Show more (${Math.round((responseContent.length - TRUNCATE_THRESHOLD) / 1024)}KB hidden)`
           }
         </button>
       )}

@@ -9,6 +9,7 @@ import type { User } from '@supabase/supabase-js';
 import type { ContextTracker } from '../../lib/context/context-tracker';
 import type { ContextUsage } from '@/lib/context/types';
 import type { ResearchProgress, ActiveResearchJob } from './useResearchState';
+import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 
 
 interface Tool {
@@ -76,9 +77,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
   const [error, setError] = useState<string | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const lastScrolledMessagesLength = useRef<number>(0);
+	  const messagesEndRef = useRef<HTMLDivElement>(null);
+	  const messagesContainerRef = useRef<HTMLDivElement>(null);
+	  const lastScrolledMessagesLength = useRef<number>(0);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -101,10 +102,11 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     }
   }, [messages, scrollToBottom, isStreamingRef]);
 
-  const streamAndProcessResponse = async (response: Response, tempMessageId: string, userMessage: string, streamStartTime: number, updateThrottle: NodeJS.Timeout | null) => {
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let assistantMessage = "";
+	  const streamAndProcessResponse = async (response: Response, tempMessageId: string, userMessage: string, streamStartTime: number, updateThrottle: NodeJS.Timeout | null) => {
+	    const reader = response.body?.getReader();
+	    const decoder = new TextDecoder();
+	    let assistantMessage = "";
+	    let webSearchResults: WebSearchDocument[] | undefined;
     let graphragCitations: Citation[] | undefined;
     let graphragContextsUsed: number | undefined;
     let modelId: string | null = null;
@@ -123,11 +125,12 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           msgs.map((m) =>
             m.id === tempMessageId
               ? {
-                  ...m,
-                  content: assistantMessage,
-                  citations: graphragCitations,
-                  contextsUsed: graphragContextsUsed
-                }
+	                  ...m,
+	                  content: assistantMessage,
+	                  citations: graphragCitations,
+	                  contextsUsed: graphragContextsUsed,
+	                  webSearchResults
+	                }
               : m
           )
         );
@@ -224,15 +227,36 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               });
             }
 
-            // Phase 3: progressive per-document summaries (previews before final answer)
-            if (parsed.type === "doc_summary") {
-              const title = parsed.title || 'Document';
-              const url = parsed.url || '';
-              const summary = parsed.summary || '';
-              const line = `\n• ${title}${url ? ` (${url})` : ''}\n   ${summary}\n`;
-              assistantMessage += line;
-              updateMessageThrottled();
-            }
+	            if (parsed.type === "web_search_results") {
+	              const results = Array.isArray(parsed.results)
+	                ? parsed.results.filter((result: unknown): result is WebSearchDocument => {
+	                    return typeof result === 'object' &&
+	                      result !== null &&
+	                      typeof (result as WebSearchDocument).title === 'string' &&
+	                      typeof (result as WebSearchDocument).url === 'string';
+	                  })
+	                : [];
+	              webSearchResults = results.length > 0 ? results : undefined;
+	              updateMessageThrottled();
+	            }
+
+	            // Legacy per-document previews are now rendered through web_search_results.
+	            if (parsed.type === "doc_summary") {
+	              if (parsed.title && parsed.url) {
+	                const legacyResult = {
+	                  title: String(parsed.title),
+	                  url: String(parsed.url),
+	                  snippet: typeof parsed.summary === 'string' ? parsed.summary : '',
+	                  summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
+	                  source: typeof parsed.source === 'string' ? parsed.source : undefined,
+	                  publishedAt: typeof parsed.publishedAt === 'string' ? parsed.publishedAt : undefined,
+	                };
+	                webSearchResults = webSearchResults
+	                  ? [...webSearchResults, legacyResult]
+	                  : [legacyResult];
+	              }
+	              updateMessageThrottled();
+	            }
 
             if (parsed.type === "model_metadata") {
               modelId = parsed.model_id;
@@ -240,15 +264,21 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               modelName = parsed.model_name;
             }
 
-            if (parsed.type === "tool_call") {
-              const toolInfo = `\n\n🔧 Using tool: ${parsed.tool_name}\n`;
-              assistantMessage += toolInfo;
+	            if (parsed.type === "tool_call") {
+	              if (parsed.tool_name === 'web_search') {
+	                continue;
+	              }
+	              const toolInfo = `\n\n🔧 Using tool: ${parsed.tool_name}\n`;
+	              assistantMessage += toolInfo;
               // [UI_FREEZE_FIX] Use throttled update instead of immediate
               updateMessageThrottled();
             }
 
-            if (parsed.type === "tool_result") {
-              const resultInfo = `📊 Result: ${JSON.stringify(
+	            if (parsed.type === "tool_result") {
+	              if (parsed.tool_name === 'web_search' || parsed.toolName === 'web_search') {
+	                continue;
+	              }
+	              const resultInfo = `📊 Result: ${JSON.stringify(
                 parsed.result
               )}\n\n`;
               assistantMessage += resultInfo;
@@ -361,11 +391,12 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       msgs.map((m) =>
         m.id === tempMessageId
           ? {
-              ...m,
-              content: assistantMessage,
-              citations: graphragCitations,
-              contextsUsed: graphragContextsUsed
-            }
+	              ...m,
+	              content: assistantMessage,
+	              citations: graphragCitations,
+	              contextsUsed: graphragContextsUsed,
+	              webSearchResults
+	            }
           : m
       )
     );
@@ -394,12 +425,15 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     });
 
     // Create metadata object for persistence (matching server-side implementation)
-    const messageMetadata = modelId && modelName && provider ? {
-      model_name: modelName,
-      provider: provider,
-      model_id: modelId,
-      timestamp: new Date().toISOString()
-    } : undefined;
+	    const messageMetadata = {
+	      ...(modelId && modelName && provider ? {
+	        model_name: modelName,
+	        provider: provider,
+	        model_id: modelId,
+	      } : {}),
+	      ...(webSearchResults && webSearchResults.length > 0 ? { web_search_results: webSearchResults } : {}),
+	      timestamp: new Date().toISOString()
+	    };
 
     if (user && activeId && !allowAnonymous) {
       void supabase
@@ -414,8 +448,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           latency_ms: streamLatencyMs,
           input_tokens: finalInputTokens,
           output_tokens: finalOutputTokens,
-          ...(messageMetadata && { metadata: messageMetadata })
-        })
+	          metadata: messageMetadata
+	        })
         .select()
         .single()
         .then(({ data: aiMsg, error: dbError }) => {
@@ -427,8 +461,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             setMessages((msgs) =>
               msgs.map((m) =>
                 m.id === tempMessageId
-                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed }
-                  : m
+	                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed, webSearchResults }
+	                  : m
               )
             );
             log.debug('useChat', 'Message updated with real ID', { realId: aiMsg.id, tempId: tempMessageId });
