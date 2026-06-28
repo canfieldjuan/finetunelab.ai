@@ -107,7 +107,10 @@ describe('SecretsPage provider model import', () => {
           success: true,
           models: [
             { id: 'gpt-4o-mini' },
-            { id: 'gpt-4.1-mini', max_model_len: 8192 },
+            { id: 'gpt-4.1-mini' },
+            { id: 'text-embedding-3-small' },
+            { id: 'dall-e-3' },
+            { id: 'omni-moderation-latest' },
           ],
         });
       }
@@ -146,11 +149,18 @@ describe('SecretsPage provider model import', () => {
       provider: 'openai',
       base_url: 'https://api.openai.com/v1',
       auth_type: 'bearer',
+      supports_streaming: true,
+      supports_functions: true,
+      supports_vision: false,
       models: [
-        { model_id: 'gpt-4o-mini', name: 'gpt-4o-mini', context_length: 4096 },
-        { model_id: 'gpt-4.1-mini', name: 'gpt-4.1-mini', context_length: 8192 },
+        { model_id: 'gpt-4o-mini', name: 'gpt-4o-mini', context_length: 128000 },
+        { model_id: 'gpt-4.1-mini', name: 'gpt-4.1-mini', context_length: 128000 },
       ],
     });
+    const importedModelIds = bulkBody.models.map((model: { model_id: string }) => model.model_id);
+    expect(importedModelIds).not.toContain('text-embedding-3-small');
+    expect(importedModelIds).not.toContain('dall-e-3');
+    expect(importedModelIds).not.toContain('omni-moderation-latest');
   });
 
   it('chunks provider-secret model imports into 100-model bulk requests', async () => {
@@ -196,7 +206,7 @@ describe('SecretsPage provider model import', () => {
     expect(bulkBodies[1].models[0]).toEqual({
       model_id: 'openrouter/model-100',
       name: 'openrouter/model-100',
-      context_length: 4096,
+      context_length: 128000,
     });
   });
 

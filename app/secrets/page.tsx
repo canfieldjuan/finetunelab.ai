@@ -25,6 +25,7 @@ import { WidgetAppsManagement } from '@/components/settings/WidgetAppsManagement
 import { IntegrationsManagement } from '@/components/settings/IntegrationsManagement';
 import type { ProviderSecretDisplay } from '@/lib/secrets/secrets.types';
 import type { AuthType, DiscoveredModel, ModelProvider } from '@/lib/models/llm-model.types';
+import { ALL_TEMPLATES } from '@/lib/models/model-templates';
 import { safeJsonParse } from '@/lib/utils/safe-json';
 
 const AUTO_IMPORT_BATCH_SIZE = 100;
@@ -32,6 +33,7 @@ const AUTO_IMPORT_BATCH_SIZE = 100;
 type AutoDiscoveryImportConfig = {
   base_url: string;
   auth_type: AuthType;
+  default_context_length: number;
 };
 
 type ModelImportNotice = {
@@ -58,12 +60,29 @@ type BulkImportResponse = {
 };
 
 const AUTO_DISCOVERY_IMPORT_CONFIG: Partial<Record<ModelProvider, AutoDiscoveryImportConfig>> = {
-  openai: { base_url: 'https://api.openai.com/v1', auth_type: 'bearer' },
-  openrouter: { base_url: 'https://openrouter.ai/api/v1', auth_type: 'bearer' },
-  together: { base_url: 'https://api.together.xyz/v1', auth_type: 'bearer' },
-  groq: { base_url: 'https://api.groq.com/openai/v1', auth_type: 'bearer' },
-  fireworks: { base_url: 'https://api.fireworks.ai/inference/v1', auth_type: 'bearer' },
+  openai: { base_url: 'https://api.openai.com/v1', auth_type: 'bearer', default_context_length: 128000 },
+  openrouter: { base_url: 'https://openrouter.ai/api/v1', auth_type: 'bearer', default_context_length: 128000 },
+  together: { base_url: 'https://api.together.xyz/v1', auth_type: 'bearer', default_context_length: 32768 },
+  groq: { base_url: 'https://api.groq.com/openai/v1', auth_type: 'bearer', default_context_length: 32768 },
+  fireworks: { base_url: 'https://api.fireworks.ai/inference/v1', auth_type: 'bearer', default_context_length: 32768 },
 };
+
+const NON_CHAT_MODEL_ID_PATTERNS = [
+  /(^|[/:_-])(?:text-)?embedd?ings?([/:_-]|$)/,
+  /(^|[/:_-])rerank(?:er)?([/:_-]|$)/,
+  /(^|[/:_-])moderation([/:_-]|$)/,
+  /(^|[/:_-])omni-moderation([/:_-]|$)/,
+  /(^|[/:_-])dall[-_]?e([/:_-]|$)/,
+  /(^|[/:_-])image(s)?([/:_-]|$)/,
+  /(^|[/:_-])stable[-_]?diffusion([/:_-]|$)/,
+  /(^|[/:_-])flux([/:_-]|$)/,
+  /(^|[/:_-])clip([/:_-]|$)/,
+  /(^|[/:_-])whisper([/:_-]|$)/,
+  /(^|[/:_-])tts([/:_-]|$)/,
+  /(^|[/:_-])speech([/:_-]|$)/,
+  /(^|[/:_-])audio([/:_-]|$)/,
+  /transcri(?:be|ption)/,
+];
 
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -75,6 +94,38 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 
 function modelLabel(count: number): string {
   return count === 1 ? 'model' : 'models';
+}
+
+function isLikelyChatModel(modelId: string): boolean {
+  const normalized = modelId.toLowerCase();
+  return !NON_CHAT_MODEL_ID_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function matchingTemplateContextLength(provider: ModelProvider, modelId: string): number | undefined {
+  const normalizedModelId = modelId.toLowerCase();
+  const template = ALL_TEMPLATES
+    .filter((candidate) => candidate.provider === provider)
+    .find((candidate) => {
+      const templateModelId = candidate.model_id.toLowerCase();
+      return (
+        normalizedModelId === templateModelId ||
+        normalizedModelId.startsWith(`${templateModelId}-`) ||
+        templateModelId.startsWith(`${normalizedModelId}-`)
+      );
+    });
+
+  return template?.context_length;
+}
+
+function toBulkImportModel(provider: ModelProvider, config: AutoDiscoveryImportConfig, model: DiscoveredModel) {
+  return {
+    model_id: model.id,
+    name: model.id,
+    context_length:
+      model.max_model_len ||
+      matchingTemplateContextLength(provider, model.id) ||
+      config.default_context_length,
+  };
 }
 
 async function importDiscoveredModelsForProvider(
@@ -107,7 +158,7 @@ async function importDiscoveredModelsForProvider(
       };
     }
 
-    const discoveredModels = discoverData.models || [];
+    const discoveredModels = (discoverData.models || []).filter((model) => isLikelyChatModel(model.id));
     if (discoveredModels.length === 0) {
       return {
         type: 'warning',
@@ -128,11 +179,10 @@ async function importDiscoveredModelsForProvider(
           provider,
           base_url: config.base_url,
           auth_type: config.auth_type,
-          models: batch.map((model) => ({
-            model_id: model.id,
-            name: model.id,
-            context_length: model.max_model_len || 4096,
-          })),
+          supports_streaming: true,
+          supports_functions: true,
+          supports_vision: false,
+          models: batch.map((model) => toBulkImportModel(provider, config, model)),
         }),
       });
 
