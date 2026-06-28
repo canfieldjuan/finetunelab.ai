@@ -4,6 +4,7 @@
 
 import type { ChatMessage } from '../openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
+import { resolveOllamaRequestModel, toOllamaNativeBaseUrl } from '../ollama-utils';
 import { BaseProviderAdapter, type AdapterRequest, type AdapterResponse } from './base-adapter';
 
 // ============================================================================
@@ -43,12 +44,13 @@ export class OllamaAdapter extends BaseProviderAdapter {
     const { messages, config, options } = request;
 
     // Use /api/chat for multi-turn conversations
-    const url = this.buildUrl(config.base_url, '/api/chat');
+    const url = this.buildUrl(toOllamaNativeBaseUrl(config.base_url), '/api/chat');
     const headers = this.buildAuthHeaders(config);
+    const modelName = resolveOllamaRequestModel(config);
 
     // Build request body
     const body: Record<string, unknown> = {
-      model: config.model_id,
+      model: modelName,
       messages: this.formatMessages(messages),
       stream: options.stream ?? false,
       options: {
@@ -59,7 +61,7 @@ export class OllamaAdapter extends BaseProviderAdapter {
 
     console.log('[OllamaAdapter] Request:', {
       url,
-      model: config.model_id,
+      model: modelName,
       messageCount: messages.length,
       stream: options.stream || false,
     });

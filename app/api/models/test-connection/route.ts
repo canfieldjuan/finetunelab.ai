@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
 import { PROVIDERS } from '@/lib/constants';
+import { resolveOllamaRequestModel, toOllamaNativeBaseUrl } from '@/lib/llm/ollama-utils';
 
 export const runtime = 'nodejs';
 
@@ -235,15 +236,17 @@ async function testOllamaConnection(config: ModelConfig): Promise<{
   error?: string;
 }> {
   const startTime = Date.now();
+  const requestModelName = resolveOllamaRequestModel(config);
+  const nativeBaseUrl = toOllamaNativeBaseUrl(config.base_url);
 
   try {
-    const response = await fetch(`${config.base_url}/api/generate`, {
+    const response = await fetch(`${nativeBaseUrl}/api/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: config.model_id,
+        model: requestModelName,
         prompt: 'test',
         stream: false,
       }),
