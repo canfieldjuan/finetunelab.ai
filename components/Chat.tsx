@@ -30,6 +30,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { logSessionEvent } from "../lib/sessionLogs";
 import { supabase } from "../lib/supabaseClient";
 import { getEnabledTools } from "../lib/tools/toolManager";
+import { copyTextToClipboard } from "../lib/utils/clipboard";
 import { AppSidebar } from "./layout/AppSidebar";
 import { useDocuments } from "../hooks/useDocuments";
 import { useArchive } from "../hooks/useArchive";
@@ -508,9 +509,13 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
 
   const handleCopyMessage = async (content: string, messageId: string) => {
     try {
-      await navigator.clipboard.writeText(content);
-      handleCopyMessageState(messageId);
-      log.debug('Chat', 'Message copied', { messageId });
+      const copied = await copyTextToClipboard(content);
+      if (copied) {
+        handleCopyMessageState(messageId);
+        log.debug('Chat', 'Message copied', { messageId });
+      } else {
+        log.error('Chat', 'Failed to copy message', { messageId });
+      }
     } catch (err) {
       log.error('Chat', 'Failed to copy message', { error: err });
     }
@@ -1882,7 +1887,6 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     </div>
   );
 }
-
 
 
 
