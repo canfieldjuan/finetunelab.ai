@@ -87,6 +87,8 @@ export async function waitForGpuMemoryRelease(options: GpuMemoryWaitOptions = {}
     const waitedMs = Date.now() - start;
 
     if (!snapshot.supported) {
+      console.warn('[GpuMemory] GPU memory probe unavailable; proceeding without a VRAM-settle gate:', snapshot.reason);
+
       return {
         supported: false,
         released: true,
