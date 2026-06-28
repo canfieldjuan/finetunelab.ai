@@ -25,6 +25,12 @@ const DISCOVERY_SUPPORTED = new Set<ModelProvider>([
   'custom',
 ]);
 
+const BULK_IMPORT_SUPPORTED = new Set<ModelProvider>([
+  ...DISCOVERY_SUPPORTED,
+  'anthropic',
+  'huggingface',
+]);
+
 const SERVED_MODEL_NAME_PROVIDERS = new Set<ModelProvider>(['vllm', 'ollama']);
 const AUTH_TYPES = new Set<AuthType>(['bearer', 'api_key', 'custom_header', 'none']);
 
@@ -34,6 +40,14 @@ type BulkModelInput = {
   served_model_name?: unknown;
   context_length?: unknown;
   max_model_len?: unknown;
+  max_output_tokens?: unknown;
+  supports_streaming?: unknown;
+  supports_functions?: unknown;
+  supports_vision?: unknown;
+  price_per_input_token?: unknown;
+  price_per_output_token?: unknown;
+  default_temperature?: unknown;
+  default_top_p?: unknown;
 };
 
 type BulkModelSummary = {
@@ -52,6 +66,19 @@ function asPositiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : undefined;
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function asNonNegativeNumber(value: unknown): number | undefined {
+  const numberValue = asNumber(value);
+  return numberValue !== undefined && numberValue >= 0 ? numberValue : undefined;
 }
 
 function toCreatedSummary(model: LLMModel): BulkModelSummary {
@@ -92,25 +119,28 @@ function buildBulkDto({
     served_model_name: servedModelName,
     auth_type: authType,
     auth_headers: {},
-    supports_streaming: typeof body.supports_streaming === 'boolean' ? body.supports_streaming : true,
-    supports_functions: typeof body.supports_functions === 'boolean' ? body.supports_functions : false,
-    supports_vision: typeof body.supports_vision === 'boolean' ? body.supports_vision : false,
+    supports_streaming: asBoolean(model.supports_streaming) ?? asBoolean(body.supports_streaming) ?? true,
+    supports_functions: asBoolean(model.supports_functions) ?? asBoolean(body.supports_functions) ?? false,
+    supports_vision: asBoolean(model.supports_vision) ?? asBoolean(body.supports_vision) ?? false,
     context_length:
       asPositiveInteger(model.context_length) ??
       asPositiveInteger(model.max_model_len) ??
       asPositiveInteger(body.context_length) ??
       4096,
     max_output_tokens:
+      asPositiveInteger(model.max_output_tokens) ??
       asPositiveInteger(body.max_output_tokens) ??
       parseInt(process.env.MODELS_DEFAULT_MAX_OUTPUT_TOKENS || '2000', 10),
+    price_per_input_token: asNonNegativeNumber(model.price_per_input_token) ?? asNonNegativeNumber(body.price_per_input_token),
+    price_per_output_token: asNonNegativeNumber(model.price_per_output_token) ?? asNonNegativeNumber(body.price_per_output_token),
     default_temperature:
-      typeof body.default_temperature === 'number'
-        ? body.default_temperature
-        : parseFloat(process.env.MODELS_DEFAULT_TEMPERATURE || '0.7'),
+      asNumber(model.default_temperature) ??
+      asNumber(body.default_temperature) ??
+      parseFloat(process.env.MODELS_DEFAULT_TEMPERATURE || '0.7'),
     default_top_p:
-      typeof body.default_top_p === 'number'
-        ? body.default_top_p
-        : parseFloat(process.env.MODELS_DEFAULT_TOP_P || '1.0'),
+      asNumber(model.default_top_p) ??
+      asNumber(body.default_top_p) ??
+      parseFloat(process.env.MODELS_DEFAULT_TOP_P || '1.0'),
     enabled: true,
     is_default: false,
   };
@@ -151,13 +181,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!DISCOVERY_SUPPORTED.has(provider)) {
+    if (!BULK_IMPORT_SUPPORTED.has(provider)) {
       return NextResponse.json(
         {
           success: false,
           unsupported: true,
           error: 'unsupported_provider',
-          message: `Bulk discovery import isn't available for "${provider}".`,
+          message: `Bulk model import isn't available for "${provider}".`,
         },
         { status: 400 }
       );

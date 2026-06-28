@@ -24,7 +24,7 @@ import { ApiKeysManagement } from '@/components/settings/ApiKeysManagement';
 import { WidgetAppsManagement } from '@/components/settings/WidgetAppsManagement';
 import { IntegrationsManagement } from '@/components/settings/IntegrationsManagement';
 import type { ProviderSecretDisplay } from '@/lib/secrets/secrets.types';
-import type { AuthType, DiscoveredModel, ModelProvider } from '@/lib/models/llm-model.types';
+import type { AuthType, DiscoveredModel, ModelProvider, ModelTemplate } from '@/lib/models/llm-model.types';
 import { ALL_TEMPLATES } from '@/lib/models/model-templates';
 import { safeJsonParse } from '@/lib/utils/safe-json';
 
@@ -66,6 +66,8 @@ const AUTO_DISCOVERY_IMPORT_CONFIG: Partial<Record<ModelProvider, AutoDiscoveryI
   groq: { base_url: 'https://api.groq.com/openai/v1', auth_type: 'bearer', default_context_length: 32768 },
   fireworks: { base_url: 'https://api.fireworks.ai/inference/v1', auth_type: 'bearer', default_context_length: 32768 },
 };
+
+const CURATED_TEMPLATE_IMPORT_PROVIDERS = new Set<ModelProvider>(['anthropic', 'huggingface']);
 
 const NON_CHAT_MODEL_ID_PATTERNS = [
   /(^|[/:_-])(?:text-)?embedd?ings?([/:_-]|$)/,
@@ -126,6 +128,40 @@ function toBulkImportModel(provider: ModelProvider, config: AutoDiscoveryImportC
       matchingTemplateContextLength(provider, model.id) ||
       config.default_context_length,
   };
+}
+
+function isAutoImportableTemplate(template: ModelTemplate): boolean {
+  const placeholderPattern = /\b(?:YOUR|your)[-_]/;
+  return (
+    CURATED_TEMPLATE_IMPORT_PROVIDERS.has(template.provider) &&
+    !template.id.includes('custom') &&
+    !placeholderPattern.test(template.base_url) &&
+    !placeholderPattern.test(template.model_id)
+  );
+}
+
+function getCuratedTemplatesForProvider(provider: ModelProvider): ModelTemplate[] {
+  return ALL_TEMPLATES.filter((template) => template.provider === provider && isAutoImportableTemplate(template));
+}
+
+function toBulkImportTemplateModel(template: ModelTemplate) {
+  return {
+    model_id: template.model_id,
+    name: template.name,
+    context_length: template.context_length,
+    max_output_tokens: template.max_output_tokens,
+    supports_streaming: template.supports_streaming,
+    supports_functions: template.supports_functions,
+    supports_vision: template.supports_vision,
+    price_per_input_token: template.price_per_input_token,
+    price_per_output_token: template.price_per_output_token,
+    default_temperature: template.default_temperature,
+    default_top_p: template.default_top_p,
+  };
+}
+
+function templateGroupKey(template: ModelTemplate): string {
+  return `${template.base_url}\n${template.auth_type}`;
 }
 
 async function importDiscoveredModelsForProvider(
@@ -222,6 +258,90 @@ async function importDiscoveredModelsForProvider(
       message: `${providerLabel} key saved, but model import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
+}
+
+async function importCuratedModelsForProvider(
+  provider: ModelProvider,
+  providerLabel: string,
+  sessionToken: string
+): Promise<ModelImportNotice | null> {
+  const templates = getCuratedTemplatesForProvider(provider);
+  if (templates.length === 0) return null;
+
+  const groups = new Map<string, ModelTemplate[]>();
+  for (const template of templates) {
+    const key = templateGroupKey(template);
+    groups.set(key, [...(groups.get(key) || []), template]);
+  }
+
+  try {
+    const totals = { created: 0, skipped: 0, failed: 0 };
+    const requestErrors: string[] = [];
+
+    for (const groupTemplates of groups.values()) {
+      const firstTemplate = groupTemplates[0];
+      for (const batch of chunkArray(groupTemplates, AUTO_IMPORT_BATCH_SIZE)) {
+        const bulkResponse = await fetch('/api/models/bulk', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify({
+            provider,
+            base_url: firstTemplate.base_url,
+            auth_type: firstTemplate.auth_type,
+            models: batch.map(toBulkImportTemplateModel),
+          }),
+        });
+
+        const bulkData = await safeJsonParse<BulkImportResponse>(bulkResponse, {});
+        if (!bulkResponse.ok) {
+          requestErrors.push(bulkData.message || bulkData.error || `Bulk import failed with ${bulkResponse.status}`);
+          continue;
+        }
+
+        totals.created += bulkData.counts?.created || 0;
+        totals.skipped += bulkData.counts?.skipped || 0;
+        totals.failed += bulkData.counts?.failed || 0;
+      }
+    }
+
+    if (requestErrors.length > 0 || totals.failed > 0) {
+      return {
+        type: 'warning',
+        message: `${providerLabel} key saved. Imported ${totals.created} curated ${modelLabel(totals.created)}, skipped ${totals.skipped}, and ${totals.failed + requestErrors.length} failed.`,
+      };
+    }
+
+    if (totals.created > 0) {
+      const skippedSuffix = totals.skipped > 0 ? ` ${totals.skipped} already existed.` : '';
+      return {
+        type: 'success',
+        message: `Imported ${totals.created} curated ${providerLabel} ${modelLabel(totals.created)}.${skippedSuffix}`,
+      };
+    }
+
+    return {
+      type: 'success',
+      message: `${providerLabel} key saved. All ${totals.skipped} curated ${modelLabel(totals.skipped)} were already imported.`,
+    };
+  } catch (error) {
+    return {
+      type: 'warning',
+      message: `${providerLabel} key saved, but curated model import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
+  }
+}
+
+async function importModelsForProvider(
+  provider: ModelProvider,
+  providerLabel: string,
+  sessionToken: string
+): Promise<ModelImportNotice | null> {
+  const discoveredImportNotice = await importDiscoveredModelsForProvider(provider, providerLabel, sessionToken);
+  if (discoveredImportNotice) return discoveredImportNotice;
+  return importCuratedModelsForProvider(provider, providerLabel, sessionToken);
 }
 
 export default function SecretsPage() {
@@ -645,7 +765,7 @@ function SecretDialog({
       }
 
       console.log('[SecretDialog] Secret', isEdit ? 'updated' : 'created');
-      const modelImportNotice = await importDiscoveredModelsForProvider(provider, providerLabel, sessionToken);
+      const modelImportNotice = await importModelsForProvider(provider, providerLabel, sessionToken);
       onModelImportNotice(modelImportNotice);
       onSuccess();
     } catch (err) {

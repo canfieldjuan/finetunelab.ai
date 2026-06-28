@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import SecretsPage from '../page';
 import type { ModelProvider } from '@/lib/models/llm-model.types';
@@ -210,7 +210,7 @@ describe('SecretsPage provider model import', () => {
     });
   });
 
-  it('does not attempt model discovery for providers without a list endpoint', async () => {
+  it('imports curated catalog models for providers without a list endpoint', async () => {
     let secretsFetchCount = 0;
     const fetchMock = stubFetch(async (url, init) => {
       if (url === '/api/secrets' && !init?.method) {
@@ -225,6 +225,14 @@ describe('SecretsPage provider model import', () => {
         return jsonResponse({ success: true, secret: secret('anthropic') });
       }
 
+      if (url === '/api/models/bulk') {
+        const body = JSON.parse(init?.body as string);
+        return jsonResponse({
+          success: true,
+          counts: { created: body.models.length, skipped: 0, failed: 0 },
+        });
+      }
+
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
@@ -233,10 +241,27 @@ describe('SecretsPage provider model import', () => {
     await openProviderDialog('Anthropic');
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
-    await waitFor(() => {
-      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/secrets')).toHaveLength(2);
-    });
+    expect(await screen.findByText('Imported 5 curated Anthropic models.')).toBeInTheDocument();
+
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/models/discover')).toBe(false);
-    expect(fetchMock.mock.calls.some(([url]) => url === '/api/models/bulk')).toBe(false);
+
+    const bulkCall = fetchMock.mock.calls.find(([url]) => url === '/api/models/bulk');
+    expect(bulkCall).toBeDefined();
+    const bulkBody = JSON.parse((bulkCall?.[1] as RequestInit).body as string);
+    expect(bulkBody.provider).toBe('anthropic');
+    expect(bulkBody.base_url).toBe('https://api.anthropic.com/v1');
+    expect(bulkBody.auth_type).toBe('api_key');
+    expect(bulkBody.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          model_id: 'claude-3-5-sonnet-20241022',
+          name: 'Claude 3.5 Sonnet',
+          context_length: 200000,
+          supports_functions: true,
+          supports_vision: true,
+        }),
+      ])
+    );
+    expect(bulkBody.models).toHaveLength(5);
   });
 });
