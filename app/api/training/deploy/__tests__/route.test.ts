@@ -15,6 +15,9 @@ const swapServer = vi.fn();
 const getServerStatus = vi.fn();
 const stopServer = vi.fn();
 const getSecret = vi.fn();
+const supabaseState = vi.hoisted(() => ({
+  supabaseAdmin: null as unknown,
+}));
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient,
@@ -55,7 +58,9 @@ vi.mock('@/lib/cache/redis-cache', () => ({
 }));
 
 vi.mock('@/lib/supabaseClient', () => ({
-  supabaseAdmin: null,
+  get supabaseAdmin() {
+    return supabaseState.supabaseAdmin;
+  },
 }));
 
 vi.mock('@/lib/secrets/secrets-manager.service', () => ({
@@ -125,6 +130,7 @@ describe('POST /api/training/deploy', () => {
     });
     getServerStatus.mockResolvedValue({ status: STATUS.RUNNING });
     getSecret.mockResolvedValue(null);
+    supabaseState.supabaseAdmin = null;
     from.mockImplementation((table: string) => {
       if (table === 'llm_models') {
         return llmModelsQuery();
@@ -198,6 +204,157 @@ describe('POST /api/training/deploy', () => {
           }),
         }),
         scope: 'user',
+      })
+    );
+  });
+
+  it('treats already-running local swap results as successful deploys', async () => {
+    swapServer.mockResolvedValue({
+      ok: true,
+      kind: 'already_running',
+      targetServer: {
+        id: 'running-1',
+        user_id: 'user-1',
+        server_type: STATUS.VLLM,
+        status: STATUS.RUNNING,
+        base_url: 'http://127.0.0.1:8001/v1',
+        model_path: '/models/qwen',
+        model_name: 'Local Qwen',
+        port: 8001,
+        process_id: 12345,
+        training_job_id: null,
+        config_json: {},
+      },
+      eviction: {
+        scope: 'user',
+        stoppedServers: [],
+        failures: [],
+        affectedUserIds: ['user-1'],
+      },
+    });
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      server_type: STATUS.VLLM,
+      name: 'Local Qwen',
+      config: {
+        model_path: '/models/qwen',
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.success).toBe(true);
+    expect(payload.server_id).toBe('running-1');
+    expect(payload.base_url).toBe('http://127.0.0.1:8001/v1');
+    expect(payload.port).toBe(8001);
+  });
+
+  it('maps GPU-not-released swap failures to 409 responses', async () => {
+    swapServer.mockResolvedValue({
+      ok: false,
+      kind: 'gpu_not_released',
+      statusCode: 409,
+      error: 'GPU memory is still in use after eviction',
+      eviction: {
+        scope: 'user',
+        stoppedServers: [{ id: 'old-1', user_id: 'user-1', server_type: STATUS.VLLM, status: STATUS.RUNNING, model_name: 'old', port: 8000 }],
+        failures: [],
+        affectedUserIds: ['user-1'],
+      },
+      gpu: { supported: true, released: false, usedMiB: 2048, thresholdMiB: 512, attempts: 10 },
+    });
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      server_type: STATUS.VLLM,
+      name: 'Local Qwen',
+      config: {
+        model_path: '/models/qwen',
+      },
+    }));
+
+    expect(response.status).toBe(409);
+    const payload = await response.json();
+    expect(payload.error).toBe('GPU memory is still in use after eviction');
+    expect(payload.gpu).toEqual(expect.objectContaining({ released: false }));
+    expect(payload.evicted_servers).toEqual([
+      expect.objectContaining({ id: 'old-1' }),
+    ]);
+  });
+
+  it('maps start-failed swap failures to partial-failure responses', async () => {
+    swapServer.mockResolvedValue({
+      ok: false,
+      kind: 'start_failed',
+      statusCode: 500,
+      error: 'Failed to start target server after evicting existing local servers',
+      details: 'vLLM failed',
+      eviction: {
+        scope: 'user',
+        stoppedServers: [{ id: 'old-1', user_id: 'user-1', server_type: STATUS.OLLAMA, status: STATUS.RUNNING, model_name: 'old', port: 11434 }],
+        failures: [],
+        affectedUserIds: ['user-1'],
+      },
+      gpu: { supported: true, released: true, usedMiB: 0, thresholdMiB: 512, attempts: 1 },
+      restartAttempt: { attempted: false, reason: 'No previously running local server was evicted.' },
+      gpuEmpty: true,
+    });
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      server_type: STATUS.VLLM,
+      name: 'Local Qwen',
+      config: {
+        model_path: '/models/qwen',
+      },
+    }));
+
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload.partial_failure).toBe(true);
+    expect(payload.details).toBe('vLLM failed');
+    expect(payload.gpu_empty).toBe(true);
+    expect(payload.restart_attempt).toEqual(expect.objectContaining({ attempted: false }));
+  });
+
+  it('uses global eviction scope when the admin client is configured', async () => {
+    supabaseState.supabaseAdmin = { from: vi.fn() };
+    swapServer.mockResolvedValue({
+      ok: true,
+      kind: 'started',
+      serverInfo: {
+        serverId: 'server-1',
+        port: 8000,
+        baseUrl: 'http://127.0.0.1:8000/v1',
+        status: STATUS.STARTING,
+      },
+      eviction: {
+        scope: 'global',
+        stoppedServers: [],
+        failures: [],
+        affectedUserIds: ['user-1'],
+      },
+      gpu: { supported: true, released: true, usedMiB: 0, thresholdMiB: 512, attempts: 1 },
+    });
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      server_type: STATUS.VLLM,
+      name: 'Local Qwen',
+      config: {
+        model_path: '/models/qwen',
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(swapServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'global',
       })
     );
   });

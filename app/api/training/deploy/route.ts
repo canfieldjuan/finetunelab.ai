@@ -171,6 +171,21 @@ function startLocalServerFromTarget(
   throw new Error(`Unsupported local server type: ${server.server_type}`);
 }
 
+function serverInfoFromAlreadyRunning(server: LocalServerRow): ServerInfo {
+  const baseUrl = server.base_url ?? (server.port ? `http://127.0.0.1:${server.port}` : '');
+
+  if (!baseUrl || !server.port) {
+    throw new Error('Already-running local server is missing base_url or port.');
+  }
+
+  return {
+    serverId: server.id,
+    baseUrl,
+    port: server.port,
+    status: STATUS.RUNNING,
+  };
+}
+
 async function startLocalServerWithSwap({
   serverType,
   modelPath,
@@ -219,7 +234,11 @@ async function startLocalServerWithSwap({
   });
 
   return {
-    serverInfo: swapResult.ok && swapResult.kind === 'started' ? swapResult.serverInfo : undefined,
+    serverInfo: swapResult.ok
+      ? swapResult.kind === 'started'
+        ? swapResult.serverInfo
+        : serverInfoFromAlreadyRunning(swapResult.targetServer)
+      : undefined,
     swapResult,
   };
 }
