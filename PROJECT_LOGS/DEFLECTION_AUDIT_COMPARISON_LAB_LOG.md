@@ -10,7 +10,7 @@ This note couples the lab to the Deflection Audit Report workflow without turnin
 
 - Sends the same prompt to 2-4 registered models.
 - Shows responses side by side.
-- Tracks response latency and token metadata when the chat API emits it.
+- Tracks response latency, and token metadata when the chat API emits it.
 - Lets a reviewer score each response on clarity, accuracy, conciseness, and overall quality.
 - Lets a reviewer mark a response as preferred or rejected.
 - Exports the comparison as JSONL preference data.
