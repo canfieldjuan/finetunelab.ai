@@ -268,8 +268,14 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
               </p>
             </div>
 
-            {/* Ownership Badge */}
-            <div>
+            {/* Badges */}
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              {model.is_default && (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs font-medium">
+                  <Sparkles className="h-3 w-3" />
+                  Default
+                </div>
+              )}
               {model.is_global ? (
                 <div className="flex items-center gap-1 px-2 py-0.5 bg-muted text-foreground rounded text-xs font-medium">
                   <Globe className="h-3 w-3" />
