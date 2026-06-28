@@ -14,15 +14,262 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { inferenceServerManager, type OllamaConfig, sanitizeOllamaModelName, type ServerInfo } from '@/lib/services/inference-server-manager';
+import { waitForGpuMemoryRelease } from '@/lib/services/gpu-memory';
+import {
+  LOCAL_SERVER_TYPES,
+  processServerSwapLock,
+  swapServer,
+  type LocalServerRow,
+  type ServerConfigJson,
+  type ServerSwapResult,
+} from '@/lib/services/server-swap';
 import { runpodServerlessService } from '@/lib/inference/runpod-serverless-service';
 import { fireworksDeploymentService } from '@/lib/inference/fireworks-deployment-service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
 import { decrypt } from '@/lib/models/encryption';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import path from 'path';
 import { STATUS } from '@/lib/constants';
 import type { RunPodServerlessGPU } from '@/lib/inference/deployment.types';
+import { cacheDeletePattern, generateCacheKey } from '@/lib/cache/redis-cache';
+import { supabaseAdmin } from '@/lib/supabaseClient';
+
+const SERVER_CACHE_PREFIX = 'api:servers';
+const EVICTION_CANDIDATE_FILTER = `status.in.(${STATUS.RUNNING},${STATUS.STARTING}),process_id.not.is.null`;
+
+function isProcessAlive(pid: number | null | undefined): boolean {
+  if (!pid) return false;
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isAlreadyRunning(server: LocalServerRow): boolean {
+  if (server.status !== STATUS.RUNNING) return false;
+  if (server.config_json?.external) return true;
+  return isProcessAlive(server.process_id);
+}
+
+async function listEvictionCandidates(
+  evictionClient: SupabaseClient,
+  userId: string,
+  canEvictGlobally: boolean
+): Promise<LocalServerRow[]> {
+  let query = evictionClient
+    .from('local_inference_servers')
+    .select('*')
+    .in('server_type', [...LOCAL_SERVER_TYPES])
+    .or(EVICTION_CANDIDATE_FILTER);
+
+  if (!canEvictGlobally) {
+    query = query.eq('user_id', userId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as LocalServerRow[];
+}
+
+async function clearServerCaches(userIds: string[]): Promise<void> {
+  await Promise.all(
+    Array.from(new Set(userIds)).map((userId) =>
+      cacheDeletePattern(generateCacheKey(SERVER_CACHE_PREFIX, userId))
+    )
+  );
+}
+
+function localTargetServer({
+  serverType,
+  modelPath,
+  modelName,
+  userId,
+  jobId,
+  config,
+}: {
+  serverType: string;
+  modelPath: string;
+  modelName: string;
+  userId: string;
+  jobId?: string | null;
+  config?: Record<string, unknown>;
+}): LocalServerRow {
+  const configJson: ServerConfigJson =
+    serverType === STATUS.VLLM
+      ? {
+          gpu_memory_utilization: Number(config?.gpu_memory_utilization ?? 0.8),
+          max_model_len: Number(config?.max_model_len ?? 8192),
+          tensor_parallel_size: Number(config?.tensor_parallel_size ?? 1),
+          dtype: typeof config?.dtype === 'string' ? config.dtype as ServerConfigJson['dtype'] : 'auto',
+          trust_remote_code: Boolean(config?.trust_remote_code ?? false),
+        }
+      : {
+          context_length: Number(config?.context_length ?? 4096),
+        };
+
+  return {
+    id: `training-deploy:${userId}:${serverType}:${modelName}`,
+    user_id: userId,
+    server_type: serverType,
+    status: STATUS.STOPPED,
+    model_path: modelPath,
+    model_name: modelName,
+    port: null,
+    process_id: null,
+    training_job_id: jobId ?? null,
+    config_json: configJson,
+  };
+}
+
+function startLocalServerFromTarget(
+  server: LocalServerRow,
+  userId: string | null,
+  supabase: SupabaseClient
+): Promise<ServerInfo> {
+  const config: ServerConfigJson = server.config_json ?? {};
+
+  if (server.server_type === STATUS.VLLM) {
+    return inferenceServerManager.startVLLM(
+      {
+        modelPath: server.model_path,
+        modelName: server.model_name,
+        gpuMemoryUtilization: config.gpu_memory_utilization ?? 0.8,
+        maxModelLen: config.max_model_len ?? 8192,
+        tensorParallelSize: config.tensor_parallel_size ?? 1,
+        dtype: config.dtype ?? 'auto',
+        trustRemoteCode: config.trust_remote_code ?? false,
+      },
+      userId,
+      server.training_job_id ?? undefined,
+      supabase
+    );
+  }
+
+  if (server.server_type === STATUS.OLLAMA) {
+    const ollamaConfig: OllamaConfig = {
+      modelPath: server.model_path,
+      modelName: server.model_name,
+      contextLength: config.context_length ?? 4096,
+    };
+
+    return inferenceServerManager.startOllama(
+      ollamaConfig,
+      userId,
+      server.training_job_id ?? undefined,
+      supabase
+    );
+  }
+
+  throw new Error(`Unsupported local server type: ${server.server_type}`);
+}
+
+async function startLocalServerWithSwap({
+  serverType,
+  modelPath,
+  modelName,
+  userId,
+  jobId,
+  config,
+  supabase,
+}: {
+  serverType: string;
+  modelPath: string;
+  modelName: string;
+  userId: string;
+  jobId?: string | null;
+  config?: Record<string, unknown>;
+  supabase: SupabaseClient;
+}): Promise<{ serverInfo?: ServerInfo; swapResult: ServerSwapResult }> {
+  const targetServer = localTargetServer({
+    serverType,
+    modelPath,
+    modelName,
+    userId,
+    jobId,
+    config,
+  });
+  const evictionClient = supabaseAdmin ?? supabase;
+  const canEvictGlobally = Boolean(supabaseAdmin);
+
+  const swapResult = await swapServer({
+    targetServer,
+    userId,
+    scope: canEvictGlobally ? 'global' : 'user',
+    lock: processServerSwapLock,
+    deps: {
+      listEvictionCandidates: () =>
+        listEvictionCandidates(evictionClient, userId, canEvictGlobally),
+      stopServer: (server) =>
+        inferenceServerManager.stopServer(server.id, server.user_id ?? null, evictionClient),
+      startServer: (server) => startLocalServerFromTarget(server, userId, supabase),
+      restartServer: (server) =>
+        startLocalServerFromTarget(server, server.user_id ?? null, evictionClient),
+      waitForGpuMemory: () => waitForGpuMemoryRelease(),
+      isServerRunning: isAlreadyRunning,
+      clearCaches: clearServerCaches,
+    },
+  });
+
+  return {
+    serverInfo: swapResult.ok && swapResult.kind === 'started' ? swapResult.serverInfo : undefined,
+    swapResult,
+  };
+}
+
+function localSwapFailureResponse(result: ServerSwapResult): NextResponse | null {
+  if (result.ok) {
+    return null;
+  }
+
+  if (result.kind === 'eviction_failed') {
+    return NextResponse.json(
+      {
+        error: result.error,
+        failures: result.eviction.failures,
+        eviction_scope: result.eviction.scope,
+        evicted_servers: result.eviction.stoppedServers,
+      },
+      { status: result.statusCode }
+    );
+  }
+
+  if (result.kind === 'gpu_not_released') {
+    return NextResponse.json(
+      {
+        error: result.error,
+        gpu: result.gpu,
+        eviction_scope: result.eviction.scope,
+        evicted_servers: result.eviction.stoppedServers,
+      },
+      { status: result.statusCode }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      error: result.error,
+      details: result.details,
+      partial_failure: true,
+      gpu_empty: result.gpuEmpty,
+      gpu: result.gpu,
+      restart_attempt: result.restartAttempt,
+      eviction_scope: result.eviction.scope,
+      evicted_servers: result.eviction.stoppedServers,
+      message: result.gpuEmpty
+        ? 'Existing local servers were evicted and the target failed to start; the GPU is currently empty.'
+        : 'The target failed to start after eviction; a previous local server restart was attempted successfully.',
+    },
+    { status: result.statusCode }
+  );
+}
 
 export async function POST(req: NextRequest) {
   console.log('[DeployAPI] Received deployment request');
@@ -187,38 +434,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ========================================================================
-    // Step 2.5: Stop ALL vLLM servers before deploying (local dev cleanup)
-    // ========================================================================
     const modelName = name || (job ? `${job.model_name}-trained-${Date.now()}` : `trained-model-${Date.now()}`);
-
-    console.log('[DeployAPI] Stopping ALL vLLM servers before deploying:', modelName);
-
-    // Find ALL running/starting vLLM servers for this user
-    const { data: allVllmServers } = await supabase
-      .from('local_inference_servers')
-      .select('id, status, port, model_name')
-      .eq('user_id', userId)
-      .eq('server_type', 'vllm')
-      .in('status', [STATUS.RUNNING, STATUS.STARTING]);
-
-    if (allVllmServers && allVllmServers.length > 0) {
-      console.log(`[DeployAPI] Found ${allVllmServers.length} vLLM server(s) to stop`);
-
-      for (const server of allVllmServers) {
-        try {
-          console.log(`[DeployAPI] Stopping vLLM server ${server.id} (${server.model_name}) on port ${server.port}`);
-          await inferenceServerManager.stopServer(server.id, userId, supabase);
-        } catch (error) {
-          console.error(`[DeployAPI] Failed to stop server ${server.id}:`, error);
-          // Continue with other servers even if one fails
-        }
-      }
-
-      console.log('[DeployAPI] All vLLM servers stopped');
-    } else {
-      console.log('[DeployAPI] No running vLLM servers found');
-    }
+    const isLocalDeployment = server_type === STATUS.VLLM || server_type === STATUS.OLLAMA;
 
     // Check if model entry exists (for UPDATE vs INSERT)
     const { data: existingModel } = await supabase
@@ -243,6 +460,7 @@ export async function POST(req: NextRequest) {
     console.log('[DeployAPI] Starting', server_type, 'server');
 
     let serverInfo: ServerInfo | undefined;
+    let localSwapResult: ServerSwapResult | undefined;
 
     // ========================================================================
     // RunPod Common Setup (for both RUNPOD and RUNPOD_SERVERLESS)
@@ -291,39 +509,34 @@ export async function POST(req: NextRequest) {
     }
 
     if (server_type === STATUS.VLLM) {
-      // Start vLLM server
-      serverInfo = await inferenceServerManager.startVLLM(
-        {
-          modelPath,
-          modelName: name || (job ? `${job.model_name}-trained-${Date.now()}` : `model-${Date.now()}`),
-          gpuMemoryUtilization: config?.gpu_memory_utilization || 0.8,
-          maxModelLen: config?.max_model_len || 8192,
-          tensorParallelSize: config?.tensor_parallel_size || 1,
-          dtype: config?.dtype || 'auto',
-          trustRemoteCode: config?.trust_remote_code || false,
-        },
+      const swapStart = await startLocalServerWithSwap({
+        serverType: server_type,
+        modelPath,
+        modelName,
         userId,
-        job_id || null,
-        supabase
-      );
+        jobId: job_id,
+        config,
+        supabase,
+      });
+      serverInfo = swapStart.serverInfo;
+      localSwapResult = swapStart.swapResult;
     } else if (server_type === STATUS.OLLAMA) {
-      // Start Ollama server
       console.log('[DeployAPI] Starting Ollama deployment...');
-
-      const ollamaConfig: OllamaConfig = {
-        modelPath: modelPath,
-        modelName: name || (job ? `${job.model_name}-trained-${Date.now()}` : `model-${Date.now()}`),
-        contextLength: config?.context_length || 4096,
-      };
-
-      serverInfo = await inferenceServerManager.startOllama(
-        ollamaConfig,
+      const swapStart = await startLocalServerWithSwap({
+        serverType: server_type,
+        modelPath,
+        modelName,
         userId,
-        job_id || null,
-        supabase
-      );
+        jobId: job_id,
+        config,
+        supabase,
+      });
+      serverInfo = swapStart.serverInfo;
+      localSwapResult = swapStart.swapResult;
 
-      console.log('[DeployAPI] Ollama deployment successful:', serverInfo.serverId);
+      if (serverInfo) {
+        console.log('[DeployAPI] Ollama deployment started:', serverInfo.serverId);
+      }
     } else if (server_type === STATUS.RUNPOD) {
       // ========================================================================
       // RUNPOD POD DEPLOYMENT - Separate flow, returns early
@@ -835,6 +1048,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!serverInfo && localSwapResult) {
+      const response = localSwapFailureResponse(localSwapResult);
+      if (response) {
+        return response;
+      }
+    }
+
     if (!serverInfo) {
       return NextResponse.json(
         { error: 'Failed to initialize server info' },
@@ -1070,6 +1290,10 @@ export async function POST(req: NextRequest) {
       port: serverInfo.port,
       model_id: modelEntry!.id,
       model_name: modelName,
+      ...(isLocalDeployment && localSwapResult?.ok ? {
+        eviction_scope: localSwapResult.eviction.scope,
+        evicted_servers: localSwapResult.eviction.stoppedServers,
+      } : {}),
       message: serverReady
         ? 'Model deployed successfully!'
         : 'Model deployment started. Server is still initializing.',
