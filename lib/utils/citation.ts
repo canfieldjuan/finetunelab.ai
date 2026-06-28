@@ -1,4 +1,5 @@
 import { WebSearchDocument } from '@/lib/tools/web-search/types';
+import { copyTextToClipboard } from './clipboard';
 
 export type CitationStyle = 'apa' | 'mla' | 'chicago' | 'simple';
 
@@ -44,45 +45,7 @@ export function copyCitation(
   style: CitationStyle = 'apa'
 ): Promise<boolean> {
   const citation = formatCitation(result, style);
-
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    return navigator.clipboard
-      .writeText(citation)
-      .then(() => {
-        console.log('Citation copied to clipboard');
-        return true;
-      })
-      .catch((err) => {
-        console.error('Failed to copy citation:', err);
-        return false;
-      });
-  } else {
-    // Fallback for older browsers
-    return new Promise<boolean>((resolve) => {
-      try {
-        const textArea = document.createElement('textarea');
-        textArea.value = citation;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = '0';
-        document.body.appendChild(textArea);
-        textArea.select();
-
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-
-        if (successful) {
-          console.log('Citation copied to clipboard (fallback)');
-          resolve(true);
-        } else {
-          console.error('Failed to copy citation (fallback)');
-          resolve(false);
-        }
-      } catch (err) {
-        console.error('Failed to copy citation (fallback):', err);
-        resolve(false);
-      }
-    });
-  }
+  return copyTextToClipboard(citation);
 }
 
 /**
@@ -108,43 +71,5 @@ export function copyBibliography(
   style: CitationStyle = 'apa'
 ): Promise<boolean> {
   const bibliography = formatBibliography(results, style);
-
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    return navigator.clipboard
-      .writeText(bibliography)
-      .then(() => {
-        console.log('Bibliography copied to clipboard');
-        return true;
-      })
-      .catch((err) => {
-        console.error('Failed to copy bibliography:', err);
-        return false;
-      });
-  } else {
-    // Fallback for older browsers
-    return new Promise<boolean>((resolve) => {
-      try {
-        const textArea = document.createElement('textarea');
-        textArea.value = bibliography;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = '0';
-        document.body.appendChild(textArea);
-        textArea.select();
-
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-
-        if (successful) {
-          console.log('Bibliography copied to clipboard (fallback)');
-          resolve(true);
-        } else {
-          console.error('Failed to copy bibliography (fallback)');
-          resolve(false);
-        }
-      } catch (err) {
-        console.error('Failed to copy bibliography (fallback):', err);
-        resolve(false);
-      }
-    });
-  }
+  return copyTextToClipboard(bibliography);
 }

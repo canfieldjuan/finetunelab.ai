@@ -510,7 +510,7 @@ If issues occur:
 1. **Immediate**: Revert `/components/chat/MessageContent.tsx` changes
 2. **Complete**: Remove `/components/chat/ImageLightbox.tsx`
 3. **Verify**: Confirm app works as before
-4. **Restore**: Original MessageContent.tsx.broken backup available
+4. **Restore**: Recover the prior implementation from git history if needed
 
 ---
 

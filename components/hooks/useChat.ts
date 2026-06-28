@@ -9,6 +9,12 @@ import type { User } from '@supabase/supabase-js';
 import type { ContextTracker } from '../../lib/context/context-tracker';
 import type { ContextUsage } from '@/lib/context/types';
 import type { ResearchProgress, ActiveResearchJob } from './useResearchState';
+import type { WebSearchDocument } from '@/lib/tools/web-search/types';
+import {
+  getToolEventName,
+  initialWebSearchStreamState,
+  reduceWebSearchStreamEvent,
+} from './chatSearchStream';
 
 
 interface Tool {
@@ -105,6 +111,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let assistantMessage = "";
+    let webSearchResults: WebSearchDocument[] | undefined;
+    let webSearchState = initialWebSearchStreamState;
     let graphragCitations: Citation[] | undefined;
     let graphragContextsUsed: number | undefined;
     let modelId: string | null = null;
@@ -126,7 +134,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                   ...m,
                   content: assistantMessage,
                   citations: graphragCitations,
-                  contextsUsed: graphragContextsUsed
+                  contextsUsed: graphragContextsUsed,
+                  webSearchResults
                 }
               : m
           )
@@ -224,13 +233,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               });
             }
 
-            // Phase 3: progressive per-document summaries (previews before final answer)
-            if (parsed.type === "doc_summary") {
-              const title = parsed.title || 'Document';
-              const url = parsed.url || '';
-              const summary = parsed.summary || '';
-              const line = `\n• ${title}${url ? ` (${url})` : ''}\n   ${summary}\n`;
-              assistantMessage += line;
+            if (parsed.type === "web_search_results" || parsed.type === "doc_summary") {
+              webSearchState = reduceWebSearchStreamEvent(webSearchState, parsed);
+              webSearchResults = webSearchState.results;
               updateMessageThrottled();
             }
 
@@ -241,13 +246,20 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             }
 
             if (parsed.type === "tool_call") {
-              const toolInfo = `\n\n🔧 Using tool: ${parsed.tool_name}\n`;
+              const toolName = getToolEventName(parsed);
+              if (toolName === 'web_search') {
+                continue;
+              }
+              const toolInfo = `\n\n🔧 Using tool: ${toolName ?? 'unknown'}\n`;
               assistantMessage += toolInfo;
               // [UI_FREEZE_FIX] Use throttled update instead of immediate
               updateMessageThrottled();
             }
 
             if (parsed.type === "tool_result") {
+              if (getToolEventName(parsed) === 'web_search') {
+                continue;
+              }
               const resultInfo = `📊 Result: ${JSON.stringify(
                 parsed.result
               )}\n\n`;
@@ -364,7 +376,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               ...m,
               content: assistantMessage,
               citations: graphragCitations,
-              contextsUsed: graphragContextsUsed
+              contextsUsed: graphragContextsUsed,
+              webSearchResults
             }
           : m
       )
@@ -394,12 +407,17 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     });
 
     // Create metadata object for persistence (matching server-side implementation)
-    const messageMetadata = modelId && modelName && provider ? {
-      model_name: modelName,
-      provider: provider,
-      model_id: modelId,
-      timestamp: new Date().toISOString()
-    } : undefined;
+    const messageMetadataFields = {
+      ...(modelId && modelName && provider ? {
+        model_name: modelName,
+        provider: provider,
+        model_id: modelId,
+      } : {}),
+      ...(webSearchResults && webSearchResults.length > 0 ? { web_search_results: webSearchResults } : {}),
+    };
+    const messageMetadata = Object.keys(messageMetadataFields).length > 0
+      ? { ...messageMetadataFields, timestamp: new Date().toISOString() }
+      : undefined;
 
     if (user && activeId && !allowAnonymous) {
       void supabase
@@ -427,7 +445,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             setMessages((msgs) =>
               msgs.map((m) =>
                 m.id === tempMessageId
-                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed }
+                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed, webSearchResults }
                   : m
               )
             );
