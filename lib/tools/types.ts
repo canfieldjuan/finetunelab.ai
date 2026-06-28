@@ -6,7 +6,7 @@
  * Parameter definition for a tool
  */
 export interface ToolParameter {
-  type: string;
+  type: string | string[];
   description: string;
   enum?: string[];
   default?: unknown;

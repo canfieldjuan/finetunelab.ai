@@ -5,7 +5,7 @@ import type { ChatMessage, ToolDefinition } from '@/lib/llm/openai';
 import { streamAnthropicResponse, runAnthropicWithToolCalls } from '@/lib/llm/anthropic';
 import { graphragService, graphragConfig } from '@/lib/graphrag';
 import type { EmbedderConfig } from '@/lib/graphrag/graphiti/client';
-import { executeTool } from '@/lib/tools/toolManager';
+import { executePortalChatTool } from '@/lib/tools/toolManager';
 import type { EnhancedPrompt, SearchSource, GraphRAGRetrievalMetadata } from '@/lib/graphrag';
 import { supabase } from '@/lib/supabaseClient';
 import { loadLLMConfig } from '@/lib/config/llmConfig';
@@ -857,7 +857,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       const toolStartTime = Date.now();
-      const result = await executeTool(toolName, args, convId, undefined, userId || undefined, undefined, toolTraceContext);
+      const result = await executePortalChatTool(toolName, args, convId, undefined, userId || undefined, undefined, toolTraceContext);
       const toolExecutionTime = Date.now() - toolStartTime;
 
       // Capture web_search results for SSE previews (standard search path only)

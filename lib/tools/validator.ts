@@ -39,18 +39,16 @@ export class DefaultToolValidator implements ToolValidator {
 
       // Type validation
       const actualType = typeof paramValue;
-      const expectedType = paramDef.type;
+      const expectedTypes = Array.isArray(paramDef.type) ? paramDef.type : [paramDef.type];
 
-      if (expectedType === 'string' && actualType !== 'string') {
-        errors.push(`Parameter '${paramName}' must be a string, got ${actualType}`);
-      } else if (expectedType === 'number' && actualType !== 'number') {
-        errors.push(`Parameter '${paramName}' must be a number, got ${actualType}`);
-      } else if (expectedType === 'boolean' && actualType !== 'boolean') {
-        errors.push(`Parameter '${paramName}' must be a boolean, got ${actualType}`);
-      } else if (expectedType === 'array' && !Array.isArray(paramValue)) {
-        errors.push(`Parameter '${paramName}' must be an array, got ${actualType}`);
-      } else if (expectedType === 'object' && (actualType !== 'object' || Array.isArray(paramValue) || paramValue === null)) {
-        errors.push(`Parameter '${paramName}' must be an object, got ${actualType}`);
+      const typeMatches = expectedTypes.some((expectedType) => {
+        if (expectedType === 'array') return Array.isArray(paramValue);
+        if (expectedType === 'object') return actualType === 'object' && !Array.isArray(paramValue) && paramValue !== null;
+        return actualType === expectedType;
+      });
+
+      if (!typeMatches) {
+        errors.push(`Parameter '${paramName}' must be ${expectedTypes.join(' or ')}, got ${actualType}`);
       }
 
       // Enum validation
