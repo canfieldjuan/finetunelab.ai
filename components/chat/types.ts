@@ -70,6 +70,14 @@ export interface WidgetConfig {
 }
 
 /**
+ * Per-chat generation controls sent with each request.
+ */
+export interface GenerationSettings {
+  temperature: number;
+  maxOutputTokens: number;
+}
+
+/**
  * Props for the main Chat component
  */
 export interface ChatProps {
