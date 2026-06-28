@@ -27,27 +27,33 @@ interface AddModelDialogProps {
 
 type TabType = 'templates' | 'manual';
 
+const DEFAULT_FORM_DATA: Partial<CreateModelDTO> = {
+  name: '',
+  description: '',
+  provider: 'openai',
+  base_url: 'https://api.openai.com/v1',
+  model_id: '',
+  served_model_name: '',
+  auth_type: 'bearer',
+  api_key: '',
+  supports_streaming: true,
+  supports_functions: true,
+  supports_vision: false,
+  context_length: 4096,
+  max_output_tokens: 2000,
+  default_temperature: 0.7,
+  default_top_p: 1.0,
+  is_default: false,
+};
+
+const createDefaultFormData = (): Partial<CreateModelDTO> => ({ ...DEFAULT_FORM_DATA });
+
 export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: AddModelDialogProps) {
   const [activeTab, setActiveTab] = useState<TabType>('templates');
   const [selectedTemplate, setSelectedTemplate] = useState<ModelTemplate | null>(null);
 
   // Form state
-  const [formData, setFormData] = useState<Partial<CreateModelDTO>>({
-    name: '',
-    description: '',
-    provider: 'openai',
-    base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
-    model_id: '',
-    auth_type: 'bearer',
-    api_key: '',
-    supports_streaming: true,
-    supports_functions: true,
-    supports_vision: false,
-    context_length: 4096,
-    max_output_tokens: 2000,
-    default_temperature: 0.7,
-    default_top_p: 1.0,
-  });
+  const [formData, setFormData] = useState<Partial<CreateModelDTO>>(createDefaultFormData);
 
   // Local deployment state (for local provider)
   const [localDeploymentConfig, setLocalDeploymentConfig] = useState({
@@ -105,6 +111,8 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       price_per_output_token: template.price_per_output_token,
       default_temperature: template.default_temperature,
       default_top_p: template.default_top_p,
+      served_model_name: '',
+      is_default: false,
     });
 
     // Initialize local deployment config for local templates
@@ -284,6 +292,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
           provider: formData.provider,
           base_url: formData.base_url,
           model_id: formData.model_id,
+          served_model_name: formData.served_model_name,
           auth_type: formData.auth_type,
           api_key: formData.api_key,
         }),
@@ -398,22 +407,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       }
 
       // Reset form and close
-      setFormData({
-        name: '',
-        description: '',
-        provider: 'openai',
-        base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
-        model_id: '',
-        auth_type: 'bearer',
-        api_key: '',
-        supports_streaming: true,
-        supports_functions: true,
-        supports_vision: false,
-        context_length: 4096,
-        max_output_tokens: 2000,
-        default_temperature: 0.7,
-        default_top_p: 1.0,
-      });
+      setFormData(createDefaultFormData());
       setSelectedTemplate(null);
       setTestResult(null);
       setDiscoveredModels([]);
@@ -441,14 +435,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
   const handleClose = () => {
     if (!submitting) {
       setSelectedTemplate(null);
-      setFormData({
-        name: '',
-        provider: 'openai',
-        base_url: 'https://api.openai.com/v1', // Auto-populate for default provider
-        model_id: '',
-        auth_type: 'bearer',
-        api_key: '',
-      });
+      setFormData(createDefaultFormData());
       setError(null);
       setTestResult(null);
       setDiscoveredModels([]);
@@ -1113,6 +1100,8 @@ const DISCOVERY_SUPPORTED_PROVIDERS: ModelProvider[] = [
   'openai', 'vllm', 'ollama', 'together', 'groq', 'openrouter', 'fireworks', 'runpod', 'custom',
 ];
 
+const SERVED_MODEL_NAME_PROVIDERS: ModelProvider[] = ['vllm'];
+
 function ManualForm({
   formData,
   onChange,
@@ -1132,10 +1121,14 @@ function ManualForm({
   // When the endpoint returns models, show a dropdown; allow falling back to manual entry.
   // `manualModelEntry` is owned by the parent so it resets when connection params change.
   const canDiscover = DISCOVERY_SUPPORTED_PROVIDERS.includes(formData.provider as ModelProvider);
+  const supportsServedModelName = SERVED_MODEL_NAME_PROVIDERS.includes(formData.provider as ModelProvider);
   const showModelDropdown = discoveredModels.length > 0 && !manualModelEntry;
 
   const handleModelSelect = (modelId: string) => {
     onChange('model_id', modelId);
+    if (supportsServedModelName && !formData.served_model_name?.trim()) {
+      onChange('served_model_name', modelId);
+    }
     const selected = discoveredModels.find(m => m.id === modelId);
     if (selected?.max_model_len) {
       onChange('context_length', selected.max_model_len);
@@ -1726,8 +1719,28 @@ function ManualForm({
           )}
         </div>
 
+        {/* Served Model Name */}
+        {supportsServedModelName && (
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Served Model Name
+            </label>
+            <input
+              type="text"
+              value={formData.served_model_name || ''}
+              onChange={(e) => onChange('served_model_name', e.target.value)}
+              placeholder="qwen-chat"
+              className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+              disabled={submitting}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Optional request name when it differs from Model ID.
+            </p>
+          </div>
+        )}
+
         {/* API Key */}
-        <div>
+        <div className={supportsServedModelName ? 'md:col-span-2' : undefined}>
           <label className="block text-sm font-medium mb-2">
             API Key <span className="text-muted-foreground text-xs">(Optional - uses provider secret if empty)</span>
           </label>
@@ -1742,6 +1755,20 @@ function ManualForm({
           <p className="text-xs text-muted-foreground mt-1">
             Leave empty to use the provider secret configured in <a href="/secrets" className="text-primary hover:underline">Provider Secrets</a>
           </p>
+        </div>
+
+        {/* Default model */}
+        <div className="md:col-span-2">
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formData.is_default || false}
+              onChange={(e) => onChange('is_default', e.target.checked)}
+              disabled={submitting}
+              className="rounded border-input"
+            />
+            <span className="text-sm font-medium">Set as default model</span>
+          </label>
         </div>
 
         {/* Description */}
