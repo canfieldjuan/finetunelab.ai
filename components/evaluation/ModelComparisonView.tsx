@@ -119,12 +119,13 @@ export function ModelComparisonView({
       throw new Error('No response body received');
     }
 
-    const reader = response.body.getReader();
+    const streamReader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let content = '';
     let modelName: string | undefined;
     let tokensUsed: number | undefined;
+    let streamComplete = false;
 
     const processEvent = (eventText: string) => {
       for (const line of eventText.split('\n')) {
@@ -170,7 +171,7 @@ export function ModelComparisonView({
 
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } = await streamReader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -183,8 +184,12 @@ export function ModelComparisonView({
       if (buffer.trim()) {
         processEvent(buffer);
       }
+      streamComplete = true;
     } finally {
-      reader.releaseLock();
+      if (!streamComplete) {
+        await streamReader.cancel().catch(() => {});
+      }
+      streamReader.releaseLock();
     }
 
     return { content, modelName, tokensUsed };
