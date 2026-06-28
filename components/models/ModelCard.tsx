@@ -125,11 +125,11 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
   const handleStartServer = async () => {
     if (!serverInfo || !sessionToken) return;
 
-    console.log('[ModelCard] Starting server:', serverInfo.id);
+    console.log('[ModelCard] Swapping in server:', serverInfo.id);
     setServerActionLoading(true);
 
     try {
-      const response = await fetch('/api/servers/start', {
+      const response = await fetch('/api/servers/swap', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
@@ -140,14 +140,14 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to start server');
+        throw new Error(data.error || 'Failed to swap server');
       }
 
-      toast.success('Server started successfully');
+      toast.success('Server swap started');
       onServerChanged?.();
     } catch (error) {
-      console.error('[ModelCard] Start server failed:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to start server');
+      console.error('[ModelCard] Server swap failed:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to swap server');
     } finally {
       setServerActionLoading(false);
     }
@@ -399,7 +399,7 @@ export function ModelCard({ model, onEdit, onDelete, currentUserId, serverInfo, 
                         className="flex-1 gap-1.5 h-8"
                       >
                         <PlayCircle className="h-3 w-3" />
-                        {serverActionLoading ? 'Starting...' : 'Start Server'}
+                        {serverActionLoading ? 'Swapping...' : 'Swap In'}
                       </Button>
                     )}
                     {hasServer && serverInfo.status === 'starting' && (
