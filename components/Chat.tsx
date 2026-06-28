@@ -278,9 +278,11 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     temperature: 0.7,
     maxOutputTokens: 2000,
   });
+  const [generationSettingsDirty, setGenerationSettingsDirty] = useState(false);
 
   useEffect(() => {
     setGenerationSettings(buildGenerationDefaults());
+    setGenerationSettingsDirty(false);
   }, [buildGenerationDefaults, selectedModelId]);
 
   // Determine widget/demo mode early so it's available to hooks below
@@ -316,7 +318,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     setActiveResearchJob,
     contextInjectionEnabled,
     enableThinking,
-    generationSettings,
+    generationSettings: generationSettingsDirty ? generationSettings : undefined,
     allowAnonymous: isDemoOrWidget,
     widgetConfig: widgetConfig || null,
   });
@@ -1391,8 +1393,14 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
               modelName={selectedModel?.name}
               contextLength={selectedModel?.context_length}
               disabled={loading}
-              onChange={setGenerationSettings}
-              onReset={() => setGenerationSettings(buildGenerationDefaults())}
+              onChange={(settings) => {
+                setGenerationSettings(settings);
+                setGenerationSettingsDirty(true);
+              }}
+              onReset={() => {
+                setGenerationSettings(buildGenerationDefaults());
+                setGenerationSettingsDirty(false);
+              }}
             />
           }
         />
@@ -1872,7 +1880,6 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     </div>
   );
 }
-
 
 
 

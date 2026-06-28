@@ -915,6 +915,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
     const encoder = new TextEncoder();
     let actualModelConfig: ModelConfig | null = null; // Store model config to get actual provider
+    let effectiveTraceTemperature = temperature;
+    let effectiveTraceMaxTokens = maxTokens;
 
     // ========================================================================
     // THINKING MODE: Add <think> tag for reasoning models (Qwen3, etc.)
@@ -1001,10 +1003,15 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         };
 
         const effectiveTemperature = requestedTemperature ?? actualModelConfig?.default_temperature ?? temperature;
-        const requestedOrModelMaxTokens = requestedMaxOutputTokens ?? actualModelConfig?.max_output_tokens ?? maxTokens;
+        const configuredOutputLimit = typeof actualModelConfig?.max_output_tokens === 'number' && actualModelConfig.max_output_tokens > 0
+          ? actualModelConfig.max_output_tokens
+          : undefined;
+        const requestedOrModelMaxTokens = requestedMaxOutputTokens ?? configuredOutputLimit ?? maxTokens;
 
-        // Calculate safe max_tokens based on model's context window
-        let safeMaxTokens = requestedOrModelMaxTokens;
+        // Calculate safe max_tokens based on the model's output cap and context window.
+        let safeMaxTokens = configuredOutputLimit
+          ? Math.min(requestedOrModelMaxTokens, configuredOutputLimit)
+          : requestedOrModelMaxTokens;
         if (actualModelConfig?.context_length) {
           // Estimate input tokens (rough: 1 token ≈ 4 chars)
           const inputText = enhancedMessages.map(m => m.content).join(' ');
@@ -1013,18 +1020,21 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           // Calculate available space for output
           const availableTokens = actualModelConfig.context_length - estimatedInputTokens;
 
-          // Use the minimum of requested and available, with safety margin
+          // Use the minimum of requested/output-capped and available, with safety margin
           const safetyMargin = 100; // Reserve tokens for tool calls, formatting, etc.
-          safeMaxTokens = Math.min(requestedOrModelMaxTokens, Math.max(100, availableTokens - safetyMargin));
+          safeMaxTokens = Math.min(safeMaxTokens, Math.max(100, availableTokens - safetyMargin));
 
           console.log('[API] Context calculation:', {
             modelContextLength: actualModelConfig.context_length,
             estimatedInputTokens,
             availableTokens,
             requestedMaxTokens: requestedOrModelMaxTokens,
+            configuredOutputLimit,
             adjustedMaxTokens: safeMaxTokens
           });
         }
+        effectiveTraceTemperature = effectiveTemperature;
+        effectiveTraceMaxTokens = safeMaxTokens;
 
         // Start trace for LLM operation
         console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4] About to start trace with selectedModelId:`, selectedModelId);
@@ -1423,8 +1433,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 messageId: assistantMsgData.id,
                 tokenUsage: tokenUsage ?? undefined,
                 selectedModelId,
-                temperature,
-                maxTokens,
+                temperature: effectiveTraceTemperature,
+                maxTokens: effectiveTraceMaxTokens,
                 tools: toolsForTrace,
                 toolsCalled: toolsCalled ?? undefined,
                 reasoning,
@@ -1569,8 +1579,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           enhancedMessages,
           tokenUsage: tokenUsage ?? undefined,
           selectedModelId,
-          temperature,
-          maxTokens,
+          temperature: effectiveTraceTemperature,
+          maxTokens: effectiveTraceMaxTokens,
           tools: toolsForTrace,
           toolsCalled: toolsCalled ?? undefined,
           reasoning,
@@ -1769,7 +1779,13 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       const effectiveTemperature = requestedTemperature ?? actualModelConfig?.default_temperature ?? temperature;
-      let effectiveMaxTokens = requestedMaxOutputTokens ?? actualModelConfig?.max_output_tokens ?? maxTokens;
+      const configuredOutputLimit = typeof actualModelConfig?.max_output_tokens === 'number' && actualModelConfig.max_output_tokens > 0
+        ? actualModelConfig.max_output_tokens
+        : undefined;
+      let effectiveMaxTokens = requestedMaxOutputTokens ?? configuredOutputLimit ?? maxTokens;
+      if (configuredOutputLimit) {
+        effectiveMaxTokens = Math.min(effectiveMaxTokens, configuredOutputLimit);
+      }
 
       if (actualModelConfig?.context_length) {
         const inputText = enhancedMessages.map(m => m.content).join(' ');
@@ -1782,9 +1798,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           modelContextLength: actualModelConfig.context_length,
           estimatedInputTokens,
           availableTokens,
+          configuredOutputLimit,
           adjustedMaxTokens: effectiveMaxTokens
         });
       }
+      effectiveTraceTemperature = effectiveTemperature;
+      effectiveTraceMaxTokens = effectiveMaxTokens;
 
       // Create metadata object for persistence (streaming path)
       const messageMetadata = {
@@ -2101,8 +2120,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                       output_tokens: estimatedOutputTokens,
                     } : undefined,
                     selectedModelId: selectedModelId ?? undefined,
-                    temperature,
-                    maxTokens,
+                    temperature: effectiveTraceTemperature,
+                    maxTokens: effectiveTraceMaxTokens,
                     tools: toolsForTrace,
                     toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
                     reasoning: undefined, // Reasoning not available in streaming mode
@@ -2151,8 +2170,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                   output_tokens: estimatedOutputTokens,
                 } : undefined,
                 selectedModelId: selectedModelId ?? undefined,
-                temperature,
-                maxTokens,
+                temperature: effectiveTraceTemperature,
+                maxTokens: effectiveTraceMaxTokens,
                 tools: toolsForTrace,
                 toolsCalled: toolCallsTracking.length > 0 ? toolCallsTracking : undefined,
                 reasoning: undefined, // Reasoning not available in streaming mode
