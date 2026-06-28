@@ -8,8 +8,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { modelManager } from '@/lib/models/model-manager.service';
 import type { UpdateModelDTO } from '@/lib/models/llm-model.types';
+import { cacheDeletePattern, generateCacheKey } from '@/lib/cache/redis-cache';
 
 export const runtime = 'nodejs';
+const CACHE_PREFIX = 'api:models';
 
 // ============================================================================
 // Helper function to extract and validate ID
@@ -199,6 +201,10 @@ export async function PATCH(
     // Update model - pass authenticated client to bypass RLS
     const updatedModel = await modelManager.updateModel(id, dto, supabase);
 
+    const userCacheKey = generateCacheKey(CACHE_PREFIX, userId);
+    await cacheDeletePattern(userCacheKey);
+    console.log('[ModelsAPI] Cache invalidated for user:', userId);
+
     console.log('[ModelsAPI] Model updated successfully');
     return NextResponse.json({
       success: true,
@@ -282,6 +288,10 @@ export async function DELETE(
 
     // Delete model - pass authenticated client to bypass RLS
     await modelManager.deleteModel(id, supabase);
+
+    const userCacheKey = generateCacheKey(CACHE_PREFIX, userId);
+    await cacheDeletePattern(userCacheKey);
+    console.log('[ModelsAPI] Cache invalidated for user:', userId);
 
     console.log('[ModelsAPI] Model deleted successfully');
     return NextResponse.json({

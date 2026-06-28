@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
       for (const server of allVllmServers) {
         try {
           console.log(`[DeployAPI] Stopping vLLM server ${server.id} (${server.model_name}) on port ${server.port}`);
-          await inferenceServerManager.stopServer(server.id, userId);
+          await inferenceServerManager.stopServer(server.id, userId, supabase);
         } catch (error) {
           console.error(`[DeployAPI] Failed to stop server ${server.id}:`, error);
           // Continue with other servers even if one fails
@@ -1279,7 +1279,7 @@ export async function DELETE(req: NextRequest) {
     const userId = user.id;
 
     // Stop server
-    await inferenceServerManager.stopServer(serverId, userId);
+    await inferenceServerManager.stopServer(serverId, userId, supabase);
 
     return NextResponse.json({
       success: true,

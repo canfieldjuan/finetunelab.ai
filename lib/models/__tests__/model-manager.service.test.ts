@@ -1,61 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import {
+  buildCreateModelRecord,
+  buildUpdateModelRecord,
+} from '../model-manager.service';
 
-const insert = vi.fn();
-const update = vi.fn();
-const eq = vi.fn();
-const selectAfterInsert = vi.fn();
-const selectAfterUpdate = vi.fn();
-const singleAfterInsert = vi.fn();
-const singleAfterUpdate = vi.fn();
-
-const mockClient = {
-  from: vi.fn(),
-};
-
-vi.mock('@/lib/supabaseClient', () => ({
-  supabase: mockClient,
-  supabaseAdmin: mockClient,
-}));
-
-function makeInsertChain() {
-  singleAfterInsert.mockResolvedValue({
-    data: {
-      id: 'model-1',
-      name: 'Local Qwen',
-      provider: 'vllm',
-    },
-    error: null,
-  });
-  selectAfterInsert.mockReturnValue({ single: singleAfterInsert });
-  insert.mockReturnValue({ select: selectAfterInsert });
-  return { insert };
-}
-
-function makeUpdateChain() {
-  singleAfterUpdate.mockResolvedValue({
-    data: {
-      id: 'model-1',
-      name: 'Local Qwen',
-      provider: 'vllm',
-    },
-    error: null,
-  });
-  selectAfterUpdate.mockReturnValue({ single: singleAfterUpdate });
-  eq.mockReturnValue({ select: selectAfterUpdate });
-  update.mockReturnValue({ eq });
-  return { update };
-}
-
-describe('modelManager model contract persistence', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('persists served_model_name and is_default on create', async () => {
-    mockClient.from.mockReturnValue(makeInsertChain());
-    const { modelManager } = await import('../model-manager.service');
-
-    await modelManager.createModel(
+describe('modelManager payload builders', () => {
+  it('includes served_model_name and is_default in create records', () => {
+    const record = buildCreateModelRecord(
       {
         name: 'Local Qwen',
         provider: 'vllm',
@@ -65,37 +16,27 @@ describe('modelManager model contract persistence', () => {
         auth_type: 'none',
         is_default: true,
       },
-      'user-1',
-      mockClient as never
+      'user-1'
     );
 
-    expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model_id: '/models/qwen',
-        served_model_name: 'qwen-chat',
-        is_default: true,
-      })
-    );
+    expect(record).toEqual(expect.objectContaining({
+      user_id: 'user-1',
+      model_id: '/models/qwen',
+      served_model_name: 'qwen-chat',
+      is_global: false,
+      is_default: true,
+    }));
   });
 
-  it('normalizes empty served_model_name to null on update', async () => {
-    mockClient.from.mockReturnValue(makeUpdateChain());
-    const { modelManager } = await import('../model-manager.service');
+  it('normalizes empty served_model_name to null on update records', () => {
+    const updates = buildUpdateModelRecord({
+      served_model_name: '',
+      is_default: false,
+    });
 
-    await modelManager.updateModel(
-      'model-1',
-      {
-        served_model_name: '',
-        is_default: false,
-      },
-      mockClient as never
-    );
-
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        served_model_name: null,
-        is_default: false,
-      })
-    );
+    expect(updates).toEqual({
+      served_model_name: null,
+      is_default: false,
+    });
   });
 });

@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
 
     // Stop the server
     console.log('[ServerStop] Stopping server...');
-    await inferenceServerManager.stopServer(server_id, user.id);
+    await inferenceServerManager.stopServer(server_id, user.id, supabase);
 
     console.log('[ServerStop] Server stopped successfully');
 

@@ -123,5 +123,6 @@ describe('model API contract', () => {
       }),
       mockSupabase
     );
+    expect(cacheDeletePattern).toHaveBeenCalledWith('api:models:user-1');
   });
 });

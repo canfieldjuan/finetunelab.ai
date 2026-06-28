@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS public.llm_models (
   metadata JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_used_at TIMESTAMPTZ
+  last_used_at TIMESTAMPTZ,
+  CONSTRAINT llm_models_user_id_name_key UNIQUE (user_id, name)
 );
 
 ALTER TABLE public.llm_models
@@ -72,6 +73,74 @@ ALTER TABLE public.llm_models
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now(),
   ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
+
+UPDATE public.llm_models
+   SET name = COALESCE(NULLIF(name, ''), 'Unnamed Model ' || id::text),
+       provider = COALESCE(NULLIF(provider, ''), 'custom'),
+       base_url = COALESCE(NULLIF(base_url, ''), 'http://localhost'),
+       model_id = COALESCE(NULLIF(model_id, ''), name, id::text),
+       auth_type = COALESCE(NULLIF(auth_type, ''), 'bearer'),
+       auth_headers = COALESCE(auth_headers, '{}'::jsonb),
+       supports_streaming = COALESCE(supports_streaming, true),
+       supports_functions = COALESCE(supports_functions, false),
+       supports_vision = COALESCE(supports_vision, false),
+       context_length = COALESCE(context_length, 4096),
+       max_output_tokens = COALESCE(max_output_tokens, 2000),
+       default_temperature = COALESCE(default_temperature, 0.7),
+       default_top_p = COALESCE(default_top_p, 1.0),
+       enabled = COALESCE(enabled, true),
+       is_global = COALESCE(is_global, false),
+       is_default = COALESCE(is_default, false),
+       created_at = COALESCE(created_at, now()),
+       updated_at = COALESCE(updated_at, now());
+
+ALTER TABLE public.llm_models
+  ALTER COLUMN id SET DEFAULT gen_random_uuid(),
+  ALTER COLUMN name SET NOT NULL,
+  ALTER COLUMN provider SET NOT NULL,
+  ALTER COLUMN base_url SET NOT NULL,
+  ALTER COLUMN model_id SET NOT NULL,
+  ALTER COLUMN auth_type SET DEFAULT 'bearer',
+  ALTER COLUMN auth_type SET NOT NULL,
+  ALTER COLUMN auth_headers SET DEFAULT '{}'::jsonb,
+  ALTER COLUMN auth_headers SET NOT NULL,
+  ALTER COLUMN supports_streaming SET DEFAULT true,
+  ALTER COLUMN supports_streaming SET NOT NULL,
+  ALTER COLUMN supports_functions SET DEFAULT false,
+  ALTER COLUMN supports_functions SET NOT NULL,
+  ALTER COLUMN supports_vision SET DEFAULT false,
+  ALTER COLUMN supports_vision SET NOT NULL,
+  ALTER COLUMN context_length SET DEFAULT 4096,
+  ALTER COLUMN context_length SET NOT NULL,
+  ALTER COLUMN max_output_tokens SET DEFAULT 2000,
+  ALTER COLUMN max_output_tokens SET NOT NULL,
+  ALTER COLUMN default_temperature SET DEFAULT 0.7,
+  ALTER COLUMN default_temperature SET NOT NULL,
+  ALTER COLUMN default_top_p SET DEFAULT 1.0,
+  ALTER COLUMN default_top_p SET NOT NULL,
+  ALTER COLUMN enabled SET DEFAULT true,
+  ALTER COLUMN enabled SET NOT NULL,
+  ALTER COLUMN is_global SET DEFAULT false,
+  ALTER COLUMN is_global SET NOT NULL,
+  ALTER COLUMN is_default SET DEFAULT false,
+  ALTER COLUMN is_default SET NOT NULL,
+  ALTER COLUMN created_at SET DEFAULT now(),
+  ALTER COLUMN created_at SET NOT NULL,
+  ALTER COLUMN updated_at SET DEFAULT now(),
+  ALTER COLUMN updated_at SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'llm_models_user_id_name_key'
+      AND conrelid = 'public.llm_models'::regclass
+  ) THEN
+    ALTER TABLE public.llm_models
+      ADD CONSTRAINT llm_models_user_id_name_key UNIQUE (user_id, name);
+  END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS public.local_inference_servers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -113,6 +182,38 @@ ALTER TABLE public.local_inference_servers
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
+UPDATE public.local_inference_servers
+   SET server_type = COALESCE(NULLIF(server_type, ''), 'vllm'),
+       name = COALESCE(NULLIF(name, ''), 'Inference Server ' || id::text),
+       port = COALESCE(port, 0),
+       base_url = COALESCE(NULLIF(base_url, ''), 'http://127.0.0.1:' || COALESCE(port, 0)::text),
+       model_path = COALESCE(NULLIF(model_path, ''), 'unknown'),
+       model_name = COALESCE(NULLIF(model_name, ''), name, 'unknown'),
+       status = COALESCE(NULLIF(status, ''), 'starting'),
+       config_json = COALESCE(config_json, '{}'::jsonb),
+       started_at = COALESCE(started_at, now()),
+       created_at = COALESCE(created_at, now()),
+       updated_at = COALESCE(updated_at, now());
+
+ALTER TABLE public.local_inference_servers
+  ALTER COLUMN id SET DEFAULT gen_random_uuid(),
+  ALTER COLUMN server_type SET NOT NULL,
+  ALTER COLUMN name SET NOT NULL,
+  ALTER COLUMN base_url SET NOT NULL,
+  ALTER COLUMN port SET NOT NULL,
+  ALTER COLUMN model_path SET NOT NULL,
+  ALTER COLUMN model_name SET NOT NULL,
+  ALTER COLUMN status SET DEFAULT 'starting',
+  ALTER COLUMN status SET NOT NULL,
+  ALTER COLUMN config_json SET DEFAULT '{}'::jsonb,
+  ALTER COLUMN config_json SET NOT NULL,
+  ALTER COLUMN started_at SET DEFAULT now(),
+  ALTER COLUMN started_at SET NOT NULL,
+  ALTER COLUMN created_at SET DEFAULT now(),
+  ALTER COLUMN created_at SET NOT NULL,
+  ALTER COLUMN updated_at SET DEFAULT now(),
+  ALTER COLUMN updated_at SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_llm_models_user_enabled
   ON public.llm_models(user_id, enabled);
 CREATE INDEX IF NOT EXISTS idx_llm_models_global_enabled
@@ -124,6 +225,12 @@ CREATE INDEX IF NOT EXISTS idx_llm_models_served_model_name
 CREATE INDEX IF NOT EXISTS idx_llm_models_user_default
   ON public.llm_models(user_id, is_default)
   WHERE is_default = true;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_models_one_default_per_user
+  ON public.llm_models(user_id)
+  WHERE is_default = true AND user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_models_one_global_default
+  ON public.llm_models((is_default))
+  WHERE is_default = true AND user_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_local_inference_servers_user_status
   ON public.local_inference_servers(user_id, status);
@@ -194,7 +301,14 @@ BEGIN
     CREATE POLICY llm_models_select_own_or_global
       ON public.llm_models
       FOR SELECT
-      USING (is_global = true OR auth.uid() = user_id);
+      USING (
+        auth.uid() = user_id
+        OR (
+          is_global = true
+          AND api_key_encrypted IS NULL
+          AND auth_headers = '{}'::jsonb
+        )
+      );
   END IF;
 
   IF NOT EXISTS (
@@ -206,7 +320,7 @@ BEGIN
     CREATE POLICY llm_models_insert_own
       ON public.llm_models
       FOR INSERT
-      WITH CHECK (auth.uid() = user_id);
+      WITH CHECK (auth.uid() = user_id AND is_global = false);
   END IF;
 
   IF NOT EXISTS (
@@ -219,7 +333,7 @@ BEGIN
       ON public.llm_models
       FOR UPDATE
       USING (auth.uid() = user_id)
-      WITH CHECK (auth.uid() = user_id);
+      WITH CHECK (auth.uid() = user_id AND is_global = false);
   END IF;
 
   IF NOT EXISTS (
