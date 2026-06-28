@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
+import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 
 interface ConversationData {
   id: string;
@@ -23,6 +24,19 @@ interface ValidationResult {
     invalidCount?: number;
   };
   valid: ConversationData[];
+}
+
+function normalizeWebSearchResults(value: unknown): WebSearchDocument[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const results = value.filter((item): item is WebSearchDocument => {
+    return typeof item === 'object' &&
+      item !== null &&
+      typeof (item as WebSearchDocument).title === 'string' &&
+      typeof (item as WebSearchDocument).url === 'string';
+  });
+
+  return results.length > 0 ? results : undefined;
 }
 
 /**
@@ -143,7 +157,14 @@ export function useMessages(
                   answer_grounded_in_graph?: boolean;
                   retrieval_method?: string;
                 };
+                web_search_results?: unknown;
+                webSearchResults?: unknown;
               };
+              const webSearchResults = normalizeWebSearchResults(meta.web_search_results ?? meta.webSearchResults);
+              if (webSearchResults) {
+                enrichedMsg.webSearchResults = webSearchResults;
+              }
+
               if (meta.model_name) {
                 enrichedMsg.model_name = meta.model_name;
                 enrichedCount++;
@@ -213,6 +234,7 @@ export function useMessages(
               metadata: msg.metadata,
               content_json: msg.content_json,
               tools_called: msg.tools_called,
+              webSearchResults: msg.webSearchResults,
               // Include all metadata fields for MessageMetadata component
               model_id: msg.model_id,
               model_name: msg.model_name,

@@ -9,6 +9,7 @@ import type { User } from '@supabase/supabase-js';
 import type { ContextTracker } from '../../lib/context/context-tracker';
 import type { ContextUsage } from '@/lib/context/types';
 import type { ResearchProgress, ActiveResearchJob } from './useResearchState';
+import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 
 
 interface Tool {
@@ -22,6 +23,19 @@ interface Tool {
       required?: string[];
     };
   };
+}
+
+function normalizeWebSearchResults(value: unknown): WebSearchDocument[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const results = value.filter((result): result is WebSearchDocument => {
+    return typeof result === 'object' &&
+      result !== null &&
+      typeof (result as WebSearchDocument).title === 'string' &&
+      typeof (result as WebSearchDocument).url === 'string';
+  });
+
+  return results.length > 0 ? results : undefined;
 }
 
 /**
@@ -105,6 +119,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let assistantMessage = "";
+    let webSearchResults: WebSearchDocument[] | undefined;
+    let receivedWebSearchResultsEvent = false;
     let graphragCitations: Citation[] | undefined;
     let graphragContextsUsed: number | undefined;
     let modelId: string | null = null;
@@ -126,7 +142,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                   ...m,
                   content: assistantMessage,
                   citations: graphragCitations,
-                  contextsUsed: graphragContextsUsed
+                  contextsUsed: graphragContextsUsed,
+                  webSearchResults
                 }
               : m
           )
@@ -224,13 +241,27 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               });
             }
 
-            // Phase 3: progressive per-document summaries (previews before final answer)
+            if (parsed.type === "web_search_results") {
+              receivedWebSearchResultsEvent = true;
+              webSearchResults = normalizeWebSearchResults(parsed.results);
+              updateMessageThrottled();
+            }
+
+            // Legacy doc summaries are superseded by web_search_results cards.
             if (parsed.type === "doc_summary") {
-              const title = parsed.title || 'Document';
-              const url = parsed.url || '';
-              const summary = parsed.summary || '';
-              const line = `\n• ${title}${url ? ` (${url})` : ''}\n   ${summary}\n`;
-              assistantMessage += line;
+              if (!receivedWebSearchResultsEvent) {
+                const legacyResults = normalizeWebSearchResults([{
+                  title: typeof parsed.title === 'string' ? parsed.title : 'Document',
+                  url: typeof parsed.url === 'string' ? parsed.url : '',
+                  snippet: typeof parsed.summary === 'string' ? parsed.summary : '',
+                  summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
+                  source: typeof parsed.source === 'string' ? parsed.source : undefined,
+                  publishedAt: typeof parsed.publishedAt === 'string' ? parsed.publishedAt : undefined,
+                }]);
+                if (legacyResults) {
+                  webSearchResults = webSearchResults ? [...webSearchResults, ...legacyResults] : legacyResults;
+                }
+              }
               updateMessageThrottled();
             }
 
@@ -241,6 +272,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             }
 
             if (parsed.type === "tool_call") {
+              if (parsed.tool_name === 'web_search') {
+                continue;
+              }
               const toolInfo = `\n\n🔧 Using tool: ${parsed.tool_name}\n`;
               assistantMessage += toolInfo;
               // [UI_FREEZE_FIX] Use throttled update instead of immediate
@@ -248,6 +282,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             }
 
             if (parsed.type === "tool_result") {
+              if (parsed.tool_name === 'web_search' || parsed.toolName === 'web_search') {
+                continue;
+              }
               const resultInfo = `📊 Result: ${JSON.stringify(
                 parsed.result
               )}\n\n`;
@@ -364,7 +401,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               ...m,
               content: assistantMessage,
               citations: graphragCitations,
-              contextsUsed: graphragContextsUsed
+              contextsUsed: graphragContextsUsed,
+              webSearchResults
             }
           : m
       )
@@ -394,12 +432,15 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     });
 
     // Create metadata object for persistence (matching server-side implementation)
-    const messageMetadata = modelId && modelName && provider ? {
-      model_name: modelName,
-      provider: provider,
-      model_id: modelId,
+    const messageMetadata = {
+      ...(modelId && modelName && provider ? {
+        model_name: modelName,
+        provider: provider,
+        model_id: modelId,
+      } : {}),
+      ...(webSearchResults && webSearchResults.length > 0 ? { web_search_results: webSearchResults } : {}),
       timestamp: new Date().toISOString()
-    } : undefined;
+    };
 
     if (user && activeId && !allowAnonymous) {
       void supabase
@@ -414,7 +455,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           latency_ms: streamLatencyMs,
           input_tokens: finalInputTokens,
           output_tokens: finalOutputTokens,
-          ...(messageMetadata && { metadata: messageMetadata })
+          metadata: messageMetadata
         })
         .select()
         .single()
@@ -427,7 +468,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             setMessages((msgs) =>
               msgs.map((m) =>
                 m.id === tempMessageId
-                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed }
+                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed, webSearchResults }
                   : m
               )
             );
