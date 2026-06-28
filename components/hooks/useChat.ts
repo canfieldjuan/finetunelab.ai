@@ -590,7 +590,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           enableDeepResearch,
           contextInjectionEnabled,
           enableThinking,
-          generationSettings,
+          ...(generationSettings ? { generationSettings } : {}),
         }),
         signal: controller.signal,
       });
