@@ -176,14 +176,64 @@ describe('POST /api/models/bulk contract', () => {
     expect(createModel).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects providers without discovery support', async () => {
+  it('creates catalog-backed provider models with per-model capability overrides', async () => {
+    createModel.mockImplementation(async (dto: CreateModelDTO) => modelFromDto(dto, 'model-anthropic'));
+
     const { POST } = await import('../bulk/route');
 
     const response = await POST(createRequest({
       provider: 'anthropic',
-      base_url: 'https://api.anthropic.com/v1/messages',
+      base_url: 'https://api.anthropic.com/v1',
+      auth_type: 'api_key',
+      models: [
+        {
+          model_id: 'claude-3-5-sonnet-20241022',
+          name: 'Claude 3.5 Sonnet',
+          context_length: 200000,
+          max_output_tokens: 8192,
+          supports_streaming: true,
+          supports_functions: true,
+          supports_vision: true,
+          default_temperature: 0.4,
+          default_top_p: 0.9,
+        },
+      ],
+    }) as never);
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+
+    expect(payload.counts).toEqual({ created: 1, skipped: 0, failed: 0 });
+    expect(createModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Claude 3.5 Sonnet',
+        provider: 'anthropic',
+        base_url: 'https://api.anthropic.com/v1',
+        model_id: 'claude-3-5-sonnet-20241022',
+        auth_type: 'api_key',
+        context_length: 200000,
+        max_output_tokens: 8192,
+        supports_streaming: true,
+        supports_functions: true,
+        supports_vision: true,
+        default_temperature: 0.4,
+        default_top_p: 0.9,
+      }),
+      'user-1',
+      mockSupabase
+    );
+    const [dto] = createModel.mock.calls[0] as [CreateModelDTO];
+    expect(dto).not.toHaveProperty('api_key');
+  });
+
+  it('rejects providers without bulk import support', async () => {
+    const { POST } = await import('../bulk/route');
+
+    const response = await POST(createRequest({
+      provider: 'aws',
+      base_url: 'https://sagemaker.us-east-1.amazonaws.com',
       auth_type: 'bearer',
-      models: [{ model_id: 'claude-sonnet-4-5' }],
+      models: [{ model_id: 'endpoint/model' }],
     }) as never);
 
     expect(response.status).toBe(400);

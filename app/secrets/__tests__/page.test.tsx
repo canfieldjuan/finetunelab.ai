@@ -210,7 +210,7 @@ describe('SecretsPage provider model import', () => {
     });
   });
 
-  it('does not attempt model discovery for providers without a list endpoint', async () => {
+  it('imports curated Anthropic catalog models without provider discovery', async () => {
     let secretsFetchCount = 0;
     const fetchMock = stubFetch(async (url, init) => {
       if (url === '/api/secrets' && !init?.method) {
@@ -225,12 +225,111 @@ describe('SecretsPage provider model import', () => {
         return jsonResponse({ success: true, secret: secret('anthropic') });
       }
 
+      if (url === '/api/models/bulk') {
+        const body = JSON.parse(init?.body as string);
+        return jsonResponse({
+          success: true,
+          counts: { created: body.models.length, skipped: 0, failed: 0 },
+        });
+      }
+
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
     render(<SecretsPage />);
 
     await openProviderDialog('Anthropic');
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByText('Imported 5 Anthropic models.')).toBeInTheDocument();
+
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/models/discover')).toBe(false);
+    const bulkCall = fetchMock.mock.calls.find(([url]) => url === '/api/models/bulk');
+    expect(bulkCall).toBeDefined();
+    const bulkBody = JSON.parse((bulkCall?.[1] as RequestInit).body as string);
+    expect(bulkBody).toMatchObject({
+      provider: 'anthropic',
+      base_url: 'https://api.anthropic.com/v1',
+      auth_type: 'api_key',
+    });
+    expect(bulkBody.models).toContainEqual({
+      model_id: 'claude-3-5-sonnet-20241022',
+      name: 'Claude 3.5 Sonnet',
+      context_length: 200000,
+      max_output_tokens: 8192,
+      supports_streaming: true,
+      supports_functions: true,
+      supports_vision: true,
+      default_temperature: 0.7,
+      default_top_p: 1,
+    });
+  });
+
+  it('imports curated HuggingFace chat catalog models without importing GPT-2', async () => {
+    const fetchMock = stubFetch(async (url, init) => {
+      if (url === '/api/secrets' && !init?.method) {
+        return jsonResponse({ secrets: [], count: 0 });
+      }
+
+      if (url === '/api/secrets' && init?.method === 'POST') {
+        return jsonResponse({ success: true, secret: secret('huggingface') });
+      }
+
+      if (url === '/api/models/bulk') {
+        const body = JSON.parse(init?.body as string);
+        return jsonResponse({
+          success: true,
+          counts: { created: body.models.length, skipped: 0, failed: 0 },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<SecretsPage />);
+
+    await openProviderDialog('HuggingFace');
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByText('Imported 4 HuggingFace models.')).toBeInTheDocument();
+
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/models/discover')).toBe(false);
+    const bulkCall = fetchMock.mock.calls.find(([url]) => url === '/api/models/bulk');
+    expect(bulkCall).toBeDefined();
+    const bulkBody = JSON.parse((bulkCall?.[1] as RequestInit).body as string);
+    const importedModelIds = bulkBody.models.map((model: { model_id: string }) => model.model_id);
+
+    expect(bulkBody.provider).toBe('huggingface');
+    expect(importedModelIds).toEqual([
+      'Qwen/Qwen2.5-0.5B',
+      'mistralai/Mistral-7B-Instruct-v0.3',
+      'meta-llama/Meta-Llama-3.1-8B-Instruct',
+      'HuggingFaceH4/zephyr-7b-beta',
+    ]);
+    expect(importedModelIds).not.toContain('gpt2');
+  });
+
+  it('does not attempt model import for providers without discovery or catalog support', async () => {
+    let secretsFetchCount = 0;
+    const fetchMock = stubFetch(async (url, init) => {
+      if (url === '/api/secrets' && !init?.method) {
+        secretsFetchCount += 1;
+        return jsonResponse({
+          secrets: secretsFetchCount === 1 ? [] : [secret('github')],
+          count: secretsFetchCount === 1 ? 0 : 1,
+        });
+      }
+
+      if (url === '/api/secrets' && init?.method === 'POST') {
+        return jsonResponse({ success: true, secret: secret('github') });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<SecretsPage />);
+
+    await openProviderDialog('GitHub');
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     await waitFor(() => {

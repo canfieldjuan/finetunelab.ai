@@ -24,16 +24,29 @@ import { ApiKeysManagement } from '@/components/settings/ApiKeysManagement';
 import { WidgetAppsManagement } from '@/components/settings/WidgetAppsManagement';
 import { IntegrationsManagement } from '@/components/settings/IntegrationsManagement';
 import type { ProviderSecretDisplay } from '@/lib/secrets/secrets.types';
-import type { AuthType, DiscoveredModel, ModelProvider } from '@/lib/models/llm-model.types';
+import type { AuthType, DiscoveredModel, ModelProvider, ModelTemplate } from '@/lib/models/llm-model.types';
 import { ALL_TEMPLATES } from '@/lib/models/model-templates';
 import { safeJsonParse } from '@/lib/utils/safe-json';
 
 const AUTO_IMPORT_BATCH_SIZE = 100;
 
-type AutoDiscoveryImportConfig = {
+type AutoModelImportConfig = {
   base_url: string;
   auth_type: AuthType;
   default_context_length: number;
+  source: 'discover' | 'catalog';
+};
+
+type BulkImportModelPayload = {
+  model_id: string;
+  name: string;
+  context_length: number;
+  max_output_tokens?: number;
+  supports_streaming?: boolean;
+  supports_functions?: boolean;
+  supports_vision?: boolean;
+  default_temperature?: number;
+  default_top_p?: number;
 };
 
 type ModelImportNotice = {
@@ -59,12 +72,30 @@ type BulkImportResponse = {
   message?: string;
 };
 
-const AUTO_DISCOVERY_IMPORT_CONFIG: Partial<Record<ModelProvider, AutoDiscoveryImportConfig>> = {
-  openai: { base_url: 'https://api.openai.com/v1', auth_type: 'bearer', default_context_length: 128000 },
-  openrouter: { base_url: 'https://openrouter.ai/api/v1', auth_type: 'bearer', default_context_length: 128000 },
-  together: { base_url: 'https://api.together.xyz/v1', auth_type: 'bearer', default_context_length: 32768 },
-  groq: { base_url: 'https://api.groq.com/openai/v1', auth_type: 'bearer', default_context_length: 32768 },
-  fireworks: { base_url: 'https://api.fireworks.ai/inference/v1', auth_type: 'bearer', default_context_length: 32768 },
+const AUTO_MODEL_IMPORT_CONFIG: Partial<Record<ModelProvider, AutoModelImportConfig>> = {
+  openai: { base_url: 'https://api.openai.com/v1', auth_type: 'bearer', default_context_length: 128000, source: 'discover' },
+  openrouter: { base_url: 'https://openrouter.ai/api/v1', auth_type: 'bearer', default_context_length: 128000, source: 'discover' },
+  together: { base_url: 'https://api.together.xyz/v1', auth_type: 'bearer', default_context_length: 32768, source: 'discover' },
+  groq: { base_url: 'https://api.groq.com/openai/v1', auth_type: 'bearer', default_context_length: 32768, source: 'discover' },
+  fireworks: { base_url: 'https://api.fireworks.ai/inference/v1', auth_type: 'bearer', default_context_length: 32768, source: 'discover' },
+  anthropic: { base_url: 'https://api.anthropic.com/v1', auth_type: 'api_key', default_context_length: 200000, source: 'catalog' },
+  huggingface: { base_url: 'https://router.huggingface.co/v1', auth_type: 'bearer', default_context_length: 32768, source: 'catalog' },
+};
+
+const CATALOG_TEMPLATE_IDS: Partial<Record<ModelProvider, readonly string[]>> = {
+  anthropic: [
+    'anthropic-claude-3.5-sonnet',
+    'anthropic-claude-3-opus',
+    'anthropic-claude-3-haiku',
+    'anthropic-claude-sonnet-4.5',
+    'anthropic-claude-haiku-4.5',
+  ],
+  huggingface: [
+    'huggingface-custom-import',
+    'huggingface-mistral-7b',
+    'huggingface-llama-3.1-8b',
+    'huggingface-zephyr-7b',
+  ],
 };
 
 const NON_CHAT_MODEL_ID_PATTERNS = [
@@ -117,7 +148,15 @@ function matchingTemplateContextLength(provider: ModelProvider, modelId: string)
   return template?.context_length;
 }
 
-function toBulkImportModel(provider: ModelProvider, config: AutoDiscoveryImportConfig, model: DiscoveredModel) {
+function isModelTemplate(template: ModelTemplate | undefined): template is ModelTemplate {
+  return Boolean(template);
+}
+
+function toDiscoveredBulkImportModel(
+  provider: ModelProvider,
+  config: AutoModelImportConfig,
+  model: DiscoveredModel
+): BulkImportModelPayload {
   return {
     model_id: model.id,
     name: model.id,
@@ -128,47 +167,84 @@ function toBulkImportModel(provider: ModelProvider, config: AutoDiscoveryImportC
   };
 }
 
-async function importDiscoveredModelsForProvider(
+function toCatalogBulkImportModel(template: ModelTemplate): BulkImportModelPayload {
+  return {
+    model_id: template.model_id,
+    name: template.name,
+    context_length: template.context_length,
+    max_output_tokens: template.max_output_tokens,
+    supports_streaming: template.supports_streaming,
+    supports_functions: template.supports_functions,
+    supports_vision: template.supports_vision,
+    default_temperature: template.default_temperature,
+    default_top_p: template.default_top_p,
+  };
+}
+
+function catalogModelsForProvider(provider: ModelProvider): BulkImportModelPayload[] {
+  const templateIds = CATALOG_TEMPLATE_IDS[provider];
+  if (!templateIds) return [];
+
+  return templateIds
+    .map((templateId) => ALL_TEMPLATES.find((template) => template.id === templateId && template.provider === provider))
+    .filter(isModelTemplate)
+    .map(toCatalogBulkImportModel);
+}
+
+async function importModelsForProvider(
   provider: ModelProvider,
   providerLabel: string,
   sessionToken: string
 ): Promise<ModelImportNotice | null> {
-  const config = AUTO_DISCOVERY_IMPORT_CONFIG[provider];
+  const config = AUTO_MODEL_IMPORT_CONFIG[provider];
   if (!config) return null;
 
   try {
-    const discoverResponse = await fetch('/api/models/discover', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${sessionToken}`,
-      },
-      body: JSON.stringify({
-        provider,
-        base_url: config.base_url,
-        auth_type: config.auth_type,
-      }),
-    });
+    let importModels: BulkImportModelPayload[] = [];
 
-    const discoverData = await safeJsonParse<DiscoverModelsResponse>(discoverResponse, {});
-    if (!discoverResponse.ok || !discoverData.success) {
-      return {
-        type: 'warning',
-        message: `${providerLabel} key saved, but model discovery failed: ${discoverData.message || discoverData.error || 'Unknown error'}`,
-      };
-    }
+    if (config.source === 'catalog') {
+      importModels = catalogModelsForProvider(provider);
+      if (importModels.length === 0) {
+        return {
+          type: 'warning',
+          message: `${providerLabel} key saved, but no catalog models are configured for import.`,
+        };
+      }
+    } else {
+      const discoverResponse = await fetch('/api/models/discover', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          provider,
+          base_url: config.base_url,
+          auth_type: config.auth_type,
+        }),
+      });
 
-    const discoveredModels = (discoverData.models || []).filter((model) => isLikelyChatModel(model.id));
-    if (discoveredModels.length === 0) {
-      return {
-        type: 'warning',
-        message: `${providerLabel} key saved, but the provider did not return any models to import.`,
-      };
+      const discoverData = await safeJsonParse<DiscoverModelsResponse>(discoverResponse, {});
+      if (!discoverResponse.ok || !discoverData.success) {
+        return {
+          type: 'warning',
+          message: `${providerLabel} key saved, but model discovery failed: ${discoverData.message || discoverData.error || 'Unknown error'}`,
+        };
+      }
+
+      const discoveredModels = (discoverData.models || []).filter((model) => isLikelyChatModel(model.id));
+      if (discoveredModels.length === 0) {
+        return {
+          type: 'warning',
+          message: `${providerLabel} key saved, but the provider did not return any models to import.`,
+        };
+      }
+      importModels = discoveredModels.map((model) => toDiscoveredBulkImportModel(provider, config, model));
     }
 
     const totals = { created: 0, skipped: 0, failed: 0 };
     const requestErrors: string[] = [];
-    for (const batch of chunkArray(discoveredModels, AUTO_IMPORT_BATCH_SIZE)) {
+    for (const batch of chunkArray(importModels, AUTO_IMPORT_BATCH_SIZE)) {
       const bulkResponse = await fetch('/api/models/bulk', {
         method: 'POST',
         headers: {
@@ -182,7 +258,7 @@ async function importDiscoveredModelsForProvider(
           supports_streaming: true,
           supports_functions: true,
           supports_vision: false,
-          models: batch.map((model) => toBulkImportModel(provider, config, model)),
+          models: batch,
         }),
       });
 
@@ -214,7 +290,7 @@ async function importDiscoveredModelsForProvider(
 
     return {
       type: 'success',
-      message: `${providerLabel} key saved. All ${totals.skipped} discovered ${modelLabel(totals.skipped)} were already imported.`,
+      message: `${providerLabel} key saved. All ${totals.skipped} ${config.source === 'catalog' ? 'catalog' : 'discovered'} ${modelLabel(totals.skipped)} were already imported.`,
     };
   } catch (error) {
     return {
@@ -645,7 +721,7 @@ function SecretDialog({
       }
 
       console.log('[SecretDialog] Secret', isEdit ? 'updated' : 'created');
-      const modelImportNotice = await importDiscoveredModelsForProvider(provider, providerLabel, sessionToken);
+      const modelImportNotice = await importModelsForProvider(provider, providerLabel, sessionToken);
       onModelImportNotice(modelImportNotice);
       onSuccess();
     } catch (err) {
