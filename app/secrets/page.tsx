@@ -24,8 +24,155 @@ import { ApiKeysManagement } from '@/components/settings/ApiKeysManagement';
 import { WidgetAppsManagement } from '@/components/settings/WidgetAppsManagement';
 import { IntegrationsManagement } from '@/components/settings/IntegrationsManagement';
 import type { ProviderSecretDisplay } from '@/lib/secrets/secrets.types';
-import type { ModelProvider } from '@/lib/models/llm-model.types';
+import type { AuthType, DiscoveredModel, ModelProvider } from '@/lib/models/llm-model.types';
 import { safeJsonParse } from '@/lib/utils/safe-json';
+
+const AUTO_IMPORT_BATCH_SIZE = 100;
+
+type AutoDiscoveryImportConfig = {
+  base_url: string;
+  auth_type: AuthType;
+};
+
+type ModelImportNotice = {
+  type: 'success' | 'warning';
+  message: string;
+};
+
+type DiscoverModelsResponse = {
+  success?: boolean;
+  models?: DiscoveredModel[];
+  error?: string;
+  message?: string;
+};
+
+type BulkImportResponse = {
+  success?: boolean;
+  counts?: {
+    created?: number;
+    skipped?: number;
+    failed?: number;
+  };
+  error?: string;
+  message?: string;
+};
+
+const AUTO_DISCOVERY_IMPORT_CONFIG: Partial<Record<ModelProvider, AutoDiscoveryImportConfig>> = {
+  openai: { base_url: 'https://api.openai.com/v1', auth_type: 'bearer' },
+  openrouter: { base_url: 'https://openrouter.ai/api/v1', auth_type: 'bearer' },
+  together: { base_url: 'https://api.together.xyz/v1', auth_type: 'bearer' },
+  groq: { base_url: 'https://api.groq.com/openai/v1', auth_type: 'bearer' },
+  fireworks: { base_url: 'https://api.fireworks.ai/inference/v1', auth_type: 'bearer' },
+};
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function modelLabel(count: number): string {
+  return count === 1 ? 'model' : 'models';
+}
+
+async function importDiscoveredModelsForProvider(
+  provider: ModelProvider,
+  providerLabel: string,
+  sessionToken: string
+): Promise<ModelImportNotice | null> {
+  const config = AUTO_DISCOVERY_IMPORT_CONFIG[provider];
+  if (!config) return null;
+
+  try {
+    const discoverResponse = await fetch('/api/models/discover', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionToken}`,
+      },
+      body: JSON.stringify({
+        provider,
+        base_url: config.base_url,
+        auth_type: config.auth_type,
+      }),
+    });
+
+    const discoverData = await safeJsonParse<DiscoverModelsResponse>(discoverResponse, {});
+    if (!discoverResponse.ok || !discoverData.success) {
+      return {
+        type: 'warning',
+        message: `${providerLabel} key saved, but model discovery failed: ${discoverData.message || discoverData.error || 'Unknown error'}`,
+      };
+    }
+
+    const discoveredModels = discoverData.models || [];
+    if (discoveredModels.length === 0) {
+      return {
+        type: 'warning',
+        message: `${providerLabel} key saved, but the provider did not return any models to import.`,
+      };
+    }
+
+    const totals = { created: 0, skipped: 0, failed: 0 };
+    const requestErrors: string[] = [];
+    for (const batch of chunkArray(discoveredModels, AUTO_IMPORT_BATCH_SIZE)) {
+      const bulkResponse = await fetch('/api/models/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          provider,
+          base_url: config.base_url,
+          auth_type: config.auth_type,
+          models: batch.map((model) => ({
+            model_id: model.id,
+            name: model.id,
+            context_length: model.max_model_len || 4096,
+          })),
+        }),
+      });
+
+      const bulkData = await safeJsonParse<BulkImportResponse>(bulkResponse, {});
+      if (!bulkResponse.ok) {
+        requestErrors.push(bulkData.message || bulkData.error || `Bulk import failed with ${bulkResponse.status}`);
+        continue;
+      }
+
+      totals.created += bulkData.counts?.created || 0;
+      totals.skipped += bulkData.counts?.skipped || 0;
+      totals.failed += bulkData.counts?.failed || 0;
+    }
+
+    if (requestErrors.length > 0 || totals.failed > 0) {
+      return {
+        type: 'warning',
+        message: `${providerLabel} key saved. Imported ${totals.created} ${modelLabel(totals.created)}, skipped ${totals.skipped}, and ${totals.failed + requestErrors.length} failed.`,
+      };
+    }
+
+    if (totals.created > 0) {
+      const skippedSuffix = totals.skipped > 0 ? ` ${totals.skipped} already existed.` : '';
+      return {
+        type: 'success',
+        message: `Imported ${totals.created} ${providerLabel} ${modelLabel(totals.created)}.${skippedSuffix}`,
+      };
+    }
+
+    return {
+      type: 'success',
+      message: `${providerLabel} key saved. All ${totals.skipped} discovered ${modelLabel(totals.skipped)} were already imported.`,
+    };
+  } catch (error) {
+    return {
+      type: 'warning',
+      message: `${providerLabel} key saved, but model import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
+  }
+}
 
 export default function SecretsPage() {
   const { user, session, signOut, loading: authLoading } = useAuth();
@@ -37,6 +184,7 @@ export default function SecretsPage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ModelProvider | null>(null);
+  const [modelImportNotice, setModelImportNotice] = useState<ModelImportNotice | null>(null);
 
   console.log('[SecretsPage] Auth state:', { user: user?.email, authLoading });
 
@@ -89,6 +237,7 @@ export default function SecretsPage() {
     }
 
     try {
+      setModelImportNotice(null);
       const response = await fetch(`/api/secrets/${provider}`, {
         method: 'DELETE',
         headers: session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {},
@@ -165,6 +314,19 @@ export default function SecretsPage() {
         {/* Loading State */}
         {loading && <LoadingState message="Loading secrets..." />}
 
+        {modelImportNotice && (
+          <div
+            role="status"
+            className={`mb-6 rounded-md border p-3 text-sm ${
+              modelImportNotice.type === 'success'
+                ? 'border-green-200 bg-green-50 text-green-800'
+                : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}
+          >
+            {modelImportNotice.message}
+          </div>
+        )}
+
         {/* Third-Party Integrations Section - At Top */}
         {user && session?.access_token && (
           <div className="mb-8">
@@ -187,7 +349,10 @@ export default function SecretsPage() {
                   .map((provider) => (
                     <button
                       key={provider}
-                      onClick={() => setEditingProvider(provider)}
+                      onClick={() => {
+                        setModelImportNotice(null);
+                        setEditingProvider(provider);
+                      }}
                       className="border border-dashed border-border rounded-lg p-2.5 hover:bg-muted/50 transition-colors text-left group"
                     >
                       <div className="flex items-center gap-2">
@@ -237,7 +402,10 @@ export default function SecretsPage() {
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0"
-                            onClick={() => setEditingProvider(secret.provider)}
+                            onClick={() => {
+                              setModelImportNotice(null);
+                              setEditingProvider(secret.provider);
+                            }}
                           >
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
@@ -283,10 +451,12 @@ export default function SecretsPage() {
         {editingProvider && user && session?.access_token && (
           <SecretDialog
             provider={editingProvider}
+            providerLabel={providerInfo[editingProvider]?.name || editingProvider}
             existingSecret={secrets.find(s => s.provider === editingProvider)}
             userId={user.id}
             sessionToken={session.access_token}
             onClose={() => setEditingProvider(null)}
+            onModelImportNotice={setModelImportNotice}
             onSuccess={() => {
               setEditingProvider(null);
               fetchSecrets();
@@ -303,19 +473,23 @@ export default function SecretsPage() {
 
 interface SecretDialogProps {
   provider: ModelProvider;
+  providerLabel: string;
   existingSecret?: ProviderSecretDisplay;
   userId: string;
   sessionToken: string;
   onClose: () => void;
+  onModelImportNotice: (notice: ModelImportNotice | null) => void;
   onSuccess: () => void;
 }
 
 function SecretDialog({
   provider,
+  providerLabel,
   existingSecret,
   userId: _userId, // eslint-disable-line @typescript-eslint/no-unused-vars
   sessionToken,
   onClose,
+  onModelImportNotice,
   onSuccess,
 }: SecretDialogProps) {
   const [apiKey, setApiKey] = useState('');
@@ -421,6 +595,8 @@ function SecretDialog({
       }
 
       console.log('[SecretDialog] Secret', isEdit ? 'updated' : 'created');
+      const modelImportNotice = await importDiscoveredModelsForProvider(provider, providerLabel, sessionToken);
+      onModelImportNotice(modelImportNotice);
       onSuccess();
     } catch (err) {
       console.error('[SecretDialog] Error:', err);
