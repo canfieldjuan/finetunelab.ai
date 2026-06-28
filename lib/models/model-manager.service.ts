@@ -13,6 +13,84 @@ import type {
   ModelConfig,
 } from './llm-model.types';
 
+export function buildCreateModelRecord(dto: CreateModelDTO, userId?: string) {
+  const encryptedKey = dto.api_key ? encrypt(dto.api_key) : null;
+
+  return {
+    user_id: userId || null,
+    name: dto.name,
+    description: dto.description || null,
+    provider: dto.provider,
+    base_url: dto.base_url,
+    model_id: dto.model_id,
+    served_model_name: dto.served_model_name || null,
+    auth_type: dto.auth_type,
+    api_key_encrypted: encryptedKey,
+    auth_headers: dto.auth_headers || {},
+    supports_streaming: dto.supports_streaming ?? true,
+    supports_functions: dto.supports_functions ?? true,
+    supports_vision: dto.supports_vision ?? false,
+    context_length: dto.context_length ?? 4096,
+    max_output_tokens: dto.max_output_tokens ?? 2000,
+    price_per_input_token: dto.price_per_input_token || null,
+    price_per_output_token: dto.price_per_output_token || null,
+    default_temperature: dto.default_temperature ?? 0.7,
+    default_top_p: dto.default_top_p ?? 1.0,
+    enabled: dto.enabled ?? true,
+    is_global: userId ? false : true,
+    is_default: dto.is_default ?? false,
+  };
+}
+
+export function buildUpdateModelRecord(dto: UpdateModelDTO): Record<string, unknown> {
+  const updates: Record<string, unknown> = {};
+
+  if (dto.name !== undefined) updates.name = dto.name;
+  if (dto.description !== undefined) updates.description = dto.description;
+  if (dto.base_url !== undefined) updates.base_url = dto.base_url;
+  if (dto.model_id !== undefined) updates.model_id = dto.model_id;
+  if (dto.served_model_name !== undefined) {
+    updates.served_model_name = dto.served_model_name || null;
+  }
+  if (dto.auth_type !== undefined) updates.auth_type = dto.auth_type;
+  if (dto.auth_headers !== undefined) updates.auth_headers = dto.auth_headers;
+  if (dto.supports_streaming !== undefined) {
+    updates.supports_streaming = dto.supports_streaming;
+  }
+  if (dto.supports_functions !== undefined) {
+    updates.supports_functions = dto.supports_functions;
+  }
+  if (dto.supports_vision !== undefined) {
+    updates.supports_vision = dto.supports_vision;
+  }
+  if (dto.context_length !== undefined) {
+    updates.context_length = dto.context_length;
+  }
+  if (dto.max_output_tokens !== undefined) {
+    updates.max_output_tokens = dto.max_output_tokens;
+  }
+  if (dto.price_per_input_token !== undefined) {
+    updates.price_per_input_token = dto.price_per_input_token;
+  }
+  if (dto.price_per_output_token !== undefined) {
+    updates.price_per_output_token = dto.price_per_output_token;
+  }
+  if (dto.default_temperature !== undefined) {
+    updates.default_temperature = dto.default_temperature;
+  }
+  if (dto.default_top_p !== undefined) {
+    updates.default_top_p = dto.default_top_p;
+  }
+  if (dto.enabled !== undefined) updates.enabled = dto.enabled;
+  if (dto.is_default !== undefined) updates.is_default = dto.is_default;
+
+  if (dto.api_key !== undefined) {
+    updates.api_key_encrypted = dto.api_key ? encrypt(dto.api_key) : null;
+  }
+
+  return updates;
+}
+
 class ModelManagerService {
   // ============================================================================
   // LIST MODELS
@@ -22,8 +100,9 @@ class ModelManagerService {
     try {
       console.log('[ModelManager] Listing models for user:', userId || 'anonymous');
 
-      // Use authenticated client if provided, otherwise default (for backwards compatibility)
-      const client = supabaseClient || defaultSupabase;
+      // Prefer the server-side client for model listing so global rows with
+      // stored provider credentials do not need direct client-readable RLS.
+      const client = supabaseAdmin || supabaseClient || defaultSupabase;
 
       let query = client
         .from('llm_models')
@@ -128,31 +207,7 @@ class ModelManagerService {
 
       const client = supabaseClient || defaultSupabase;
 
-      const encryptedKey = dto.api_key ? encrypt(dto.api_key) : null;
-
-      const modelData = {
-        user_id: userId || null,
-        name: dto.name,
-        description: dto.description || null,
-        provider: dto.provider,
-        base_url: dto.base_url,
-        model_id: dto.model_id,
-        auth_type: dto.auth_type,
-        api_key_encrypted: encryptedKey,
-        auth_headers: dto.auth_headers || {},
-        supports_streaming: dto.supports_streaming ?? true,
-        supports_functions: dto.supports_functions ?? true,
-        supports_vision: dto.supports_vision ?? false,
-        context_length: dto.context_length ?? 4096,
-        max_output_tokens: dto.max_output_tokens ?? 2000,
-        price_per_input_token: dto.price_per_input_token || null,
-        price_per_output_token: dto.price_per_output_token || null,
-        default_temperature: dto.default_temperature ?? 0.7,
-        default_top_p: dto.default_top_p ?? 1.0,
-        enabled: dto.enabled ?? true,
-        is_global: userId ? false : true,
-        is_default: dto.is_default ?? false,
-      };
+      const modelData = buildCreateModelRecord(dto, userId);
 
       const { data, error } = await client
         .from('llm_models')
@@ -194,47 +249,7 @@ class ModelManagerService {
       // Use authenticated client if provided, otherwise default
       const client = supabaseClient || defaultSupabase;
 
-      const updates: Record<string, unknown> = {};
-
-      if (dto.name !== undefined) updates.name = dto.name;
-      if (dto.description !== undefined) updates.description = dto.description;
-      if (dto.base_url !== undefined) updates.base_url = dto.base_url;
-      if (dto.model_id !== undefined) updates.model_id = dto.model_id;
-      if (dto.auth_type !== undefined) updates.auth_type = dto.auth_type;
-      if (dto.auth_headers !== undefined) updates.auth_headers = dto.auth_headers;
-      if (dto.supports_streaming !== undefined) {
-        updates.supports_streaming = dto.supports_streaming;
-      }
-      if (dto.supports_functions !== undefined) {
-        updates.supports_functions = dto.supports_functions;
-      }
-      if (dto.supports_vision !== undefined) {
-        updates.supports_vision = dto.supports_vision;
-      }
-      if (dto.context_length !== undefined) {
-        updates.context_length = dto.context_length;
-      }
-      if (dto.max_output_tokens !== undefined) {
-        updates.max_output_tokens = dto.max_output_tokens;
-      }
-      if (dto.price_per_input_token !== undefined) {
-        updates.price_per_input_token = dto.price_per_input_token;
-      }
-      if (dto.price_per_output_token !== undefined) {
-        updates.price_per_output_token = dto.price_per_output_token;
-      }
-      if (dto.default_temperature !== undefined) {
-        updates.default_temperature = dto.default_temperature;
-      }
-      if (dto.default_top_p !== undefined) {
-        updates.default_top_p = dto.default_top_p;
-      }
-      if (dto.enabled !== undefined) updates.enabled = dto.enabled;
-      if (dto.is_default !== undefined) updates.is_default = dto.is_default;
-
-      if (dto.api_key !== undefined) {
-        updates.api_key_encrypted = dto.api_key ? encrypt(dto.api_key) : null;
-      }
+      const updates = buildUpdateModelRecord(dto);
 
       const { data, error } = await client
         .from('llm_models')

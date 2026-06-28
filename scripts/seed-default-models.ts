@@ -26,10 +26,11 @@ envContent.split('\n').forEach(line => {
 });
 
 const supabaseUrl = envVars.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = envVars.SUPABASE_SERVICE_ROLE_KEY || envVars.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseKey = envVars.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('[SeedModels] Missing Supabase credentials');
+  console.error('[SeedModels] Missing Supabase admin credentials');
+  console.error('[SeedModels] Required: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
   process.exit(1);
 }
 

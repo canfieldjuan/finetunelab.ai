@@ -13,19 +13,6 @@ interface FeedbackRequest {
   confidenceScore?: number;
 }
 
-interface FeedbackRecord {
-  id: string;
-  user_id: string;
-  conversation_id: string | null;
-  message_id: string | null;
-  source_id: string;
-  fact_content: string | null;
-  helpful: boolean;
-  feedback_text: string | null;
-  confidence_score: number | null;
-  created_at: string;
-}
-
 /**
  * POST /api/graphrag/feedback
  * Submit feedback on a GraphRAG search result
@@ -170,29 +157,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/**
- * GET feedback statistics for a source
- */
-export async function getSourceStats(sourceId: string, userId: string): Promise<{
-  totalFeedback: number;
-  helpfulCount: number;
-  helpfulPercentage: number;
-}> {
-  const { data, error } = await supabaseAdmin
-    .from('graphrag_feedback')
-    .select('helpful')
-    .eq('source_id', sourceId)
-    .eq('user_id', userId);
-
-  if (error || !data) {
-    return { totalFeedback: 0, helpfulCount: 0, helpfulPercentage: 0 };
-  }
-
-  const totalFeedback = data.length;
-  const helpfulCount = data.filter(f => f.helpful).length;
-  const helpfulPercentage = totalFeedback > 0 ? (helpfulCount / totalFeedback) * 100 : 0;
-
-  return { totalFeedback, helpfulCount, helpfulPercentage };
 }

@@ -72,7 +72,9 @@ export function ModelSelector({ value, onChange, sessionToken, disabled }: Model
 
       // Auto-select default model if no model is currently selected
       if (!value || value === '__default__') {
-        const defaultModel = data.models.find((m: LLMModelDisplay) => m.is_default);
+        const defaultModel =
+          data.models.find((m: LLMModelDisplay) => m.is_default && !m.is_global) ||
+          data.models.find((m: LLMModelDisplay) => m.is_default);
         if (defaultModel) {
           console.log('[ModelSelector] Auto-selecting default model:', defaultModel.name);
           onChange(defaultModel.id, defaultModel);

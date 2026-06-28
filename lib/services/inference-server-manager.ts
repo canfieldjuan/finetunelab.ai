@@ -181,7 +181,7 @@ export class InferenceServerManager {
       console.log('[InferenceServerManager] Using external vLLM server:', externalUrl);
 
       // Create a record for the external server reference
-      const serverId = `external-vllm-${Date.now()}`;
+      const serverId = uuidv4();
       const { error: dbError } = await supabaseClient
         .from('local_inference_servers')
         .insert({
@@ -743,20 +743,24 @@ export class InferenceServerManager {
   /**
    * Stop a running server
    */
-  async stopServer(serverId: string, userId: string | null): Promise<void> {
+  async stopServer(
+    serverId: string,
+    userId: string | null,
+    supabaseClient?: SupabaseClient
+  ): Promise<void> {
     console.log('[InferenceServerManager] Stopping server:', serverId);
 
     // First, try to get process from memory
     const memoryProcess = this.processes.get(serverId);
 
     // Also get the PID from database as fallback (critical for server restarts)
-    const serverInfo = await this.getServerStatus(serverId, userId);
+    const serverInfo = await this.getServerStatus(serverId, userId, supabaseClient);
     const pid = serverInfo?.pid || memoryProcess?.pid;
 
     if (!memoryProcess && !pid) {
       console.warn('[InferenceServerManager] No process found in memory or database');
       // Update database anyway
-      await this.updateServerStatus(serverId, userId, 'stopped');
+      await this.updateServerStatus(serverId, userId, 'stopped', undefined, undefined, supabaseClient);
       return;
     }
 
@@ -823,7 +827,14 @@ export class InferenceServerManager {
     }
 
     // Update database
-    await this.updateServerStatus(serverId, userId, 'stopped', new Date().toISOString());
+    await this.updateServerStatus(
+      serverId,
+      userId,
+      'stopped',
+      new Date().toISOString(),
+      undefined,
+      supabaseClient
+    );
   }
 
   /**

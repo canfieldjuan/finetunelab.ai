@@ -8,8 +8,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { modelManager } from '@/lib/models/model-manager.service';
 import type { UpdateModelDTO } from '@/lib/models/llm-model.types';
+import { cacheDeletePattern, generateCacheKey } from '@/lib/cache/redis-cache';
 
 export const runtime = 'nodejs';
+const CACHE_PREFIX = 'api:models';
 
 // ============================================================================
 // Helper function to extract and validate ID
@@ -178,6 +180,7 @@ export async function PATCH(
     if (body.description !== undefined) dto.description = body.description;
     if (body.base_url !== undefined) dto.base_url = body.base_url;
     if (body.model_id !== undefined) dto.model_id = body.model_id;
+    if (body.served_model_name !== undefined) dto.served_model_name = body.served_model_name;
     if (body.auth_type !== undefined) dto.auth_type = body.auth_type;
     if (body.api_key !== undefined) dto.api_key = body.api_key;
     if (body.auth_headers !== undefined) dto.auth_headers = body.auth_headers;
@@ -191,11 +194,16 @@ export async function PATCH(
     if (body.default_temperature !== undefined) dto.default_temperature = body.default_temperature;
     if (body.default_top_p !== undefined) dto.default_top_p = body.default_top_p;
     if (body.enabled !== undefined) dto.enabled = body.enabled;
+    if (body.is_default !== undefined) dto.is_default = body.is_default;
 
     console.log('[ModelsAPI] Updating model:', id, 'with fields:', Object.keys(dto));
 
     // Update model - pass authenticated client to bypass RLS
     const updatedModel = await modelManager.updateModel(id, dto, supabase);
+
+    const userCacheKey = generateCacheKey(CACHE_PREFIX, userId);
+    await cacheDeletePattern(userCacheKey);
+    console.log('[ModelsAPI] Cache invalidated for user:', userId);
 
     console.log('[ModelsAPI] Model updated successfully');
     return NextResponse.json({
@@ -205,6 +213,8 @@ export async function PATCH(
         name: updatedModel.name,
         provider: updatedModel.provider,
         enabled: updatedModel.enabled,
+        served_model_name: updatedModel.served_model_name,
+        is_default: updatedModel.is_default,
       },
       message: 'Model updated successfully',
     });
@@ -278,6 +288,10 @@ export async function DELETE(
 
     // Delete model - pass authenticated client to bypass RLS
     await modelManager.deleteModel(id, supabase);
+
+    const userCacheKey = generateCacheKey(CACHE_PREFIX, userId);
+    await cacheDeletePattern(userCacheKey);
+    console.log('[ModelsAPI] Cache invalidated for user:', userId);
 
     console.log('[ModelsAPI] Model deleted successfully');
     return NextResponse.json({

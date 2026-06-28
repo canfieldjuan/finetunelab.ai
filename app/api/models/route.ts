@@ -314,6 +314,7 @@ export async function POST(request: NextRequest) {
       provider: body.provider,
       base_url: body.base_url,
       model_id: body.model_id,
+      served_model_name: body.served_model_name,
       auth_type: body.auth_type,
       api_key: body.api_key,
       auth_headers: body.auth_headers || {},
@@ -327,6 +328,7 @@ export async function POST(request: NextRequest) {
       default_temperature: body.default_temperature ?? parseFloat(process.env.MODELS_DEFAULT_TEMPERATURE || '0.7'),
       default_top_p: body.default_top_p ?? parseFloat(process.env.MODELS_DEFAULT_TOP_P || '1.0'),
       enabled: body.enabled ?? true,
+      is_default: body.is_default ?? false,
     };
 
     console.log('[ModelsAPI] Creating model:', dto.name, 'for user:', user.id);
@@ -347,6 +349,8 @@ export async function POST(request: NextRequest) {
         name: model.name,
         provider: model.provider,
         enabled: model.enabled,
+        served_model_name: model.served_model_name,
+        is_default: model.is_default,
       },
       message: 'Model created successfully',
     }, { status: 201 });
