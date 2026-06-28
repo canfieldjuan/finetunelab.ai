@@ -1174,6 +1174,43 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         console.log('[API] ⚠️ Using legacy provider-specific path (LIMITED METADATA) - model:', model);
         console.log('[API] ⚠️ Why legacy? useUnifiedClient:', useUnifiedClient, 'selectedModelId:', selectedModelId);
 
+        // Load model config before the legacy call so generation controls still honor model caps.
+        try {
+          actualModelConfig = await modelManager.getModelConfig(model, userId || undefined, supabaseAdmin || undefined);
+          if (actualModelConfig) {
+            console.log('[API] [LEGACY] Model config loaded - actual provider:', actualModelConfig.provider);
+          }
+        } catch (_error) {
+          console.log('[API] [LEGACY] Could not load model config, using model string:', model);
+        }
+
+        const effectiveTemperature = requestedTemperature ?? actualModelConfig?.default_temperature ?? temperature;
+        const configuredOutputLimit = typeof actualModelConfig?.max_output_tokens === 'number' && actualModelConfig.max_output_tokens > 0
+          ? actualModelConfig.max_output_tokens
+          : undefined;
+        const requestedOrModelMaxTokens = requestedMaxOutputTokens ?? configuredOutputLimit ?? maxTokens;
+        let safeMaxTokens = configuredOutputLimit
+          ? Math.min(requestedOrModelMaxTokens, configuredOutputLimit)
+          : requestedOrModelMaxTokens;
+
+        if (actualModelConfig?.context_length) {
+          const inputText = enhancedMessages.map(m => m.content).join(' ');
+          const estimatedInputTokens = Math.ceil(inputText.length / 4);
+          const availableTokens = actualModelConfig.context_length - estimatedInputTokens;
+          const safetyMargin = 100;
+          safeMaxTokens = Math.min(safeMaxTokens, Math.max(100, availableTokens - safetyMargin));
+
+          console.log('[API] Legacy context calculation:', {
+            modelContextLength: actualModelConfig.context_length,
+            estimatedInputTokens,
+            availableTokens,
+            configuredOutputLimit,
+            adjustedMaxTokens: safeMaxTokens
+          });
+        }
+        effectiveTraceTemperature = effectiveTemperature;
+        effectiveTraceMaxTokens = safeMaxTokens;
+
         // Start trace for legacy LLM operation
         traceContext = await traceService.startTrace({
           spanName: 'llm.completion',
@@ -1188,22 +1225,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         llmResponse = await runLLMWithToolCalls(
           enhancedMessages,
           model,
-          temperature,
-          maxTokens,
+          effectiveTemperature,
+          safeMaxTokens,
           tools,
           toolCallHandler
         );
-
-        // Load model config for metadata (legacy path)
-        // Try to get config from registry, fallback to using model string as-is
-        try {
-          actualModelConfig = await modelManager.getModelConfig(model, userId || undefined, supabaseAdmin || undefined);
-          if (actualModelConfig) {
-            console.log('[API] [LEGACY] Model config loaded - actual provider:', actualModelConfig.provider);
-          }
-        } catch (_error) {
-          console.log('[API] [LEGACY] Could not load model config, using model string:', model);
-        }
 
         // Create metadata object for persistence (legacy path)
         messageMetadata = {

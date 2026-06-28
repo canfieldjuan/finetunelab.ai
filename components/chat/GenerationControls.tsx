@@ -107,7 +107,7 @@ export function GenerationControls({
               onChange={(event) => updateMaxOutputTokens(Number(event.target.value))}
             />
             <p className="text-xs text-muted-foreground">
-              Capped at {maxTokenLimit.toLocaleString()} for this model context.
+              Input limit: {maxTokenLimit.toLocaleString()}. Final output may be lowered for the model cap and remaining context.
             </p>
           </div>
 
