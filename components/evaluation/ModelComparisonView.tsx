@@ -140,7 +140,7 @@ export function ModelComparisonView({
           continue;
         }
 
-        if (!parsed || typeof parsed !== 'object') return;
+        if (!parsed || typeof parsed !== 'object') continue;
         const event = parsed as {
           content?: string;
           error?: string;
@@ -168,19 +168,23 @@ export function ModelComparisonView({
       }
     };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
-      buffer = events.pop() || '';
-      events.forEach(processEvent);
-    }
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+        events.forEach(processEvent);
+      }
 
-    buffer += decoder.decode();
-    if (buffer.trim()) {
-      processEvent(buffer);
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        processEvent(buffer);
+      }
+    } finally {
+      reader.releaseLock();
     }
 
     return { content, modelName, tokensUsed };

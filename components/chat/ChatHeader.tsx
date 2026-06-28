@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { MoreVertical, Download, Share2, Tag, Copy, Check, RefreshCw } from 'lucide-react';
+import { MoreVertical, Download, Share2, Tag, Copy, Check, GitCompare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -100,7 +100,7 @@ export function ChatHeader({
                 disabled={loading || !onCompareModels}
                 className="cursor-pointer"
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
+                <GitCompare className="mr-2 h-4 w-4" />
                 <span>Compare Models</span>
               </DropdownMenuItem>
               <DropdownMenuItem
