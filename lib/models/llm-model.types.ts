@@ -98,6 +98,7 @@ export interface CreateModelDTO {
   provider: ModelProvider;
   base_url: string;
   model_id: string;
+  served_model_name?: string | null;
   auth_type: AuthType;
   api_key?: string;  // Plain text, will be encrypted
   auth_headers?: Record<string, string>;
@@ -126,6 +127,7 @@ export interface UpdateModelDTO {
   description?: string;
   base_url?: string;
   model_id?: string;
+  served_model_name?: string | null;
   auth_type?: AuthType;
   api_key?: string;  // Plain text, will be encrypted
   auth_headers?: Record<string, string>;

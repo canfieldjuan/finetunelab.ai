@@ -137,6 +137,7 @@ class ModelManagerService {
         provider: dto.provider,
         base_url: dto.base_url,
         model_id: dto.model_id,
+        served_model_name: dto.served_model_name || null,
         auth_type: dto.auth_type,
         api_key_encrypted: encryptedKey,
         auth_headers: dto.auth_headers || {},
@@ -200,6 +201,9 @@ class ModelManagerService {
       if (dto.description !== undefined) updates.description = dto.description;
       if (dto.base_url !== undefined) updates.base_url = dto.base_url;
       if (dto.model_id !== undefined) updates.model_id = dto.model_id;
+      if (dto.served_model_name !== undefined) {
+        updates.served_model_name = dto.served_model_name || null;
+      }
       if (dto.auth_type !== undefined) updates.auth_type = dto.auth_type;
       if (dto.auth_headers !== undefined) updates.auth_headers = dto.auth_headers;
       if (dto.supports_streaming !== undefined) {
