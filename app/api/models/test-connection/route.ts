@@ -21,6 +21,9 @@ async function testOpenAIConnection(config: ModelConfig): Promise<{
   error?: string;
 }> {
   const startTime = Date.now();
+  const requestModelName = config.provider === PROVIDERS.VLLM
+    ? (config.served_model_name || config.model_id)
+    : config.model_id;
 
   try {
     const response = await fetch(`${config.base_url}/chat/completions`, {
@@ -30,7 +33,7 @@ async function testOpenAIConnection(config: ModelConfig): Promise<{
         'Authorization': `Bearer ${config.api_key || ''}`,
       },
       body: JSON.stringify({
-        model: config.model_id,
+        model: requestModelName,
         messages: [{ role: 'user', content: 'test' }],
         max_tokens: 5,
       }),
