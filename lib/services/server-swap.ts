@@ -20,6 +20,7 @@ export type LocalServerRow = {
   name?: string | null;
   server_type: string;
   status: string;
+  base_url?: string | null;
   model_path: string;
   model_name: string;
   port: number | null;
