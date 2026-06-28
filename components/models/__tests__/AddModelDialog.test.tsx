@@ -6,16 +6,20 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AddModelDialog } from '../AddModelDialog';
 
-function renderDialog() {
-  return render(
-    <AddModelDialog
-      isOpen
-      onClose={vi.fn()}
-      onSuccess={vi.fn()}
-      userId="user-1"
-      sessionToken="session-token"
-    />
-  );
+function renderDialog(overrides: Partial<React.ComponentProps<typeof AddModelDialog>> = {}) {
+  const props = {
+    isOpen: true,
+    onClose: vi.fn(),
+    onSuccess: vi.fn(),
+    userId: 'user-1',
+    sessionToken: 'session-token',
+    ...overrides,
+  };
+
+  return {
+    ...render(<AddModelDialog {...props} />),
+    props,
+  };
 }
 
 function selectProvider(container: HTMLElement, provider: string) {
@@ -143,5 +147,127 @@ describe('AddModelDialog model serving fields', () => {
       served_model_name: 'llama3.2',
       auth_type: 'none',
     }));
+  });
+
+  it('bulk imports all discovered models by default', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/models/discover') {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            models: [
+              { id: 'gpt-4o-mini' },
+              { id: 'gpt-4.1-mini' },
+              { id: 'gpt-5-mini' },
+            ],
+          }),
+        };
+      }
+
+      if (url === '/api/models/bulk') {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            created: [{ id: 'model-1' }, { id: 'model-2' }, { id: 'model-3' }],
+            skipped: [],
+            failed: [],
+            counts: { created: 3, skipped: 0, failed: 0 },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onClose = vi.fn();
+    const onSuccess = vi.fn();
+
+    renderDialog({ onClose, onSuccess });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fetch available models' }));
+
+    await screen.findByText('Found 3 models');
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected (3)' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/models/bulk', expect.any(Object));
+    });
+    const bulkCall = fetchMock.mock.calls.find(([url]) => url === '/api/models/bulk');
+    expect(bulkCall).toBeDefined();
+    const [, init] = bulkCall as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+
+    expect(body).toEqual(expect.objectContaining({
+      provider: 'openai',
+      base_url: 'https://api.openai.com/v1',
+      auth_type: 'bearer',
+      models: [
+        { model_id: 'gpt-4o-mini', name: 'gpt-4o-mini', context_length: 4096 },
+        { model_id: 'gpt-4.1-mini', name: 'gpt-4.1-mini', context_length: 4096 },
+        { model_id: 'gpt-5-mini', name: 'gpt-5-mini', context_length: 4096 },
+      ],
+    }));
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('chunks large bulk imports into 100-model requests', async () => {
+    const discoveredModels = Array.from({ length: 101 }, (_, index) => ({ id: `provider/model-${index}` }));
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/models/discover') {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            models: discoveredModels,
+          }),
+        };
+      }
+
+      if (url === '/api/models/bulk') {
+        const body = JSON.parse(init?.body as string);
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            created: body.models.map((model: { model_id: string }) => ({ id: model.model_id })),
+            skipped: [],
+            failed: [],
+            counts: { created: body.models.length, skipped: 0, failed: 0 },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fetch available models' }));
+
+    await screen.findByText('Found 101 models');
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected (101)' }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/models/bulk')).toHaveLength(2);
+    });
+    const bulkBodies = fetchMock.mock.calls
+      .filter(([url]) => url === '/api/models/bulk')
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+
+    expect(bulkBodies.map((body) => body.models.length)).toEqual([100, 1]);
+    expect(bulkBodies[0].models[0]).toEqual({
+      model_id: 'provider/model-0',
+      name: 'provider/model-0',
+      context_length: 4096,
+    });
+    expect(bulkBodies[1].models[0]).toEqual({
+      model_id: 'provider/model-100',
+      name: 'provider/model-100',
+      context_length: 4096,
+    });
   });
 });

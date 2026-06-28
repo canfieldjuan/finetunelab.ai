@@ -47,6 +47,7 @@ const DEFAULT_FORM_DATA: Partial<CreateModelDTO> = {
 };
 
 const createDefaultFormData = (): Partial<CreateModelDTO> => ({ ...DEFAULT_FORM_DATA });
+const BULK_IMPORT_BATCH_SIZE = 100;
 
 export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: AddModelDialogProps) {
   const [activeTab, setActiveTab] = useState<TabType>('templates');
@@ -73,6 +74,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
   // Model auto-discovery state (fetch available models from an OpenAI-compatible endpoint)
   const [discovering, setDiscovering] = useState(false);
   const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
+  const [selectedDiscoveredModelIds, setSelectedDiscoveredModelIds] = useState<string[]>([]);
   const [discoverError, setDiscoverError] = useState<string | null>(null);
   // Whether the user opted out of the discovered-models dropdown (lifted here so it
   // resets when connection params change, e.g. after a fresh fetch on a new endpoint).
@@ -188,6 +190,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     // so a stale dropdown can't submit a model ID that doesn't exist on the new endpoint.
     if (field === 'provider' || field === 'base_url' || field === 'auth_type' || field === 'api_key') {
       setDiscoveredModels([]);
+      setSelectedDiscoveredModelIds([]);
       setDiscoverError(null);
       setManualModelEntry(false);
     }
@@ -204,6 +207,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     setDiscovering(true);
     setDiscoverError(null);
     setDiscoveredModels([]);
+    setSelectedDiscoveredModelIds([]);
     setManualModelEntry(false);
 
     // Abort if the request stalls, so the UI can't get stuck on "Fetching models…".
@@ -230,7 +234,9 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       const data = await response.json();
 
       if (data.success && Array.isArray(data.models) && data.models.length > 0) {
-        setDiscoveredModels(data.models as DiscoveredModel[]);
+        const models = data.models as DiscoveredModel[];
+        setDiscoveredModels(models);
+        setSelectedDiscoveredModelIds(models.map((model) => model.id));
       } else if (data.success) {
         setDiscoverError('No models returned by the endpoint. Enter the Model ID manually.');
       } else {
@@ -263,6 +269,103 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     // API key is now optional - will use provider secret if not provided
 
     return null;
+  };
+
+  const resetDialogState = () => {
+    setFormData(createDefaultFormData());
+    setSelectedTemplate(null);
+    setTestResult(null);
+    setDiscoveredModels([]);
+    setSelectedDiscoveredModelIds([]);
+    setDiscoverError(null);
+    setManualModelEntry(false);
+    setLocalDeploymentConfig({
+      server_type: 'vllm',
+      model_path: '',
+      gpu_memory_utilization: 0.5,
+      max_model_len: undefined,
+      tensor_parallel_size: 1,
+      context_length: 4096,
+    });
+  };
+
+  const handleBulkImport = async () => {
+    if (!formData.provider || !formData.base_url?.trim() || !formData.auth_type) {
+      setError('Provider, Base URL, and Authentication Type are required');
+      return;
+    }
+
+    const selectedModels = discoveredModels.filter((model) => selectedDiscoveredModelIds.includes(model.id));
+    if (selectedModels.length === 0) {
+      setError('Select at least one discovered model to import');
+      return;
+    }
+
+    console.log('[AddModelDialog] Bulk importing models:', selectedModels.length);
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      let createdCount = 0;
+      let skippedCount = 0;
+      let failedCount = 0;
+
+      for (let i = 0; i < selectedModels.length; i += BULK_IMPORT_BATCH_SIZE) {
+        const batch = selectedModels.slice(i, i + BULK_IMPORT_BATCH_SIZE);
+        const response = await fetch('/api/models/bulk', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify({
+            provider: formData.provider,
+            base_url: formData.base_url,
+            auth_type: formData.auth_type,
+            supports_streaming: formData.supports_streaming,
+            supports_functions: formData.supports_functions,
+            supports_vision: formData.supports_vision,
+            max_output_tokens: formData.max_output_tokens,
+            default_temperature: formData.default_temperature,
+            default_top_p: formData.default_top_p,
+            models: batch.map((model) => ({
+              model_id: model.id,
+              name: model.id,
+              served_model_name: SERVED_MODEL_NAME_PROVIDERS.includes(formData.provider as ModelProvider)
+                ? model.id
+                : undefined,
+              context_length: model.max_model_len || formData.context_length,
+            })),
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || data.error || 'Failed to import models');
+        }
+
+        createdCount += data.counts?.created ?? (Array.isArray(data.created) ? data.created.length : 0);
+        skippedCount += data.counts?.skipped ?? (Array.isArray(data.skipped) ? data.skipped.length : 0);
+        failedCount += data.counts?.failed ?? (Array.isArray(data.failed) ? data.failed.length : 0);
+      }
+
+      if (failedCount > 0) {
+        onSuccess();
+        setError(`${failedCount} model import${failedCount === 1 ? '' : 's'} failed. Created ${createdCount}, skipped ${skippedCount}.`);
+        return;
+      }
+
+      console.log('[AddModelDialog] Bulk import complete:', { created: createdCount, skipped: skippedCount });
+      resetDialogState();
+      onSuccess();
+      onClose();
+    } catch (err) {
+      console.error('[AddModelDialog] Bulk import error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to import models');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleTestConnection = async () => {
@@ -406,22 +509,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         console.log('[AddModelDialog] Model created:', data.model.id);
       }
 
-      // Reset form and close
-      setFormData(createDefaultFormData());
-      setSelectedTemplate(null);
-      setTestResult(null);
-      setDiscoveredModels([]);
-      setDiscoverError(null);
-      setManualModelEntry(false);
-      setLocalDeploymentConfig({
-        server_type: 'vllm',
-        model_path: '',
-        gpu_memory_utilization: 0.5,
-        max_model_len: undefined,
-        tensor_parallel_size: 1,
-        context_length: 4096,
-      });
-
+      resetDialogState();
       onSuccess();
       onClose();
     } catch (err) {
@@ -434,13 +522,8 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
 
   const handleClose = () => {
     if (!submitting) {
-      setSelectedTemplate(null);
-      setFormData(createDefaultFormData());
       setError(null);
-      setTestResult(null);
-      setDiscoveredModels([]);
-      setDiscoverError(null);
-      setManualModelEntry(false);
+      resetDialogState();
       onClose();
     }
   };
@@ -555,6 +638,17 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
             onDiscover={handleDiscover}
             discovering={discovering}
             discoveredModels={discoveredModels}
+            selectedDiscoveredModelIds={selectedDiscoveredModelIds}
+            onToggleDiscoveredModel={(modelId, checked) => {
+              setSelectedDiscoveredModelIds((current) =>
+                checked
+                  ? Array.from(new Set([...current, modelId]))
+                  : current.filter((id) => id !== modelId)
+              );
+            }}
+            onSelectAllDiscoveredModels={() => setSelectedDiscoveredModelIds(discoveredModels.map((model) => model.id))}
+            onClearDiscoveredModels={() => setSelectedDiscoveredModelIds([])}
+            onBulkImport={handleBulkImport}
             discoverError={discoverError}
             manualModelEntry={manualModelEntry}
             onManualModelEntry={() => setManualModelEntry(true)}
@@ -1089,6 +1183,11 @@ interface ManualFormProps {
   onDiscover: () => void;
   discovering: boolean;
   discoveredModels: DiscoveredModel[];
+  selectedDiscoveredModelIds: string[];
+  onToggleDiscoveredModel: (modelId: string, checked: boolean) => void;
+  onSelectAllDiscoveredModels: () => void;
+  onClearDiscoveredModels: () => void;
+  onBulkImport: () => void;
   discoverError: string | null;
   manualModelEntry: boolean;
   onManualModelEntry: () => void;
@@ -1114,6 +1213,11 @@ function ManualForm({
   onDiscover,
   discovering,
   discoveredModels,
+  selectedDiscoveredModelIds,
+  onToggleDiscoveredModel,
+  onSelectAllDiscoveredModels,
+  onClearDiscoveredModels,
+  onBulkImport,
   discoverError,
   manualModelEntry,
   onManualModelEntry,
@@ -1123,6 +1227,7 @@ function ManualForm({
   const canDiscover = DISCOVERY_SUPPORTED_PROVIDERS.includes(formData.provider as ModelProvider);
   const supportsServedModelName = SERVED_MODEL_NAME_PROVIDERS.includes(formData.provider as ModelProvider);
   const showModelDropdown = discoveredModels.length > 0 && !manualModelEntry;
+  const selectedDiscoveredCount = selectedDiscoveredModelIds.length;
 
   const handleModelSelect = (modelId: string) => {
     onChange('model_id', modelId);
@@ -1680,6 +1785,69 @@ function ManualForm({
             <p className="text-xs text-amber-700 mt-1">{discoverError}</p>
           )}
         </div>
+
+        {showModelDropdown && (
+          <div className="md:col-span-2 border border-input rounded-md p-3 bg-muted/20">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div>
+                <p className="text-sm font-medium">Bulk import discovered models</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedDiscoveredCount} of {discoveredModels.length} selected
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onSelectAllDiscoveredModels}
+                  disabled={submitting || selectedDiscoveredCount === discoveredModels.length}
+                >
+                  Select all
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onClearDiscoveredModels}
+                  disabled={submitting || selectedDiscoveredCount === 0}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+            <div className="max-h-44 overflow-y-auto border border-input rounded-md divide-y bg-background">
+              {discoveredModels.map((model) => (
+                <label
+                  key={model.id}
+                  className="flex items-center gap-3 px-3 py-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedDiscoveredModelIds.includes(model.id)}
+                    onChange={(event) => onToggleDiscoveredModel(model.id, event.target.checked)}
+                    disabled={submitting}
+                    className="rounded border-input"
+                  />
+                  <span className="font-mono break-all">{model.id}</span>
+                  {model.max_model_len && (
+                    <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+                      {model.max_model_len.toLocaleString()} ctx
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+            <Button
+              type="button"
+              onClick={onBulkImport}
+              disabled={submitting || selectedDiscoveredCount === 0}
+              className="w-full mt-3"
+            >
+              {submitting ? 'Adding models...' : `Add selected (${selectedDiscoveredCount})`}
+            </Button>
+          </div>
+        )}
 
         {/* Model ID */}
         <div>
