@@ -44,6 +44,8 @@ export interface ComparisonRating {
 export interface ModelComparisonViewProps {
   /** Session token for API calls */
   sessionToken?: string;
+  /** User ID for authenticated model registry lookups */
+  userId?: string | null;
   /** Whether the view is open */
   open: boolean;
   /** Callback when closed */
@@ -64,6 +66,13 @@ export interface ModelComparisonViewProps {
   }) => void;
 }
 
+const DEMO_ALLOWED_MODELS = [
+  'gpt-4o-mini',
+  'gpt-4o',
+  'claude-3-5-sonnet-20241022',
+  'claude-3-haiku-20240307',
+];
+
 /**
  * ModelComparisonView - A/B test models side-by-side
  * 
@@ -76,6 +85,7 @@ export interface ModelComparisonViewProps {
  */
 export function ModelComparisonView({
   sessionToken,
+  userId,
   open,
   onClose,
   initialPrompt = '',
@@ -95,13 +105,95 @@ export function ModelComparisonView({
   const [revealed, setRevealed] = useState(false);
   const [bothRated, setBothRated] = useState(false);
 
-  // Demo mode allowed models
-  const DEMO_ALLOWED_MODELS = [
-    'gpt-4o-mini',
-    'gpt-4o',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-haiku-20240307',
-  ];
+  const readChatStream = async (response: Response): Promise<{
+    content: string;
+    modelName?: string;
+    tokensUsed?: number;
+  }> => {
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(errorText || `Request failed with ${response.status}`);
+    }
+
+    if (!response.body) {
+      throw new Error('No response body received');
+    }
+
+    const streamReader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let content = '';
+    let modelName: string | undefined;
+    let tokensUsed: number | undefined;
+    let streamComplete = false;
+
+    const processEvent = (eventText: string) => {
+      for (const line of eventText.split('\n')) {
+        if (!line.startsWith('data:')) continue;
+
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+
+        if (!parsed || typeof parsed !== 'object') continue;
+        const event = parsed as {
+          content?: string;
+          error?: string;
+          type?: string;
+          model_name?: string;
+          input_tokens?: number;
+          output_tokens?: number;
+        };
+
+        if (event.error) {
+          throw new Error(event.error);
+        }
+
+        if (typeof event.content === 'string') {
+          content += event.content;
+        }
+
+        if (event.type === 'model_metadata' && event.model_name) {
+          modelName = event.model_name;
+        }
+
+        if (event.type === 'token_usage') {
+          tokensUsed = (event.input_tokens || 0) + (event.output_tokens || 0);
+        }
+      }
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await streamReader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+        events.forEach(processEvent);
+      }
+
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        processEvent(buffer);
+      }
+      streamComplete = true;
+    } finally {
+      if (!streamComplete) {
+        await streamReader.cancel().catch(() => {});
+      }
+      streamReader.releaseLock();
+    }
+
+    return { content, modelName, tokensUsed };
+  };
 
   // Fetch available models
   const fetchModels = React.useCallback(async () => {
@@ -129,8 +221,6 @@ export function ModelComparisonView({
     } catch (error) {
       console.error('[ModelComparisonView] Error fetching models:', error);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionToken, demoMode]);
 
   // Setup demo mode models and randomize display order
@@ -284,22 +374,24 @@ export function ModelComparisonView({
           },
           body: JSON.stringify({
             messages: [{ role: 'user', content: prompt }],
-            model_id: modelId,
-            stream: false,
+            modelId,
+            userId: userId || null,
+            forceNonStreaming: true,
+            contextInjectionEnabled: false,
           }),
         });
 
-        const data = await response.json();
+        const data = await readChatStream(response);
         const responseTime = Date.now() - startTime;
 
-        if (response.ok && data.response) {
+        if (data.content.trim()) {
           setResponses(prev => {
             const updated = new Map(prev);
             updated.set(modelId, {
               modelId,
-              modelName: model?.name || 'Unknown',
-              response: data.response,
-              tokensUsed: data.usage?.total_tokens,
+              modelName: data.modelName || model?.name || 'Unknown',
+              response: data.content,
+              tokensUsed: data.tokensUsed,
               responseTime,
               status: 'complete',
               timestamp: new Date(),
@@ -307,7 +399,7 @@ export function ModelComparisonView({
             return updated;
           });
         } else {
-          throw new Error(data.error || 'Failed to get response');
+          throw new Error('No content was generated by the model');
         }
       } catch (error) {
         setResponses(prev => {
@@ -363,19 +455,11 @@ export function ModelComparisonView({
       };
       updated.set(modelId, { ...current, preference });
       
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       return updated;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     });
   };
- // eslint-disable-next-line react-hooks/exhaustive-deps
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const exportAsJSONL = () => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     const data = selectedModels.map(modelId => {
       const response = responses.get(modelId);
       const rating = ratings.get(modelId);
@@ -398,17 +482,13 @@ export function ModelComparisonView({
         },
       };
     });
- // eslint-disable-next-line react-hooks/exhaustive-deps
 
     const jsonl = data.map(item => JSON.stringify(item)).join('\n');
     const blob = new Blob([jsonl], { type: 'application/jsonl' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     a.href = url;
     a.download = `model-comparison-${Date.now()}.jsonl`;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     a.click();
     URL.revokeObjectURL(url);
   };
