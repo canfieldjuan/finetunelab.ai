@@ -25,6 +25,7 @@ interface EditFormState {
   description: string;
   base_url: string;
   model_id: string;
+  served_model_name: string;
   auth_type: AuthType;
   supports_streaming: boolean;
   supports_functions: boolean;
@@ -36,6 +37,7 @@ interface EditFormState {
   default_temperature: string;
   default_top_p: string;
   enabled: boolean;
+  is_default: boolean;
 }
 
 const DEFAULT_FORM_STATE: EditFormState = {
@@ -43,6 +45,7 @@ const DEFAULT_FORM_STATE: EditFormState = {
   description: '',
   base_url: '',
   model_id: '',
+  served_model_name: '',
   auth_type: 'bearer',
   supports_streaming: true,
   supports_functions: true,
@@ -54,7 +57,10 @@ const DEFAULT_FORM_STATE: EditFormState = {
   default_temperature: '0.7',
   default_top_p: '1',
   enabled: true,
+  is_default: false,
 };
+
+const createDefaultFormState = (): EditFormState => ({ ...DEFAULT_FORM_STATE });
 
 const AUTH_TYPES: AuthType[] = ['bearer', 'api_key', 'custom_header', 'none'];
 
@@ -65,7 +71,7 @@ export function EditModelDialog({
   onClose,
   onUpdated,
 }: EditModelDialogProps) {
-  const [formData, setFormData] = useState<EditFormState>(DEFAULT_FORM_STATE);
+  const [formData, setFormData] = useState<EditFormState>(createDefaultFormState);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [authHeadersText, setAuthHeadersText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +85,7 @@ export function EditModelDialog({
         description: model.description || '',
         base_url: model.base_url,
         model_id: model.model_id,
+        served_model_name: model.served_model_name || '',
         auth_type: model.auth_type,
         supports_streaming: model.supports_streaming,
         supports_functions: model.supports_functions,
@@ -90,6 +97,7 @@ export function EditModelDialog({
         default_temperature: model.default_temperature.toString(),
         default_top_p: model.default_top_p.toString(),
         enabled: model.enabled,
+        is_default: model.is_default,
       });
       setApiKeyInput('');
       setAuthHeadersText(
@@ -99,7 +107,7 @@ export function EditModelDialog({
       );
       setError(null);
     } else if (!isOpen) {
-      setFormData(DEFAULT_FORM_STATE);
+      setFormData(createDefaultFormState());
       setApiKeyInput('');
       setAuthHeadersText('');
       setError(null);
@@ -158,6 +166,11 @@ export function EditModelDialog({
     const trimmedModelId = formData.model_id.trim();
     if (trimmedModelId !== model.model_id) payload.model_id = trimmedModelId;
 
+    const trimmedServedModelName = formData.served_model_name.trim();
+    if ((model.served_model_name || '') !== trimmedServedModelName) {
+      payload.served_model_name = trimmedServedModelName || null;
+    }
+
     if (formData.auth_type !== model.auth_type) payload.auth_type = formData.auth_type;
 
     if (formData.supports_streaming !== model.supports_streaming) {
@@ -204,6 +217,10 @@ export function EditModelDialog({
 
     if (formData.enabled !== model.enabled) {
       payload.enabled = formData.enabled;
+    }
+
+    if (formData.is_default !== model.is_default) {
+      payload.is_default = formData.is_default;
     }
 
     if (parsedAuthHeaders && JSON.stringify(parsedAuthHeaders) !== JSON.stringify(model.auth_headers || {})) {
@@ -341,7 +358,7 @@ export function EditModelDialog({
             </div>
 
             {/* Model ID */}
-            <div className="md:col-span-2">
+            <div className={model.provider === 'vllm' ? '' : 'md:col-span-2'}>
               <label className="block text-sm font-medium mb-2">
                 Model ID <span className="text-destructive">*</span>
               </label>
@@ -353,6 +370,21 @@ export function EditModelDialog({
                 disabled={submitting}
               />
             </div>
+
+            {/* Served Model Name */}
+            {model.provider === 'vllm' && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Served Model Name</label>
+                <input
+                  type="text"
+                  value={formData.served_model_name}
+                  onChange={(e) => handleFieldChange('served_model_name', e.target.value)}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                  disabled={submitting}
+                  placeholder="Optional"
+                />
+              </div>
+            )}
 
             {/* Auth Type */}
             <div>
@@ -387,6 +419,20 @@ export function EditModelDialog({
                   Enabled
                 </label>
               </div>
+            </div>
+
+            {/* Default model */}
+            <div className="md:col-span-2">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.is_default}
+                  onChange={(e) => handleFieldChange('is_default', e.target.checked)}
+                  disabled={submitting}
+                  className="rounded border-input"
+                />
+                <span className="text-sm font-medium">Set as default model</span>
+              </label>
             </div>
           </div>
 
