@@ -2,6 +2,7 @@
 
 import React, { memo, useMemo, useState } from 'react';
 import ReactMarkdown, { type Components, type UrlTransform } from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { Brain, Check, ChevronDown, Copy } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
@@ -19,23 +20,28 @@ interface ImageWithFallbackProps {
 
 const LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 const IMAGE_PROTOCOLS = new Set(['http:', 'https:']);
+const URL_CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
+const URL_ENCODED_CONTROL_CHARS = /%(?:0[0-9a-f]|1[0-9a-f]|7f|8[0-9a-f]|9[0-9a-f])/gi;
 
 function sanitizeMarkdownUrl(value: unknown, kind: 'link' | 'image'): string | undefined {
   if (typeof value !== 'string') return undefined;
 
-  const trimmed = value.trim();
+  const trimmed = value
+    .replace(URL_CONTROL_CHARS, '')
+    .replace(URL_ENCODED_CONTROL_CHARS, '')
+    .trim();
   if (!trimmed) return undefined;
 
   if (trimmed.startsWith('#')) {
     return kind === 'link' ? trimmed : undefined;
   }
 
-  if (trimmed.startsWith('/')) {
-    return trimmed;
-  }
-
   if (trimmed.startsWith('//')) {
     return `https:${trimmed}`;
+  }
+
+  if (trimmed.startsWith('/')) {
+    return trimmed;
   }
 
   const hasExplicitProtocol = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed);
@@ -163,6 +169,22 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
   );
 }
 
+function getCodeElement(children: React.ReactNode) {
+  return React.Children
+    .toArray(children)
+    .find((child): child is React.ReactElement<{ className?: string; children?: React.ReactNode }> => {
+      return React.isValidElement(child);
+    });
+}
+
+function stringifyCodeChildren(children: React.ReactNode): string {
+  return React.Children
+    .toArray(children)
+    .map((child) => (typeof child === 'string' || typeof child === 'number' ? String(child) : ''))
+    .join('')
+    .replace(/\n$/, '');
+}
+
 const markdownComponents: Components = {
   a({ href, children }) {
     const safeHref = sanitizeMarkdownUrl(href, 'link');
@@ -194,19 +216,23 @@ const markdownComponents: Components = {
     return <ImageWithFallback src={safeSrc} alt={alt || 'Image'} />;
   },
   pre({ children }) {
-    return <>{children}</>;
-  },
-  code({ className, children }) {
-    const rawCode = String(children).replace(/\n$/, '');
-    const language = /language-([\w-]+)/.exec(className || '')?.[1];
-    const isBlock = Boolean(language) || rawCode.includes('\n');
+    const codeElement = getCodeElement(children);
 
-    if (isBlock) {
-      return <CodeBlock code={rawCode} language={language} />;
+    if (!codeElement) {
+      return <pre className="overflow-x-auto p-4 text-sm leading-6">{children}</pre>;
     }
 
+    const language = /language-([\w-]+)/.exec(codeElement.props.className || '')?.[1];
     return (
-      <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono border">
+      <CodeBlock
+        code={stringifyCodeChildren(codeElement.props.children)}
+        language={language}
+      />
+    );
+  },
+  code({ className, children }) {
+    return (
+      <code className={`px-1.5 py-0.5 rounded bg-muted text-sm font-mono border ${className || ''}`}>
         {children}
       </code>
     );
@@ -283,9 +309,8 @@ function parseThinkingBlocks(content: string): ParsedContent {
 function MarkdownContent({ content }: { content: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkBreaks]}
       components={markdownComponents}
-      skipHtml
       urlTransform={safeUrlTransform}
     >
       {content}

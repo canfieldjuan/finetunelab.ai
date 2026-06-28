@@ -42,6 +42,42 @@ function answer() {
     expect(container.querySelector('pre')?.textContent).toContain('  return 42;');
   });
 
+  it('renders unlabeled single-line fenced code as a block', () => {
+    render(
+      <MessageContent
+        role="assistant"
+        content={'```\none-line fence\n```'}
+      />
+    );
+
+    expect(screen.getByText('code')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument();
+  });
+
+  it('preserves soft line breaks in model output', () => {
+    const { container } = render(
+      <MessageContent
+        role="assistant"
+        content={'Line one\nLine two'}
+      />
+    );
+
+    expect(container.querySelector('br')).toBeInTheDocument();
+    expect(container.textContent).toContain('Line one');
+    expect(container.textContent).toContain('Line two');
+  });
+
+  it('displays raw html as literal text', () => {
+    const { container } = render(
+      <MessageContent
+        role="assistant"
+        content={'Use <div>literal html</div> safely'}
+      />
+    );
+
+    expect(container.textContent).toContain('Use <div>literal html</div> safely');
+  });
+
   it('copies code blocks through the fallback when navigator.clipboard is unavailable', () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -77,5 +113,16 @@ console.log("copy me");
 
     expect(screen.getByText('unsafe').closest('a')).toBeNull();
     expect(screen.getByRole('link', { name: 'safe' })).toHaveAttribute('href', 'https://example.com');
+  });
+
+  it('does not render control-character javascript links as live anchors', () => {
+    render(
+      <MessageContent
+        role="assistant"
+        content={'[unsafe](java&#10;script:alert(1))'}
+      />
+    );
+
+    expect(screen.getByText('unsafe').closest('a')).toBeNull();
   });
 });
