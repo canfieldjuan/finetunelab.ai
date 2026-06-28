@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
-import type { WebSearchDocument } from '@/lib/tools/web-search/types';
+import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 
 interface ConversationData {
   id: string;
@@ -24,19 +24,6 @@ interface ValidationResult {
     invalidCount?: number;
   };
   valid: ConversationData[];
-}
-
-function normalizeWebSearchResults(value: unknown): WebSearchDocument[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-
-  const results = value.filter((item): item is WebSearchDocument => {
-    return typeof item === 'object' &&
-      item !== null &&
-      typeof (item as WebSearchDocument).title === 'string' &&
-      typeof (item as WebSearchDocument).url === 'string';
-  });
-
-  return results.length > 0 ? results : undefined;
 }
 
 /**

@@ -25,6 +25,8 @@ import { calculateBasicQualityScore } from '@/lib/batch-testing/evaluation-integ
 import crypto from 'crypto';
 import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
+import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
+import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
@@ -32,7 +34,7 @@ import { completeTraceWithFullData, completeTraceBasic } from './trace-completio
 // Use Node.js runtime instead of Edge for OpenAI SDK compatibility
 export const runtime = 'nodejs';
 
-type WebSearchDocument = {
+type RawWebSearchDocument = {
   title?: string;
   url?: string;
   summary?: string;
@@ -42,12 +44,20 @@ type WebSearchDocument = {
 };
 
 type WebSearchToolPayload = {
-  results?: WebSearchDocument[];
+  results?: RawWebSearchDocument[];
   status?: string;
   jobId?: string | number;
 };
 
-function isWebSearchDocument(value: unknown): value is WebSearchDocument {
+type AssistantMessageMetadata = {
+  model_name?: string;
+  provider?: string;
+  model_id?: string;
+  timestamp: string;
+  web_search_results?: WebSearchDocument[];
+};
+
+function isWebSearchDocument(value: unknown): value is RawWebSearchDocument {
   return typeof value === 'object' && value !== null;
 }
 
@@ -100,6 +110,17 @@ export async function POST(req: NextRequest) {
     } catch {
       return null;
     }
+  }
+
+  function withWebSearchMetadata(metadata: AssistantMessageMetadata | undefined): AssistantMessageMetadata | undefined {
+    if (!lastWebSearchDocs || lastWebSearchDocs.length === 0) {
+      return metadata;
+    }
+
+    return {
+      ...(metadata ?? { timestamp: new Date().toISOString() }),
+      web_search_results: lastWebSearchDocs,
+    };
   }
 
   try {
@@ -844,7 +865,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         if (toolName === 'web_search' && isWebSearchToolPayload(result.data)) {
           const { results, status, jobId } = result.data;
           if (Array.isArray(results)) {
-            lastWebSearchDocs = results;
+            lastWebSearchDocs = normalizeWebSearchResults(results) ?? null;
             lastWebSearchQuery = typeof args.query === 'string' ? args.query : null;
           }
           // Capture deep research job id directly when present
@@ -956,7 +977,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       console.log('[API] [LATENCY] Request started at:', startTime);
 
       let llmResponse;
-      let messageMetadata: { model_name: string; provider: string; model_id: string; timestamp: string } | undefined;
+      let messageMetadata: AssistantMessageMetadata | undefined;
 
       // Use UnifiedLLMClient if model is selected from registry
       console.log('[API] [MODEL-SELECT] useUnifiedClient:', useUnifiedClient, 'selectedModelId:', selectedModelId);
@@ -1416,6 +1437,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           }
 
           // Save assistant message with metrics
+          const assistantMessageMetadata = withWebSearchMetadata(messageMetadata);
           const { data: assistantMsgData, error: assistantMsgError} = await supabaseAdmin!
             .from('messages')
             .insert({
@@ -1430,7 +1452,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               ...(toolsCalled && { tool_success: toolsCalled.every(t => t.success) }),
               ...(selectedModelId && { model_id: selectedModelId }),
               ...(provider && { provider: provider }),
-              ...(messageMetadata && { metadata: messageMetadata }),
+              ...(assistantMessageMetadata && { metadata: assistantMessageMetadata }),
             })
             .select('id')
             .single();
@@ -1844,7 +1866,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       effectiveTraceMaxTokens = effectiveMaxTokens;
 
       // Create metadata object for persistence (streaming path)
-      const messageMetadata = {
+      const messageMetadata: AssistantMessageMetadata = {
         model_name: (actualModelConfig as unknown as { name?: string })?.name || selectedModelId || model || 'unknown',
         provider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || 'unknown',
         model_id: selectedModelId || model || 'unknown',
@@ -2128,6 +2150,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 }
 
                 // Save assistant message with latency and token estimates
+                const assistantMessageMetadata = withWebSearchMetadata(messageMetadata);
                 const { data: streamMsgData } = await supabaseAdmin!
                   .from('messages')
                   .insert({
@@ -2140,7 +2163,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     output_tokens: estimatedOutputTokens,
                     ...(selectedModelId && { model_id: selectedModelId }),
                     ...(provider && { provider: provider }),
-                    ...(messageMetadata && { metadata: messageMetadata }),
+                    ...(assistantMessageMetadata && { metadata: assistantMessageMetadata }),
                   })
                   .select('id')
                   .single();

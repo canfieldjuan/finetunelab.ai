@@ -10,6 +10,11 @@ import type { ContextTracker } from '../../lib/context/context-tracker';
 import type { ContextUsage } from '@/lib/context/types';
 import type { ResearchProgress, ActiveResearchJob } from './useResearchState';
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
+import {
+  getToolEventName,
+  initialWebSearchStreamState,
+  reduceWebSearchStreamEvent,
+} from './chatSearchStream';
 
 
 interface Tool {
@@ -23,19 +28,6 @@ interface Tool {
       required?: string[];
     };
   };
-}
-
-function normalizeWebSearchResults(value: unknown): WebSearchDocument[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-
-  const results = value.filter((result): result is WebSearchDocument => {
-    return typeof result === 'object' &&
-      result !== null &&
-      typeof (result as WebSearchDocument).title === 'string' &&
-      typeof (result as WebSearchDocument).url === 'string';
-  });
-
-  return results.length > 0 ? results : undefined;
 }
 
 /**
@@ -120,7 +112,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     const decoder = new TextDecoder();
     let assistantMessage = "";
     let webSearchResults: WebSearchDocument[] | undefined;
-    let receivedWebSearchResultsEvent = false;
+    let webSearchState = initialWebSearchStreamState;
     let graphragCitations: Citation[] | undefined;
     let graphragContextsUsed: number | undefined;
     let modelId: string | null = null;
@@ -241,27 +233,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               });
             }
 
-            if (parsed.type === "web_search_results") {
-              receivedWebSearchResultsEvent = true;
-              webSearchResults = normalizeWebSearchResults(parsed.results);
-              updateMessageThrottled();
-            }
-
-            // Legacy doc summaries are superseded by web_search_results cards.
-            if (parsed.type === "doc_summary") {
-              if (!receivedWebSearchResultsEvent) {
-                const legacyResults = normalizeWebSearchResults([{
-                  title: typeof parsed.title === 'string' ? parsed.title : 'Document',
-                  url: typeof parsed.url === 'string' ? parsed.url : '',
-                  snippet: typeof parsed.summary === 'string' ? parsed.summary : '',
-                  summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
-                  source: typeof parsed.source === 'string' ? parsed.source : undefined,
-                  publishedAt: typeof parsed.publishedAt === 'string' ? parsed.publishedAt : undefined,
-                }]);
-                if (legacyResults) {
-                  webSearchResults = webSearchResults ? [...webSearchResults, ...legacyResults] : legacyResults;
-                }
-              }
+            if (parsed.type === "web_search_results" || parsed.type === "doc_summary") {
+              webSearchState = reduceWebSearchStreamEvent(webSearchState, parsed);
+              webSearchResults = webSearchState.results;
               updateMessageThrottled();
             }
 
@@ -272,17 +246,18 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             }
 
             if (parsed.type === "tool_call") {
-              if (parsed.tool_name === 'web_search') {
+              const toolName = getToolEventName(parsed);
+              if (toolName === 'web_search') {
                 continue;
               }
-              const toolInfo = `\n\n🔧 Using tool: ${parsed.tool_name}\n`;
+              const toolInfo = `\n\n🔧 Using tool: ${toolName ?? 'unknown'}\n`;
               assistantMessage += toolInfo;
               // [UI_FREEZE_FIX] Use throttled update instead of immediate
               updateMessageThrottled();
             }
 
             if (parsed.type === "tool_result") {
-              if (parsed.tool_name === 'web_search' || parsed.toolName === 'web_search') {
+              if (getToolEventName(parsed) === 'web_search') {
                 continue;
               }
               const resultInfo = `📊 Result: ${JSON.stringify(
@@ -432,15 +407,17 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     });
 
     // Create metadata object for persistence (matching server-side implementation)
-    const messageMetadata = {
+    const messageMetadataFields = {
       ...(modelId && modelName && provider ? {
         model_name: modelName,
         provider: provider,
         model_id: modelId,
       } : {}),
       ...(webSearchResults && webSearchResults.length > 0 ? { web_search_results: webSearchResults } : {}),
-      timestamp: new Date().toISOString()
     };
+    const messageMetadata = Object.keys(messageMetadataFields).length > 0
+      ? { ...messageMetadataFields, timestamp: new Date().toISOString() }
+      : undefined;
 
     if (user && activeId && !allowAnonymous) {
       void supabase
@@ -455,7 +432,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           latency_ms: streamLatencyMs,
           input_tokens: finalInputTokens,
           output_tokens: finalOutputTokens,
-          metadata: messageMetadata
+          ...(messageMetadata && { metadata: messageMetadata })
         })
         .select()
         .single()
