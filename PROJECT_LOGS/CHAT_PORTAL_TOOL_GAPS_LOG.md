@@ -128,16 +128,17 @@ names to the `tools` table in Slice 3.
 ## Slice 3 (registration) follow-ups — from PR #42 review
 
 When wiring discovery/registration, before a tool is registered/offered:
-- **Connect-time SSRF check (P1, authoritative).** The Slice-2 `url-guard` runs at
-  config-write time, but owners can INSERT rows directly via RLS (the DB only checks
-  the scheme), and string checks can't stop DNS rebinding (public host → private IP).
-  So the real defense is at connect time: resolve the host and reject
-  loopback/link-local/private/IPv4-mapped IPs before opening the transport. Reuse the
-  range logic from `url-guard.ts`.
-- **Filter task-required tools.** MCP tools advertising `execution.taskSupport:
-  'required'` can't run via plain `callTool` — don't register/offer them (or
-  implement the task call path first), else the model is offered tools that always
-  error.
+- **Connect-time SSRF check (P1, authoritative).** ✅ DONE in Slice 3a (hardened in
+  review round 2): `assertResolvedHostIsPublic` (`url-guard.ts`) resolves the host and
+  rejects loopback/private/CGNAT/link-local/test-net/reserved/multicast/IPv4-mapped/
+  doc IPs (full non-global set, not just RFC1918). The http transport uses a custom
+  `ssrfGuardedFetch` that **re-validates on every request** and sets `redirect:'error'`
+  (so a public endpoint can't 3xx to an internal host, and a post-connect rebind is
+  caught on the next request); `connect()` also pre-checks before opening. Residual:
+  a micro-TOCTOU between the lookup and fetch's own resolution — true socket-level
+  IP-pinning (undici custom connect) is a deeper follow-up.
+- **Filter task-required tools.** ✅ DONE in Slice 3a: `listTools` skips tools with
+  `execution.taskSupport === 'required'` (not callable via `callTool`).
 - **Nested arg schemas.** `normalizeInputSchema` currently maps only top-level
   `properties`/`required`; nested object/array param shapes are flattened to a bare
   `type`. Fine for simple tools; revisit (extend `ToolParameter` / pass through inner
@@ -173,3 +174,6 @@ When wiring discovery/registration, before a tool is registered/offered:
   suffix when the composed name exceeds 64 chars (a long server/tool name could
   previously truncate away the `__<tool>` suffix and collide). Resolves the last
   inline finding on #45.
+- 2026-06-29 — Slice 3a (security core) built: connect-time resolve-time SSRF check
+  (`assertResolvedHostIsPublic`, wired into `McpClientManager.connect`) + task-required
+  tool filtering in `listTools`. 55 MCP tests.

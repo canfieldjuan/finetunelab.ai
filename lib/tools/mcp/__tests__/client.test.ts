@@ -15,6 +15,17 @@ const sdk = vi.hoisted(() => ({
   instances: [] as Array<{ onclose?: () => void }>,
 }));
 
+// Mock the URL/SSRF guard so connect() doesn't do real DNS; the guard's own logic is
+// covered in url-guard.test.ts. Here we just verify connect wires it in.
+const guard = vi.hoisted(() => ({
+  assertSafeHttpUrl: vi.fn(),
+  assertResolvedHostIsPublic: vi.fn(),
+}));
+vi.mock('../url-guard', () => ({
+  assertSafeHttpUrl: guard.assertSafeHttpUrl,
+  assertResolvedHostIsPublic: guard.assertResolvedHostIsPublic,
+}));
+
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: class {
     connect = sdk.connect;
@@ -72,6 +83,8 @@ describe('McpClientManager', () => {
       tools: [{ name: 'echo', description: 'echoes', inputSchema: { type: 'object', properties: {} } }],
     });
     sdk.callTool.mockResolvedValue({ content: [{ type: 'text', text: 'pong' }], isError: false });
+    guard.assertSafeHttpUrl.mockReturnValue(undefined);
+    guard.assertResolvedHostIsPublic.mockResolvedValue(undefined);
   });
 
   it('connects over HTTP with a bearer auth header and is idempotent', async () => {
@@ -84,7 +97,10 @@ describe('McpClientManager', () => {
     expect(sdk.connect).toHaveBeenCalledTimes(1);
     expect(sdk.HttpTransportCtor).toHaveBeenCalledWith(
       new URL('https://example.com/mcp'),
-      { requestInit: { headers: { Authorization: 'Bearer secret-token' } } },
+      expect.objectContaining({
+        requestInit: { redirect: 'error', headers: { Authorization: 'Bearer secret-token' } },
+        fetch: expect.any(Function),
+      }),
     );
   });
 
@@ -164,6 +180,34 @@ describe('McpClientManager', () => {
     await expect(manager.connect(httpServer)).rejects.toThrow('handshake failed');
     expect(sdk.close).toHaveBeenCalledTimes(1);
     expect(manager.isConnected('http-server')).toBe(false);
+  });
+
+  it('refuses to connect when the host resolves to a private address (SSRF guard)', async () => {
+    guard.assertResolvedHostIsPublic.mockRejectedValueOnce(new Error('resolves to a non-public address'));
+    const manager = new McpClientManager();
+
+    await expect(manager.connect(httpServer)).rejects.toThrow(/non-public address/);
+    expect(sdk.connect).not.toHaveBeenCalled();
+    expect(manager.isConnected('http-server')).toBe(false);
+  });
+
+  it('filters out task-required tools from listTools', async () => {
+    sdk.listTools.mockResolvedValueOnce({
+      tools: [
+        { name: 'normal', description: '', inputSchema: { type: 'object', properties: {} } },
+        {
+          name: 'taskonly',
+          description: '',
+          inputSchema: { type: 'object', properties: {} },
+          execution: { taskSupport: 'required' },
+        },
+      ],
+    });
+    const manager = new McpClientManager();
+    await manager.connect(httpServer);
+
+    const tools = await manager.listTools('http-server');
+    expect(tools.map((t) => t.name)).toEqual(['normal']);
   });
 
   it('throws when listing/calling an unconnected server', async () => {
