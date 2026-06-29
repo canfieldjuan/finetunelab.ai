@@ -26,10 +26,85 @@ interface MessageEvaluation {
   notes: string | null;
 }
 
+interface ToolUsageMessageRow {
+  id: string;
+  conversation_id: string;
+  created_at: string;
+  tools_called: unknown;
+  tool_success: unknown;
+  error_type?: string | null;
+  latency_ms?: number | null;
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
 );
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function getLegacyToolSuccess(value: unknown, index: number): boolean {
+  if (Array.isArray(value)) {
+    return value[index] === true;
+  }
+
+  return value === true;
+}
+
+function normalizeToolUsageCall(
+  tool: unknown,
+  toolSuccess: unknown,
+  index: number
+): { name: string; success: boolean; errorType?: string } | null {
+  if (typeof tool === 'string') {
+    const name = getString(tool);
+    return name ? { name, success: getLegacyToolSuccess(toolSuccess, index) } : null;
+  }
+
+  if (!isRecord(tool)) return null;
+
+  const name = getString(tool.name);
+  if (!name) return null;
+
+  return {
+    name,
+    success: typeof tool.success === 'boolean'
+      ? tool.success
+      : getLegacyToolSuccess(toolSuccess, index),
+    errorType: getString(tool.error),
+  };
+}
+
+export function buildToolUsageDataPointsFromMessages(rows: ToolUsageMessageRow[]): ToolUsageDataPoint[] {
+  return rows.flatMap((msg) => {
+    const tools = Array.isArray(msg.tools_called)
+      ? msg.tools_called
+      : msg.tools_called
+        ? [msg.tools_called]
+        : [];
+
+    return tools.flatMap((tool, index): ToolUsageDataPoint[] => {
+      const normalized = normalizeToolUsageCall(tool, msg.tool_success, index);
+      if (!normalized) return [];
+
+      return [{
+        timestamp: new Date(msg.created_at),
+        messageId: msg.id,
+        conversationId: msg.conversation_id,
+        toolName: normalized.name,
+        executionTimeMs: msg.latency_ms || 0,
+        success: normalized.success,
+        errorType: normalized.errorType ?? msg.error_type ?? undefined,
+      }];
+    });
+  });
+}
 
 /**
  * Calculate date range from period
@@ -400,22 +475,7 @@ export async function aggregateToolUsageData(
 
     if (error) throw error;
 
-    let dataPoints: ToolUsageDataPoint[] = [];
-
-    (data || []).forEach((msg) => {
-      const tools = msg.tools_called || [];
-      tools.forEach((toolName: string, index: number) => {
-        dataPoints.push({
-          timestamp: new Date(msg.created_at),
-          messageId: msg.id,
-          conversationId: msg.conversation_id,
-          toolName,
-          executionTimeMs: msg.latency_ms || 0,
-          success: msg.tool_success?.[index] || false,
-          errorType: msg.error_type,
-        });
-      });
-    });
+    let dataPoints = buildToolUsageDataPointsFromMessages(data || []);
 
     // Apply filters in JavaScript
     if (filters?.toolNames && filters.toolNames.length > 0) {
