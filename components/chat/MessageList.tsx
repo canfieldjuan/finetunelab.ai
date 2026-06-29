@@ -49,6 +49,12 @@ export interface MessageListProps {
 }
 
 function formatToolName(name: string): string {
+  if (name.startsWith('mcp__')) {
+    const [, server, ...toolParts] = name.split('__');
+    const label = [server, ...toolParts].filter(Boolean).join(' ');
+    return label.replace(/_/g, ' ');
+  }
+
   return name.replace(/_/g, ' ');
 }
 

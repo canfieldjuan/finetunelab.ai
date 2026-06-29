@@ -71,6 +71,20 @@ This covers:
 - The route-level security gate: body-claimed users without authenticated session context do not get MCP tools.
 - Non-streaming SSE metadata for built-in and MCP-backed tool calls.
 
+## UI Rendering Smoke
+
+The client rendering smoke verifies MCP tool metadata stays visible and readable in chat:
+
+```bash
+npx vitest run components/hooks/__tests__/chatToolStream.test.ts components/chat/__tests__/MessageList.test.tsx
+```
+
+This covers:
+
+- MCP `tools_metadata` normalizing into renderable assistant-message tool activity.
+- MCP namespaced tool ids rendering as readable server/tool labels instead of raw `mcp__*` strings.
+- Existing web-search card behavior still avoiding duplicate successful search activity.
+
 ## Probe Cases
 
 Check available cases without making a provider call:
@@ -137,7 +151,7 @@ The API-level route smoke in `app/api/chat/__tests__/route-tool-use-smoke.test.t
 It does not yet verify:
 
 - Live DB-backed `/api/chat` model lookup and enabled portal-tool selection.
-- SSE streaming/rendering in the chat UI.
+- Browser-level live SSE streaming/rendering in the chat UI.
 - Conversation persistence.
 - Trace persistence for tool calls.
 - Live MCP server behavior.
