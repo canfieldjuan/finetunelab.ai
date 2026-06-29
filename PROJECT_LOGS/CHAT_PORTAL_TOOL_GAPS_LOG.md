@@ -244,3 +244,8 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   stale `onclose` callbacks cannot delete the refreshed connection. Remaining
   MCP follow-ups: schema-first telemetry for MCP `tool_executions`;
   browser-level live SSE verification.
+- 2026-06-29 - MCP connection refresh coverage NITs: PR #69 review noted two
+  non-blocking boundary tests worth adding before the next heavier slice:
+  display-name-only changes should reuse the connection while refreshing cached
+  metadata, and stdio command/args/env changes should reconnect. This robust
+  testing slice carries those forward.
