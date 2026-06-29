@@ -14,10 +14,6 @@ function getString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-export function getToolEventName(parsed: Record<string, unknown>): string | undefined {
-  return getString(parsed.tool_name) ?? getString(parsed.toolName);
-}
-
 export function reduceWebSearchStreamEvent(
   state: WebSearchStreamState,
   parsed: Record<string, unknown>
