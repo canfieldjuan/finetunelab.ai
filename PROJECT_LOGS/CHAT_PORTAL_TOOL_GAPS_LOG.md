@@ -254,3 +254,10 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   `/api/chat` records MCP tool calls with `tool_source='mcp'` after scoped
   execution. MCP tools still stay out of the global `tools` table. Remaining MCP
   follow-up: browser-level live SSE verification with a real MCP server.
+- 2026-06-29 - MCP live SSE verification: added a hermetic stdio MCP fixture using
+  the official SDK server API, a `/api/chat` smoke that keeps
+  `McpClientManager`/`McpUserToolset`/adapter/stdio transport real while mocking
+  only auth/model/database boundaries, and a `useChat` browser-stream smoke for
+  MCP `tools_metadata`. This closes the logged browser-level live SSE verification
+  follow-up for the MCP lane; optional manual browser testing against an operator
+  MCP server remains outside the unit gate.
