@@ -135,6 +135,7 @@ function isAutoImportableTemplate(template: ModelTemplate): boolean {
   return (
     CURATED_TEMPLATE_IMPORT_PROVIDERS.has(template.provider) &&
     !template.id.includes('custom') &&
+    !placeholderPattern.test(template.name) &&
     !placeholderPattern.test(template.base_url) &&
     !placeholderPattern.test(template.model_id)
   );
@@ -204,6 +205,7 @@ async function importDiscoveredModelsForProvider(
 
     const totals = { created: 0, skipped: 0, failed: 0 };
     const requestErrors: string[] = [];
+    let requestFailureCount = 0;
     for (const batch of chunkArray(discoveredModels, AUTO_IMPORT_BATCH_SIZE)) {
       const bulkResponse = await fetch('/api/models/bulk', {
         method: 'POST',
@@ -225,6 +227,7 @@ async function importDiscoveredModelsForProvider(
       const bulkData = await safeJsonParse<BulkImportResponse>(bulkResponse, {});
       if (!bulkResponse.ok) {
         requestErrors.push(bulkData.message || bulkData.error || `Bulk import failed with ${bulkResponse.status}`);
+        requestFailureCount += batch.length;
         continue;
       }
 
@@ -236,7 +239,7 @@ async function importDiscoveredModelsForProvider(
     if (requestErrors.length > 0 || totals.failed > 0) {
       return {
         type: 'warning',
-        message: `${providerLabel} key saved. Imported ${totals.created} ${modelLabel(totals.created)}, skipped ${totals.skipped}, and ${totals.failed + requestErrors.length} failed.`,
+        message: `${providerLabel} key saved. Imported ${totals.created} ${modelLabel(totals.created)}, skipped ${totals.skipped}, and ${totals.failed + requestFailureCount} failed.`,
       };
     }
 
@@ -277,6 +280,7 @@ async function importCuratedModelsForProvider(
   try {
     const totals = { created: 0, skipped: 0, failed: 0 };
     const requestErrors: string[] = [];
+    let requestFailureCount = 0;
 
     for (const groupTemplates of groups.values()) {
       const firstTemplate = groupTemplates[0];
@@ -298,6 +302,7 @@ async function importCuratedModelsForProvider(
         const bulkData = await safeJsonParse<BulkImportResponse>(bulkResponse, {});
         if (!bulkResponse.ok) {
           requestErrors.push(bulkData.message || bulkData.error || `Bulk import failed with ${bulkResponse.status}`);
+          requestFailureCount += batch.length;
           continue;
         }
 
@@ -310,7 +315,7 @@ async function importCuratedModelsForProvider(
     if (requestErrors.length > 0 || totals.failed > 0) {
       return {
         type: 'warning',
-        message: `${providerLabel} key saved. Imported ${totals.created} curated ${modelLabel(totals.created)}, skipped ${totals.skipped}, and ${totals.failed + requestErrors.length} failed.`,
+        message: `${providerLabel} key saved. Imported ${totals.created} curated ${modelLabel(totals.created)}, skipped ${totals.skipped}, and ${totals.failed + requestFailureCount} failed.`,
       };
     }
 

@@ -264,4 +264,85 @@ describe('SecretsPage provider model import', () => {
     );
     expect(bulkBody.models).toHaveLength(5);
   });
+
+  it('imports curated HuggingFace templates without placeholder custom templates', async () => {
+    let secretsFetchCount = 0;
+    const fetchMock = stubFetch(async (url, init) => {
+      if (url === '/api/secrets' && !init?.method) {
+        secretsFetchCount += 1;
+        return jsonResponse({
+          secrets: secretsFetchCount === 1 ? [] : [secret('huggingface')],
+          count: secretsFetchCount === 1 ? 0 : 1,
+        });
+      }
+
+      if (url === '/api/secrets' && init?.method === 'POST') {
+        return jsonResponse({ success: true, secret: secret('huggingface') });
+      }
+
+      if (url === '/api/models/bulk') {
+        const body = JSON.parse(init?.body as string);
+        return jsonResponse({
+          success: true,
+          counts: { created: body.models.length, skipped: 0, failed: 0 },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<SecretsPage />);
+
+    await openProviderDialog('HuggingFace');
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByText('Imported 4 curated HuggingFace models.')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/models/discover')).toBe(false);
+
+    const bulkCall = fetchMock.mock.calls.find(([url]) => url === '/api/models/bulk');
+    expect(bulkCall).toBeDefined();
+    const bulkBody = JSON.parse((bulkCall?.[1] as RequestInit).body as string);
+    expect(bulkBody.provider).toBe('huggingface');
+    expect(bulkBody.base_url).toBe('https://router.huggingface.co/v1');
+    expect(bulkBody.auth_type).toBe('bearer');
+    expect(bulkBody.models).toHaveLength(4);
+    expect(bulkBody.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          model_id: 'mistralai/Mistral-7B-Instruct-v0.3',
+          name: 'Mistral 7B Instruct',
+          supports_streaming: false,
+          supports_functions: false,
+        }),
+      ])
+    );
+    expect(bulkBody.models.map((model: { name: string }) => model.name)).not.toContain('Import Custom Model');
+    expect(bulkBody.models.map((model: { model_id: string }) => model.model_id)).not.toContain('Qwen/Qwen2.5-0.5B');
+  });
+
+  it('counts every unimported curated model when a bulk request fails', async () => {
+    const fetchMock = stubFetch(async (url, init) => {
+      if (url === '/api/secrets' && !init?.method) {
+        return jsonResponse({ secrets: [], count: 0 });
+      }
+
+      if (url === '/api/secrets' && init?.method === 'POST') {
+        return jsonResponse({ success: true, secret: secret('anthropic') });
+      }
+
+      if (url === '/api/models/bulk') {
+        return jsonResponse({ success: false, error: 'bulk failed' }, 500);
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<SecretsPage />);
+
+    await openProviderDialog('Anthropic');
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByText('Anthropic key saved. Imported 0 curated models, skipped 0, and 5 failed.')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/models/discover')).toBe(false);
+  });
 });
