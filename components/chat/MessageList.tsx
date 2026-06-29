@@ -95,6 +95,7 @@ export function MessageList({
                       key={`${result.url}-${index}`}
                       result={result}
                       index={index}
+                      thumbnailMode="plain-img"
                     />
                   ))}
                 </div>

@@ -58,4 +58,27 @@ describe('MessageList web search results', () => {
     );
     expect(screen.queryByText(/"results"/)).not.toBeInTheDocument();
   });
+
+  it('uses a plain image thumbnail in chat search cards', () => {
+    renderList([
+      {
+        id: 'temp-assistant',
+        role: 'assistant',
+        content: 'Thumbnail result.',
+        webSearchResults: [
+          {
+            title: 'Remote Thumbnail Result',
+            url: 'https://example.com/thumbnail-result',
+            snippet: 'A result with a provider thumbnail.',
+            imageUrl: 'https://cdn.example.com/thumb.jpg',
+          },
+        ],
+      },
+    ]);
+
+    expect(screen.getByRole('img', { name: 'Remote Thumbnail Result' })).toHaveAttribute(
+      'data-thumbnail-renderer',
+      'plain-img'
+    );
+  });
 });
