@@ -13,6 +13,18 @@ interface SearchResultCardProps {
   onSave?: (result: WebSearchDocument) => void;
   onCite?: (result: WebSearchDocument) => void;
   isSaved?: boolean;
+  thumbnailMode?: 'next-image' | 'plain-img';
+}
+
+function isHttpImageUrl(value: string | undefined): value is string {
+  if (!value) return false;
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 export function SearchResultCard({
@@ -21,12 +33,14 @@ export function SearchResultCard({
   onSave,
   onCite,
   isSaved = false,
+  thumbnailMode = 'next-image',
 }: SearchResultCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const hasFullContent = result.fullContent && result.fullContent.length > 0;
   const hasSummary = result.summary && result.summary.length > 0;
+  const imageUrl = isHttpImageUrl(result.imageUrl) ? result.imageUrl : undefined;
 
   // Format published date
   const formatDate = (dateString?: string) => {
@@ -55,16 +69,29 @@ export function SearchResultCard({
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
         {/* Thumbnail */}
-        {result.imageUrl && !imageError && (
+        {imageUrl && !imageError && (
           <div className="flex-shrink-0 w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-md overflow-hidden">
-            <Image
-              src={result.imageUrl}
-              alt={result.title}
-              width={80}
-              height={80}
-              className="w-full h-full object-cover"
-              onError={() => setImageError(true)}
-            />
+            {thumbnailMode === 'plain-img' ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imageUrl}
+                alt={result.title}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                data-thumbnail-renderer="plain-img"
+                className="w-full h-full object-cover"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <Image
+                src={imageUrl}
+                alt={result.title}
+                width={80}
+                height={80}
+                className="w-full h-full object-cover"
+                onError={() => setImageError(true)}
+              />
+            )}
           </div>
         )}
 

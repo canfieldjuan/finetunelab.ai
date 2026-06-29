@@ -15,6 +15,7 @@ import {
   initialWebSearchStreamState,
   reduceWebSearchStreamEvent,
 } from './chatSearchStream';
+import { getSseDataLine, splitSseLines } from './sseStream';
 
 
 interface Tool {
@@ -145,17 +146,20 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
 
     if (reader) {
       log.debug('useChat', 'Starting stream read');
+      let sseLineBuffer = "";
       streamLoop: while (true) {
         const { done, value } = await reader.read();
         if (done) {
           log.debug('useChat', 'Stream done', { totalMessageLength: assistantMessage.length });
           break streamLoop;
         }
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
+        const chunk = decoder.decode(value, { stream: true });
+        const split = splitSseLines(sseLineBuffer, chunk);
+        sseLineBuffer = split.buffer;
+        const lines = split.lines;
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6);
+          const data = getSseDataLine(line);
+          if (data === null) continue;
           if (data === "[DONE]") {
             log.debug('useChat', 'Received [DONE] marker');
             break streamLoop;
