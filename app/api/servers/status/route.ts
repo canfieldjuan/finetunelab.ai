@@ -19,6 +19,20 @@ import { cacheGet, cacheSet, generateCacheKey } from '@/lib/cache/redis-cache';
 const SERVERS_CACHE_TTL_MS = parseInt(process.env.SERVERS_CACHE_TTL_MS || '15000', 10);
 const CACHE_PREFIX = 'api:servers';
 
+function isLocalBaseUrl(baseUrl: string | null | undefined): boolean {
+  if (!baseUrl) return true;
+  return baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+}
+
+function isExternalServerRecord(server: {
+  server_type: string;
+  base_url: string | null;
+  config_json?: { external?: boolean } | null;
+}): boolean {
+  if (server.config_json?.external) return true;
+  return server.server_type === STATUS.OLLAMA && !isLocalBaseUrl(server.base_url);
+}
+
 // Type for cached server data (before process check)
 interface CachedServerData {
   servers: Array<{
@@ -149,7 +163,7 @@ export async function GET(req: NextRequest) {
           started_at: s.started_at,
           stopped_at: s.stopped_at,
           last_health_check: s.last_health_check,
-          external: Boolean(s.config_json?.external),
+          external: isExternalServerRecord(s),
         })),
         modelLookup: modelLookupObj,
       };

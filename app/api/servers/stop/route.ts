@@ -12,6 +12,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { inferenceServerManager } from '@/lib/services/inference-server-manager';
 import { STATUS } from '@/lib/constants';
+import { cacheDeletePattern, generateCacheKey } from '@/lib/cache/redis-cache';
+
+const SERVER_CACHE_PREFIX = 'api:servers';
+
+async function clearServerCache(userId: string): Promise<void> {
+  await cacheDeletePattern(generateCacheKey(SERVER_CACHE_PREFIX, userId));
+}
 
 export async function POST(req: NextRequest) {
   console.log('[ServerStop] POST request received');
@@ -88,6 +95,7 @@ export async function POST(req: NextRequest) {
     // Check if already stopped (idempotent)
     if (server.status === STATUS.STOPPED) {
       console.log('[ServerStop] Server already stopped');
+      await clearServerCache(user.id);
       return NextResponse.json({
         success: true,
         server_id: server.id,
@@ -113,6 +121,8 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', server.id);
 
+        await clearServerCache(user.id);
+
         return NextResponse.json({
           success: true,
           server_id: server.id,
@@ -125,6 +135,7 @@ export async function POST(req: NextRequest) {
     // Stop the server
     console.log('[ServerStop] Stopping server...');
     await inferenceServerManager.stopServer(server_id, user.id, supabase);
+    await clearServerCache(user.id);
 
     console.log('[ServerStop] Server stopped successfully');
 

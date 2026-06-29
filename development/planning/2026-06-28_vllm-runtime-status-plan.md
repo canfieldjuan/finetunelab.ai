@@ -10,13 +10,17 @@ PR #46 made saved local server rows manageable, but the portal still does not sa
 2. Keep sensitive local paths out of the public response.
 3. Show runtime mode/version/configuration in the Models page local runtime panel.
 4. Let the deploy button label external mode correctly instead of only showing a local package version.
+5. Fix follow-through from PR #46: stop actions clear stale server-status cache, and external Ollama records are marked as external.
 
 ## Files touched
 
 - `app/api/training/vllm/check/route.ts`
+- `app/api/servers/status/route.ts`
+- `app/api/servers/stop/route.ts`
 - `components/models/LocalInferenceServersPanel.tsx`
 - `components/training/DeployModelButton.tsx`
 - `lib/services/vllm-checker.ts`
+- `lib/services/inference-server-manager.ts`
 - `development/planning/2026-06-28_vllm-runtime-status-plan.md`
 - `.agents/session-drift/2026-06-28-vllm-runtime-status.md`
 
@@ -44,3 +48,4 @@ The checker exposes a safe runtime status helper that reports local executable a
 - `npm run lint` passed with existing repo warnings and no errors.
 - Browser check on `http://localhost:3000/models` passed: route compiled, auth redirect rendered login, no Next.js error overlay, and body content was nonblank.
 - Runtime API check on `http://localhost:3000/api/training/vllm/check` returned the new status shape with `mode: "unavailable"` in this environment where neither local vLLM nor `VLLM_EXTERNAL_URL` is configured.
+- PR #46 follow-up fix re-run: `npx vitest run lib/services/__tests__/vllm-checker.test.ts` passed, `npm run type-check` passed, and `npm run lint` passed with existing repo warnings.
