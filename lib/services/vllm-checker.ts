@@ -178,14 +178,14 @@ export async function getVLLMRuntimeStatus(): Promise<VLLMRuntimeStatus> {
   const localAvailable = await isVLLMAvailable();
   const version = localAvailable ? await getVLLMVersion() : null;
 
+  const requiresExternal = cloudRuntime && !externalConfigured;
   const mode: VLLMRuntimeMode = externalConfigured
     ? 'external'
-    : localAvailable
+    : localAvailable && !requiresExternal
       ? 'local'
       : 'unavailable';
 
-  const available = externalConfigured || localAvailable;
-  const requiresExternal = cloudRuntime && !externalConfigured;
+  const available = externalConfigured || (localAvailable && !requiresExternal);
 
   return {
     available,

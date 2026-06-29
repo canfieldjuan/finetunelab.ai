@@ -133,6 +133,9 @@ describe('POST /api/training/deploy', () => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+    delete process.env.VLLM_EXTERNAL_URL;
+    delete process.env.VERCEL;
+    delete process.env.RENDER;
 
     authGetUser.mockResolvedValue({
       data: { user: { id: 'user-1', email: 'user@example.com' } },
@@ -240,6 +243,61 @@ describe('POST /api/training/deploy', () => {
         }),
       }),
     }));
+  });
+
+  it('skips native vLLM import preflight when an external vLLM URL is configured', async () => {
+    process.env.VLLM_EXTERNAL_URL = 'https://vllm.example.com';
+    swapServer.mockResolvedValue({
+      ok: true,
+      kind: 'started',
+      serverInfo: {
+        serverId: 'server-1',
+        port: 0,
+        baseUrl: 'https://vllm.example.com',
+        status: STATUS.STARTING,
+      },
+      eviction: {
+        scope: 'user',
+        stoppedServers: [],
+        failures: [],
+        affectedUserIds: ['user-1'],
+      },
+      gpu: { supported: true, released: true, usedMiB: 0, thresholdMiB: 512, attempts: 1 },
+    });
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      server_type: STATUS.VLLM,
+      name: 'External Qwen',
+      config: {
+        model_path: '/models/qwen',
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(execSync).not.toHaveBeenCalled();
+    expect(swapServer).toHaveBeenCalled();
+  });
+
+  it('rejects vLLM deploys on cloud runtimes without VLLM_EXTERNAL_URL', async () => {
+    process.env.VERCEL = '1';
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      server_type: STATUS.VLLM,
+      name: 'Cloud Qwen',
+      config: {
+        model_path: '/models/qwen',
+      },
+    }));
+
+    expect(response.status).toBe(400);
+    const payload = await response.json();
+    expect(payload.details).toBe('Cannot spawn vLLM in this runtime without VLLM_EXTERNAL_URL.');
+    expect(execSync).not.toHaveBeenCalled();
+    expect(swapServer).not.toHaveBeenCalled();
   });
 
   it('treats already-running local swap results as successful deploys', async () => {

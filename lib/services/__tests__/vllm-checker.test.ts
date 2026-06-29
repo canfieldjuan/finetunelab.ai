@@ -99,4 +99,31 @@ describe('vLLM checker', () => {
       },
     });
   });
+
+  it('does not report local vLLM as deployable on cloud runtimes without an external URL', async () => {
+    process.env.VERCEL = '1';
+    mockExecFile((file, args) => {
+      if ((file === 'python3' || file === 'python') && args[1] === "import vllm; print('OK')") {
+        return { stdout: 'OK\n' };
+      }
+      if ((file === 'python3' || file === 'python') && args[1] === 'import vllm; print(vllm.__version__)') {
+        return { stdout: '0.16.0\n' };
+      }
+      if (file === 'vllm' && args[0] === '--version') {
+        return { stdout: 'vllm 0.16.0\n' };
+      }
+      return { error: new Error(`unexpected execFile call: ${file} ${args.join(' ')}`) };
+    });
+
+    const { getVLLMRuntimeStatus } = await import('../vllm-checker');
+
+    await expect(getVLLMRuntimeStatus()).resolves.toMatchObject({
+      available: false,
+      mode: 'unavailable',
+      local_available: true,
+      external_configured: false,
+      cloud_runtime: true,
+      requires_external: true,
+    });
+  });
 });
