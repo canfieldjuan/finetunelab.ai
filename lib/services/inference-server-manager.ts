@@ -45,6 +45,10 @@ export function sanitizeOllamaModelName(name: string): string {
   return cleaned;
 }
 
+function isExternalOllamaUrl(baseUrl: string): boolean {
+  return !baseUrl.includes('localhost') && !baseUrl.includes('127.0.0.1');
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -549,7 +553,8 @@ export class InferenceServerManager {
 
       // Step 5: Register in database (Ollama uses port 11434)
       const serverId = uuidv4();
-      const baseUrl = ENDPOINTS.OLLAMA;
+      const baseUrl = process.env.OLLAMA_BASE_URL || ENDPOINTS.OLLAMA;
+      const externalOllama = isExternalOllamaUrl(baseUrl);
 
       const { error: dbError } = await supabaseClient
         .from('local_inference_servers')
@@ -559,7 +564,7 @@ export class InferenceServerManager {
           server_type: 'ollama',
           name: config.modelName,
           base_url: baseUrl,
-          port: PORTS.OLLAMA,
+          port: externalOllama ? 0 : PORTS.OLLAMA,
           model_path: ggufPath,
           model_name: servedName,
           training_job_id: trainingJobId || null,
@@ -569,6 +574,10 @@ export class InferenceServerManager {
             context_length: config.contextLength || 4096,
             original_model_path: config.modelPath,
             served_model_name: servedName,
+            ...(externalOllama ? {
+              external: true,
+              external_url: baseUrl,
+            } : {}),
           },
           started_at: new Date().toISOString(),
         });
@@ -583,7 +592,7 @@ export class InferenceServerManager {
       return {
         serverId,
         baseUrl,
-        port: PORTS.OLLAMA,
+        port: externalOllama ? 0 : PORTS.OLLAMA,
         status: 'running',
       };
     } catch (error) {

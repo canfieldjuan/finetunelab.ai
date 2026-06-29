@@ -351,27 +351,40 @@ export async function POST(req: NextRequest) {
     if (server_type === STATUS.VLLM) {
       console.log('[DeployAPI] Checking vLLM availability...');
 
-      // Check if vLLM is available via Python (native)
-      // Native launcher is mandatory so we surface failures immediately
-      try {
-        // Check native vLLM availability
-        const pythonPath = process.env.VLLM_PYTHON_PATH || process.env.PYTHON_PATH || 'python3';
-        execSync(`${pythonPath} -c "import vllm"`, {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: 'pipe'
-        });
-        console.log('[DeployAPI] vLLM is available (native Python)');
-      } catch (vllmError) {
-        console.error('[DeployAPI] Native vLLM import failed:', vllmError);
+      if (process.env.VLLM_EXTERNAL_URL) {
+        console.log('[DeployAPI] External vLLM URL configured; skipping native Python preflight');
+      } else if (process.env.VERCEL || process.env.RENDER) {
         return NextResponse.json(
           {
             error: 'vLLM not available',
-            details: 'vLLM must be installed in the configured Python environment. Docker fallback has been removed.',
-            hint: 'Run: pip install vllm',
+            details: 'Cannot spawn vLLM in this runtime without VLLM_EXTERNAL_URL.',
+            hint: 'Set VLLM_EXTERNAL_URL to point to a dedicated vLLM server.',
           },
           { status: 400 }
         );
+      } else {
+        // Check if vLLM is available via Python (native)
+        // Native launcher is mandatory so we surface failures immediately
+        try {
+          // Check native vLLM availability
+          const pythonPath = process.env.VLLM_PYTHON_PATH || process.env.PYTHON_PATH || 'python3';
+          execSync(`${pythonPath} -c "import vllm"`, {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: 'pipe'
+          });
+          console.log('[DeployAPI] vLLM is available (native Python)');
+        } catch (vllmError) {
+          console.error('[DeployAPI] Native vLLM import failed:', vllmError);
+          return NextResponse.json(
+            {
+              error: 'vLLM not available',
+              details: 'vLLM must be installed in the configured Python environment. Docker fallback has been removed.',
+              hint: 'Run: pip install vllm',
+            },
+            { status: 400 }
+          );
+        }
       }
     }
 

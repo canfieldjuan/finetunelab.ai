@@ -53,6 +53,7 @@ interface DeployModelButtonProps {
 
 type DeploymentStatus = typeof STATUS.IDLE | typeof STATUS.DEPLOYING | typeof STATUS.SUCCESS | typeof STATUS.ERROR;
 type VLLMStatus = typeof STATUS.CHECKING | typeof STATUS.AVAILABLE | typeof STATUS.UNAVAILABLE | typeof STATUS.ERROR;
+type VLLMMode = 'local' | 'external' | 'unavailable';
 type ServerType = typeof STATUS.VLLM | typeof STATUS.OLLAMA | typeof STATUS.RUNPOD | typeof STATUS.RUNPOD_SERVERLESS | 'fireworks';
 
 /**
@@ -166,6 +167,7 @@ export function DeployModelButton({
   // vLLM availability state
   const [vllmStatus, setVllmStatus] = useState<VLLMStatus>(STATUS.CHECKING);
   const [vllmVersion, setVllmVersion] = useState<string | null>(null);
+  const [vllmMode, setVllmMode] = useState<VLLMMode>('unavailable');
 
   // Checkpoint selection state
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<TrainingCheckpoint | null>(null);
@@ -200,10 +202,12 @@ export function DeployModelButton({
         
         setVllmStatus(data.available ? STATUS.AVAILABLE : STATUS.UNAVAILABLE);
         setVllmVersion(data.version);
+        setVllmMode(data.mode || 'unavailable');
       } catch (error) {
         console.error('[DeployButton] vLLM check failed:', error);
         setVllmStatus(STATUS.ERROR);
         setVllmVersion(null);
+        setVllmMode('unavailable');
       }
     };
 
@@ -380,7 +384,9 @@ export function DeployModelButton({
               }}
             >
               <Rocket className="mr-2 h-5 w-5" />
-              Deploy to vLLM{vllmVersion && ` (v${vllmVersion})`}
+              {vllmMode === 'external'
+                ? 'Deploy to external vLLM'
+                : `Deploy to vLLM${vllmVersion ? ` (v${vllmVersion})` : ''}`}
             </Button>
           )}
 
@@ -428,7 +434,7 @@ export function DeployModelButton({
         <DialogHeader>
           <DialogTitle>Deploy Trained Model</DialogTitle>
           <DialogDescription>
-            Deploy your trained model to a local inference server for testing and use.
+            Deploy your trained model to the configured vLLM or Ollama inference runtime for testing and use.
           </DialogDescription>
         </DialogHeader>
 

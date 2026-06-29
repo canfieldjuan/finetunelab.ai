@@ -17,6 +17,23 @@ let cachedPythonPath: string | null = null;
 let cachedExecutablePath: string | null = null;
 const CACHE_DURATION = 60000; // Cache for 1 minute
 
+export type VLLMRuntimeMode = 'local' | 'external' | 'unavailable';
+
+export interface VLLMRuntimeStatus {
+  available: boolean;
+  mode: VLLMRuntimeMode;
+  local_available: boolean;
+  external_configured: boolean;
+  cloud_runtime: boolean;
+  requires_external: boolean;
+  version: string | null;
+  configured: {
+    executable_path: boolean;
+    python_path: boolean;
+  };
+  message: string;
+}
+
 function hasPathSeparator(value: string): boolean {
   return value.includes('/') || value.includes('\\');
 }
@@ -153,6 +170,43 @@ export async function getVLLMVersion(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export async function getVLLMRuntimeStatus(): Promise<VLLMRuntimeStatus> {
+  const externalConfigured = Boolean(process.env.VLLM_EXTERNAL_URL);
+  const cloudRuntime = Boolean(process.env.VERCEL || process.env.RENDER);
+  const localAvailable = await isVLLMAvailable();
+  const version = localAvailable ? await getVLLMVersion() : null;
+
+  const requiresExternal = cloudRuntime && !externalConfigured;
+  const mode: VLLMRuntimeMode = externalConfigured
+    ? 'external'
+    : localAvailable && !requiresExternal
+      ? 'local'
+      : 'unavailable';
+
+  const available = externalConfigured || (localAvailable && !requiresExternal);
+
+  return {
+    available,
+    mode,
+    local_available: localAvailable,
+    external_configured: externalConfigured,
+    cloud_runtime: cloudRuntime,
+    requires_external: requiresExternal,
+    version,
+    configured: {
+      executable_path: Boolean(process.env.VLLM_EXECUTABLE_PATH),
+      python_path: Boolean(process.env.VLLM_PYTHON_PATH || process.env.PYTHON_PATH),
+    },
+    message: externalConfigured
+      ? 'External vLLM endpoint is configured'
+      : requiresExternal
+        ? 'External vLLM endpoint is required in this runtime'
+      : localAvailable
+        ? 'Local vLLM is installed and ready'
+        : 'vLLM not found. Install with: pip install vllm',
+  };
 }
 
 console.log('[vLLMChecker] Service loaded');
