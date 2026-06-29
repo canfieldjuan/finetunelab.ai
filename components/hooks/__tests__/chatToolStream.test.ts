@@ -39,4 +39,18 @@ describe('chat tool stream helpers', () => {
       { name: 'web_search', success: false, error: 'Search unavailable' },
     ]);
   });
+
+  it('keeps MCP tool calls renderable from tools_metadata payloads', () => {
+    expect(normalizeToolCalls([
+      { name: 'mcp__docs__lookup', success: true },
+    ])).toEqual([
+      { name: 'mcp__docs__lookup', success: true },
+    ]);
+
+    expect(getRenderableToolCalls({
+      tools_called: [{ name: 'mcp__docs__lookup', success: true }],
+    })).toEqual([
+      { name: 'mcp__docs__lookup', success: true },
+    ]);
+  });
 });

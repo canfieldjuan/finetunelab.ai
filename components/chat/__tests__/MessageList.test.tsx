@@ -123,4 +123,20 @@ describe('MessageList web search results', () => {
     expect(screen.getByRole('link', { name: /Search Result/i })).toBeInTheDocument();
     expect(screen.queryByText('web search')).not.toBeInTheDocument();
   });
+
+  it('renders MCP tool activity as a readable server/tool label', () => {
+    renderList([
+      {
+        id: 'temp-assistant',
+        role: 'assistant',
+        content: 'I checked your MCP docs.',
+        tools_called: [{ name: 'mcp__docs__lookup', success: true }],
+      },
+    ]);
+
+    expect(screen.getByText('docs lookup')).toBeInTheDocument();
+    expect(screen.getByText('Complete')).toBeInTheDocument();
+    expect(screen.queryByText(/mcp__/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/"name"/)).not.toBeInTheDocument();
+  });
 });
