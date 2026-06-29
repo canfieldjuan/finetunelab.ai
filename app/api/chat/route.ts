@@ -28,6 +28,7 @@ import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
 import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 import { buildUserMcpToolset, type McpUserToolset } from '@/lib/tools/mcp/user-toolset';
+import { signImageStreamToken } from '@/lib/tools/image-gen/stream-token';
 import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
 import { resolveChatUser } from '@/lib/chat/resolve-chat-user';
 import { normalizeGenerationSettings, type RawGenerationSettings } from '@/lib/llm/generation-settings';
@@ -1970,11 +1971,17 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
             // Surface an image-generation job id so the client can subscribe to
             // its stream (does not rely on the model echoing the magic string).
-            if (lastImageJobId) {
+            // Mint a short-lived, job-scoped stream token here rather than letting
+            // the client forward its session token in the SSE URL (#72 MINOR).
+            // generate_image only runs for a verified user (route gate), so userId
+            // is the authenticated owner.
+            if (lastImageJobId && userId) {
+              const streamToken = signImageStreamToken({ jobId: lastImageJobId, userId });
               const imageStartData = `data: ${JSON.stringify({
                 type: 'image_generation_started',
                 jobId: lastImageJobId,
                 prompt: lastImagePrompt || null,
+                streamToken,
               })}\n\n`;
               controller.enqueue(encoder.encode(imageStartData));
             }

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { imageJobStore } from '@/lib/tools/image-gen/image-job-store';
+import { verifyImageStreamToken } from '@/lib/tools/image-gen/stream-token';
 import {
   imageSseService,
   IMAGE_EVENT_TYPES,
@@ -12,11 +12,12 @@ export const runtime = 'nodejs';
 /**
  * SSE endpoint that streams the result of an async image-generation job.
  *
- * OWNER-SCOPED: unlike the research stream, this verifies the caller. EventSource
- * can't set an Authorization header, so the session token is passed as a query
- * param (the pattern used elsewhere for SSE) and the job is read via the
- * owner-scoped `imageJobStore.get(jobId, userId)` — a non-owner / unknown id gets
- * a 404 and never streams.
+ * OWNER-SCOPED via a short-lived, job-scoped token (NOT the Supabase session
+ * token — see the #72 review). EventSource can't set an Authorization header, so
+ * the token rides the query string; it is signed and bound to (jobId, userId)
+ * with a minutes-TTL, so a leaked URL exposes one image stream until it expires,
+ * not the account. The job is then read via the owner-scoped
+ * `imageJobStore.get(jobId, userId)`, so a non-owner / unknown id gets a 404.
  */
 
 function jsonResponse(body: unknown, status: number): Response {
@@ -26,34 +27,24 @@ function jsonResponse(body: unknown, status: number): Response {
   });
 }
 
-async function resolveUserId(token: string | null): Promise<string | null> {
-  if (!token) return null;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) return null;
-  const client = createClient(url, anonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-  const {
-    data: { user },
-    error,
-  } = await client.auth.getUser();
-  return user && !error ? user.id : null;
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get('jobId');
-  const token = searchParams.get('token') ?? searchParams.get('access_token');
+  const token = searchParams.get('token');
 
   if (!jobId) {
     return jsonResponse({ error: 'jobId is required' }, 400);
   }
 
-  const userId = await resolveUserId(token);
-  if (!userId) {
+  const claims = verifyImageStreamToken(token);
+  if (!claims) {
     return jsonResponse({ error: 'Unauthorized' }, 401);
   }
+  // The token is bound to a specific job; reject a token minted for a different one.
+  if (claims.jobId !== jobId) {
+    return jsonResponse({ error: 'Job not found' }, 404);
+  }
+  const userId = claims.userId;
 
   // Owner-scoped: null for a non-owner or unknown id.
   const job = await imageJobStore.get(jobId, userId);

@@ -83,6 +83,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  // jobIds we've already opened an image stream for (dedupe across stream chunks).
+  const subscribedImageJobsRef = useRef<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -159,6 +161,56 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           )
         );
       }, THROTTLE_MS);
+    };
+
+    // Inline image delivery: a generate_image job finishes asynchronously (after
+    // this chat response), so we subscribe to its owner-scoped SSE stream and, on
+    // completion, append the image to the conversation as markdown (renders via
+    // MessageContent's img path; data-URIs are already blocked there).
+    const subscribeToImageJob = (imgJobId: string, imgPrompt: string, streamToken: string) => {
+      try {
+        const es = new EventSource(
+          `/api/image/stream?jobId=${encodeURIComponent(imgJobId)}&token=${encodeURIComponent(streamToken)}`
+        );
+        let done = false;
+        const close = () => {
+          try { es.close(); } catch { /* noop */ }
+        };
+        es.onmessage = (ev: MessageEvent) => {
+          try {
+            const evt = JSON.parse(ev.data);
+            if (evt.type === 'image_complete' && typeof evt.url === 'string') {
+              if (done) return;
+              done = true;
+              const alt = imgPrompt || 'generated image';
+              let content = `![${alt}](${evt.url})`;
+              const attr = evt.attribution;
+              if (attr && typeof attr === 'object' && typeof attr.authorName === 'string') {
+                content += `\n\n*Photo by [${attr.authorName}](${attr.authorUrl}) on [${attr.sourceName}](${attr.sourceUrl})*`;
+              }
+              setMessages((prev) => [...prev, { id: `img-${imgJobId}`, role: 'assistant', content }]);
+              close();
+            } else if (evt.type === 'image_failed') {
+              if (done) return;
+              done = true;
+              const detail = typeof evt.error === 'string' ? `: ${evt.error}` : '';
+              setMessages((prev) => [
+                ...prev,
+                { id: `img-${imgJobId}`, role: 'assistant', content: `_Image generation failed${detail}._` },
+              ]);
+              close();
+            }
+          } catch {
+            // ignore malformed event
+          }
+        };
+        // EventSource auto-reconnects on close. Once we have a terminal result we
+        // close ourselves; on any error we also stop, so an expired token / 4xx
+        // can't trigger a reconnect storm.
+        es.onerror = () => { close(); };
+      } catch (e) {
+        log.debug('useChat', 'Failed to open image stream', { jobId: imgJobId, error: String(e) });
+      }
     };
 
     if (reader) {
@@ -259,6 +311,19 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                 totalSteps: parsed.totalSteps || researchProgress?.totalSteps || 4,
                 completedSteps: parsed.completedSteps ?? researchProgress?.completedSteps ?? 0,
               });
+            }
+
+            // Image generation started server-side: open its result stream once.
+            if (parsed.type === "image_generation_started" && parsed.jobId && parsed.streamToken) {
+              const imgJobId = String(parsed.jobId);
+              if (!subscribedImageJobsRef.current.has(imgJobId)) {
+                subscribedImageJobsRef.current.add(imgJobId);
+                subscribeToImageJob(
+                  imgJobId,
+                  typeof parsed.prompt === 'string' ? parsed.prompt : '',
+                  String(parsed.streamToken)
+                );
+              }
             }
 
             if (parsed.type === "web_search_results" || parsed.type === "doc_summary") {
