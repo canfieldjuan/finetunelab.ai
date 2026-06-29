@@ -245,6 +245,7 @@ export async function POST(req: NextRequest) {
 
     // Keep tools as-is for trace logging (empty array is meaningful)
     let activeTools = tools.length > 0 ? tools : undefined;
+    const offeredToolNames = new Set(tools.map((tool) => tool.function.name));
 
     // For traces, always pass tools array (even if empty) to show what was available
     let toolsForTrace = tools;
@@ -267,9 +268,10 @@ export async function POST(req: NextRequest) {
 
     // Extract user ID from request (from auth/memory or widget API key)
     let userId: string | null = null;
-    // True only when userId came from a VERIFIED source (widget API key or batch
-    // auth), never from a request-body claim. Gates per-user MCP loading so a
-    // claimed userId can't trigger connecting to that user's servers / auth.
+    // True only for a VERIFIED session user (batch session token or trusted
+    // service-role caller) — NOT a request-body claim and NOT a public widget key.
+    // Gates per-user MCP loading so neither a claimed id nor a public widget can
+    // trigger connecting to that user's servers / decrypted auth.
     let isAuthenticatedUser = false;
 
     if (isWidgetMode && apiKey) {
@@ -286,7 +288,10 @@ export async function POST(req: NextRequest) {
       }
 
       userId = validationResult.userId;
-      isAuthenticatedUser = true;
+      // NOTE: a widget API key is PUBLIC (read from the page URL), so it does NOT
+      // make the user MCP-eligible — we must never expose the owner's MCP servers
+      // or decrypted auth through a public widget. MCP loads only for verified
+      // session auth (set in the batch branches below).
       console.log('[API] Widget mode: API key validated, user_id:', userId);
     } else if (isBatchTestMode && authHeader) {
       // Batch test mode: Check if this is service role authentication
@@ -389,8 +394,12 @@ export async function POST(req: NextRequest) {
     // ========================================================================
     if (isAuthenticatedUser && userId && supabaseAdmin) {
       try {
+        const buildPromise = buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager());
+        // If the deadline wins the race the build promise is abandoned — swallow any
+        // later rejection so it can't surface as an unhandled rejection.
+        buildPromise.catch(() => {});
         const toolset = await Promise.race([
-          buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager()),
+          buildPromise,
           new Promise<null>((resolve) => setTimeout(() => resolve(null), MCP_DISCOVERY_DEADLINE_MS)),
         ]);
         if (!toolset) {
@@ -958,10 +967,20 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
       const toolStartTime = Date.now();
       // MCP tools are user-scoped and never in the global registry, so route them
-      // through this user's toolset; everything else uses the portal executor.
+      // through this user's toolset; everything else uses the portal executor
+      // (which also enforces the offered-tool allowlist from main).
       const result = mcpToolset?.has(toolName)
         ? await runMcpToolCall(mcpToolset, toolName, args)
-        : await executePortalChatTool(toolName, args, convId, undefined, userId || undefined, undefined, toolTraceContext);
+        : await executePortalChatTool(
+            toolName,
+            args,
+            convId,
+            undefined,
+            userId || undefined,
+            undefined,
+            toolTraceContext,
+            { allowedToolNames: offeredToolNames },
+          );
       const toolExecutionTime = Date.now() - toolStartTime;
 
       // Capture web_search results for SSE previews (standard search path only)

@@ -208,3 +208,15 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   (no tools-table id) so they're invisible in tool telemetry.
   NOTE: 'normal mode' (body-supplied userId, unverified) will NOT load MCP — if the
   main chat path uses it, it must authenticate (widget key / session) for MCP.
+- 2026-06-29 — Slice 3c review round 2 (codex P1+P2s) + merged main: widget API
+  keys are PUBLIC, so they no longer mark the user MCP-eligible (don't expose the
+  owner's servers/auth via a public widget) — MCP loads only for verified batch
+  session / service-role auth. Fixed the Promise.race orphan (swallow late
+  rejection). Merged main's offered-tool allowlist (`allowedToolNames`) with the
+  MCP dispatch branch. OPEN follow-ups: (a) the primary chat client (`useChat`)
+  posts userId in the body but sends NO session Authorization header, so regular
+  chat is unverified and won't load MCP — needs real session auth on that path for
+  MCP to work in the main UI (product/auth decision); (b) all-or-nothing discovery
+  race drops the whole toolset if one server exceeds 8s — move to per-server
+  deadlines + parallel load; (c) connection refresh on server config change;
+  (d) MCP calls not in tool_executions telemetry.
