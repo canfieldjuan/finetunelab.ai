@@ -80,6 +80,17 @@ const createDefaultFormState = (): EditFormState => ({ ...DEFAULT_FORM_STATE });
 
 const AUTH_TYPES: AuthType[] = ['bearer', 'api_key', 'custom_header', 'none'];
 
+function normalizeVllmRuntimeForForm(metadata: unknown) {
+  const runtime = getVllmRuntimeMetadata(metadata);
+  return {
+    enable_auto_tool_choice: runtime.enable_auto_tool_choice ?? true,
+    tool_call_parser: runtime.tool_call_parser || 'hermes',
+    chat_template: runtime.chat_template || undefined,
+    chat_template_content_format: runtime.chat_template_content_format || 'auto',
+    parse_qwen_xml_tool_calls: runtime.parse_qwen_xml_tool_calls ?? false,
+  };
+}
+
 export function EditModelDialog({
   isOpen,
   model,
@@ -238,7 +249,7 @@ export function EditModelDialog({
     }
 
     if (model.provider === 'vllm' || model.provider === 'runpod') {
-      const currentVllmRuntime = getVllmRuntimeMetadata(model.metadata);
+      const currentVllmRuntime = normalizeVllmRuntimeForForm(model.metadata);
       const nextVllmRuntime = {
         enable_auto_tool_choice: formData.vllm_enable_auto_tool_choice,
         tool_call_parser: formData.vllm_tool_call_parser.trim() || undefined,
