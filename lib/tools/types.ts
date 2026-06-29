@@ -8,7 +8,9 @@
 export interface ToolParameter {
   type: string | string[];
   description: string;
-  enum?: string[];
+  // Enum values keep their original JSON types (e.g. numeric/boolean enums from
+  // MCP tool schemas); not limited to strings.
+  enum?: Array<string | number | boolean>;
   default?: unknown;
   required?: boolean;
 }
