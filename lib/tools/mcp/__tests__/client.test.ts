@@ -132,6 +132,32 @@ describe('McpClientManager', () => {
     expect(manager.isConnected('srv-http')).toBe(true);
   });
 
+  it('reuses the connection for name-only changes while refreshing cached metadata', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const manager = new McpClientManager();
+    await manager.connect(httpServer);
+    await manager.connect({ ...httpServer, name: 'renamed-http-server' });
+
+    expect(sdk.ClientCtor).toHaveBeenCalledTimes(1);
+    expect(sdk.connect).toHaveBeenCalledTimes(1);
+    expect(sdk.close).not.toHaveBeenCalled();
+
+    sdk.listTools.mockResolvedValueOnce({
+      tools: [
+        {
+          name: 'taskonly',
+          description: '',
+          inputSchema: { type: 'object', properties: {} },
+          execution: { taskSupport: 'required' },
+        },
+      ],
+    });
+
+    await expect(manager.listTools('srv-http')).resolves.toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('renamed-http-server'));
+    warnSpy.mockRestore();
+  });
+
   it('connects over stdio with command/args/env', async () => {
     const manager = new McpClientManager();
     await manager.connect(stdioServer);
@@ -140,6 +166,27 @@ describe('McpClientManager', () => {
       command: 'node',
       args: ['server.js'],
       env: { FOO: 'bar' },
+    });
+  });
+
+  it('reconnects stdio servers when command args or env change', async () => {
+    const manager = new McpClientManager();
+    await manager.connect(stdioServer);
+
+    await manager.connect({
+      ...stdioServer,
+      command: 'python',
+      args: ['server.py', '--verbose'],
+      env: { FOO: 'bar', MODE: 'fresh' },
+    });
+
+    expect(sdk.close).toHaveBeenCalledTimes(1);
+    expect(sdk.ClientCtor).toHaveBeenCalledTimes(2);
+    expect(sdk.connect).toHaveBeenCalledTimes(2);
+    expect(sdk.StdioTransportCtor).toHaveBeenNthCalledWith(2, {
+      command: 'python',
+      args: ['server.py', '--verbose'],
+      env: { FOO: 'bar', MODE: 'fresh' },
     });
   });
 
