@@ -15,7 +15,7 @@ import {
   reduceWebSearchStreamEvent,
 } from './chatSearchStream';
 import { normalizeToolCalls } from './chatToolStream';
-import { buildAssistantMessageMetadata } from './chatMessageMetadata';
+import { buildAssistantMessageMetadata, normalizeGraphRAGCitations } from './chatMessageMetadata';
 import { getSseDataLine, splitSseLines } from './sseStream';
 
 
@@ -184,7 +184,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           try {
             const parsed = JSON.parse(data);
             if (parsed.type === "graphrag_metadata") {
-              graphragCitations = parsed.citations;
+              graphragCitations = normalizeGraphRAGCitations(parsed.citations);
               graphragContextsUsed = parsed.contextsUsed;
               graphragUsed = parsed.graphrag_used;
               graphragNodes = parsed.graphrag_nodes;

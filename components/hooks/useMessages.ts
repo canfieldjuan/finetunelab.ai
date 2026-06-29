@@ -28,6 +28,34 @@ interface ValidationResult {
   valid: ConversationData[];
 }
 
+export function buildValidationMessageProjection(messages: Message[]): Message[] {
+  return messages.map((msg: Message) => ({
+    id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    metadata: msg.metadata,
+    content_json: msg.content_json,
+    tools_called: msg.tools_called,
+    webSearchResults: msg.webSearchResults,
+    citations: msg.citations,
+    contextsUsed: msg.contextsUsed,
+    graphrag_used: msg.graphrag_used,
+    graphrag_nodes: msg.graphrag_nodes,
+    graphrag_chunks: msg.graphrag_chunks,
+    graphrag_retrieval_ms: msg.graphrag_retrieval_ms,
+    graphrag_relevance: msg.graphrag_relevance,
+    graphrag_grounded: msg.graphrag_grounded,
+    graphrag_method: msg.graphrag_method,
+    // Include all metadata fields for MessageMetadata component
+    model_id: msg.model_id,
+    model_name: msg.model_name,
+    provider: msg.provider,
+    input_tokens: msg.input_tokens,
+    output_tokens: msg.output_tokens,
+    latency_ms: msg.latency_ms,
+  }));
+}
+
 /**
  * A hook for fetching messages for the active conversation.
  * @param userId - The ID of the current user.
@@ -211,22 +239,7 @@ export function useMessages(
             id: activeId,
             user_id: userId,
             created_at: new Date().toISOString(),
-            messages: processedMessages.map((msg: Message) => ({
-              id: msg.id,
-              role: msg.role,
-              content: msg.content,
-              metadata: msg.metadata,
-              content_json: msg.content_json,
-              tools_called: msg.tools_called,
-              webSearchResults: msg.webSearchResults,
-              // Include all metadata fields for MessageMetadata component
-              model_id: msg.model_id,
-              model_name: msg.model_name,
-              provider: msg.provider,
-              input_tokens: msg.input_tokens,
-              output_tokens: msg.output_tokens,
-              latency_ms: msg.latency_ms,
-            })),
+            messages: buildValidationMessageProjection(processedMessages),
           };
 
           // Validate messages if validation function provided

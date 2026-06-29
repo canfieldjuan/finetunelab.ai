@@ -83,7 +83,7 @@ describe('chat message metadata helpers', () => {
           confidence: 1,
         },
       ],
-      contextsUsed: 1,
+      contextsUsed: 2,
       graphrag_used: true,
       graphrag_nodes: 3,
       graphrag_chunks: 2,

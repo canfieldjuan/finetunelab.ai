@@ -70,7 +70,7 @@ function normalizeCitation(value: unknown): Citation | null {
   };
 }
 
-function normalizeCitations(value: unknown): Citation[] | undefined {
+export function normalizeGraphRAGCitations(value: unknown): Citation[] | undefined {
   if (!Array.isArray(value)) return undefined;
 
   const citations = value
@@ -97,7 +97,7 @@ function hasGraphRAGInput(graphRAG?: GraphRAGMessageMetadataInput): boolean {
 function buildGraphRAGMetadata(graphRAG?: GraphRAGMessageMetadataInput): PersistedGraphRAGMetadata | undefined {
   if (!hasGraphRAGInput(graphRAG)) return undefined;
 
-  const citations = normalizeCitations(graphRAG?.citations);
+  const citations = normalizeGraphRAGCitations(graphRAG?.citations);
   const metadata = {
     ...(graphRAG?.graphUsed !== undefined ? { graph_used: graphRAG.graphUsed } : {}),
     ...(graphRAG?.nodesRetrieved !== undefined ? { nodes_retrieved: graphRAG.nodesRetrieved } : {}),
@@ -145,8 +145,10 @@ export function hydrateGraphRAGMessageFields(metadata: unknown): HydratedGraphRA
   }
 
   const graphRAG = metadata.graphrag as PersistedGraphRAGMetadata;
-  const citations = normalizeCitations(graphRAG.citations);
-  const contextsUsed = finiteNumber(graphRAG.contexts_used) ?? citations?.length;
+  const citations = normalizeGraphRAGCitations(graphRAG.citations);
+  const contextsUsed = finiteNumber(graphRAG.contexts_used)
+    ?? finiteNumber(graphRAG.context_chunks_used)
+    ?? citations?.length;
 
   return {
     ...(citations ? { citations } : {}),
