@@ -14,8 +14,12 @@ export type ServerConfigJson = {
   tool_call_parser?: string;
   chat_template?: string;
   chat_template_content_format?: 'auto' | 'openai' | 'string';
+  is_lora_adapter?: boolean;
+  lora_adapter_path?: string | null;
+  base_model_path?: string | null;
   context_length?: number;
   external?: boolean;
+  external_url?: string;
 };
 
 export type LocalServerRow = {

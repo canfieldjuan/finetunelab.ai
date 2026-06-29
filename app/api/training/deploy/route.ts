@@ -23,6 +23,7 @@ import {
   type ServerConfigJson,
   type ServerSwapResult,
 } from '@/lib/services/server-swap';
+import { buildVLLMConfigFromServerRow, buildVLLMServerConfigJson } from '@/lib/services/vllm-runtime-config';
 import { runpodServerlessService } from '@/lib/inference/runpod-serverless-service';
 import { fireworksDeploymentService } from '@/lib/inference/fireworks-deployment-service';
 import { secretsManager } from '@/lib/secrets/secrets-manager.service';
@@ -104,25 +105,27 @@ function localTargetServer({
 }): LocalServerRow {
   const configJson: ServerConfigJson =
     serverType === STATUS.VLLM
-      ? {
-          gpu_memory_utilization: Number(config?.gpu_memory_utilization ?? 0.8),
-          max_model_len: Number(config?.max_model_len ?? 8192),
-          tensor_parallel_size: Number(config?.tensor_parallel_size ?? 1),
+      ? buildVLLMServerConfigJson({
+          modelPath,
+          modelName,
+          gpuMemoryUtilization: Number(config?.gpu_memory_utilization ?? 0.8),
+          maxModelLen: Number(config?.max_model_len ?? 8192),
+          tensorParallelSize: Number(config?.tensor_parallel_size ?? 1),
           dtype: typeof config?.dtype === 'string' ? config.dtype as ServerConfigJson['dtype'] : 'auto',
-          trust_remote_code: Boolean(config?.trust_remote_code ?? false),
-          enable_auto_tool_choice: typeof config?.enable_auto_tool_choice === 'boolean'
+          trustRemoteCode: Boolean(config?.trust_remote_code ?? false),
+          enableAutoToolChoice: typeof config?.enable_auto_tool_choice === 'boolean'
             ? config.enable_auto_tool_choice
             : true,
-          tool_call_parser: typeof config?.tool_call_parser === 'string'
+          toolCallParser: typeof config?.tool_call_parser === 'string'
             ? config.tool_call_parser
             : 'hermes',
-          chat_template: typeof config?.chat_template === 'string'
+          chatTemplate: typeof config?.chat_template === 'string'
             ? config.chat_template
             : undefined,
-          chat_template_content_format: typeof config?.chat_template_content_format === 'string'
+          chatTemplateContentFormat: typeof config?.chat_template_content_format === 'string'
             ? config.chat_template_content_format as ServerConfigJson['chat_template_content_format']
             : undefined,
-        }
+        })
       : {
           context_length: Number(config?.context_length ?? 4096),
         };
@@ -150,19 +153,7 @@ function startLocalServerFromTarget(
 
   if (server.server_type === STATUS.VLLM) {
     return inferenceServerManager.startVLLM(
-      {
-        modelPath: server.model_path,
-        modelName: server.model_name,
-        gpuMemoryUtilization: config.gpu_memory_utilization ?? 0.8,
-        maxModelLen: config.max_model_len ?? 8192,
-        tensorParallelSize: config.tensor_parallel_size ?? 1,
-        dtype: config.dtype ?? 'auto',
-        trustRemoteCode: config.trust_remote_code ?? false,
-        enableAutoToolChoice: config.enable_auto_tool_choice ?? true,
-        toolCallParser: config.tool_call_parser ?? 'hermes',
-        chatTemplate: config.chat_template,
-        chatTemplateContentFormat: config.chat_template_content_format,
-      },
+      buildVLLMConfigFromServerRow(server, { maxModelLen: 8192 }),
       userId,
       server.training_job_id ?? undefined,
       supabase
@@ -628,6 +619,7 @@ export async function POST(req: NextRequest) {
         training_dataset: job?.dataset_path || null,
         training_date: job?.completed_at || new Date().toISOString(),
         auth_type: 'none',
+        supports_functions: config?.enable_auto_tool_choice ?? true,
         metadata: {
           training_job_id: job_id,
           runpod_pod_id: runpodResponse.endpoint_id,
@@ -1259,6 +1251,9 @@ export async function POST(req: NextRequest) {
           served_model_name: servedName,
           base_url: serverInfo.baseUrl,
           enabled: true,
+          supports_functions: server_type === STATUS.VLLM
+            ? config?.enable_auto_tool_choice ?? true
+            : false,
           training_method: trainingMethod,
           base_model: job?.model_name || 'unknown',
           training_dataset: job?.dataset_path || null,
@@ -1296,6 +1291,9 @@ export async function POST(req: NextRequest) {
           base_url: serverInfo.baseUrl,
           is_global: false,
           enabled: true,
+          supports_functions: server_type === STATUS.VLLM
+            ? config?.enable_auto_tool_choice ?? true
+            : false,
           training_method: trainingMethod,
           base_model: job?.model_name || 'unknown',
           training_dataset: job?.dataset_path || null,

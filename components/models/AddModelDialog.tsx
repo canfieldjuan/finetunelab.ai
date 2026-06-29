@@ -49,11 +49,6 @@ const DEFAULT_FORM_DATA: Partial<CreateModelDTO> = {
   max_output_tokens: 2000,
   default_temperature: 0.7,
   default_top_p: 1.0,
-  metadata: withVllmRuntimeMetadata(null, {
-    enable_auto_tool_choice: true,
-    tool_call_parser: 'hermes',
-    parse_qwen_xml_tool_calls: false,
-  }),
   is_default: false,
 };
 
@@ -201,6 +196,10 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         // Local servers don't require auth; default cloud providers to bearer.
         // (Avoids the confusing "no API key needed" helper sitting next to a Bearer auth type.)
         updated.auth_type = provider === 'vllm' || provider === 'ollama' ? 'none' : 'bearer';
+
+        if (provider !== 'vllm' && provider !== 'runpod') {
+          delete updated.metadata;
+        }
       }
 
       return updated;

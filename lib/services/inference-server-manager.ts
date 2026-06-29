@@ -11,7 +11,7 @@
  * Date: 2025-10-28
  */
 
-import { spawn, ChildProcess, execSync, spawnSync } from 'child_process';
+import { spawn, ChildProcess, execSync } from 'child_process';
 import { promises as fs } from 'fs';
 import * as fsSync from 'fs';
 import * as net from 'net';
@@ -21,58 +21,8 @@ import { v4 as uuidv4 } from 'uuid';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { generateModelfile, saveModelfile } from './ollama-modelfile-generator';
 import { ENDPOINTS, PORTS } from '@/lib/config/endpoints';
-
-// Resolve the python executable we will use for vLLM on Linux systems
-function resolvePythonExecutable(): string {
-  // On Vercel, Python is not available - this function should not be called
-  if (process.env.VERCEL || process.env.RENDER) {
-    throw new Error(
-      'Python executable resolution is not available on cloud deployments (Vercel/Render). ' +
-      'Use VLLM_EXTERNAL_URL to connect to an external vLLM server.'
-    );
-  }
-
-  const candidates = [
-    process.env.VLLM_PYTHON_PATH,
-    process.env.PYTHON_PATH,
-    'python3',
-  ].filter((candidate): candidate is string => Boolean(candidate));
-
-  for (const candidate of candidates) {
-    const check = spawnSync(candidate, ['--version'], { encoding: 'utf-8' });
-
-    if (check.error) {
-      console.error(
-        '[InferenceServerManager] Python check failed:',
-        candidate,
-        check.error.message
-      );
-      continue;
-    }
-
-    if (check.status === 0) {
-      console.log(
-        '[InferenceServerManager] Using python executable:',
-        candidate,
-        check.stdout.trim() || check.stderr.trim()
-      );
-      return candidate;
-    }
-
-    console.error(
-      '[InferenceServerManager] Python candidate exited with non-zero status:',
-      candidate,
-      'status:',
-      check.status,
-      'stderr:',
-      check.stderr?.toString().trim()
-    );
-  }
-
-  throw new Error(
-    'No usable python3 executable found. Set VLLM_PYTHON_PATH to the python environment with vLLM installed.'
-  );
-}
+import { getVLLMExecutablePath } from './vllm-checker';
+import { buildVLLMServerConfigJson } from './vllm-runtime-config';
 
 // ----------------------------------------------------------------------------
 // Helpers
@@ -201,6 +151,7 @@ export class InferenceServerManager {
           process_id: null, // No local process
           status: 'running', // Assume external server is running
           config_json: {
+            ...buildVLLMServerConfigJson(config),
             external: true,
             external_url: externalUrl,
           },
@@ -327,9 +278,11 @@ export class InferenceServerManager {
 
       console.log('[InferenceServerManager] Spawning vLLM with args:', args.join(' '));
 
-      // Resolve vLLM executable from the trainer virtual environment
-      const venvPath = path.join(process.cwd(), 'lib', 'training', 'trainer_venv');
-      const vllmPath = path.join(venvPath, 'bin', 'vllm');
+      // Resolve vLLM executable from the same environment the availability check probes.
+      const vllmPath = await getVLLMExecutablePath();
+      if (!vllmPath) {
+        throw new Error('vLLM is not available from VLLM_EXECUTABLE_PATH, VLLM_PYTHON_PATH, PYTHON_PATH, trainer venv, or PATH');
+      }
       console.log('[InferenceServerManager] vLLM executable:', vllmPath);
 
       // Spawn vLLM process
@@ -382,16 +335,11 @@ export class InferenceServerManager {
           training_job_id: trainingJobId || null,
           process_id: vllmProcess.pid || null,
           status: 'starting',
-          config_json: {
-            gpu_memory_utilization: config.gpuMemoryUtilization || 0.8,
-            max_model_len: config.maxModelLen || null,
-            tensor_parallel_size: config.tensorParallelSize || 1,
-            dtype: config.dtype || 'auto',
-            trust_remote_code: config.trustRemoteCode || false,
+          config_json: buildVLLMServerConfigJson(config, {
             is_lora_adapter: isLoraAdapter,
             lora_adapter_path: loraAdapterPath,
             base_model_path: isLoraAdapter ? actualModelPath : null,
-          },
+          }),
           started_at: new Date().toISOString(),
         })
         .select()

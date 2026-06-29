@@ -186,7 +186,7 @@ export class OpenAIAdapter extends BaseProviderAdapter {
     const message = (choice.message as Record<string, unknown> | undefined) || {};
 
     // Extract content
-    const content = typeof message.content === 'string' ? message.content : '';
+    let content = typeof message.content === 'string' ? message.content : '';
 
     // Extract usage metrics safely
     let usage;
@@ -245,7 +245,11 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       vllmRuntime.parse_qwen_xml_tool_calls &&
       content.includes('<tool_call>')
     ) {
-      toolCalls = this.parseQwenXmlToolCalls(content);
+      const recoveredToolCalls = this.parseQwenXmlToolCalls(content);
+      if (recoveredToolCalls?.length) {
+        toolCalls = recoveredToolCalls;
+        content = this.stripQwenXmlToolCalls(content);
+      }
     }
 
     console.log('[OpenAIAdapter] Parsed response:', {
@@ -267,6 +271,10 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       toolCalls,
       requestMetadata,
     };
+  }
+
+  private stripQwenXmlToolCalls(content: string): string {
+    return content.replace(/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/g, '').trim();
   }
 
   private parseQwenXmlToolCalls(content: string): Array<{

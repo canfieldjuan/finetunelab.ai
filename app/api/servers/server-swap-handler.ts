@@ -14,6 +14,7 @@ import {
 import { cacheDeletePattern, generateCacheKey } from '@/lib/cache/redis-cache';
 import { supabaseAdmin } from '@/lib/supabaseClient';
 import { STATUS } from '@/lib/constants';
+import { buildVLLMConfigFromServerRow } from '@/lib/services/vllm-runtime-config';
 
 const SERVER_CACHE_PREFIX = 'api:servers';
 const EVICTION_CANDIDATE_FILTER = `status.in.(${STATUS.RUNNING},${STATUS.STARTING}),process_id.not.is.null`;
@@ -147,15 +148,7 @@ async function startServerFromRecord(
 
   if (server.server_type === STATUS.VLLM) {
     return inferenceServerManager.startVLLM(
-      {
-        modelPath: server.model_path,
-        modelName: server.model_name,
-        gpuMemoryUtilization: config.gpu_memory_utilization ?? 0.8,
-        maxModelLen: config.max_model_len,
-        tensorParallelSize: config.tensor_parallel_size ?? 1,
-        dtype: config.dtype ?? 'auto',
-        trustRemoteCode: config.trust_remote_code ?? false,
-      },
+      buildVLLMConfigFromServerRow(server),
       userId,
       server.training_job_id ?? undefined,
       supabase

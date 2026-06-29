@@ -157,6 +157,18 @@ export interface VLLMPodDeploymentRequest {
   network_volume_id?: string;  // To attach an existing volume
 }
 
+export function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_./:=@+-]+$/.test(value)) {
+    return value;
+  }
+
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function buildVLLMDockerArgs(model: string, args: string[]): string {
+  return ['vllm', 'serve', '--model', model, ...args].map(shellQuote).join(' ');
+}
+
 // ============================================================================
 // RUNPOD SERVERLESS API SERVICE
 // ============================================================================
@@ -434,7 +446,7 @@ export class RunPodServerlessService {
           containerDiskInGb: 20,
           env: envVars,
           ports: '8000/http',
-          dockerArgs: `vllm serve --model ${request.model_id} ${vllmArgs.join(' ')}`,
+          dockerArgs: buildVLLMDockerArgs(request.model_id, vllmArgs),
           volumeMountPath: '/root/.cache',
         },
       };
@@ -444,7 +456,7 @@ export class RunPodServerlessService {
         (variables.input as typeof variables.input & { networkVolumeId?: string }).networkVolumeId = networkVolumeIdToAttach;
         variables.input.volumeMountPath = volumeMountPath;
         const modelFolderName = request.model_id.split('/').pop();
-        variables.input.dockerArgs = `vllm serve --model ${volumeMountPath}/${modelFolderName} ${vllmArgs.join(' ')}`;
+        variables.input.dockerArgs = buildVLLMDockerArgs(`${volumeMountPath}/${modelFolderName}`, vllmArgs);
       }
       
       console.log('[RunPodServerlessService] Creating vLLM pod:', {
