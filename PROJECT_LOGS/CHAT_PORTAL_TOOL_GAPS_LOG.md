@@ -94,16 +94,21 @@ across both.
 ## Security constraints (MCP build)
 
 **stdio transport = arbitrary host command execution.** A `stdio` MCP server config
-is a command + args the server process spawns — i.e. host RCE. This is fine in Slice 1
-(code-config only, single operator), but once `mcp_servers` becomes DB-backed
-(Slice 2) and portal-reachable (Slice 3), **configuring a `stdio` command MUST be
-admin-only**. Hard requirements for the config layer:
-- Slice 2/3: a non-admin user may NOT create/edit a `stdio` server (only `http`).
-  Enforce server-side (RLS + API check), not just in the UI.
-- Slice 3's portal allowlist / registration is where stdio servers must be gated to
-  admins before their tools are registered or offered.
+is a command + args the server process spawns — i.e. host RCE. Since this app has **no
+admin/role model** (verified: user-scoped auth + RLS only), the gate is made
+*structural* rather than a permission check (decided 2026-06-28):
+
+**stdio is host-config-only and NEVER DB-backed.** Implemented in Slice 2:
+- `mcp_servers` stores only `http` rows — DB `CHECK (transport = 'http')`
+  (`migrations/20260628_create_mcp_servers.sql`) + service hardcodes `transport:'http'`
+  and exposes no stdio create path (`server-config.service.ts`). There is no
+  DB/UI-writable path to a `command`, so DB → command → RCE is impossible by construction.
+- stdio servers come **only** from trusted host config — the `MCP_STDIO_SERVERS` env
+  the operator controls (`host-config.ts`), loaded server-side.
+- `listEnabledServers` merges the user's enabled DB http servers + host stdio servers
+  for the client manager.
 - Treat all MCP servers (even http) as untrusted input; never echo resolved auth
-  tokens back to clients.
+  tokens back to clients. HTTP auth tokens are encrypted at rest.
 
 **HTTP transport = outbound request surface (SSRF/egress).** `http` is the
 non-admin-safe alternative to stdio, but once non-admins can configure server URLs,
@@ -123,6 +128,12 @@ names to the `tools` table in Slice 3.
 ## Slice 3 (registration) follow-ups — from PR #42 review
 
 When wiring discovery/registration, before a tool is registered/offered:
+- **Connect-time SSRF check (P1, authoritative).** The Slice-2 `url-guard` runs at
+  config-write time, but owners can INSERT rows directly via RLS (the DB only checks
+  the scheme), and string checks can't stop DNS rebinding (public host → private IP).
+  So the real defense is at connect time: resolve the host and reject
+  loopback/link-local/private/IPv4-mapped IPs before opening the transport. Reuse the
+  range logic from `url-guard.ts`.
 - **Filter task-required tools.** MCP tools advertising `execution.taskSupport:
   'required'` can't run via plain `callTool` — don't register/offer them (or
   implement the task call path first), else the model is offered tools that always
@@ -146,3 +157,19 @@ When wiring discovery/registration, before a tool is registered/offered:
   (`ToolParameter.enum` widened); connects deduped + `onclose` clears stale entries;
   http transport rejects non-http(s). Recorded HTTP SSRF/egress + task-required-tool
   + nested-schema follow-ups (above).
+- 2026-06-29 — Slice 1 merged (#42). Slice 2 started: no admin/role model exists, so
+  decided stdio = **host-config-only, never DB-backed** (Option 2, strongest). Built
+  `mcp_servers` migration (http-only CHECK + RLS), `host-config.ts` (stdio from
+  `MCP_STDIO_SERVERS`), `url-guard.ts` (http(s) + private-target SSRF block),
+  `server-config.service.ts` (http CRUD + merged `listEnabledServers`), with tests.
+- 2026-06-29 — Slice 2 PR #45 review round (codex P1s + reviewer): moved migration to
+  `supabase/migrations/` (the actual runner path — gate DB layer now applies); fixed
+  url-guard (public domains like fda.gov no longer false-flagged as IPv6 ULA;
+  IPv4-mapped IPv6 + trailing-dot loopback now blocked); public service methods return
+  a token-redacted summary (no decrypted bearer leaks to UI/API); server names
+  validated to [A-Za-z0-9_-] (DB-unique == namespace-unique). Recorded connect-time
+  SSRF (resolve-time) as a Slice-3 P1 above.
+- 2026-06-29 — Slice 2 review round 2: `mcpToolName` now appends an FNV-1a hash
+  suffix when the composed name exceeds 64 chars (a long server/tool name could
+  previously truncate away the `__<tool>` suffix and collide). Resolves the last
+  inline finding on #45.
