@@ -11,10 +11,10 @@ import type { ContextUsage } from '@/lib/context/types';
 import type { ResearchProgress, ActiveResearchJob } from './useResearchState';
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 import {
-  getToolEventName,
   initialWebSearchStreamState,
   reduceWebSearchStreamEvent,
 } from './chatSearchStream';
+import { normalizeToolCalls } from './chatToolStream';
 import { getSseDataLine, splitSseLines } from './sseStream';
 
 
@@ -114,6 +114,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     let assistantMessage = "";
     let webSearchResults: WebSearchDocument[] | undefined;
     let webSearchState = initialWebSearchStreamState;
+    let toolsCalled: ReturnType<typeof normalizeToolCalls>;
     let graphragCitations: Citation[] | undefined;
     let graphragContextsUsed: number | undefined;
     let modelId: string | null = null;
@@ -136,6 +137,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                   content: assistantMessage,
                   citations: graphragCitations,
                   contextsUsed: graphragContextsUsed,
+                  tools_called: toolsCalled,
                   webSearchResults
                 }
               : m
@@ -243,33 +245,15 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               updateMessageThrottled();
             }
 
+            if (parsed.type === "tools_metadata") {
+              toolsCalled = normalizeToolCalls(parsed.tools_called);
+              updateMessageThrottled();
+            }
+
             if (parsed.type === "model_metadata") {
               modelId = parsed.model_id;
               provider = parsed.provider;
               modelName = parsed.model_name;
-            }
-
-            if (parsed.type === "tool_call") {
-              const toolName = getToolEventName(parsed);
-              if (toolName === 'web_search') {
-                continue;
-              }
-              const toolInfo = `\n\n🔧 Using tool: ${toolName ?? 'unknown'}\n`;
-              assistantMessage += toolInfo;
-              // [UI_FREEZE_FIX] Use throttled update instead of immediate
-              updateMessageThrottled();
-            }
-
-            if (parsed.type === "tool_result") {
-              if (getToolEventName(parsed) === 'web_search') {
-                continue;
-              }
-              const resultInfo = `📊 Result: ${JSON.stringify(
-                parsed.result
-              )}\n\n`;
-              assistantMessage += resultInfo;
-              // [UI_FREEZE_FIX] Use throttled update instead of immediate
-              updateMessageThrottled();
             }
 
             // Capture token usage for context tracking AND message persistence
@@ -381,6 +365,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               content: assistantMessage,
               citations: graphragCitations,
               contextsUsed: graphragContextsUsed,
+              tools_called: toolsCalled,
               webSearchResults
             }
           : m
@@ -436,6 +421,10 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           latency_ms: streamLatencyMs,
           input_tokens: finalInputTokens,
           output_tokens: finalOutputTokens,
+          ...(toolsCalled && toolsCalled.length > 0 ? {
+            tools_called: toolsCalled,
+            tool_success: toolsCalled.every((tool) => tool.success),
+          } : {}),
           ...(messageMetadata && { metadata: messageMetadata })
         })
         .select()
@@ -449,7 +438,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             setMessages((msgs) =>
               msgs.map((m) =>
                 m.id === tempMessageId
-                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed, webSearchResults }
+                  ? {
+                      ...aiMsg,
+                      citations: graphragCitations,
+                      contextsUsed: graphragContextsUsed,
+                      tools_called: toolsCalled,
+                      webSearchResults
+                    }
                   : m
               )
             );

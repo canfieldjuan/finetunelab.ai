@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getToolEventName,
   initialWebSearchStreamState,
   reduceWebSearchStreamEvent,
 } from '../chatSearchStream';
@@ -53,8 +52,4 @@ describe('chat search stream helpers', () => {
     expect(state.results).toBeUndefined();
   });
 
-  it('reads both tool_name and toolName event shapes', () => {
-    expect(getToolEventName({ tool_name: 'web_search' })).toBe('web_search');
-    expect(getToolEventName({ toolName: 'web_search' })).toBe('web_search');
-  });
 });

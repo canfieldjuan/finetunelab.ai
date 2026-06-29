@@ -7,7 +7,9 @@ import { SearchResultCard } from '@/components/search/SearchResultCard';
 import { GraphRAGIndicator } from '../graphrag/GraphRAGIndicator';
 import { MessageMetadata } from './MessageMetadata';
 import { MessageJudgments } from './MessageJudgments';
+import { getRenderableToolCalls } from '../hooks/chatToolStream';
 import {
+  AlertCircle,
   Copy,
   ThumbsUp,
   ThumbsDown,
@@ -20,7 +22,8 @@ import {
   MoreVertical,
   Mail,
   Download,
-  RefreshCw
+  RefreshCw,
+  Wrench
 } from 'lucide-react';
 import type { Message } from './types';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -43,6 +46,56 @@ export interface MessageListProps {
   onDownloadResearch: (content: string) => void;
   isDeepResearchResult: (content: string) => boolean;
   onRegenerate?: (messageId: string) => void;
+}
+
+function formatToolName(name: string): string {
+  return name.replace(/_/g, ' ');
+}
+
+function ToolActivityPanel({ message }: { message: Message }) {
+  const toolCalls = getRenderableToolCalls(message);
+  if (toolCalls.length === 0) return null;
+
+  return (
+    <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+      <div className="space-y-2">
+        {toolCalls.map((tool, index) => (
+          <div
+            key={`${tool.name}-${index}`}
+            className="flex items-start justify-between gap-3 text-sm"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <Wrench className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+              <span className="truncate font-medium capitalize text-gray-800 dark:text-gray-100">
+                {formatToolName(tool.name)}
+              </span>
+            </div>
+            <div className="flex min-w-0 flex-col items-end gap-1 text-right">
+              <span
+                className={`inline-flex items-center gap-1 text-xs font-medium ${
+                  tool.success
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-red-700 dark:text-red-300'
+                }`}
+              >
+                {tool.success ? (
+                  <CheckCircle className="h-3.5 w-3.5" />
+                ) : (
+                  <AlertCircle className="h-3.5 w-3.5" />
+                )}
+                {tool.success ? 'Complete' : 'Failed'}
+              </span>
+              {tool.error && (
+                <span className="max-w-[22rem] truncate text-xs text-red-700 dark:text-red-300">
+                  {tool.error}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -100,6 +153,7 @@ export function MessageList({
                   ))}
                 </div>
               )}
+              {msg.role === "assistant" && <ToolActivityPanel message={msg} />}
               {msg.role === "assistant" && (
                 <>
                   <GraphRAGIndicator
