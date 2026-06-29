@@ -220,3 +220,10 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   race drops the whole toolset if one server exceeds 8s — move to per-server
   deadlines + parallel load; (c) connection refresh on server config change;
   (d) MCP calls not in tool_executions telemetry.
+- 2026-06-29 - Chat session-token auth (enables MCP in the main UI): `useChat`
+  now sends the Supabase session token as `Authorization: Bearer`, and the chat
+  route's normal mode VERIFIES it server-side (`getUser`); a verified session sets
+  the real userId + `isAuthenticatedUser` (so MCP loads), and wins over any
+  body-supplied id (no impersonation). Unverified callers fall back to body userId
+  (no MCP), preserving existing behavior. Resolves the slice-3c regular-chat-auth
+  follow-up. (MCP client gap #1 now usable in the primary chat UI.)
