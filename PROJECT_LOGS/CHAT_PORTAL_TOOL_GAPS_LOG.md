@@ -63,6 +63,50 @@ Nice-to-have:
 Web search, RAG knowledge base, voice in/out, multi-model compare, generation
 params, memory.
 
+## 2026-06-29 Open WebUI-style generic portal inventory
+
+Refreshed against current Open WebUI docs on 2026-06-29:
+
+- Features overview: `https://docs.openwebui.com/features/`
+- Essentials: `https://docs.openwebui.com/getting-started/essentials/`
+- Tools: `https://docs.openwebui.com/features/extensibility/plugin/tools/`
+- Image generation usage:
+  `https://docs.openwebui.com/features/chat-conversations/image-generation-and-editing/usage/`
+
+Keep this inventory provider-agnostic. Marketing Audit Resolution tools are
+explicitly deferred to a later product lane.
+
+Already present or in flight:
+
+- Provider-agnostic model chat with OpenAI-compatible adapters.
+- Web search result rendering.
+- Knowledge-base RAG through GraphRAG.
+- Voice STT/TTS.
+- Model management for hosted and local runtimes.
+- MCP gateway and scoped MCP tool execution.
+- Image generation is in flight through Comfy/Flux.
+
+Still missing for a local Open WebUI-like chat portal:
+
+1. **MCP server controls** — portal UI/API for user-owned HTTP MCP servers, with
+   host stdio visible but read-only. This slice owns it.
+2. **Per-chat file attachments** — ad-hoc documents/images/code attached to one
+   conversation without committing them to the knowledge base.
+3. **Code interpreter / sandbox** — Python or command execution in an isolated
+   workspace. Treat this like stdio: admin/trusted or sandboxed only.
+4. **URL fetch / page reader** — direct "read this URL" distinct from search.
+5. **Tool config import/export/catalog** — install or share generic MCP/OpenAPI
+   tool definitions without hand-editing rows.
+6. **Per-chat/per-model tool bindings** — capability-aware controls for which
+   tools a model/chat may use.
+7. **Automations and task lists** — scheduled prompts and structured task state.
+8. **Multimodal input / vision chat** — user image/document inputs routed to
+   models that support them.
+9. **Artifacts / live previews** — files, HTML, charts, or generated outputs in
+   a first-class side panel instead of only markdown.
+10. **Filesystem/workspace browser** — only after a real sandbox/permission model;
+    the registry-backed `filesystem` tool remains non-portal.
+
 ## Decision / sequencing
 
 Pursue in order: **(1) MCP client → (2) code interpreter → (3) image-gen via local
@@ -261,3 +305,7 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   MCP `tools_metadata`. This closes the logged browser-level live SSE verification
   follow-up for the MCP lane; optional manual browser testing against an operator
   MCP server remains outside the unit gate.
+- 2026-06-29 - MCP server controls UI started: add authenticated HTTP MCP server
+  CRUD routes, a Secrets/Integrations portal panel, read-only host stdio display,
+  and route/component tests. Generic Open WebUI-style local portal gaps refreshed
+  above; marketing Audit Resolution tools remain out of this lane.

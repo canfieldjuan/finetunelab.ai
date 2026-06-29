@@ -23,6 +23,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { ApiKeysManagement } from '@/components/settings/ApiKeysManagement';
 import { WidgetAppsManagement } from '@/components/settings/WidgetAppsManagement';
 import { IntegrationsManagement } from '@/components/settings/IntegrationsManagement';
+import { McpServerManagement } from '@/components/settings/McpServerManagement';
 import type { ProviderSecretDisplay } from '@/lib/secrets/secrets.types';
 import type { AuthType, DiscoveredModel, ModelProvider, ModelTemplate } from '@/lib/models/llm-model.types';
 import { ALL_TEMPLATES } from '@/lib/models/model-templates';
@@ -511,6 +512,12 @@ export default function SecretsPage() {
               userId={user.id}
               sessionToken={session.access_token}
             />
+          </div>
+        )}
+
+        {user && session?.access_token && (
+          <div className="mb-8">
+            <McpServerManagement sessionToken={session.access_token} />
           </div>
         )}
 
