@@ -144,6 +144,19 @@ When wiring discovery/registration, before a tool is registered/offered:
   `type`. Fine for simple tools; revisit (extend `ToolParameter` / pass through inner
   schema) if complex MCP tools need full structure for the model.
 
+## MCP tool multi-tenancy (Slice 3b decision)
+
+The `tools` table + `getEnabledTools` + the `ToolRegistry` are process-global, but
+MCP http servers are per-user (slice-2 owner RLS). Writing per-user MCP tools to the
+global table/registry would offer one user's tools (and decrypted server auth) to all.
+**Decision (2026-06-29): request-time, no global rows.** MCP tools are resolved per
+user per request into an in-memory `McpUserToolset` (`user-toolset.ts`) and injected
+by the chat route (3c); never written to the global `tools` table or registry. Dispatch
+is scoped to the names in that user's toolset. The shared `McpClientManager` keys
+connections by **server id** (not name) so users sharing a display name (e.g. two
+"github" servers) stay isolated and host stdio is shared — this also resolves the
+deferred slice-1 Copilot finding about name-vs-id keying.
+
 ## Status log
 
 - 2026-06-28 — Gap analysis logged. Starting MCP client (item 1).
@@ -177,3 +190,6 @@ When wiring discovery/registration, before a tool is registered/offered:
 - 2026-06-29 — Slice 3a (security core) built: connect-time resolve-time SSRF check
   (`assertResolvedHostIsPublic`, wired into `McpClientManager.connect`) + task-required
   tool filtering in `listTools`. 55 MCP tests.
+- 2026-06-29 — Slice 3b built: keyed `McpClientManager` connections by server id
+  (adapter dispatches by id), added `McpUserToolset`/`buildUserMcpToolset` (per-user,
+  in-memory, no global table/registry). 61 MCP tests.

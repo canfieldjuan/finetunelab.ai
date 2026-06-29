@@ -150,7 +150,9 @@ export function mcpToolToDefinition(
     parameters: normalizeInputSchema(mcpTool.inputSchema),
     config: { enabled: server.enabled },
     async execute(params: Record<string, unknown>) {
-      const result = await manager.callTool(server.name, mcpTool.name, params ?? {});
+      // Dispatch by server id (connections are id-keyed); the display name is only
+      // used for the tool namespace above.
+      const result = await manager.callTool(server.id, mcpTool.name, params ?? {});
       return normalizeMcpResult(result);
     },
   };

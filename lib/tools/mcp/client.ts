@@ -34,13 +34,15 @@ interface Connection {
 }
 
 /**
- * Manages live connections to MCP servers, keyed by server name.
- * One instance can hold many server connections.
+ * Manages live connections to MCP servers, keyed by server **id** (not name).
+ * Keying by the stable id keeps different users' servers isolated even when they
+ * share a display name (e.g. two users each with a "github" server), and lets the
+ * global host stdio server be shared. One instance can hold many connections.
  */
 export class McpClientManager {
   private readonly connections = new Map<string, Connection>();
-  // In-flight connects, so concurrent connect() calls for the same server share
-  // one attempt (avoids spawning duplicate clients / orphan stdio processes).
+  // In-flight connects (by id), so concurrent connect() calls for the same server
+  // share one attempt (avoids duplicate clients / orphan stdio processes).
   private readonly pending = new Map<string, Promise<void>>();
   private readonly requestTimeoutMs: number;
 
@@ -54,9 +56,6 @@ export class McpClientManager {
         throw new Error(`[MCP] Server "${config.name}" uses http transport but has no url`);
       }
       const parsed = new URL(config.url);
-      // Constrain the transport to web protocols. The config layer (slices 2-3)
-      // must additionally allowlist/block internal targets to prevent SSRF once
-      // non-admins can configure http servers — see the gap log.
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         throw new Error(
           `[MCP] Server "${config.name}" url must use http(s), got: ${parsed.protocol}`,
@@ -84,11 +83,11 @@ export class McpClientManager {
     throw new Error(`[MCP] Server "${config.name}" has unknown transport: ${String(config.transport)}`);
   }
 
-  /** Connect to a server. No-op if already connected; concurrent calls are deduped. */
+  /** Connect to a server (keyed by id). No-op if already connected; concurrent calls deduped. */
   async connect(config: McpServerConfig): Promise<void> {
-    if (this.connections.has(config.name)) return;
+    if (this.connections.has(config.id)) return;
 
-    const inFlight = this.pending.get(config.name);
+    const inFlight = this.pending.get(config.id);
     if (inFlight) return inFlight;
 
     const attempt = (async () => {
@@ -112,38 +111,38 @@ export class McpClientManager {
       // If the server later closes the transport (stdio crash, HTTP session end),
       // drop the entry so isConnected() doesn't go stale and connect() can re-establish.
       client.onclose = () => {
-        this.connections.delete(config.name);
+        this.connections.delete(config.id);
       };
-      this.connections.set(config.name, { client, config });
+      this.connections.set(config.id, { client, config });
     })();
 
-    this.pending.set(config.name, attempt);
+    this.pending.set(config.id, attempt);
     try {
       await attempt;
     } finally {
-      this.pending.delete(config.name);
+      this.pending.delete(config.id);
     }
   }
 
-  isConnected(serverName: string): boolean {
-    return this.connections.has(serverName);
+  isConnected(serverId: string): boolean {
+    return this.connections.has(serverId);
   }
 
-  connectedServers(): string[] {
+  connectedServerIds(): string[] {
     return [...this.connections.keys()];
   }
 
-  private getClient(serverName: string): Client {
-    const conn = this.connections.get(serverName);
+  private getConnection(serverId: string): Connection {
+    const conn = this.connections.get(serverId);
     if (!conn) {
-      throw new Error(`[MCP] Not connected to server "${serverName}"`);
+      throw new Error(`[MCP] Not connected to server "${serverId}"`);
     }
-    return conn.client;
+    return conn;
   }
 
   /** List every tool a connected server exposes, following pagination cursors. */
-  async listTools(serverName: string): Promise<McpToolDescriptor[]> {
-    const client = this.getClient(serverName);
+  async listTools(serverId: string): Promise<McpToolDescriptor[]> {
+    const { client, config } = this.getConnection(serverId);
     const tools: McpToolDescriptor[] = [];
     let cursor: string | undefined;
 
@@ -157,7 +156,7 @@ export class McpClientManager {
         // callTool, so registering them would offer the model a tool that always errors.
         const taskSupport = (tool as { execution?: { taskSupport?: string } }).execution?.taskSupport;
         if (taskSupport === 'required') {
-          console.warn(`[MCP] Skipping task-required tool "${tool.name}" on "${serverName}" (not callable via callTool)`);
+          console.warn(`[MCP] Skipping task-required tool "${tool.name}" on "${config.name}" (not callable via callTool)`);
           continue;
         }
         tools.push({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema });
@@ -170,11 +169,11 @@ export class McpClientManager {
 
   /** Call a tool on a connected server. */
   async callTool(
-    serverName: string,
+    serverId: string,
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<McpToolCallResult> {
-    const client = this.getClient(serverName);
+    const { client } = this.getConnection(serverId);
     const result = await client.callTool(
       { name: toolName, arguments: args },
       undefined,
@@ -187,20 +186,29 @@ export class McpClientManager {
     };
   }
 
-  /** Disconnect a single server. No-op if not connected. */
-  async disconnect(serverName: string): Promise<void> {
-    const conn = this.connections.get(serverName);
+  /** Disconnect a single server (by id). No-op if not connected. */
+  async disconnect(serverId: string): Promise<void> {
+    const conn = this.connections.get(serverId);
     if (!conn) return;
-    this.connections.delete(serverName);
+    this.connections.delete(serverId);
     try {
       await conn.client.close();
     } catch (error) {
-      console.error(`[MCP] Error closing connection to "${serverName}":`, error);
+      console.error(`[MCP] Error closing connection to "${conn.config.name}":`, error);
     }
   }
 
   /** Disconnect every server. */
   async disconnectAll(): Promise<void> {
-    await Promise.all(this.connectedServers().map((name) => this.disconnect(name)));
+    await Promise.all(this.connectedServerIds().map((id) => this.disconnect(id)));
   }
+}
+
+// Process-global manager so connections are reused across requests. Safe for
+// multi-user because connections are keyed by server id (unique per user for DB
+// http servers; stable for the shared host stdio servers).
+let sharedManager: McpClientManager | null = null;
+export function getSharedMcpClientManager(): McpClientManager {
+  if (!sharedManager) sharedManager = new McpClientManager();
+  return sharedManager;
 }
