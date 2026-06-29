@@ -483,11 +483,11 @@ export class UnifiedLLMClient {
         }
 
         // Continue conversation with tool results
-        // For OpenAI: Must include assistant message with tool_calls even if no content
-        // For Anthropic: Can skip if no content (Anthropic requirement)
-        const isOpenAI = config.provider === 'openai';
+        // OpenAI-compatible chat APIs require the assistant tool_calls turn before
+        // subsequent tool result messages, even when the assistant content is empty.
+        const requiresAssistantToolMessage = adapter instanceof OpenAIAdapter;
 
-        const assistantMessage = (adapterResponse.content || isOpenAI)
+        const assistantMessage = (adapterResponse.content || requiresAssistantToolMessage)
           ? [{
               role: 'assistant' as const,
               content: adapterResponse.content || null,
@@ -502,7 +502,7 @@ export class UnifiedLLMClient {
             }]
           : [];
 
-        if (!adapterResponse.content && !isOpenAI) {
+        if (!adapterResponse.content && !requiresAssistantToolMessage) {
           console.log('[UnifiedLLMClient] Skipping empty assistant message (tool-only response)');
         }
 
