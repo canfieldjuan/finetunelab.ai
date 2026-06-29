@@ -126,6 +126,100 @@ describe('POST /api/models/bulk contract', () => {
     expect(cacheDeletePattern).toHaveBeenCalledWith('api:models:user-1');
   });
 
+  it('creates curated provider models with model-specific capabilities', async () => {
+    createModel.mockImplementation(async (dto: CreateModelDTO) => modelFromDto(dto, `model-${createModel.mock.calls.length}`));
+
+    const { POST } = await import('../bulk/route');
+
+    const response = await POST(createRequest({
+      provider: 'anthropic',
+      base_url: 'https://api.anthropic.com/v1',
+      auth_type: 'api_key',
+      models: [
+        {
+          model_id: 'claude-3-5-sonnet-20241022',
+          name: 'Claude 3.5 Sonnet',
+          context_length: 200000,
+          max_output_tokens: 8192,
+          supports_streaming: true,
+          supports_functions: true,
+          supports_vision: true,
+          price_per_input_token: 0.000003,
+          price_per_output_token: 0.000015,
+          default_temperature: 0.2,
+          default_top_p: 0.9,
+        },
+      ],
+    }) as never);
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+
+    expect(payload.counts).toEqual({ created: 1, skipped: 0, failed: 0 });
+    expect(createModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Claude 3.5 Sonnet',
+        provider: 'anthropic',
+        model_id: 'claude-3-5-sonnet-20241022',
+        auth_type: 'api_key',
+        supports_streaming: true,
+        supports_functions: true,
+        supports_vision: true,
+        context_length: 200000,
+        max_output_tokens: 8192,
+        price_per_input_token: 0.000003,
+        price_per_output_token: 0.000015,
+        default_temperature: 0.2,
+        default_top_p: 0.9,
+      }),
+      'user-1',
+      mockSupabase
+    );
+    expect(createModel.mock.calls[0][0]).not.toHaveProperty('api_key');
+  });
+
+  it('accepts curated HuggingFace models through bulk import', async () => {
+    createModel.mockImplementation(async (dto: CreateModelDTO) => modelFromDto(dto, `model-${createModel.mock.calls.length}`));
+
+    const { POST } = await import('../bulk/route');
+
+    const response = await POST(createRequest({
+      provider: 'huggingface',
+      base_url: 'https://router.huggingface.co/v1',
+      auth_type: 'bearer',
+      models: [
+        {
+          model_id: 'mistralai/Mistral-7B-Instruct-v0.3',
+          name: 'Mistral 7B Instruct',
+          context_length: 32768,
+          max_output_tokens: 2048,
+          supports_streaming: false,
+          supports_functions: false,
+          supports_vision: false,
+        },
+      ],
+    }) as never);
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+
+    expect(payload.counts).toEqual({ created: 1, skipped: 0, failed: 0 });
+    expect(createModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'huggingface',
+        base_url: 'https://router.huggingface.co/v1',
+        auth_type: 'bearer',
+        model_id: 'mistralai/Mistral-7B-Instruct-v0.3',
+        supports_streaming: false,
+        supports_functions: false,
+        supports_vision: false,
+      }),
+      'user-1',
+      mockSupabase
+    );
+    expect(createModel.mock.calls[0][0]).not.toHaveProperty('api_key');
+  });
+
   it('treats duplicate model names as skipped for idempotent re-import', async () => {
     createModel.mockRejectedValue(new Error('DUPLICATE_MODEL_NAME'));
 
@@ -176,14 +270,14 @@ describe('POST /api/models/bulk contract', () => {
     expect(createModel).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects providers without discovery support', async () => {
+  it('rejects providers without bulk import support', async () => {
     const { POST } = await import('../bulk/route');
 
     const response = await POST(createRequest({
-      provider: 'anthropic',
-      base_url: 'https://api.anthropic.com/v1/messages',
+      provider: 'azure',
+      base_url: 'https://example.openai.azure.com',
       auth_type: 'bearer',
-      models: [{ model_id: 'claude-sonnet-4-5' }],
+      models: [{ model_id: 'gpt-4-deployment' }],
     }) as never);
 
     expect(response.status).toBe(400);
