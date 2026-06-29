@@ -52,6 +52,21 @@ npm run probe:vllm-tools
 
 The probe writes a transcript to `output/vllm-tool-probes/<timestamp>.json`.
 
+## Route Smoke
+
+The API route smoke verifies the portal layer around tool execution without starting a live vLLM server:
+
+```bash
+npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts
+```
+
+This covers:
+
+- Authenticated-user MCP tool discovery in `/api/chat`.
+- MCP tool definitions being offered to `unifiedLLMClient.chat`.
+- MCP tool calls dispatching through the scoped `McpUserToolset` instead of the global portal registry.
+- Non-streaming SSE metadata for an MCP-backed tool call.
+
 ## Probe Cases
 
 Check available cases without making a provider call:
@@ -110,10 +125,10 @@ The probe is not the full portal chat path. It verifies:
 
 It does not yet verify:
 
-- `/api/chat` model lookup and enabled-tool selection.
+- Live DB-backed `/api/chat` model lookup and enabled portal-tool selection.
 - SSE streaming/rendering in the chat UI.
 - Conversation persistence.
 - Trace persistence for tool calls.
-- MCP-backed tools.
+- Live MCP server behavior.
 
 Those are the next deeper slices after this runbook/probe harness.
