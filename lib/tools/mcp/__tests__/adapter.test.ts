@@ -172,7 +172,8 @@ describe('mcpToolToDefinition', () => {
     const def = mcpToolToDefinition(server, mcpTool, manager);
     const out = await def.execute({ title: 'Bug' });
 
-    expect(callTool).toHaveBeenCalledWith('my server', 'create_issue', { title: 'Bug' });
+    // Dispatch is by server id, not name.
+    expect(callTool).toHaveBeenCalledWith('srv-1', 'create_issue', { title: 'Bug' });
     expect(out).toBe('created #1');
   });
 

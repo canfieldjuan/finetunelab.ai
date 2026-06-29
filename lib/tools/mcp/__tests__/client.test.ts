@@ -92,7 +92,7 @@ describe('McpClientManager', () => {
     await manager.connect(httpServer);
     await manager.connect(httpServer); // second call is a no-op
 
-    expect(manager.isConnected('http-server')).toBe(true);
+    expect(manager.isConnected('srv-http')).toBe(true);
     expect(sdk.ClientCtor).toHaveBeenCalledTimes(1);
     expect(sdk.connect).toHaveBeenCalledTimes(1);
     expect(sdk.HttpTransportCtor).toHaveBeenCalledWith(
@@ -151,7 +151,7 @@ describe('McpClientManager', () => {
 
     const manager = new McpClientManager();
     await manager.connect(httpServer);
-    const tools = await manager.listTools('http-server');
+    const tools = await manager.listTools('srv-http');
 
     expect(tools.map((t) => t.name)).toEqual(['a', 'b']);
     expect(sdk.listTools).toHaveBeenCalledTimes(2);
@@ -163,7 +163,7 @@ describe('McpClientManager', () => {
 
     const manager = new McpClientManager();
     await manager.connect(httpServer);
-    const result = await manager.callTool('http-server', 'echo', { msg: 'hi' });
+    const result = await manager.callTool('srv-http', 'echo', { msg: 'hi' });
 
     expect(sdk.callTool).toHaveBeenCalledWith(
       { name: 'echo', arguments: { msg: 'hi' } },
@@ -179,7 +179,7 @@ describe('McpClientManager', () => {
 
     await expect(manager.connect(httpServer)).rejects.toThrow('handshake failed');
     expect(sdk.close).toHaveBeenCalledTimes(1);
-    expect(manager.isConnected('http-server')).toBe(false);
+    expect(manager.isConnected('srv-http')).toBe(false);
   });
 
   it('refuses to connect when the host resolves to a private address (SSRF guard)', async () => {
@@ -188,7 +188,7 @@ describe('McpClientManager', () => {
 
     await expect(manager.connect(httpServer)).rejects.toThrow(/non-public address/);
     expect(sdk.connect).not.toHaveBeenCalled();
-    expect(manager.isConnected('http-server')).toBe(false);
+    expect(manager.isConnected('srv-http')).toBe(false);
   });
 
   it('filters out task-required tools from listTools', async () => {
@@ -206,7 +206,7 @@ describe('McpClientManager', () => {
     const manager = new McpClientManager();
     await manager.connect(httpServer);
 
-    const tools = await manager.listTools('http-server');
+    const tools = await manager.listTools('srv-http');
     expect(tools.map((t) => t.name)).toEqual(['normal']);
   });
 
@@ -219,19 +219,19 @@ describe('McpClientManager', () => {
   it('drops the connection when the transport closes (onclose)', async () => {
     const manager = new McpClientManager();
     await manager.connect(httpServer);
-    expect(manager.isConnected('http-server')).toBe(true);
+    expect(manager.isConnected('srv-http')).toBe(true);
 
     sdk.instances.at(-1)?.onclose?.();
-    expect(manager.isConnected('http-server')).toBe(false);
+    expect(manager.isConnected('srv-http')).toBe(false);
   });
 
   it('disconnect closes the client and removes the connection', async () => {
     const manager = new McpClientManager();
     await manager.connect(httpServer);
-    await manager.disconnect('http-server');
+    await manager.disconnect('srv-http');
 
     expect(sdk.close).toHaveBeenCalledTimes(1);
-    expect(manager.isConnected('http-server')).toBe(false);
-    await manager.disconnect('http-server'); // no-op, no throw
+    expect(manager.isConnected('srv-http')).toBe(false);
+    await manager.disconnect('srv-http'); // no-op, no throw
   });
 });
