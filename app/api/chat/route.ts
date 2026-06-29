@@ -955,6 +955,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
     // Tool-call aware chat completion (provider-aware)
     let lastDeepResearchQuery: string | null = null;
+    let lastImageJobId: string | null = null;
+    let lastImagePrompt: string | null = null;
     const toolCallHandler = async (toolName: string, args: Record<string, unknown>) => {
       // Use conversationId if available, else empty string
       const convId = conversationId || '';
@@ -1029,6 +1031,20 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
       } catch (capErr) {
         console.log('[API] Could not capture web_search results for SSE:', capErr);
+      }
+
+      // Capture generate_image job id so the client can subscribe to its stream
+      try {
+        if (toolName === 'generate_image' && result.data && typeof result.data === 'object') {
+          const imgResult = result.data as { status?: unknown; jobId?: unknown };
+          if (imgResult.status === 'image_generation_started' && typeof imgResult.jobId === 'string') {
+            lastImageJobId = imgResult.jobId;
+            lastImagePrompt = typeof args.prompt === 'string' ? args.prompt : null;
+            console.log('[API] Captured image generation job id from tool result:', lastImageJobId);
+          }
+        }
+      } catch (capErr) {
+        console.log('[API] Could not capture generate_image result for SSE:', capErr);
       }
 
       // ========================================================================
@@ -1950,6 +1966,17 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 completedSteps: 0,
               })}\n\n`;
               controller.enqueue(encoder.encode(progressData));
+            }
+
+            // Surface an image-generation job id so the client can subscribe to
+            // its stream (does not rely on the model echoing the magic string).
+            if (lastImageJobId) {
+              const imageStartData = `data: ${JSON.stringify({
+                type: 'image_generation_started',
+                jobId: lastImageJobId,
+                prompt: lastImagePrompt || null,
+              })}\n\n`;
+              controller.enqueue(encoder.encode(imageStartData));
             }
 
             // Fake stream the complete response in larger chunks for performance
