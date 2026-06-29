@@ -35,6 +35,14 @@ export const VLLM_CHAT_TEMPLATE_CONTENT_FORMATS: VLLMChatTemplateContentFormat[]
   'string',
 ];
 
+const VLLM_RUNTIME_METADATA_KEYS: Array<keyof VLLMRuntimeMetadata> = [
+  'enable_auto_tool_choice',
+  'tool_call_parser',
+  'chat_template',
+  'chat_template_content_format',
+  'parse_qwen_xml_tool_calls',
+];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -50,15 +58,19 @@ function asBoolean(value: unknown): boolean | undefined {
 export function getVllmRuntimeMetadata(metadata: unknown): VLLMRuntimeMetadata {
   if (!isRecord(metadata)) return {};
 
-  const raw = isRecord(metadata.vllm_runtime)
-    ? metadata.vllm_runtime
-    : metadata;
+  if (!isRecord(metadata.vllm_runtime)) return {};
+
+  const raw = metadata.vllm_runtime;
 
   const format = asString(raw.chat_template_content_format);
+  const parser = asString(raw.tool_call_parser);
 
   return {
     enable_auto_tool_choice: asBoolean(raw.enable_auto_tool_choice),
-    tool_call_parser: asString(raw.tool_call_parser),
+    tool_call_parser:
+      parser && VLLM_TOOL_CALL_PARSERS.includes(parser)
+        ? parser
+        : undefined,
     chat_template: asString(raw.chat_template),
     chat_template_content_format:
       format && VLLM_CHAT_TEMPLATE_CONTENT_FORMATS.includes(format as VLLMChatTemplateContentFormat)
@@ -73,10 +85,14 @@ export function withVllmRuntimeMetadata(
   patch: VLLMRuntimeMetadata
 ): Record<string, unknown> {
   const base = isRecord(metadata) ? { ...metadata } : {};
+  for (const key of VLLM_RUNTIME_METADATA_KEYS) {
+    delete base[key];
+  }
+
   const current = getVllmRuntimeMetadata(base);
   const next: VLLMRuntimeMetadata = { ...current, ...patch };
 
-  for (const key of Object.keys(next) as Array<keyof VLLMRuntimeMetadata>) {
+  for (const key of VLLM_RUNTIME_METADATA_KEYS) {
     const value = next[key];
     if (value === undefined || value === '') {
       delete next[key];
