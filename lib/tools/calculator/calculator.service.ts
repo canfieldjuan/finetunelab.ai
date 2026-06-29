@@ -147,39 +147,31 @@ export class CalculatorService {
 
   /**
    * Prepare expression for evaluation
-   * Replace function names with Math equivalents
+   * Normalize legacy Math.* expressions while keeping mathjs-native syntax.
    */
   private preparExpression(expr: string): string {
     let prepared = expr;
 
-    // Convert angle to radians if needed
-    const angleMultiplier = this.config.angleMode === 'degrees' ? ' * Math.PI / 180' : '';
+    prepared = prepared
+      .replace(/\b(\d+(?:\.\d+)?)\s*%\s+of\s+(.+)$/i, '($1 / 100) * ($2)')
+      .replace(/\b(\d+(?:\.\d+)?)\s+percent\s+of\s+(.+)$/i, '($1 / 100) * ($2)');
 
-    // Replace allowed functions
-    if (this.config.allowedFunctions.includes('sqrt')) {
-      prepared = prepared.replace(/sqrt\(([^)]+)\)/g, 'Math.sqrt($1)');
-    }
-    if (this.config.allowedFunctions.includes('pow')) {
-      prepared = prepared.replace(/pow\(([^,]+),([^)]+)\)/g, 'Math.pow($1,$2)');
-    }
-    if (this.config.allowedFunctions.includes('abs')) {
-      prepared = prepared.replace(/abs\(([^)]+)\)/g, 'Math.abs($1)');
-    }
-    
-    // Trigonometric functions
-    if (this.config.allowedFunctions.includes('sin')) {
-      prepared = prepared.replace(/sin\(([^)]+)\)/g, `Math.sin($1${angleMultiplier})`);
-    }
-    if (this.config.allowedFunctions.includes('cos')) {
-      prepared = prepared.replace(/cos\(([^)]+)\)/g, `Math.cos($1${angleMultiplier})`);
-    }
-    if (this.config.allowedFunctions.includes('tan')) {
-      prepared = prepared.replace(/tan\(([^)]+)\)/g, `Math.tan($1${angleMultiplier})`);
-    }
+    prepared = prepared
+      .replace(/\bMath\.(sqrt|pow|abs|ceil|floor|round|sin|cos|tan|asin|acos|atan|log10|log|exp|min|max)\s*\(/g, '$1(')
+      .replace(/\bMath\.PI\b/g, 'pi')
+      .replace(/\bMath\.E\b/g, 'e');
 
-    // Constants
-    prepared = prepared.replace(/\bpi\b/gi, 'Math.PI');
-    prepared = prepared.replace(/\be\b(?![a-z])/gi, 'Math.E');
+    if (this.config.angleMode === 'degrees') {
+      for (const fn of ['sin', 'cos', 'tan']) {
+        if (!this.config.allowedFunctions.includes(fn)) continue;
+        prepared = prepared.replace(
+          new RegExp(`\\b${fn}\\(([^()]*)\\)`, 'g'),
+          (match, arg: string) => /\b(deg|rad)\b/i.test(arg)
+            ? match
+            : `${fn}((${arg}) deg)`
+        );
+      }
+    }
 
     return prepared;
   }

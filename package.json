@@ -18,6 +18,7 @@
     "test:vitest:ui": "vitest --ui",
     "test:vitest:coverage": "vitest --coverage",
     "test:analytics": "vitest lib/tools/analytics-export",
+    "probe:vllm-tools": "npx tsx scripts/probe-vllm-tool-output.ts",
     "seed:models": "npx tsx scripts/seed-default-models.ts",
     "retention:cleanup": "npx tsx scripts/run-retention-cleanup.ts",
     "security:audit": "npx tsx scripts/security-audit.ts",
