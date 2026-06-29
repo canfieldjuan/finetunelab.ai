@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ModelCard, type ServerInfo } from '@/components/models/ModelCard';
+import { LocalInferenceServersPanel } from '@/components/models/LocalInferenceServersPanel';
 import { AddModelDialog } from '@/components/models/AddModelDialog';
 import { EditModelDialog } from '@/components/models/EditModelDialog';
 import type { LLMModelDisplay } from '@/lib/models/llm-model.types';
@@ -44,6 +45,7 @@ function ModelsPageContent() {
 
   const [models, setModels] = useState<LLMModelDisplay[]>([]);
   const [servers, setServers] = useState<Record<string, ServerInfo>>({});
+  const [serverList, setServerList] = useState<ServerInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -165,26 +167,27 @@ function ModelsPageContent() {
       const data = await safeJsonParse(response, { servers: [] });
       console.log('[ModelsPage] Fetched servers:', data.servers?.length || 0);
 
+      const fetchedServers = data.servers || [];
+      setServerList(fetchedServers);
+
       // Create lookup map: model_id -> server info
       // Prioritize running servers over stopped/error ones
       const serverMap: Record<string, ServerInfo> = {};
-      if (data.servers) {
-        data.servers.forEach((server: ServerInfo) => {
-          if (server.model_id) {
-            const existing = serverMap[server.model_id];
+      fetchedServers.forEach((server: ServerInfo) => {
+        if (server.model_id) {
+          const existing = serverMap[server.model_id];
 
-            // Only replace if:
-            // 1. No existing server for this model, OR
-            // 2. New server is running and existing is not, OR
-            // 3. New server is starting and existing is stopped/error
-            if (!existing ||
-                (server.status === 'running' && existing.status !== 'running') ||
-                (server.status === 'starting' && (existing.status === 'stopped' || existing.status === 'error'))) {
-              serverMap[server.model_id] = server;
-            }
+          // Only replace if:
+          // 1. No existing server for this model, OR
+          // 2. New server is running and existing is not, OR
+          // 3. New server is starting and existing is stopped/error
+          if (!existing ||
+              (server.status === 'running' && existing.status !== 'running') ||
+              (server.status === 'starting' && (existing.status === 'stopped' || existing.status === 'error'))) {
+            serverMap[server.model_id] = server;
           }
-        });
-      }
+        }
+      });
 
       setServers(serverMap);
     } catch (err) {
@@ -350,6 +353,14 @@ function ModelsPageContent() {
 
         {/* Loading State */}
         {loading && <LoadingState message="Loading models..." />}
+
+        {!loading && !error && (
+          <LocalInferenceServersPanel
+            servers={serverList}
+            sessionToken={session?.access_token}
+            onRefresh={fetchServers}
+          />
+        )}
 
         {/* Empty State */}
         {!loading && filteredModels.length === 0 && !error && (
