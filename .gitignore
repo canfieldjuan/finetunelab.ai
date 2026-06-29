@@ -72,6 +72,11 @@ __pycache__/
 *.log?
 *.tar.gz
 
+# local agent continuity notes
+/.agents/session-drift/*.md
+!/.agents/session-drift/README.md
+!/.agents/session-drift/TEMPLATE.md
+
 # vercel
 .vercel
 
