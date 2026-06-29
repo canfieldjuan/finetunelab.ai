@@ -21,9 +21,17 @@ import { toast } from 'sonner';
 
 export interface ServerInfo {
   id: string;
+  server_type?: string;
+  display_name?: string;
   status: 'running' | 'stopped' | 'starting' | 'error';
   port?: number;
   model_id?: string | null;
+  model_name?: string;
+  base_url?: string;
+  process_id?: number | null;
+  started_at?: string | null;
+  stopped_at?: string | null;
+  last_health_check?: string | null;
 }
 
 interface ModelMetadata {
