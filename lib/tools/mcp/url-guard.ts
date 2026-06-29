@@ -5,9 +5,13 @@
 // reject non-http(s) protocols and internal/private/link-local targets to limit
 // SSRF / secret egress.
 //
-// NOTE: this is string/hostname-based. It does NOT defend against DNS rebinding
-// (a public hostname resolving to a private IP); resolve-time checks belong in the
-// connect path (Slice 3). See PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md.
+// `assertSafeHttpUrl` is a sync string/hostname best-effort check. The authoritative
+// defense against DNS rebinding (public hostname -> private IP) and against rows that
+// bypassed write-time validation is the async `assertResolvedHostIsPublic`, which
+// resolves the host and checks the real IPs — call it at connect time.
+// See PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md.
+
+import { lookup } from 'dns/promises';
 
 const BLOCKED_HOSTNAMES = new Set(['localhost', '0.0.0.0']);
 
@@ -57,4 +61,42 @@ export function assertSafeHttpUrl(rawUrl: string): URL {
     throw new Error(`[MCP] Server url host is not allowed (internal/private target): ${url.hostname}`);
   }
   return url;
+}
+
+/** True if a *resolved* IP literal (v4 or v6) is loopback/private/link-local. */
+export function isPrivateIpAddress(ip: string): boolean {
+  const addr = ip.toLowerCase().replace(/^\[|\]$/g, '');
+  if (addr.includes(':')) {
+    // IPv4-mapped IPv6 with a dotted tail (::ffff:127.0.0.1): check the embedded IPv4.
+    const mapped = addr.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateIpv4OrLocalName(mapped[1]);
+    return isPrivateIpv6Literal(addr);
+  }
+  return isPrivateIpv4OrLocalName(addr);
+}
+
+/**
+ * Authoritative SSRF guard: resolve `hostname` and reject if ANY resolved address is
+ * loopback/private/link-local. Catches DNS rebinding and rows that bypassed the
+ * write-time `assertSafeHttpUrl` (e.g. a direct DB insert). Call at connect time.
+ *
+ * Residual: there is a TOCTOU window between this lookup and the transport's own
+ * connect-time DNS resolution; pinning the resolved IP into the request is a deeper
+ * follow-up.
+ */
+export async function assertResolvedHostIsPublic(hostname: string): Promise<void> {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  let addresses: Array<{ address: string }>;
+  try {
+    addresses = await lookup(host, { all: true });
+  } catch (error) {
+    throw new Error(
+      `[MCP] Could not resolve host "${hostname}": ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  for (const { address } of addresses) {
+    if (isPrivateIpAddress(address)) {
+      throw new Error(`[MCP] Host "${hostname}" resolves to a non-public address (${address}); refusing to connect`);
+    }
+  }
 }
