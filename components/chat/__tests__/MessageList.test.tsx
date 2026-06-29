@@ -81,4 +81,46 @@ describe('MessageList web search results', () => {
       'plain-img'
     );
   });
+
+  it('renders non-search tool activity without raw JSON', () => {
+    renderList([
+      {
+        id: 'temp-assistant',
+        role: 'assistant',
+        content: 'I checked your uploaded documents.',
+        tools_called: [
+          { name: 'query_knowledge_graph', success: true },
+          { name: 'email_security', success: false, error: 'Mailbox not connected' },
+        ],
+      },
+    ]);
+
+    expect(screen.getByText('query knowledge graph')).toBeInTheDocument();
+    expect(screen.getByText('email security')).toBeInTheDocument();
+    expect(screen.getByText('Complete')).toBeInTheDocument();
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.getByText('Mailbox not connected')).toBeInTheDocument();
+    expect(screen.queryByText(/"success"/)).not.toBeInTheDocument();
+  });
+
+  it('does not duplicate successful web search tool activity when cards render', () => {
+    renderList([
+      {
+        id: 'temp-assistant',
+        role: 'assistant',
+        content: 'Here are the sources.',
+        tools_called: [{ name: 'web_search', success: true }],
+        webSearchResults: [
+          {
+            title: 'Search Result',
+            url: 'https://example.com/search',
+            snippet: 'Search summary.',
+          },
+        ],
+      },
+    ]);
+
+    expect(screen.getByRole('link', { name: /Search Result/i })).toBeInTheDocument();
+    expect(screen.queryByText('web search')).not.toBeInTheDocument();
+  });
 });

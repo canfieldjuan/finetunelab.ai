@@ -15,6 +15,7 @@ import {
   initialWebSearchStreamState,
   reduceWebSearchStreamEvent,
 } from './chatSearchStream';
+import { normalizeToolCalls } from './chatToolStream';
 import { getSseDataLine, splitSseLines } from './sseStream';
 
 
@@ -114,6 +115,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     let assistantMessage = "";
     let webSearchResults: WebSearchDocument[] | undefined;
     let webSearchState = initialWebSearchStreamState;
+    let toolsCalled: ReturnType<typeof normalizeToolCalls>;
     let graphragCitations: Citation[] | undefined;
     let graphragContextsUsed: number | undefined;
     let modelId: string | null = null;
@@ -136,6 +138,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                   content: assistantMessage,
                   citations: graphragCitations,
                   contextsUsed: graphragContextsUsed,
+                  tools_called: toolsCalled,
                   webSearchResults
                 }
               : m
@@ -240,6 +243,11 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             if (parsed.type === "web_search_results" || parsed.type === "doc_summary") {
               webSearchState = reduceWebSearchStreamEvent(webSearchState, parsed);
               webSearchResults = webSearchState.results;
+              updateMessageThrottled();
+            }
+
+            if (parsed.type === "tools_metadata") {
+              toolsCalled = normalizeToolCalls(parsed.tools_called);
               updateMessageThrottled();
             }
 
@@ -381,6 +389,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               content: assistantMessage,
               citations: graphragCitations,
               contextsUsed: graphragContextsUsed,
+              tools_called: toolsCalled,
               webSearchResults
             }
           : m
@@ -436,6 +445,10 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           latency_ms: streamLatencyMs,
           input_tokens: finalInputTokens,
           output_tokens: finalOutputTokens,
+          ...(toolsCalled && toolsCalled.length > 0 ? {
+            tools_called: toolsCalled,
+            tool_success: toolsCalled.every((tool) => tool.success),
+          } : {}),
           ...(messageMetadata && { metadata: messageMetadata })
         })
         .select()
@@ -449,7 +462,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             setMessages((msgs) =>
               msgs.map((m) =>
                 m.id === tempMessageId
-                  ? { ...aiMsg, citations: graphragCitations, contextsUsed: graphragContextsUsed, webSearchResults }
+                  ? {
+                      ...aiMsg,
+                      citations: graphragCitations,
+                      contextsUsed: graphragContextsUsed,
+                      tools_called: toolsCalled,
+                      webSearchResults
+                    }
                   : m
               )
             );

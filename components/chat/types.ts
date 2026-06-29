@@ -8,6 +8,12 @@
 import type { Citation } from "@/lib/graphrag/service";
 import type { WebSearchDocument } from "@/lib/tools/web-search/types";
 
+export interface ChatToolCall {
+  name: string;
+  success: boolean;
+  error?: string;
+}
+
 /**
  * Represents a single chat message
  */

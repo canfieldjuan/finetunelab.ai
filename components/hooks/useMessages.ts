@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
+import { normalizeToolCalls } from './chatToolStream';
 import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 
 interface ConversationData {
@@ -129,6 +130,10 @@ export function useMessages(
 
           const processedMessages = data.map((msg: Message) => {
             const enrichedMsg: Message = { ...msg };
+            const toolCalls = normalizeToolCalls(msg.tools_called);
+            if (toolCalls) {
+              enrichedMsg.tools_called = toolCalls;
+            }
 
             // PRIORITY 1: Use persisted metadata if available
             if (msg.metadata && typeof msg.metadata === 'object') {
