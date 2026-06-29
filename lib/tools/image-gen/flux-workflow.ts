@@ -11,11 +11,13 @@
  *   models/clip/clip_l.safetensors
  *   models/clip/t5xxl_fp8_e4m3fn.safetensors
  *
- * NOTE: this graph is authored from the known model filenames and the standard
- * Flux-dev GGUF node layout; it has NOT yet been executed against a running
- * ComfyUI instance (the GPU is otherwise occupied). Verify node availability
- * (UnetLoaderGGUF, DualCLIPLoader type:'flux', FluxGuidance, EmptySD3LatentImage)
- * against a live instance before relying on it in production.
+ * This graph is structurally identical to a Flux workflow that was previously
+ * confirmed generating on this exact install (UnetLoaderGGUF -> DualCLIPLoader
+ * type:'flux' -> FluxGuidance(3.5) -> KSampler euler/simple/20/cfg1.0 ->
+ * VAEDecode -> SaveImage, with EmptySD3LatentImage), so the class_type names
+ * are validated. The still-unverified piece is exercising the HTTP client
+ * (comfyui-client.ts: queue/poll/download) end-to-end against a live instance,
+ * which needs a GPU window (the card is currently held by vLLM).
  */
 
 /** A single node in the API-format graph. */
