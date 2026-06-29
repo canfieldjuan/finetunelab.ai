@@ -27,6 +27,8 @@ import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
 import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
+import { buildUserMcpToolset, type McpUserToolset } from '@/lib/tools/mcp/user-toolset';
+import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
@@ -78,6 +80,29 @@ function isToolDefinition(value: unknown): value is ToolDefinition {
   if (tool.type !== 'function') return false;
   const fn = tool.function;
   return !!fn && typeof fn === 'object' && typeof fn.name === 'string';
+}
+
+// Max time to spend discovering a user's MCP tools before proceeding without them,
+// so a slow/hung MCP server never stalls the chat request.
+const MCP_DISCOVERY_DEADLINE_MS = 8000;
+
+/** Run a user-scoped MCP tool, shaped like executePortalChatTool's result. */
+async function runMcpToolCall(
+  toolset: McpUserToolset,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<{ data: unknown; error: string | null; executionTimeMs: number }> {
+  const started = Date.now();
+  try {
+    const data = await toolset.execute(toolName, args);
+    return { data, error: null, executionTimeMs: Date.now() - started };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : String(error),
+      executionTimeMs: Date.now() - started,
+    };
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -219,11 +244,11 @@ export async function POST(req: NextRequest) {
     console.log('[API] Final tools names:', tools.map(t => t.function.name));
 
     // Keep tools as-is for trace logging (empty array is meaningful)
-    const activeTools = tools.length > 0 ? tools : undefined;
+    let activeTools = tools.length > 0 ? tools : undefined;
     const offeredToolNames = new Set(tools.map((tool) => tool.function.name));
 
     // For traces, always pass tools array (even if empty) to show what was available
-    const toolsForTrace = tools;
+    let toolsForTrace = tools;
 
     // ========================================================================
     // WIDGET MODE DETECTION & API KEY VALIDATION
@@ -243,6 +268,11 @@ export async function POST(req: NextRequest) {
 
     // Extract user ID from request (from auth/memory or widget API key)
     let userId: string | null = null;
+    // True only for a VERIFIED session user (batch session token or trusted
+    // service-role caller) — NOT a request-body claim and NOT a public widget key.
+    // Gates per-user MCP loading so neither a claimed id nor a public widget can
+    // trigger connecting to that user's servers / decrypted auth.
+    let isAuthenticatedUser = false;
 
     if (isWidgetMode && apiKey) {
       // Widget mode: Validate API key and extract user_id
@@ -258,6 +288,10 @@ export async function POST(req: NextRequest) {
       }
 
       userId = validationResult.userId;
+      // NOTE: a widget API key is PUBLIC (read from the page URL), so it does NOT
+      // make the user MCP-eligible — we must never expose the owner's MCP servers
+      // or decrypted auth through a public widget. MCP loads only for verified
+      // session auth (set in the batch branches below).
       console.log('[API] Widget mode: API key validated, user_id:', userId);
     } else if (isBatchTestMode && authHeader) {
       // Batch test mode: Check if this is service role authentication
@@ -286,6 +320,7 @@ export async function POST(req: NextRequest) {
         }
 
         userId = userIdHeader;
+        isAuthenticatedUser = true;
         supabaseAdmin = serviceRoleClient;
       } else {
         // Regular user session token validation
@@ -308,6 +343,7 @@ export async function POST(req: NextRequest) {
         }
 
         userId = user.id;
+        isAuthenticatedUser = true;
         console.log('[API] Batch test mode: Session validated, user_id:', userId);
 
         // Use service role for RLS bypass
@@ -335,6 +371,9 @@ export async function POST(req: NextRequest) {
       console.log('[API] [DEBUG] Tools available to LLM:', tools.map((t: ToolDefinition) => t.function.name).join(', '));
     }
 
+    // The user's per-request MCP toolset (built below, after auth + admin client).
+    let mcpToolset: McpUserToolset | null = null;
+
     // ========================================================================
     // WIDGET MODE: Create service role client for RLS bypass
     // Note: Batch test mode already created service role client above
@@ -343,6 +382,50 @@ export async function POST(req: NextRequest) {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
       const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
       supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    }
+
+    // ========================================================================
+    // MCP: build the requesting user's tools at request time (per-user, NEVER
+    // global — see PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md). Runs only for an
+    // AUTHENTICATED user (not a body-claimed id), now that the admin client is set
+    // for every auth path. Bounded by a deadline and non-fatal, so a slow or
+    // misconfigured MCP server can't stall or break chat. Offer the definitions
+    // here; route the calls through the user-scoped toolset in toolCallHandler.
+    // ========================================================================
+    if (isAuthenticatedUser && userId && supabaseAdmin) {
+      try {
+        const buildPromise = buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager());
+        // If the deadline wins the race the build promise is abandoned — swallow any
+        // later rejection so it can't surface as an unhandled rejection.
+        buildPromise.catch(() => {});
+        const toolset = await Promise.race([
+          buildPromise,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), MCP_DISCOVERY_DEADLINE_MS)),
+        ]);
+        if (!toolset) {
+          console.warn('[API] MCP discovery exceeded deadline; continuing without MCP tools');
+        } else {
+          mcpToolset = toolset;
+          const mcpDefs = mcpToolset.definitions();
+          if (mcpDefs.length > 0) {
+            tools.push(
+              ...mcpDefs.map((def) => ({
+                type: 'function' as const,
+                function: {
+                  name: def.name,
+                  description: def.description,
+                  parameters: def.parameters as Record<string, unknown>,
+                },
+              })),
+            );
+            activeTools = tools.length > 0 ? tools : undefined;
+            toolsForTrace = tools;
+            console.log('[API] MCP: injected', mcpDefs.length, 'user MCP tool(s)');
+          }
+        }
+      } catch (mcpErr) {
+        console.error('[API] MCP toolset build failed (continuing without MCP tools):', mcpErr);
+      }
     }
 
     // ========================================================================
@@ -883,16 +966,21 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       const toolStartTime = Date.now();
-      const result = await executePortalChatTool(
-        toolName,
-        args,
-        convId,
-        undefined,
-        userId || undefined,
-        undefined,
-        toolTraceContext,
-        { allowedToolNames: offeredToolNames }
-      );
+      // MCP tools are user-scoped and never in the global registry, so route them
+      // through this user's toolset; everything else uses the portal executor
+      // (which also enforces the offered-tool allowlist from main).
+      const result = mcpToolset?.has(toolName)
+        ? await runMcpToolCall(mcpToolset, toolName, args)
+        : await executePortalChatTool(
+            toolName,
+            args,
+            convId,
+            undefined,
+            userId || undefined,
+            undefined,
+            toolTraceContext,
+            { allowedToolNames: offeredToolNames },
+          );
       const toolExecutionTime = Date.now() - toolStartTime;
 
       // Capture web_search results for SSE previews (standard search path only)

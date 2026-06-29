@@ -193,3 +193,30 @@ deferred slice-1 Copilot finding about name-vs-id keying.
 - 2026-06-29 — Slice 3b built: keyed `McpClientManager` connections by server id
   (adapter dispatches by id), added `McpUserToolset`/`buildUserMcpToolset` (per-user,
   in-memory, no global table/registry). 61 MCP tests.
+- 2026-06-29 — Slice 3c built: wired MCP into `app/api/chat/route.ts` — build the
+  user's `McpUserToolset` at request time (gated on userId+admin client, failures
+  non-fatal), inject its definitions into the offered tool list, and route `mcp__*`
+  tool calls through `toolset.execute()` (user-scoped) instead of the global
+  executor. MCP client is now end-to-end: config (3b) → discover → offer → dispatch.
+  type-check + eslint clean; 61 MCP unit tests. (gap #1 — MCP client — DONE)
+- 2026-06-29 — Slice 3c review round (codex P1+P2s): MCP load now gated on an
+  AUTHENTICATED userId (verified widget/batch paths) — NOT a request-body claim;
+  moved below the widget admin-client setup so widget users load MCP too; bounded
+  discovery with an 8s deadline (non-fatal) so a slow MCP server can't stall chat.
+  Follow-ups (open): refresh shared connection when a server's url/auth changes
+  (connect no-ops on cached id); MCP calls don't write a `tool_executions` row
+  (no tools-table id) so they're invisible in tool telemetry.
+  NOTE: 'normal mode' (body-supplied userId, unverified) will NOT load MCP — if the
+  main chat path uses it, it must authenticate (widget key / session) for MCP.
+- 2026-06-29 — Slice 3c review round 2 (codex P1+P2s) + merged main: widget API
+  keys are PUBLIC, so they no longer mark the user MCP-eligible (don't expose the
+  owner's servers/auth via a public widget) — MCP loads only for verified batch
+  session / service-role auth. Fixed the Promise.race orphan (swallow late
+  rejection). Merged main's offered-tool allowlist (`allowedToolNames`) with the
+  MCP dispatch branch. OPEN follow-ups: (a) the primary chat client (`useChat`)
+  posts userId in the body but sends NO session Authorization header, so regular
+  chat is unverified and won't load MCP — needs real session auth on that path for
+  MCP to work in the main UI (product/auth decision); (b) all-or-nothing discovery
+  race drops the whole toolset if one server exceeds 8s — move to per-server
+  deadlines + parallel load; (c) connection refresh on server config change;
+  (d) MCP calls not in tool_executions telemetry.
