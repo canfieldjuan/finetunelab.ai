@@ -237,3 +237,10 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   MCP discovery deadline remains as a final backstop. Remaining MCP follow-ups:
   refresh shared connections when URL/auth changes; schema-first telemetry for
   MCP `tool_executions`; browser-level live SSE verification.
+- 2026-06-29 - MCP connection refresh: `McpClientManager.connect` now reuses a
+  cached connection only when the transport/auth config still matches the
+  requested server config. URL/auth/stdio command changes disconnect the stale
+  client and open a fresh connection, including the in-flight stale-attempt case;
+  stale `onclose` callbacks cannot delete the refreshed connection. Remaining
+  MCP follow-ups: schema-first telemetry for MCP `tool_executions`;
+  browser-level live SSE verification.
