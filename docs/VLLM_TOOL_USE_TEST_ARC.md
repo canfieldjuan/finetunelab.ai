@@ -54,19 +54,22 @@ The probe writes a transcript to `output/vllm-tool-probes/<timestamp>.json`.
 
 ## Route Smoke
 
-The API route smoke verifies the portal layer around tool execution without starting a live vLLM server:
+The API route smokes verify the portal layer around tool execution without starting a live vLLM server:
 
 ```bash
+npx vitest run app/api/chat/__tests__/route-tool-use-smoke.test.ts
 npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts
 ```
 
 This covers:
 
+- Registry model selection through `modelId`.
+- Built-in portal tool dispatch through the route-level `toolCallHandler`.
 - Authenticated-user MCP tool discovery in `/api/chat`.
 - MCP tool definitions being offered to `unifiedLLMClient.chat`.
 - MCP tool calls dispatching through the scoped `McpUserToolset` instead of the global portal registry.
 - The route-level security gate: body-claimed users without authenticated session context do not get MCP tools.
-- Non-streaming SSE metadata for an MCP-backed tool call.
+- Non-streaming SSE metadata for built-in and MCP-backed tool calls.
 
 ## Probe Cases
 
@@ -123,6 +126,13 @@ The probe is not the full portal chat path. It verifies:
 - Qwen XML fallback recovery.
 - Portal tool execution for the included tools.
 - Continuation-message shape.
+
+The API-level route smoke in `app/api/chat/__tests__/route-tool-use-smoke.test.ts` verifies:
+
+- `/api/chat` selects a registry model through `modelId`.
+- Tool-enabled requests take the non-streaming tool-aware route.
+- The route-level `toolCallHandler` executes an offered portal tool.
+- The returned SSE stream includes model metadata, tool metadata, final content, and `[DONE]`.
 
 It does not yet verify:
 

@@ -1,0 +1,267 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { NextRequest } from 'next/server';
+import type { ModelConfig } from '@/lib/models/llm-model.types';
+
+const unifiedChat = vi.hoisted(() => vi.fn());
+const getModelConfig = vi.hoisted(() => vi.fn());
+const executePortalChatTool = vi.hoisted(() => vi.fn());
+const createClient = vi.hoisted(() => vi.fn());
+
+const vllmModelConfig: ModelConfig = {
+  id: 'model-vllm-qwen',
+  name: 'Local Qwen',
+  provider: 'vllm',
+  base_url: 'http://localhost:8000/v1',
+  model_id: 'qwen3',
+  served_model_name: 'qwen3',
+  auth_type: 'none',
+  auth_headers: {},
+  supports_streaming: true,
+  supports_functions: true,
+  supports_vision: false,
+  context_length: 32768,
+  max_output_tokens: 1024,
+  default_temperature: 0,
+  default_top_p: 1,
+  metadata: {
+    vllm_runtime: {
+      parse_qwen_xml_tool_calls: true,
+    },
+  },
+};
+
+function makeRequest(body: unknown): NextRequest {
+  return {
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: async () => body,
+  } as unknown as NextRequest;
+}
+
+function parseSseEvents(text: string): unknown[] {
+  return text
+    .split('\n\n')
+    .map((chunk) => chunk.trim())
+    .filter((chunk) => chunk.startsWith('data: '))
+    .map((chunk) => chunk.slice('data: '.length))
+    .filter((payload) => payload !== '[DONE]')
+    .map((payload) => JSON.parse(payload));
+}
+
+vi.mock('@/lib/llm/unified-client', () => ({
+  unifiedLLMClient: {
+    chat: unifiedChat,
+  },
+}));
+
+vi.mock('@/lib/models/model-manager.service', () => ({
+  modelManager: {
+    getModelConfig,
+  },
+}));
+
+vi.mock('@/lib/tools/toolManager', () => ({
+  executePortalChatTool,
+}));
+
+vi.mock('@supabase/supabase-js', () => ({
+  createClient,
+}));
+
+vi.mock('@/lib/supabaseClient', () => ({
+  supabase: {
+    from: vi.fn(),
+  },
+}));
+
+vi.mock('@/lib/llm/openai', () => ({
+  streamOpenAIResponse: vi.fn(),
+  runOpenAIWithToolCalls: vi.fn(),
+}));
+
+vi.mock('@/lib/llm/anthropic', () => ({
+  streamAnthropicResponse: vi.fn(),
+  runAnthropicWithToolCalls: vi.fn(),
+}));
+
+vi.mock('@/lib/config/llmConfig', () => ({
+  loadLLMConfig: vi.fn(() => ({
+    provider: 'openai',
+    openai: {
+      model: 'gpt-4o-mini',
+      temperature: 0.7,
+      max_tokens: 2000,
+    },
+  })),
+}));
+
+vi.mock('@/lib/graphrag', () => ({
+  graphragConfig: {
+    search: {
+      threshold: 0.7,
+    },
+  },
+  graphragService: {
+    enhancePrompt: vi.fn(),
+    formatCitations: vi.fn(() => []),
+  },
+}));
+
+vi.mock('@/lib/context', () => ({
+  estimateGraphRAGTokens: vi.fn(() => 0),
+}));
+
+vi.mock('@/lib/context/context-provider.service', () => ({
+  gatherConversationContext: vi.fn(),
+}));
+
+vi.mock('@/lib/auth/api-key-validator', () => ({
+  validateApiKey: vi.fn(),
+}));
+
+vi.mock('@/lib/session-tagging/generator', () => ({
+  generateSessionTag: vi.fn(async () => null),
+}));
+
+vi.mock('@/lib/tracing/trace.service', () => ({
+  traceService: {
+    startTrace: vi.fn(async () => ({ traceId: 'trace-1', spanId: 'span-1' })),
+    createChildSpan: vi.fn(async () => ({ traceId: 'trace-1', spanId: 'tool-span-1' })),
+    endTrace: vi.fn(async () => undefined),
+    captureError: vi.fn(async () => undefined),
+  },
+  startTrace: vi.fn(async () => ({ traceId: 'trace-1', spanId: 'span-1' })),
+  endTrace: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/lib/batch-testing/error-categorizer', () => ({
+  categorizeError: vi.fn(() => ({ category: 'unknown' })),
+}));
+
+vi.mock('@/lib/tracing/error-categorizer', () => ({
+  categorizeError: vi.fn(() => ({ category: 'unknown' })),
+}));
+
+vi.mock('@/lib/batch-testing/evaluation-integration', () => ({
+  saveBasicJudgment: vi.fn(),
+  calculateBasicQualityScore: vi.fn(() => 0),
+}));
+
+vi.mock('@/lib/evaluation/llm-judge-integration', () => ({
+  evaluateWithLLMJudge: vi.fn(),
+  shouldEvaluateMessage: vi.fn(() => false),
+}));
+
+describe('POST /api/chat tool-use smoke', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+    process.env.CHAT_STREAMING_CHUNK_DELAY_MS = '0';
+
+    createClient.mockReturnValue({
+      from: vi.fn(),
+      auth: {
+        admin: {
+          getUserById: vi.fn(),
+        },
+      },
+    });
+    getModelConfig.mockResolvedValue(vllmModelConfig);
+    executePortalChatTool.mockResolvedValue({
+      data: { result: 4 },
+      error: null,
+      executionTimeMs: 1,
+    });
+    unifiedChat.mockImplementation(async (_modelId, _messages, options) => {
+      await options.toolCallHandler('calculator', { expression: '2+2' });
+      return {
+        content: 'The answer is 4.',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 5,
+        },
+        toolsCalled: [{ name: 'calculator', success: true }],
+      };
+    });
+  });
+
+  it('routes registry-model tool requests through route-level tool execution and emits SSE metadata', async () => {
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      generationSettings: {
+        temperature: 0,
+        maxOutputTokens: 256,
+      },
+      messages: [
+        {
+          role: 'user',
+          content: 'Use the calculator tool for 2+2.',
+        },
+      ],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'calculator',
+            description: 'Calculate arithmetic expressions.',
+            parameters: {
+              type: 'object',
+              properties: {
+                expression: { type: 'string' },
+              },
+              required: ['expression'],
+            },
+          },
+        },
+      ],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/event-stream');
+
+    const streamText = await response.text();
+    expect(streamText).toContain('data: [DONE]');
+    expect(streamText).toContain('The answer is 4.');
+
+    const events = parseSseEvents(streamText);
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'model_metadata',
+      model_id: 'model-vllm-qwen',
+      model_name: 'Local Qwen',
+      provider: 'vllm',
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'token_usage',
+      input_tokens: 10,
+      output_tokens: 5,
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'tools_metadata',
+      tools_called: [expect.objectContaining({ name: 'calculator', success: true })],
+    }));
+
+    expect(getModelConfig).toHaveBeenCalledWith(
+      'model-vllm-qwen',
+      undefined,
+      expect.any(Object)
+    );
+    expect(unifiedChat).toHaveBeenCalledWith(
+      'model-vllm-qwen',
+      expect.any(Array),
+      expect.objectContaining({
+        tools: [expect.objectContaining({ function: expect.objectContaining({ name: 'calculator' }) })],
+        toolCallHandler: expect.any(Function),
+      })
+    );
+    expect(executePortalChatTool).toHaveBeenCalledTimes(1);
+    expect(executePortalChatTool.mock.calls[0]?.slice(0, 2)).toEqual([
+      'calculator',
+      { expression: '2+2' },
+    ]);
+  });
+});
