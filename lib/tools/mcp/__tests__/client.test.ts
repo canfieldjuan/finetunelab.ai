@@ -104,6 +104,34 @@ describe('McpClientManager', () => {
     );
   });
 
+  it('reconnects when an existing server id has new URL or auth config', async () => {
+    const manager = new McpClientManager();
+    await manager.connect(httpServer);
+    const oldClient = sdk.instances.at(-1);
+
+    await manager.connect({
+      ...httpServer,
+      url: 'https://new.example.com/mcp',
+      authToken: 'new-token',
+    });
+
+    expect(sdk.close).toHaveBeenCalledTimes(1);
+    expect(sdk.ClientCtor).toHaveBeenCalledTimes(2);
+    expect(sdk.connect).toHaveBeenCalledTimes(2);
+    expect(sdk.HttpTransportCtor).toHaveBeenNthCalledWith(
+      2,
+      new URL('https://new.example.com/mcp'),
+      expect.objectContaining({
+        requestInit: { redirect: 'error', headers: { Authorization: 'Bearer new-token' } },
+        fetch: expect.any(Function),
+      }),
+    );
+    expect(manager.isConnected('srv-http')).toBe(true);
+
+    oldClient?.onclose?.();
+    expect(manager.isConnected('srv-http')).toBe(true);
+  });
+
   it('connects over stdio with command/args/env', async () => {
     const manager = new McpClientManager();
     await manager.connect(stdioServer);
@@ -137,6 +165,39 @@ describe('McpClientManager', () => {
     await Promise.all([manager.connect(httpServer), manager.connect(httpServer)]);
     expect(sdk.ClientCtor).toHaveBeenCalledTimes(1);
     expect(sdk.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes after an in-flight stale config attempt settles', async () => {
+    let resolveFirstConnect: (() => void) | undefined;
+    sdk.connect
+      .mockImplementationOnce(() => new Promise<void>((resolve) => {
+        resolveFirstConnect = resolve;
+      }))
+      .mockResolvedValueOnce(undefined);
+
+    const manager = new McpClientManager();
+    const first = manager.connect(httpServer);
+    const second = manager.connect({
+      ...httpServer,
+      url: 'https://fresh.example.com/mcp',
+      authToken: 'fresh-token',
+    });
+
+    await Promise.resolve();
+    expect(sdk.connect).toHaveBeenCalledTimes(1);
+    resolveFirstConnect?.();
+    await Promise.all([first, second]);
+
+    expect(sdk.close).toHaveBeenCalledTimes(1);
+    expect(sdk.connect).toHaveBeenCalledTimes(2);
+    expect(sdk.HttpTransportCtor).toHaveBeenNthCalledWith(
+      2,
+      new URL('https://fresh.example.com/mcp'),
+      expect.objectContaining({
+        requestInit: { redirect: 'error', headers: { Authorization: 'Bearer fresh-token' } },
+        fetch: expect.any(Function),
+      }),
+    );
   });
 
   it('lists all tools across pagination cursors', async () => {

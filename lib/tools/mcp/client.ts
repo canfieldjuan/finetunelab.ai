@@ -33,6 +33,46 @@ interface Connection {
   config: McpServerConfig;
 }
 
+interface PendingConnection {
+  config: McpServerConfig;
+  promise: Promise<void>;
+}
+
+function arraysEqual(left?: string[], right?: string[]): boolean {
+  const leftValues = left ?? [];
+  const rightValues = right ?? [];
+  if (leftValues.length !== rightValues.length) return false;
+  return leftValues.every((value, index) => value === rightValues[index]);
+}
+
+function recordsEqual(left?: Record<string, string>, right?: Record<string, string>): boolean {
+  const leftEntries = Object.entries(left ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const rightEntries = Object.entries(right ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  if (leftEntries.length !== rightEntries.length) return false;
+  return leftEntries.every(([key, value], index) => {
+    const [rightKey, rightValue] = rightEntries[index];
+    return key === rightKey && value === rightValue;
+  });
+}
+
+function sameConnectionConfig(left: McpServerConfig, right: McpServerConfig): boolean {
+  if (left.transport !== right.transport) return false;
+
+  if (left.transport === 'http') {
+    return left.url === right.url && left.authToken === right.authToken;
+  }
+
+  if (left.transport === 'stdio') {
+    return (
+      left.command === right.command &&
+      arraysEqual(left.args, right.args) &&
+      recordsEqual(left.env, right.env)
+    );
+  }
+
+  return false;
+}
+
 /**
  * Manages live connections to MCP servers, keyed by server **id** (not name).
  * Keying by the stable id keeps different users' servers isolated even when they
@@ -43,7 +83,7 @@ export class McpClientManager {
   private readonly connections = new Map<string, Connection>();
   // In-flight connects (by id), so concurrent connect() calls for the same server
   // share one attempt (avoids duplicate clients / orphan stdio processes).
-  private readonly pending = new Map<string, Promise<void>>();
+  private readonly pending = new Map<string, PendingConnection>();
   private readonly requestTimeoutMs: number;
 
   constructor(opts?: { requestTimeoutMs?: number }) {
@@ -83,14 +123,37 @@ export class McpClientManager {
     throw new Error(`[MCP] Server "${config.name}" has unknown transport: ${String(config.transport)}`);
   }
 
-  /** Connect to a server (keyed by id). No-op if already connected; concurrent calls deduped. */
+  /**
+   * Connect to a server (keyed by id).
+   *
+   * Reuses an existing connection only when the transport/auth config still
+   * matches. If the saved server config changed while the process-global manager
+   * kept a connection alive, refresh it before listing/calling tools.
+   */
   async connect(config: McpServerConfig): Promise<void> {
-    if (this.connections.has(config.id)) return;
+    const existing = this.connections.get(config.id);
+    if (existing && sameConnectionConfig(existing.config, config)) {
+      existing.config = config;
+      return;
+    }
 
     const inFlight = this.pending.get(config.id);
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      if (sameConnectionConfig(inFlight.config, config)) return inFlight.promise;
+      await inFlight.promise.catch(() => {});
+      return this.connect(config);
+    }
 
     const attempt = (async () => {
+      const current = this.connections.get(config.id);
+      if (current) {
+        if (sameConnectionConfig(current.config, config)) {
+          current.config = config;
+          return;
+        }
+        await this.disconnect(config.id);
+      }
+
       // Authoritative SSRF gate for http servers, regardless of how the config was
       // stored (a direct DB insert can bypass the write-time guard) — validate the
       // url and reject hosts that resolve to private/loopback/link-local IPs.
@@ -111,16 +174,20 @@ export class McpClientManager {
       // If the server later closes the transport (stdio crash, HTTP session end),
       // drop the entry so isConnected() doesn't go stale and connect() can re-establish.
       client.onclose = () => {
-        this.connections.delete(config.id);
+        if (this.connections.get(config.id)?.client === client) {
+          this.connections.delete(config.id);
+        }
       };
       this.connections.set(config.id, { client, config });
     })();
 
-    this.pending.set(config.id, attempt);
+    this.pending.set(config.id, { config, promise: attempt });
     try {
       await attempt;
     } finally {
-      this.pending.delete(config.id);
+      if (this.pending.get(config.id)?.promise === attempt) {
+        this.pending.delete(config.id);
+      }
     }
   }
 
