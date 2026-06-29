@@ -4,6 +4,7 @@ export type SnippetRevisionErrorCode =
   | 'empty_find'
   | 'target_not_found'
   | 'target_ambiguous'
+  | 'target_mismatch'
   | 'range_invalid'
   | 'range_out_of_bounds';
 
@@ -17,6 +18,7 @@ export interface ReplaceRangeRevision {
   mode: 'replace_range';
   start: number;
   end: number;
+  expectedText: string;
   replace: string;
 }
 
@@ -112,11 +114,16 @@ function applyRangeReplacement(
     return failure('range_out_of_bounds', 'Range extends beyond the source text length.');
   }
 
+  const original = sourceText.slice(start, end);
+  if (original !== revision.expectedText) {
+    return failure('target_mismatch', 'Range text no longer matches the originally selected text.');
+  }
+
   return buildSuccess(sourceText, {
     mode: revision.mode,
     start,
     end,
-    original: sourceText.slice(start, end),
+    original,
     replacement: revision.replace,
   }, applied);
 }
@@ -147,7 +154,7 @@ function findAllOccurrences(sourceText: string, find: string): number[] {
 
   while (index !== -1) {
     matches.push(index);
-    index = sourceText.indexOf(find, index + find.length);
+    index = sourceText.indexOf(find, index + 1);
   }
 
   return matches;

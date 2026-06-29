@@ -10,7 +10,7 @@ Juan wants the portal to target arbitrary snippets of text before adding marketi
 2. Support exact search/replace targets for model-proposed snippet edits.
 3. Support explicit range replacement for UI-selected text snippets.
 4. Return structured preview/apply results with original text, replacement text, changed range, updated text, and an unchanged flag.
-5. Reject stale, missing, ambiguous, reversed, or out-of-bounds targets with clear error codes.
+5. Reject stale, missing, ambiguous, reversed, overlapping, or out-of-bounds targets with clear error codes.
 6. Keep this slice independent from chat tools, model prompts, file writes, product/marketing rules, and UI.
 
 ## Files touched
@@ -21,7 +21,7 @@ Juan wants the portal to target arbitrary snippets of text before adding marketi
 
 ## Mechanism
 
-The module exposes `applySnippetRevision(sourceText, revision)` and `previewSnippetRevision(sourceText, revision)`. Search/replace revisions require the `find` text to appear exactly once, which protects against ambiguous model edits. Range replacements use zero-based inclusive/exclusive offsets, which is the shape a text-selection UI can produce later. Both modes flow through the same result builder so downstream UI can render one consistent preview contract.
+The module exposes `applySnippetRevision(sourceText, revision)` and `previewSnippetRevision(sourceText, revision)`. Search/replace revisions require the `find` text to appear exactly once, including overlapping occurrences, which protects against ambiguous model edits. Range replacements use zero-based inclusive/exclusive offsets plus the originally selected text, which is the shape a text-selection UI can produce later while still rejecting stale offsets. Both modes flow through the same result builder so downstream UI can render one consistent preview contract.
 
 ## Intentional
 
@@ -40,7 +40,7 @@ The module exposes `applySnippetRevision(sourceText, revision)` and `previewSnip
 ## Verification
 
 - `npm ci` installed this fresh worktree's dependencies.
-- `npx vitest run lib/snippet-revision/__tests__/snippet-revision.test.ts` passed: 9 tests.
+- `npx vitest run lib/snippet-revision/__tests__/snippet-revision.test.ts` passed: 11 tests.
 - `npm run type-check` passed.
 - `npm run lint` passed with existing repo warnings and no errors.
 - `git diff --check` passed.

@@ -78,6 +78,19 @@ describe('snippet revision engine', () => {
     });
   });
 
+  it('treats overlapping text replacement targets as ambiguous', () => {
+    const result = applySnippetRevision('aaa', {
+      mode: 'replace_text',
+      find: 'aa',
+      replace: 'b',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'target_ambiguous',
+    });
+  });
+
   it('rejects empty search text', () => {
     const result = applySnippetRevision('Anything', {
       mode: 'replace_text',
@@ -96,6 +109,7 @@ describe('snippet revision engine', () => {
       mode: 'replace_range',
       start: 7,
       end: 22,
+      expectedText: '[selected text]',
       replace: 'replacement',
     });
 
@@ -119,6 +133,7 @@ describe('snippet revision engine', () => {
       mode: 'replace_range',
       start: 7,
       end: 7,
+      expectedText: '',
       replace: 'small ',
     });
 
@@ -137,6 +152,7 @@ describe('snippet revision engine', () => {
       mode: 'replace_range',
       start: 8,
       end: 2,
+      expectedText: '',
       replace: 'Nope',
     });
 
@@ -151,12 +167,30 @@ describe('snippet revision engine', () => {
       mode: 'replace_range',
       start: 0,
       end: 99,
+      expectedText: 'Short text',
       replace: 'Nope',
     });
 
     expect(result).toMatchObject({
       ok: false,
       code: 'range_out_of_bounds',
+    });
+  });
+
+  it('rejects stale range targets when selected text has changed', () => {
+    const result = applySnippetRevision('The dog sat.', {
+      mode: 'replace_range',
+      start: 4,
+      end: 7,
+      expectedText: 'cat',
+      replace: 'fox',
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      applied: false,
+      code: 'target_mismatch',
+      message: 'Range text no longer matches the originally selected text.',
     });
   });
 });
