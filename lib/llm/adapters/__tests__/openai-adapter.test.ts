@@ -32,7 +32,19 @@ describe('OpenAIAdapter', () => {
     const request: AdapterRequest = {
       config,
       messages: [{ role: 'user', content: 'search docs' }],
-      options: { stream: false },
+      options: {
+        stream: false,
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'search_docs',
+              description: 'Search documents',
+              parameters: { type: 'object', properties: { query: { type: 'string' } } },
+            },
+          },
+        ],
+      },
     };
 
     const response = await adapter.parseResponse(
@@ -67,5 +79,78 @@ describe('OpenAIAdapter', () => {
       },
     ]);
     expect(response.content).not.toContain('<tool_call>');
+  });
+
+  it('recovers terminal Qwen XML tool calls that omit the closing tag', async () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config,
+      messages: [{ role: 'user', content: 'summarize email' }],
+      options: {
+        stream: false,
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'email_analysis',
+              description: 'Analyze email',
+              parameters: { type: 'object', properties: { action: { type: 'string' } } },
+            },
+          },
+        ],
+      },
+    };
+
+    const response = await adapter.parseResponse(
+      new Response(null),
+      {
+        choices: [
+          {
+            message: {
+              content: `<tool_call>
+{"name":"email_analysis","arguments":{"action":"summarize_thread","emailThread":"{}"}}`,
+            },
+          },
+        ],
+      },
+      request
+    );
+
+    expect(response.content).toBe('');
+    expect(response.toolCalls).toEqual([
+      {
+        id: 'qwen-xml-tool-0',
+        name: 'email_analysis',
+        arguments: { action: 'summarize_thread', emailThread: '{}' },
+      },
+    ]);
+  });
+
+  it('does not recover literal Qwen XML when no tools were offered', async () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config,
+      messages: [{ role: 'user', content: 'document a tool call' }],
+      options: { stream: false, tools: [] },
+    };
+
+    const response = await adapter.parseResponse(
+      new Response(null),
+      {
+        choices: [
+          {
+            message: {
+              content: `<tool_call>
+{"name":"search_docs","arguments":{"query":"example"}}
+</tool_call>`,
+            },
+          },
+        ],
+      },
+      request
+    );
+
+    expect(response.toolCalls).toBeUndefined();
+    expect(response.content).toContain('<tool_call>');
   });
 });
