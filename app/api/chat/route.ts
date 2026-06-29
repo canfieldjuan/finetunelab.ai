@@ -29,6 +29,7 @@ import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normali
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 import { buildUserMcpToolset, type McpUserToolset } from '@/lib/tools/mcp/user-toolset';
 import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
+import { resolveChatUser } from '@/lib/chat/resolve-chat-user';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
@@ -269,7 +270,7 @@ export async function POST(req: NextRequest) {
     // Extract user ID from request (from auth/memory or widget API key)
     let userId: string | null = null;
     // True only for a VERIFIED session user (batch session token or trusted
-    // service-role caller) — NOT a request-body claim and NOT a public widget key.
+    // service-role caller), NOT a request-body claim and NOT a public widget key.
     // Gates per-user MCP loading so neither a claimed id nor a public widget can
     // trigger connecting to that user's servers / decrypted auth.
     let isAuthenticatedUser = false;
@@ -289,7 +290,7 @@ export async function POST(req: NextRequest) {
 
       userId = validationResult.userId;
       // NOTE: a widget API key is PUBLIC (read from the page URL), so it does NOT
-      // make the user MCP-eligible — we must never expose the owner's MCP servers
+      // make the user MCP-eligible; we must never expose the owner's MCP servers
       // or decrypted auth through a public widget. MCP loads only for verified
       // session auth (set in the batch branches below).
       console.log('[API] Widget mode: API key validated, user_id:', userId);
@@ -351,11 +352,27 @@ export async function POST(req: NextRequest) {
         supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
       }
     } else {
-      // Normal mode: Get user ID from request body
-      console.log('[API] Normal mode: Getting user from request body');
-      userId = requestUserId || memory?.userId || null;
-      console.log('[API] Normal mode: userId:', userId || 'not provided');
-      
+      // Normal mode. Prefer a VERIFIED Supabase session if the client sent one; a
+      // verified session is what makes the user trusted (e.g. eligible to load their
+      // MCP servers) and wins over any body-supplied id. Falls back to the
+      // (unverified) body userId otherwise, preserving existing behavior (no MCP).
+      const resolved = await resolveChatUser({
+        authHeader,
+        requestUserId,
+        memoryUserId: memory?.userId ?? null,
+        verifySession: async (header) => {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+          const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+          const sessionClient = createClient(supabaseUrl, supabaseAnonKey, {
+            global: { headers: { Authorization: header } },
+          });
+          const { data: { user }, error } = await sessionClient.auth.getUser();
+          return user && !error ? { id: user.id } : null;
+        },
+      });
+      userId = resolved.userId;
+      isAuthenticatedUser = resolved.isAuthenticated;
+
       // Create service role client for DB operations (bypasses RLS)
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
       const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -386,7 +403,7 @@ export async function POST(req: NextRequest) {
 
     // ========================================================================
     // MCP: build the requesting user's tools at request time (per-user, NEVER
-    // global — see PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md). Runs only for an
+    // global; see PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md). Runs only for an
     // AUTHENTICATED user (not a body-claimed id), now that the admin client is set
     // for every auth path. Bounded by a deadline and non-fatal, so a slow or
     // misconfigured MCP server can't stall or break chat. Offer the definitions
@@ -395,7 +412,7 @@ export async function POST(req: NextRequest) {
     if (isAuthenticatedUser && userId && supabaseAdmin) {
       try {
         const buildPromise = buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager());
-        // If the deadline wins the race the build promise is abandoned — swallow any
+        // If the deadline wins the race the build promise is abandoned; swallow any
         // later rejection so it can't surface as an unhandled rejection.
         buildPromise.catch(() => {});
         const toolset = await Promise.race([

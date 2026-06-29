@@ -633,10 +633,20 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       console.log('[useChat] modifiedTools count:', modifiedTools.length);
       console.log('[useChat] modifiedTools:', modifiedTools.map(t => t.function?.name || 'unknown'));
 
+      // Attach the Supabase session token so the chat route can VERIFY the user
+      // (server-side getUser), which is what makes per-user features like MCP tools
+      // available. Skip it in demo/widget mode (allowAnonymous): a logged-in browser
+      // still has a session, and we must NOT authenticate a public demo/widget
+      // request as that user. Widget mode uses X-API-Key instead.
+      const authSession = allowAnonymous
+        ? null
+        : (await supabase.auth.getSession()).data.session;
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(authSession?.access_token ? { Authorization: `Bearer ${authSession.access_token}` } : {}),
           ...(safeApiKey ? { "X-API-Key": safeApiKey } : {}),
         },
         body: JSON.stringify({
