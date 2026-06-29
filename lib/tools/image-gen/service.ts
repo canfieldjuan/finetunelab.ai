@@ -18,6 +18,7 @@ import { ImageGenError } from './types';
 import type { ImageGenOptions, ImageGenResult } from './types';
 import { buildFluxWorkflow, FLUX_DEFAULTS } from './flux-workflow';
 import { generateWithComfyUi } from './comfyui-client';
+import type { ComfyUiImage } from './comfyui-client';
 import { searchUnsplashImage } from './unsplash-client';
 import { uploadGeneratedImage } from './storage';
 import type { ImageStorageClient } from './storage';
@@ -49,46 +50,15 @@ async function resolveStorageClient(
   return mod.createServerClient() as unknown as ImageStorageClient;
 }
 
-async function generateViaComfyUi(
-  prompt: string,
-  params: GenerateImageParams,
-  config: GenerateImageConfig,
-  comfyUiUrl: string,
-): Promise<ImageGenResult> {
-  const workflow = buildFluxWorkflow({
-    prompt,
-    width: params.options?.width,
-    height: params.options?.height,
-    seed: params.options?.seed,
-    steps: params.options?.steps,
-  });
-
-  const image = await generateWithComfyUi(workflow, {
-    baseUrl: comfyUiUrl,
-    fetchImpl: config.fetchImpl,
-  });
-
-  const supabase = await resolveStorageClient(config.supabase);
-  const url = await uploadGeneratedImage({
-    supabase,
-    userId: params.userId,
-    imageBytes: image.imageBytes,
-    contentType: image.mimeType,
-  });
-
-  return {
-    url,
-    source: 'comfyui',
-    prompt,
-    width: params.options?.width ?? FLUX_DEFAULTS.width,
-    height: params.options?.height ?? FLUX_DEFAULTS.height,
-  };
-}
-
 /**
  * Produce an image URL for `prompt`, preferring local Flux generation and
  * falling back to an Unsplash stock photo. Throws {@link ImageGenError} only
  * when no backend can satisfy the request.
+ *
+ * IMPORTANT: only the *generation* step falls back to Unsplash. If generation
+ * succeeds but the upload to storage fails, that's an infrastructure failure,
+ * not a generation miss — we let it propagate rather than silently degrading a
+ * real generated image into an unrelated stock photo.
  */
 export async function generateImage(
   params: GenerateImageParams,
@@ -104,8 +74,20 @@ export async function generateImage(
 
   let comfyError: unknown;
   if (comfyUiUrl) {
+    // Generation only — a failure here is allowed to fall back to Unsplash.
+    let generated: ComfyUiImage | null = null;
     try {
-      return await generateViaComfyUi(prompt, params, config, comfyUiUrl);
+      const workflow = buildFluxWorkflow({
+        prompt,
+        width: params.options?.width,
+        height: params.options?.height,
+        seed: params.options?.seed,
+        steps: params.options?.steps,
+      });
+      generated = await generateWithComfyUi(workflow, {
+        baseUrl: comfyUiUrl,
+        fetchImpl: config.fetchImpl,
+      });
     } catch (err) {
       comfyError = err;
       console.warn(
@@ -113,6 +95,24 @@ export async function generateImage(
           err instanceof Error ? err.message : String(err)
         }`,
       );
+    }
+
+    if (generated) {
+      // Generation succeeded: upload errors propagate (NOT a fallback case).
+      const supabase = await resolveStorageClient(config.supabase);
+      const url = await uploadGeneratedImage({
+        supabase,
+        userId: params.userId,
+        imageBytes: generated.imageBytes,
+        contentType: generated.mimeType,
+      });
+      return {
+        url,
+        source: 'comfyui',
+        prompt,
+        width: params.options?.width ?? FLUX_DEFAULTS.width,
+        height: params.options?.height ?? FLUX_DEFAULTS.height,
+      };
     }
   }
 

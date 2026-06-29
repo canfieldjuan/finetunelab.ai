@@ -24,6 +24,8 @@ export interface UnsplashClientOptions {
 
 const UNSPLASH_API = 'https://api.unsplash.com';
 const DEFAULT_APP_NAME = 'finetunelab';
+/** Upper bound on the best-effort download-tracking call (never blocks delivery). */
+const DOWNLOAD_TRIGGER_TIMEOUT_MS = 3000;
 
 interface UnsplashPhoto {
   urls: { regular?: string; full?: string; small?: string };
@@ -123,14 +125,17 @@ export async function searchUnsplashImage(
     throw new UnsplashError('Unsplash photo missing a usable URL', 502);
   }
 
-  // Per Unsplash Terms: fire the download tracking endpoint (best-effort).
+  // Per Unsplash Terms: fire the download tracking endpoint. This is
+  // fire-and-forget AND time-bounded so a slow/never-completing tracking call
+  // can never block delivery of the already-selected image.
   const downloadLocation = photo.links.download_location;
   if (downloadLocation) {
-    try {
-      await fetchImpl(downloadLocation, { headers });
-    } catch {
-      // Tracking is non-fatal; never block delivery on it.
-    }
+    void fetchImpl(downloadLocation, {
+      headers,
+      signal: AbortSignal.timeout(DOWNLOAD_TRIGGER_TIMEOUT_MS),
+    }).catch(() => {
+      // tracking is non-fatal
+    });
   }
 
   const authorUrl = photo.user.links?.html

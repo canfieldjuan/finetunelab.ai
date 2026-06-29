@@ -7,6 +7,13 @@
  * ComfyUI is an operator-configured LOCAL backend (its URL comes from the
  * `COMFYUI_URL` env var, never from user input), so this is NOT the SSRF case
  * the MCP layer guards against — no resolve-time IP checks are applied here.
+ *
+ * Timeout discipline: a single `deadline` is computed up front and EVERY fetch
+ * (`/prompt`, `/history`, `/view`) is bounded by `AbortSignal.timeout(remaining)`
+ * — so a backend that accepts the connection but then stalls (the "GPU busy
+ * holding the socket" case) actually trips the deadline and falls back, rather
+ * than hanging forever. Terminal ComfyUI failures (execution error / OOM) and
+ * repeated `/history` errors fail fast instead of polling to the full timeout.
  */
 
 import { ComfyUiError } from './types';
@@ -20,7 +27,7 @@ export interface ComfyUiClientOptions {
   fetchImpl?: typeof fetch;
   /** Delay between history polls. */
   pollIntervalMs?: number;
-  /** Overall deadline for the whole generation. */
+  /** Overall deadline for the whole generation (bounds every fetch). */
   timeoutMs?: number;
   /** Node id whose outputs hold the image (defaults to the SaveImage node). */
   outputNodeId?: string;
@@ -34,6 +41,7 @@ export interface ComfyUiImage {
 
 const DEFAULT_POLL_INTERVAL_MS = 1500;
 const DEFAULT_TIMEOUT_MS = 180_000;
+const MAX_CONSECUTIVE_HISTORY_ERRORS = 5;
 
 interface PromptResponse {
   prompt_id: string;
@@ -89,6 +97,24 @@ function extractImages(
   return valid.length > 0 ? valid : null;
 }
 
+/**
+ * Inspect a history entry for a TERMINAL state with no usable image, so we can
+ * fail fast instead of polling to the timeout. Returns a reason string when the
+ * prompt has finished without producing an image, else null (still running).
+ * Only call this after {@link extractImages} has already returned null.
+ */
+function terminalReason(history: unknown, promptId: string): string | null {
+  if (typeof history !== 'object' || history === null) return null;
+  const entry = (history as Record<string, unknown>)[promptId];
+  if (typeof entry !== 'object' || entry === null) return null;
+  const status = (entry as Record<string, unknown>).status;
+  if (typeof status !== 'object' || status === null) return null;
+  const s = status as Record<string, unknown>;
+  if (s.status_str === 'error') return 'execution error';
+  if (s.completed === true) return 'completed with no output images';
+  return null;
+}
+
 function mimeTypeForFilename(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
   switch (ext) {
@@ -104,8 +130,37 @@ function mimeTypeForFilename(filename: string): string {
 }
 
 /**
+ * Fetch bounded by the remaining time until `deadline`. Aborts the underlying
+ * connection (not just the await) so a stalled backend trips the deadline.
+ */
+async function fetchWithDeadline(
+  url: string,
+  init: RequestInit | undefined,
+  deadline: number,
+  fetchImpl: typeof fetch,
+  operation: string,
+): Promise<Response> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) {
+    throw new ComfyUiError(`ComfyUI timed out before ${operation}`, 504);
+  }
+  try {
+    return await fetchImpl(url, { ...(init ?? {}), signal: AbortSignal.timeout(remaining) });
+  } catch (err) {
+    if (err instanceof ComfyUiError) throw err;
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw new ComfyUiError(`ComfyUI ${operation} timed out`, 504);
+    }
+    throw new ComfyUiError(
+      `ComfyUI ${operation} failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
  * Generate an image via ComfyUI and return the raw bytes of the first output.
- * Throws {@link ComfyUiError} on any HTTP failure, malformed response, or timeout.
+ * Throws {@link ComfyUiError} on any HTTP failure, terminal generation error,
+ * malformed response, or timeout.
  */
 export async function generateWithComfyUi(
   workflow: ComfyWorkflow,
@@ -120,20 +175,20 @@ export async function generateWithComfyUi(
   } = options;
 
   const root = baseUrl.replace(/\/+$/, '');
+  const deadline = Date.now() + timeoutMs;
 
   // 1. Queue the prompt.
-  let queueRes: Response;
-  try {
-    queueRes = await fetchImpl(`${root}/prompt`, {
+  const queueRes = await fetchWithDeadline(
+    `${root}/prompt`,
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: workflow }),
-    });
-  } catch (err) {
-    throw new ComfyUiError(
-      `ComfyUI unreachable at ${root}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
+    },
+    deadline,
+    fetchImpl,
+    'queue prompt',
+  );
   if (!queueRes.ok) {
     throw new ComfyUiError(`ComfyUI /prompt returned ${queueRes.status}`, queueRes.status);
   }
@@ -143,15 +198,35 @@ export async function generateWithComfyUi(
   }
   const { prompt_id: promptId } = queueBody;
 
-  // 2. Poll history until the output node reports images, or we time out.
-  const deadline = Date.now() + timeoutMs;
+  // 2. Poll history until the output node reports images, a terminal failure is
+  //    seen, or we time out.
   let images: HistoryImage[] | null = null;
+  let consecutiveErrors = 0;
   while (Date.now() < deadline) {
-    const historyRes = await fetchImpl(`${root}/history/${promptId}`);
+    const historyRes = await fetchWithDeadline(
+      `${root}/history/${promptId}`,
+      undefined,
+      deadline,
+      fetchImpl,
+      'poll history',
+    );
     if (historyRes.ok) {
+      consecutiveErrors = 0;
       const historyBody: unknown = await historyRes.json();
       images = extractImages(historyBody, promptId, outputNodeId);
       if (images) break;
+      const reason = terminalReason(historyBody, promptId);
+      if (reason) {
+        throw new ComfyUiError(`ComfyUI generation failed: ${reason}`);
+      }
+    } else {
+      consecutiveErrors += 1;
+      if (consecutiveErrors >= MAX_CONSECUTIVE_HISTORY_ERRORS) {
+        throw new ComfyUiError(
+          `ComfyUI /history repeatedly returned ${historyRes.status}`,
+          historyRes.status,
+        );
+      }
     }
     await sleep(pollIntervalMs);
   }
@@ -166,7 +241,13 @@ export async function generateWithComfyUi(
   viewUrl.searchParams.set('subfolder', image.subfolder ?? '');
   viewUrl.searchParams.set('type', image.type);
 
-  const viewRes = await fetchImpl(viewUrl.toString());
+  const viewRes = await fetchWithDeadline(
+    viewUrl.toString(),
+    undefined,
+    deadline,
+    fetchImpl,
+    'download image',
+  );
   if (!viewRes.ok) {
     throw new ComfyUiError(`ComfyUI /view returned ${viewRes.status}`, viewRes.status);
   }
