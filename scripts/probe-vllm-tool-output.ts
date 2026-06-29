@@ -6,20 +6,37 @@ import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { OpenAIAdapter } from '../lib/llm/adapters/openai-adapter';
 import type { AdapterRequest, AdapterResponse } from '../lib/llm/adapters/base-adapter';
-import type { ChatMessage, ToolDefinition } from '../lib/llm/openai';
+import type { ChatMessage, ToolDefinition as LlmToolDefinition } from '../lib/llm/openai';
 import type { ModelConfig } from '../lib/models/llm-model.types';
-import calculatorTool from '../lib/tools/calculator';
 
 loadEnv({ path: '.env.local', override: false });
 loadEnv({ path: '.env', override: false });
+
+type PortalTool = {
+  name: string;
+  description: string;
+  parameters: unknown;
+  execute: (
+    params: Record<string, unknown>,
+    conversationId?: string,
+    userId?: string
+  ) => Promise<unknown> | unknown;
+};
+
+type PortalTools = {
+  calculator: PortalTool;
+  datetime: PortalTool;
+  webSearch: PortalTool;
+};
 
 type ProbeCase = {
   name: string;
   description: string;
   messages: ChatMessage[];
-  tools: ToolDefinition[];
+  tools: LlmToolDefinition[];
   expectToolCalls?: boolean;
   expectNoToolCalls?: boolean;
+  validateToolResult?: (toolName: string, result: unknown) => ProbeIssue[];
 };
 
 type ProbeIssue = {
@@ -73,7 +90,11 @@ type CliOptions = {
   topP: number;
   parseQwenXmlToolCalls: boolean;
   selectedCases: string[];
+  envFiles: string[];
   strict: boolean;
+  enableWebSearch: boolean;
+  webSearchProvider?: string;
+  searchCache: boolean;
 };
 
 function usage(): string {
@@ -91,7 +112,11 @@ Options:
   --max-rounds <n>       Max tool-call rounds per case. Default: 3
   --timeout-ms <n>       Fetch timeout per round. Default: 60000
   --out <path>           Transcript JSON output path. Default: output/vllm-tool-probes/<timestamp>.json
+  --env-file <path>      Load an additional dotenv file before portal tools. Repeatable
   --no-parse-qwen-xml    Disable Qwen XML fallback parsing in adapter metadata
+  --enable-web-search    Set TOOL_WEBSEARCH_ENABLED=true before loading portal tools
+  --web-search-provider  Set SEARCH_PRIMARY_PROVIDER and SEARCH_FALLBACK_PROVIDER for the probe
+  --search-cache         Allow web-search cache/database use. Default: cache disabled for probe isolation
   --strict               Exit non-zero on warnings as well as errors
   --help                 Show this help
 
@@ -168,8 +193,47 @@ function parseCliOptions(argv: string[]): CliOptions {
     topP: toNumber(getFlag(flags, 'top-p'), 1),
     parseQwenXmlToolCalls: !hasFlag(flags, 'no-parse-qwen-xml'),
     selectedCases: flags.get('case') ?? [],
+    envFiles: flags.get('env-file') ?? [],
     strict: hasFlag(flags, 'strict'),
+    enableWebSearch: hasFlag(flags, 'enable-web-search'),
+    webSearchProvider: getFlag(flags, 'web-search-provider'),
+    searchCache: hasFlag(flags, 'search-cache'),
   };
+}
+
+function loadAdditionalEnvFiles(paths: string[]): void {
+  for (const envFile of paths) {
+    loadEnv({ path: envFile, override: false });
+  }
+}
+
+function applyToolEnv(options: CliOptions): void {
+  if (options.enableWebSearch) {
+    process.env.TOOL_WEBSEARCH_ENABLED = 'true';
+  }
+
+  if (options.webSearchProvider) {
+    process.env.SEARCH_PRIMARY_PROVIDER = options.webSearchProvider;
+    process.env.SEARCH_FALLBACK_PROVIDER = options.webSearchProvider;
+  }
+
+  if (!options.searchCache) {
+    process.env.SEARCH_CACHE_ENABLED = 'false';
+  }
+}
+
+async function loadPortalTools(): Promise<PortalTools> {
+  const [
+    { default: calculator },
+    { default: datetime },
+    { default: webSearch },
+  ] = await Promise.all([
+    import('../lib/tools/calculator'),
+    import('../lib/tools/datetime'),
+    import('../lib/tools/web-search'),
+  ]);
+
+  return { calculator, datetime, webSearch };
 }
 
 function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
@@ -185,85 +249,208 @@ function responseHeaders(headers: Headers): Record<string, string> {
   return Object.fromEntries(headers.entries());
 }
 
-function llmToolFromPortalTool(): ToolDefinition {
+function llmToolFromPortalTool(tool: PortalTool): LlmToolDefinition {
   return {
     type: 'function',
     function: {
-      name: calculatorTool.name,
-      description: calculatorTool.description,
-      parameters: calculatorTool.parameters as Record<string, unknown>,
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters as Record<string, unknown>,
     },
   };
 }
 
-const calculatorLlmTool = llmToolFromPortalTool();
+function objectResult(result: unknown): Record<string, unknown> | null {
+  return result && typeof result === 'object' && !Array.isArray(result)
+    ? result as Record<string, unknown>
+    : null;
+}
 
-const CASES: ProbeCase[] = [
-  {
-    name: 'calculator-basic',
-    description: 'Model should call calculator once and then answer from the tool result.',
-    tools: [calculatorLlmTool],
-    expectToolCalls: true,
-    messages: [
-      {
-        role: 'system',
-        content: 'You are testing tool calling. For arithmetic, call the calculator tool instead of calculating mentally. After the tool result, answer briefly.',
-      },
-      {
-        role: 'user',
-        content: 'Use the calculator tool to compute 23% of 456. Then answer with the final number.',
-      },
-    ],
-  },
-  {
-    name: 'calculator-multiple',
-    description: 'Model may emit multiple tool calls in one round or serial rounds.',
-    tools: [calculatorLlmTool],
-    expectToolCalls: true,
-    messages: [
-      {
-        role: 'system',
-        content: 'You are testing tool calling. Use calculator for each arithmetic expression, then summarize the results.',
-      },
-      {
-        role: 'user',
-        content: 'Use tools to compute both expressions: 23% of 456, and sqrt(144).',
-      },
-    ],
-  },
-  {
-    name: 'literal-xml-no-tools',
-    description: 'Literal <tool_call> prose should not become an executable tool call when no tools were offered.',
-    tools: [],
-    expectNoToolCalls: true,
-    messages: [
-      {
-        role: 'system',
-        content: 'Do not call tools. You are formatting documentation text only.',
-      },
-      {
-        role: 'user',
-        content: 'Print this exact XML snippet in a fenced code block and explain that it is only an example: <tool_call>{"name":"calculator","arguments":{"expression":"2+2"}}</tool_call>',
-      },
-    ],
-  },
-  {
-    name: 'malformed-xml-no-tools',
-    description: 'Malformed XML-looking tool JSON should not throw or start a tool loop.',
-    tools: [],
-    expectNoToolCalls: true,
-    messages: [
-      {
-        role: 'system',
-        content: 'Do not call tools. Echo requested text as plain documentation.',
-      },
-      {
-        role: 'user',
-        content: 'Print this malformed example in a fenced code block: <tool_call>{"name":"calculator","arguments":</tool_call>',
-      },
-    ],
-  },
-];
+function validateDateTimeResult(toolName: string, result: unknown): ProbeIssue[] {
+  if (toolName !== 'datetime') return [];
+
+  const payload = objectResult(result);
+  if (!payload) {
+    return [{
+      level: 'error',
+      code: 'datetime_result_not_object',
+      message: 'datetime returned a non-object result.',
+    }];
+  }
+
+  if (!('utc' in payload) && !('result' in payload) && !('diff' in payload) && !('relative' in payload)) {
+    return [{
+      level: 'warn',
+      code: 'datetime_result_unexpected_shape',
+      message: `datetime result has unexpected keys: ${Object.keys(payload).join(', ')}`,
+    }];
+  }
+
+  return [];
+}
+
+function validateWebSearchResult(toolName: string, result: unknown): ProbeIssue[] {
+  if (toolName !== 'web_search') return [];
+
+  const payload = objectResult(result);
+  if (!payload) {
+    return [{
+      level: 'error',
+      code: 'web_search_result_not_object',
+      message: 'web_search returned a non-object result.',
+    }];
+  }
+
+  if (payload.status !== 'completed') {
+    return [{
+      level: 'error',
+      code: 'web_search_not_completed',
+      message: `web_search returned status "${String(payload.status)}" instead of completed.`,
+    }];
+  }
+
+  if (!Array.isArray(payload.results)) {
+    return [{
+      level: 'error',
+      code: 'web_search_results_not_array',
+      message: 'web_search result did not include a results array.',
+    }];
+  }
+
+  if (payload.results.length === 0) {
+    return [{
+      level: 'warn',
+      code: 'web_search_empty_results',
+      message: 'web_search completed but returned zero results.',
+    }];
+  }
+
+  return [];
+}
+
+function buildCases(tools: PortalTools): ProbeCase[] {
+  const calculatorLlmTool = llmToolFromPortalTool(tools.calculator);
+  const datetimeLlmTool = llmToolFromPortalTool(tools.datetime);
+  const webSearchLlmTool = llmToolFromPortalTool(tools.webSearch);
+
+  return [
+    {
+      name: 'calculator-basic',
+      description: 'Model should call calculator once and then answer from the tool result.',
+      tools: [calculatorLlmTool],
+      expectToolCalls: true,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are testing tool calling. For arithmetic, call the calculator tool instead of calculating mentally. After the tool result, answer briefly.',
+        },
+        {
+          role: 'user',
+          content: 'Use the calculator tool to compute 23% of 456. Then answer with the final number.',
+        },
+      ],
+    },
+    {
+      name: 'calculator-multiple',
+      description: 'Model may emit multiple tool calls in one round or serial rounds.',
+      tools: [calculatorLlmTool],
+      expectToolCalls: true,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are testing tool calling. Use calculator for each arithmetic expression, then summarize the results.',
+        },
+        {
+          role: 'user',
+          content: 'Use tools to compute both expressions: 23% of 456, and sqrt(144).',
+        },
+      ],
+    },
+    {
+      name: 'datetime-current-chicago',
+      description: 'Model should call datetime for current time instead of guessing.',
+      tools: [datetimeLlmTool],
+      expectToolCalls: true,
+      validateToolResult: validateDateTimeResult,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are testing tool calling. For current date or time questions, call the datetime tool and answer from its result.',
+        },
+        {
+          role: 'user',
+          content: 'Use the datetime tool to get the current date and time in America/Chicago. Then answer briefly.',
+        },
+      ],
+    },
+    {
+      name: 'datetime-date-math',
+      description: 'Model should call datetime for date arithmetic with structured parameters.',
+      tools: [datetimeLlmTool],
+      expectToolCalls: true,
+      validateToolResult: validateDateTimeResult,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are testing tool calling. For date arithmetic, call the datetime tool with structured arguments.',
+        },
+        {
+          role: 'user',
+          content: 'Use the datetime tool to add 3 days to 2026-06-29T12:00:00Z in America/Chicago. Then answer with the resulting local date and time.',
+        },
+      ],
+    },
+    {
+      name: 'web-search-standard',
+      description: 'Model should call web_search for current/public web lookup and return completed search results.',
+      tools: [webSearchLlmTool],
+      expectToolCalls: true,
+      validateToolResult: validateWebSearchResult,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are testing tool calling. For web lookups, call web_search exactly once. Do not start deep research. Use standard search only.',
+        },
+        {
+          role: 'user',
+          content: 'Use web_search to search for OpenAI API official documentation. Request 3 results, no deep search, no summarization, and no deep research. Then summarize the result titles briefly.',
+        },
+      ],
+    },
+    {
+      name: 'literal-xml-no-tools',
+      description: 'Literal <tool_call> prose should not become an executable tool call when no tools were offered.',
+      tools: [],
+      expectNoToolCalls: true,
+      messages: [
+        {
+          role: 'system',
+          content: 'Do not call tools. You are formatting documentation text only.',
+        },
+        {
+          role: 'user',
+          content: 'Print this exact XML snippet in a fenced code block and explain that it is only an example: <tool_call>{"name":"calculator","arguments":{"expression":"2+2"}}</tool_call>',
+        },
+      ],
+    },
+    {
+      name: 'malformed-xml-no-tools',
+      description: 'Malformed XML-looking tool JSON should not throw or start a tool loop.',
+      tools: [],
+      expectNoToolCalls: true,
+      messages: [
+        {
+          role: 'system',
+          content: 'Do not call tools. Echo requested text as plain documentation.',
+        },
+        {
+          role: 'user',
+          content: 'Print this malformed example in a fenced code block: <tool_call>{"name":"calculator","arguments":</tool_call>',
+        },
+      ],
+    },
+  ];
+}
 
 function makeModelConfig(options: CliOptions): ModelConfig {
   return {
@@ -318,8 +505,21 @@ async function fetchJson(
   }
 }
 
-async function executeCalculator(argumentsRecord: Record<string, unknown>): Promise<unknown> {
-  return calculatorTool.execute(argumentsRecord);
+async function executeProbeTool(
+  tools: PortalTools,
+  toolName: string,
+  argumentsRecord: Record<string, unknown>
+): Promise<unknown> {
+  switch (toolName) {
+    case tools.calculator.name:
+      return tools.calculator.execute(argumentsRecord);
+    case tools.datetime.name:
+      return tools.datetime.execute(argumentsRecord);
+    case tools.webSearch.name:
+      return tools.webSearch.execute(argumentsRecord, 'vllm-tool-probe');
+    default:
+      throw new Error(`No probe executor for tool "${toolName}".`);
+  }
 }
 
 function toolMessage(toolCall: NonNullable<AdapterResponse['toolCalls']>[number], result: unknown): ChatMessage {
@@ -356,7 +556,8 @@ async function runCase(
   probeCase: ProbeCase,
   adapter: OpenAIAdapter,
   config: ModelConfig,
-  options: CliOptions
+  options: CliOptions,
+  portalTools: PortalTools
 ): Promise<ProbeResult> {
   let messages = [...probeCase.messages];
   const rounds: ProbeRound[] = [];
@@ -455,21 +656,12 @@ async function runCase(
           continue;
         }
 
-        if (toolCall.name !== calculatorTool.name) {
-          const result = { error: `No probe executor for tool "${toolCall.name}".` };
-          roundRecord.issues.push({
-            level: 'error',
-            code: 'missing_probe_executor',
-            message: result.error,
-          });
-          toolResults.push({ name: toolCall.name, arguments: toolCall.arguments, result });
-          nextMessages.push(toolMessage(toolCall, result));
-          continue;
-        }
-
         try {
-          const result = await executeCalculator(toolCall.arguments);
+          const result = await executeProbeTool(portalTools, toolCall.name, toolCall.arguments);
           toolResults.push({ name: toolCall.name, arguments: toolCall.arguments, result });
+          if (probeCase.validateToolResult) {
+            roundRecord.issues.push(...probeCase.validateToolResult(toolCall.name, result));
+          }
           nextMessages.push(toolMessage(toolCall, result));
         } catch (error) {
           const result = {
@@ -536,13 +728,17 @@ async function runCase(
 
 async function main() {
   const options = parseCliOptions(process.argv.slice(2));
+  loadAdditionalEnvFiles(options.envFiles);
+  applyToolEnv(options);
+  const portalTools = await loadPortalTools();
+  const cases = buildCases(portalTools);
   const selected = options.selectedCases.length
-    ? CASES.filter(probeCase => options.selectedCases.includes(probeCase.name))
-    : CASES;
+    ? cases.filter(probeCase => options.selectedCases.includes(probeCase.name))
+    : cases;
 
   if (selected.length === 0) {
     console.error('[Probe] No matching cases. Available cases:');
-    for (const probeCase of CASES) {
+    for (const probeCase of cases) {
       console.error(`  - ${probeCase.name}`);
     }
     process.exit(1);
@@ -556,12 +752,15 @@ async function main() {
   console.log('[Probe] Base URL:', options.baseUrl);
   console.log('[Probe] Model:', options.model);
   console.log('[Probe] Qwen XML fallback:', options.parseQwenXmlToolCalls ? 'enabled' : 'disabled');
+  console.log('[Probe] Web search:', process.env.TOOL_WEBSEARCH_ENABLED === 'true' ? 'enabled' : 'disabled');
+  console.log('[Probe] Search provider:', process.env.SEARCH_PRIMARY_PROVIDER ?? '(default)');
+  console.log('[Probe] Search cache:', options.searchCache ? 'enabled' : 'disabled');
   console.log('[Probe] Cases:', selected.map(probeCase => probeCase.name).join(', '));
 
   const results: ProbeResult[] = [];
   for (const probeCase of selected) {
     console.log(`\n[Probe] Running ${probeCase.name}: ${probeCase.description}`);
-    const result = await runCase(probeCase, adapter, modelConfig, options);
+    const result = await runCase(probeCase, adapter, modelConfig, options, portalTools);
     results.push(result);
     console.log(`[Probe] ${probeCase.name}: ${result.status}`);
     if (result.toolsCalled.length > 0) {
@@ -585,6 +784,9 @@ async function main() {
       temperature: options.temperature,
       topP: options.topP,
       parseQwenXmlToolCalls: options.parseQwenXmlToolCalls,
+      envFiles: options.envFiles,
+      webSearchProvider: process.env.SEARCH_PRIMARY_PROVIDER,
+      searchCache: options.searchCache,
       strict: options.strict,
     },
     results,

@@ -469,7 +469,12 @@ export class SearchService {
         return 0;
       });
     }
-    return list;
+
+    for (const providerName of list) {
+      ordered.add(providerName);
+    }
+
+    return Array.from(ordered);
   }
 
   // ================================
