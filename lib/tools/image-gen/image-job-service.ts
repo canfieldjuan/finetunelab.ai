@@ -13,6 +13,7 @@
 import { randomUUID } from 'crypto';
 import { generateImage } from './service';
 import { imageJobStore } from './image-job-store';
+import { imageSseService, IMAGE_EVENT_TYPES } from './image-sse.service';
 import { withTimeout } from '../timeout';
 import type { ImageGenOptions, ImageJob } from './types';
 
@@ -85,12 +86,27 @@ class ImageJobService {
       job.completedAt = new Date().toISOString();
       job.updatedAt = job.completedAt;
       await imageJobStore.update(job);
+      // Persist first, then notify any live stream subscriber.
+      imageSseService.sendEvent(job.id, {
+        type: IMAGE_EVENT_TYPES.COMPLETE,
+        status: 'completed',
+        url: job.resultUrl,
+        source: job.source,
+        attribution: job.attribution,
+        prompt: job.prompt,
+      });
     } catch (err) {
       job.status = 'failed';
       job.error = err instanceof Error ? err.message : String(err);
       job.completedAt = new Date().toISOString();
       job.updatedAt = job.completedAt;
       await imageJobStore.update(job);
+      imageSseService.sendEvent(job.id, {
+        type: IMAGE_EVENT_TYPES.FAILED,
+        status: 'failed',
+        error: job.error,
+        prompt: job.prompt,
+      });
       console.error(`[ImageJob] generation failed for job ${jobId}: ${job.error}`);
     }
   }

@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { create, update, get, generateImage } = vi.hoisted(() => ({
+const { create, update, get, generateImage, sendEvent } = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
   get: vi.fn(),
   generateImage: vi.fn(),
+  sendEvent: vi.fn(),
 }));
 
 vi.mock('../image-job-store', () => ({ imageJobStore: { create, update, get } }));
 vi.mock('../service', () => ({ generateImage }));
+vi.mock('../image-sse.service', () => ({
+  imageSseService: { sendEvent },
+  IMAGE_EVENT_TYPES: { CONNECTED: 'connected', COMPLETE: 'image_complete', FAILED: 'image_failed' },
+}));
 
 import { imageJobService } from '../image-job-service';
 
@@ -61,6 +66,10 @@ describe('imageJobService', () => {
     expect(final.resultUrl).toBe('https://img/x.png');
     expect(final.source).toBe('comfyui');
     expect(final.completedAt).toBeTruthy();
+    expect(sendEvent).toHaveBeenCalledWith(
+      'j1',
+      expect.objectContaining({ type: 'image_complete', url: 'https://img/x.png', source: 'comfyui' }),
+    );
   });
 
   it('carries Unsplash attribution onto the completed job', async () => {
@@ -87,6 +96,10 @@ describe('imageJobService', () => {
     expect(final.status).toBe('failed');
     expect(final.error).toMatch(/no backend/);
     expect(final.completedAt).toBeTruthy();
+    expect(sendEvent).toHaveBeenCalledWith(
+      'j1',
+      expect.objectContaining({ type: 'image_failed', error: expect.stringMatching(/no backend/) }),
+    );
   });
 
   it('no-ops when the job id is unknown', async () => {
