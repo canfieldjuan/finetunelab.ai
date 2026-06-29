@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OpenAIAdapter } from '../openai-adapter';
 import type { AdapterRequest } from '../base-adapter';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
@@ -26,6 +26,24 @@ const config: ModelConfig = {
   },
 };
 
+const searchDocsTool = {
+  type: 'function' as const,
+  function: {
+    name: 'search_docs',
+    description: 'Search documents',
+    parameters: { type: 'object', properties: { query: { type: 'string' } } },
+  },
+};
+
+const lookupCaseTool = {
+  type: 'function' as const,
+  function: {
+    name: 'lookup_case',
+    description: 'Lookup a case',
+    parameters: { type: 'object', properties: { id: { type: 'string' } } },
+  },
+};
+
 describe('OpenAIAdapter', () => {
   it('recovers Qwen XML tool calls without leaking XML into content', async () => {
     const adapter = new OpenAIAdapter();
@@ -34,16 +52,7 @@ describe('OpenAIAdapter', () => {
       messages: [{ role: 'user', content: 'search docs' }],
       options: {
         stream: false,
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'search_docs',
-              description: 'Search documents',
-              parameters: { type: 'object', properties: { query: { type: 'string' } } },
-            },
-          },
-        ],
+        tools: [searchDocsTool],
       },
     };
 
@@ -126,6 +135,104 @@ describe('OpenAIAdapter', () => {
     ]);
   });
 
+  it('leaves XML content untouched when the Qwen XML parser is disabled', async () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config: {
+        ...config,
+        metadata: {
+          vllm_runtime: {
+            parse_qwen_xml_tool_calls: false,
+          },
+        },
+      },
+      messages: [{ role: 'user', content: 'search docs' }],
+      options: { stream: false, tools: [searchDocsTool] },
+    };
+    const content = `<tool_call>
+{"name":"search_docs","arguments":{"query":"deflection audit"}}
+</tool_call>`;
+
+    const response = await adapter.parseResponse(
+      new Response(null),
+      { choices: [{ message: { content } }] },
+      request
+    );
+
+    expect(response.content).toBe(content);
+    expect(response.toolCalls).toBeUndefined();
+  });
+
+  it('warns without throwing or stripping content when XML tool JSON is malformed', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config,
+      messages: [{ role: 'user', content: 'search docs' }],
+      options: { stream: false, tools: [searchDocsTool] },
+    };
+    const content = `<tool_call>
+{"name":"search_docs","arguments":
+</tool_call>`;
+
+    const response = await adapter.parseResponse(
+      new Response(null),
+      { choices: [{ message: { content } }] },
+      request
+    );
+
+    expect(response.content).toBe(content);
+    expect(response.toolCalls).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[OpenAIAdapter] Failed to parse Qwen XML tool call:',
+      expect.any(SyntaxError)
+    );
+  });
+
+  it('recovers multiple Qwen XML tool calls in order', async () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config,
+      messages: [{ role: 'user', content: 'search docs' }],
+      options: { stream: false, tools: [searchDocsTool, lookupCaseTool] },
+    };
+
+    const response = await adapter.parseResponse(
+      new Response(null),
+      {
+        choices: [
+          {
+            message: {
+              content: `Planning.
+<tool_call>
+{"name":"search_docs","arguments":{"query":"alpha"}}
+</tool_call>
+<tool_call>
+{"name":"lookup_case","arguments":{"id":"case-1"}}
+</tool_call>
+Done.`,
+            },
+          },
+        ],
+      },
+      request
+    );
+
+    expect(response.content).toBe('Planning.\n\nDone.');
+    expect(response.toolCalls).toEqual([
+      {
+        id: 'qwen-xml-tool-0',
+        name: 'search_docs',
+        arguments: { query: 'alpha' },
+      },
+      {
+        id: 'qwen-xml-tool-1',
+        name: 'lookup_case',
+        arguments: { id: 'case-1' },
+      },
+    ]);
+  });
+
   it('does not recover literal Qwen XML when no tools were offered', async () => {
     const adapter = new OpenAIAdapter();
     const request: AdapterRequest = {
@@ -152,5 +259,9 @@ describe('OpenAIAdapter', () => {
 
     expect(response.toolCalls).toBeUndefined();
     expect(response.content).toContain('<tool_call>');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 });

@@ -30,6 +30,7 @@ import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 import { buildUserMcpToolset, type McpUserToolset } from '@/lib/tools/mcp/user-toolset';
 import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
 import { resolveChatUser } from '@/lib/chat/resolve-chat-user';
+import { normalizeGenerationSettings, type RawGenerationSettings } from '@/lib/llm/generation-settings';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
@@ -168,13 +169,7 @@ export async function POST(req: NextRequest) {
     let enableDeepResearch: boolean | undefined;
     let contextInjectionEnabled: boolean | undefined;
     let enableThinking: boolean | undefined;
-    let generationSettings: {
-      temperature?: unknown;
-      maxOutputTokens?: unknown;
-      topP?: unknown;
-      frequencyPenalty?: unknown;
-      presencePenalty?: unknown;
-    } | undefined;
+    let generationSettings: RawGenerationSettings | undefined;
     try {
       ({
         messages,
@@ -204,21 +199,12 @@ export async function POST(req: NextRequest) {
     }
 
     const allowDeepResearch = enableDeepResearch === true;
-    const requestedTemperature = typeof generationSettings?.temperature === 'number'
-      ? Math.min(2, Math.max(0, generationSettings.temperature))
-      : undefined;
-    const requestedMaxOutputTokens = typeof generationSettings?.maxOutputTokens === 'number'
-      ? Math.min(32768, Math.max(64, Math.floor(generationSettings.maxOutputTokens)))
-      : undefined;
-    const requestedTopP = typeof generationSettings?.topP === 'number'
-      ? Math.min(1, Math.max(0.01, generationSettings.topP))
-      : undefined;
-    const requestedFrequencyPenalty = typeof generationSettings?.frequencyPenalty === 'number'
-      ? Math.min(2, Math.max(-2, generationSettings.frequencyPenalty))
-      : undefined;
-    const requestedPresencePenalty = typeof generationSettings?.presencePenalty === 'number'
-      ? Math.min(2, Math.max(-2, generationSettings.presencePenalty))
-      : undefined;
+    const normalizedGenerationSettings = normalizeGenerationSettings(generationSettings);
+    const requestedTemperature = normalizedGenerationSettings.temperature;
+    const requestedMaxOutputTokens = normalizedGenerationSettings.maxOutputTokens;
+    const requestedTopP = normalizedGenerationSettings.topP;
+    const requestedFrequencyPenalty = normalizedGenerationSettings.frequencyPenalty;
+    const requestedPresencePenalty = normalizedGenerationSettings.presencePenalty;
 
     console.log('[API] ===== RECEIVED REQUEST =====');
     console.log('[API] contextInjectionEnabled:', contextInjectionEnabled);

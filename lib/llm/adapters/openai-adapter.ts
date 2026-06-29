@@ -277,11 +277,13 @@ export class OpenAIAdapter extends BaseProviderAdapter {
   private stripQwenXmlToolCalls(content: string): string {
     const withoutClosedBlocks = content.replace(/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/g, '');
     const danglingOpenIndex = withoutClosedBlocks.lastIndexOf('<tool_call>');
-    if (danglingOpenIndex === -1) {
-      return withoutClosedBlocks.trim();
-    }
+    const withoutDanglingBlock = danglingOpenIndex === -1
+      ? withoutClosedBlocks
+      : withoutClosedBlocks.slice(0, danglingOpenIndex);
 
-    return withoutClosedBlocks.slice(0, danglingOpenIndex).trim();
+    return withoutDanglingBlock
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   private parseQwenXmlToolCalls(content: string): Array<{
