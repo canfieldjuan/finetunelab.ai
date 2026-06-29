@@ -326,6 +326,39 @@ describe('POST /api/chat MCP tool use smoke', () => {
     );
     expect(mcpExecute).toHaveBeenCalledWith('mcp__docs__lookup', { query: 'deflection audit' });
     expect(executePortalChatTool).not.toHaveBeenCalled();
+    expect(createChildSpan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        traceId: 'trace-1',
+        spanId: 'span-1',
+        userId: 'user-1',
+      }),
+      'tool.mcp__docs__lookup',
+      'tool_call',
+    );
+    expect(endTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        traceId: 'trace-1',
+        spanId: 'span-tool-1',
+        parentSpanId: 'span-1',
+      }),
+      expect.objectContaining({
+        status: 'completed',
+        inputData: {
+          toolName: 'mcp__docs__lookup',
+          arguments: { query: 'deflection audit' },
+          toolDescription: 'Look up user docs through MCP.',
+        },
+        outputData: expect.objectContaining({
+          result: { answer: 'MCP doc result' },
+          executionStatus: 'success',
+          executionTimeMs: expect.any(Number),
+        }),
+        metadata: {
+          resultType: 'object',
+          hasResults: true,
+        },
+      }),
+    );
 
     expect(events).toContainEqual(expect.objectContaining({
       type: 'tools_metadata',

@@ -68,6 +68,7 @@ This covers:
 - Authenticated-user MCP tool discovery in `/api/chat`.
 - MCP tool definitions being offered to `unifiedLLMClient.chat`.
 - MCP tool calls dispatching through the scoped `McpUserToolset` instead of the global portal registry.
+- MCP tool-call trace child spans being created and closed with structured input/output metadata.
 - The route-level security gate: body-claimed users without authenticated session context do not get MCP tools.
 - Non-streaming SSE metadata for built-in and MCP-backed tool calls.
 
@@ -153,7 +154,7 @@ It does not yet verify:
 - Live DB-backed `/api/chat` model lookup and enabled portal-tool selection.
 - Browser-level live SSE streaming/rendering in the chat UI.
 - Conversation persistence.
-- Trace persistence for tool calls.
+- Live DB trace persistence for tool calls.
 - Live MCP server behavior.
 
 Those are the next deeper slices after this runbook/probe harness.
