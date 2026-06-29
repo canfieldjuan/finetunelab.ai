@@ -323,6 +323,7 @@ describe('POST /api/chat MCP tool use smoke', () => {
       'user-1',
       expect.any(Object),
       { kind: 'shared-mcp-manager' },
+      { perServerTimeoutMs: 3000 },
     );
     expect(mcpExecute).toHaveBeenCalledWith('mcp__docs__lookup', { query: 'deflection audit' });
     expect(executePortalChatTool).not.toHaveBeenCalled();

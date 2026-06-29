@@ -87,6 +87,7 @@ function isToolDefinition(value: unknown): value is ToolDefinition {
 // Max time to spend discovering a user's MCP tools before proceeding without them,
 // so a slow/hung MCP server never stalls the chat request.
 const MCP_DISCOVERY_DEADLINE_MS = 8000;
+const MCP_PER_SERVER_DISCOVERY_DEADLINE_MS = 3000;
 
 /** Run a user-scoped MCP tool, shaped like executePortalChatTool's result. */
 async function runMcpToolCall(
@@ -398,13 +399,16 @@ export async function POST(req: NextRequest) {
     // MCP: build the requesting user's tools at request time (per-user, NEVER
     // global; see PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md). Runs only for an
     // AUTHENTICATED user (not a body-claimed id), now that the admin client is set
-    // for every auth path. Bounded by a deadline and non-fatal, so a slow or
-    // misconfigured MCP server can't stall or break chat. Offer the definitions
-    // here; route the calls through the user-scoped toolset in toolCallHandler.
+    // for every auth path. Bounded per server plus a final route-level deadline,
+    // so a slow or misconfigured MCP server can't stall or break chat. Offer the
+    // definitions here; route the calls through the user-scoped toolset in
+    // toolCallHandler.
     // ========================================================================
     if (isAuthenticatedUser && userId && supabaseAdmin) {
       try {
-        const buildPromise = buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager());
+        const buildPromise = buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager(), {
+          perServerTimeoutMs: MCP_PER_SERVER_DISCOVERY_DEADLINE_MS,
+        });
         // If the deadline wins the race the build promise is abandoned; swallow any
         // later rejection so it can't surface as an unhandled rejection.
         buildPromise.catch(() => {});

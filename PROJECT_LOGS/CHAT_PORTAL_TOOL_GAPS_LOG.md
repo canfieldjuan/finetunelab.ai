@@ -231,3 +231,9 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   longer fall back to body/memory `userId`, and body-supplied `conversationId`
   is dropped without a verified session. This closes the #62 residual where
   service-role DB/context/model paths could still act on a claimed user id.
+- 2026-06-29 - MCP per-server discovery deadline: `McpUserToolset.load` now loads
+  enabled servers in parallel with a per-server timeout, so one hung MCP server
+  is skipped without dropping tools from faster servers. The `/api/chat` global
+  MCP discovery deadline remains as a final backstop. Remaining MCP follow-ups:
+  refresh shared connections when URL/auth changes; schema-first telemetry for
+  MCP `tool_executions`; browser-level live SSE verification.
