@@ -4,6 +4,7 @@
 
 import type { ChatMessage } from '../openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
+import { getVllmRuntimeMetadata } from '@/lib/models/vllm-runtime';
 import { BaseProviderAdapter, type AdapterRequest, type AdapterResponse } from './base-adapter';
 
 // ============================================================================
@@ -99,6 +100,19 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       temperature,
     };
 
+    if (!isGpt5) {
+      const topP = options.topP ?? config.default_top_p;
+      if (typeof topP === 'number') {
+        body.top_p = topP;
+      }
+      if (typeof options.frequencyPenalty === 'number') {
+        body.frequency_penalty = options.frequencyPenalty;
+      }
+      if (typeof options.presencePenalty === 'number') {
+        body.presence_penalty = options.presencePenalty;
+      }
+    }
+
     // GPT-5 models require max_completion_tokens instead of max_tokens
     const maxTokensValue = options.maxTokens ?? config.max_output_tokens ?? 2000;
     if (isGpt5) {
@@ -151,7 +165,11 @@ export class OpenAIAdapter extends BaseProviderAdapter {
   /**
    * Parse OpenAI API response into standardized format
    */
-  async parseResponse(response: Response, responseBody: unknown): Promise<AdapterResponse> {
+  async parseResponse(
+    response: Response,
+    responseBody: unknown,
+    request?: AdapterRequest
+  ): Promise<AdapterResponse> {
     if (!response.ok) {
       await this.handleResponseError(response);
     }
@@ -168,7 +186,7 @@ export class OpenAIAdapter extends BaseProviderAdapter {
     const message = (choice.message as Record<string, unknown> | undefined) || {};
 
     // Extract content
-    const content = typeof message.content === 'string' ? message.content : '';
+    let content = typeof message.content === 'string' ? message.content : '';
 
     // Extract usage metrics safely
     let usage;
@@ -221,6 +239,19 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       });
     }
 
+    const vllmRuntime = getVllmRuntimeMetadata(request?.config.metadata);
+    if (
+      (!toolCalls || toolCalls.length === 0) &&
+      vllmRuntime.parse_qwen_xml_tool_calls &&
+      content.includes('<tool_call>')
+    ) {
+      const recoveredToolCalls = this.parseQwenXmlToolCalls(content);
+      if (recoveredToolCalls?.length) {
+        toolCalls = recoveredToolCalls;
+        content = this.stripQwenXmlToolCalls(content);
+      }
+    }
+
     console.log('[OpenAIAdapter] Parsed response:', {
       contentLength: content.length,
       usage,
@@ -240,6 +271,47 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       toolCalls,
       requestMetadata,
     };
+  }
+
+  private stripQwenXmlToolCalls(content: string): string {
+    return content.replace(/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/g, '').trim();
+  }
+
+  private parseQwenXmlToolCalls(content: string): Array<{
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+  }> | undefined {
+    const calls: Array<{
+      id: string;
+      name: string;
+      arguments: Record<string, unknown>;
+    }> = [];
+    const regex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(content)) !== null) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        const name = typeof parsed.name === 'string' ? parsed.name : '';
+        const parsedArgs = parsed.arguments;
+        const args = parsedArgs && typeof parsedArgs === 'object' && !Array.isArray(parsedArgs)
+          ? parsedArgs as Record<string, unknown>
+          : {};
+
+        if (name) {
+          calls.push({
+            id: `qwen-xml-tool-${calls.length}`,
+            name,
+            arguments: args,
+          });
+        }
+      } catch (error) {
+        console.warn('[OpenAIAdapter] Failed to parse Qwen XML tool call:', error);
+      }
+    }
+
+    return calls.length > 0 ? calls : undefined;
   }
 
   /**

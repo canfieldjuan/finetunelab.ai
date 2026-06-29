@@ -209,6 +209,7 @@ describe('AddModelDialog model serving fields', () => {
         { model_id: 'gpt-5-mini', name: 'gpt-5-mini', context_length: 4096 },
       ],
     }));
+    expect(body).not.toHaveProperty('metadata');
     expect(onSuccess).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });

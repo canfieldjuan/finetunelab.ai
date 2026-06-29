@@ -10,8 +10,16 @@ export type ServerConfigJson = {
   tensor_parallel_size?: number;
   dtype?: 'auto' | 'half' | 'float16' | 'bfloat16' | 'float32';
   trust_remote_code?: boolean;
+  enable_auto_tool_choice?: boolean;
+  tool_call_parser?: string;
+  chat_template?: string;
+  chat_template_content_format?: 'auto' | 'openai' | 'string';
+  is_lora_adapter?: boolean;
+  lora_adapter_path?: string | null;
+  base_model_path?: string | null;
   context_length?: number;
   external?: boolean;
+  external_url?: string;
 };
 
 export type LocalServerRow = {

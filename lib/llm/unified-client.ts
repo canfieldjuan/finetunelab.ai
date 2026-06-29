@@ -78,6 +78,9 @@ export class UnifiedLLMClient {
       tools?: ToolDefinition[];
       temperature?: number;
       maxTokens?: number;
+      topP?: number;
+      frequencyPenalty?: number;
+      presencePenalty?: number;
       userId?: string;
       toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
       enableThinking?: boolean;
@@ -125,6 +128,9 @@ export class UnifiedLLMClient {
         tools: options.tools,
         temperature: options.temperature,
         maxTokens: options.maxTokens,
+        topP: options.topP,
+        frequencyPenalty: options.frequencyPenalty,
+        presencePenalty: options.presencePenalty,
         toolCallHandler: options.toolCallHandler,
       });
     }
@@ -143,6 +149,9 @@ export class UnifiedLLMClient {
     options: {
       temperature?: number;
       maxTokens?: number;
+      topP?: number;
+      frequencyPenalty?: number;
+      presencePenalty?: number;
       enableThinking?: boolean;
     }
   ): Promise<LLMResponse> {
@@ -153,6 +162,9 @@ export class UnifiedLLMClient {
       options: {
         temperature: options.temperature,
         maxTokens: options.maxTokens,
+        topP: options.topP,
+        frequencyPenalty: options.frequencyPenalty,
+        presencePenalty: options.presencePenalty,
         stream: false,
         enableThinking: options.enableThinking,
       },
@@ -209,7 +221,7 @@ export class UnifiedLLMClient {
     }
 
     // Parse response using adapter
-    const adapterResponse = await adapter.parseResponse(response, responseBody);
+    const adapterResponse = await adapter.parseResponse(response, responseBody, request);
 
     // Convert to LLMResponse format
     let llmResponse: LLMResponse = {
@@ -259,6 +271,9 @@ export class UnifiedLLMClient {
       tools: ToolDefinition[];
       temperature?: number;
       maxTokens?: number;
+      topP?: number;
+      frequencyPenalty?: number;
+      presencePenalty?: number;
       toolCallHandler: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
       enableThinking?: boolean;
     }
@@ -296,6 +311,9 @@ export class UnifiedLLMClient {
         options: {
           temperature: options.temperature,
           maxTokens: options.maxTokens,
+          topP: options.topP,
+          frequencyPenalty: options.frequencyPenalty,
+          presencePenalty: options.presencePenalty,
           tools: options.tools,
           stream: false,
           enableThinking: options.enableThinking,
@@ -404,7 +422,7 @@ export class UnifiedLLMClient {
       }
 
       // Parse response
-      const adapterResponse = await adapter.parseResponse(response, responseBody);
+      const adapterResponse = await adapter.parseResponse(response, responseBody, request);
 
       // Accumulate token usage
       if (adapterResponse.usage) {
@@ -465,11 +483,11 @@ export class UnifiedLLMClient {
         }
 
         // Continue conversation with tool results
-        // For OpenAI: Must include assistant message with tool_calls even if no content
-        // For Anthropic: Can skip if no content (Anthropic requirement)
-        const isOpenAI = config.provider === 'openai';
+        // OpenAI-compatible chat APIs require the assistant tool_calls turn before
+        // subsequent tool result messages, even when the assistant content is empty.
+        const requiresAssistantToolMessage = adapter instanceof OpenAIAdapter;
 
-        const assistantMessage = (adapterResponse.content || isOpenAI)
+        const assistantMessage = (adapterResponse.content || requiresAssistantToolMessage)
           ? [{
               role: 'assistant' as const,
               content: adapterResponse.content || null,
@@ -484,7 +502,7 @@ export class UnifiedLLMClient {
             }]
           : [];
 
-        if (!adapterResponse.content && !isOpenAI) {
+        if (!adapterResponse.content && !requiresAssistantToolMessage) {
           console.log('[UnifiedLLMClient] Skipping empty assistant message (tool-only response)');
         }
 
@@ -562,6 +580,9 @@ export class UnifiedLLMClient {
       tools?: ToolDefinition[];
       temperature?: number;
       maxTokens?: number;
+      topP?: number;
+      frequencyPenalty?: number;
+      presencePenalty?: number;
       userId?: string;
       onMetadata?: (metadata: RequestMetadata) => void;
       skipGuardrails?: boolean;
@@ -613,6 +634,9 @@ export class UnifiedLLMClient {
       options: {
         temperature: options?.temperature,
         maxTokens: options?.maxTokens,
+        topP: options?.topP,
+        frequencyPenalty: options?.frequencyPenalty,
+        presencePenalty: options?.presencePenalty,
         tools: options?.tools,
         stream: true,
       },

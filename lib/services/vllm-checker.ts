@@ -4,14 +4,118 @@
  * Checks if vLLM is installed and available
  */
 
-import { exec } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 let vllmAvailable: boolean | null = null;
 let lastCheck: number = 0;
+let cachedPythonPath: string | null = null;
+let cachedExecutablePath: string | null = null;
 const CACHE_DURATION = 60000; // Cache for 1 minute
+
+function hasPathSeparator(value: string): boolean {
+  return value.includes('/') || value.includes('\\');
+}
+
+function canExecute(filePath: string): boolean {
+  try {
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function commandWorks(command: string): Promise<boolean> {
+  try {
+    await execFileAsync(command, ['--version'], { timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveVLLMExecutable(pythonPath?: string | null): Promise<string | null> {
+  if (pythonPath && hasPathSeparator(pythonPath)) {
+    const executable = process.platform === 'win32' ? 'vllm.exe' : 'vllm';
+    const sibling = path.join(path.dirname(pythonPath), executable);
+    if (canExecute(sibling)) {
+      return sibling;
+    }
+  }
+
+  const trainerExecutable = path.join(
+    process.cwd(),
+    'lib',
+    'training',
+    'trainer_venv',
+    'bin',
+    'vllm'
+  );
+  if (canExecute(trainerExecutable)) {
+    return trainerExecutable;
+  }
+
+  return await commandWorks('vllm') ? 'vllm' : null;
+}
+
+export async function getVLLMExecutablePath(): Promise<string | null> {
+  if (cachedExecutablePath) {
+    return cachedExecutablePath;
+  }
+
+  const configuredExecutable = process.env.VLLM_EXECUTABLE_PATH;
+  if (configuredExecutable) {
+    if (hasPathSeparator(configuredExecutable)) {
+      if (canExecute(configuredExecutable)) {
+        cachedExecutablePath = configuredExecutable;
+        return cachedExecutablePath;
+      }
+    } else if (await commandWorks(configuredExecutable)) {
+      cachedExecutablePath = configuredExecutable;
+      return cachedExecutablePath;
+    }
+  }
+
+  const pythonPath = cachedPythonPath || await findVLLMPythonPath();
+  cachedExecutablePath = await resolveVLLMExecutable(pythonPath);
+  return cachedExecutablePath;
+}
+
+async function findVLLMPythonPath(): Promise<string | null> {
+  const candidates = [
+    process.env.VLLM_PYTHON_PATH,
+    process.env.PYTHON_PATH,
+    'python3',
+    'python',
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const pythonPath of candidates) {
+    try {
+      const { stdout } = await execFileAsync(
+        pythonPath,
+        ['-c', "import vllm; print('OK')"],
+        { timeout: 5000 }
+      );
+
+      if (stdout.trim() === 'OK') {
+        return pythonPath;
+      }
+    } catch (error) {
+      console.log(
+        '[vLLMChecker] Python candidate missing vLLM:',
+        pythonPath,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  return null;
+}
 
 /**
  * Check if vLLM is available
@@ -22,26 +126,13 @@ export async function isVLLMAvailable(): Promise<boolean> {
     return vllmAvailable;
   }
 
-  try {
-    const pythonPath = process.env.VLLM_PYTHON_PATH || 'python';
-    
-    // Try to import vllm
-    const { stdout } = await execAsync(
-      `${pythonPath} -c "import vllm; print('OK')"`,
-      { timeout: 5000 }
-    );
+  cachedPythonPath = await findVLLMPythonPath();
+  cachedExecutablePath = await getVLLMExecutablePath();
+  vllmAvailable = Boolean(cachedExecutablePath);
+  lastCheck = Date.now();
 
-    vllmAvailable = stdout.trim() === 'OK';
-    lastCheck = Date.now();
-    
-    console.log('[vLLMChecker] vLLM available:', vllmAvailable);
-    return vllmAvailable;
-  } catch (error) {
-    console.log('[vLLMChecker] vLLM not available:', error instanceof Error ? error.message : String(error));
-    vllmAvailable = false;
-    lastCheck = Date.now();
-    return false;
-  }
+  console.log('[vLLMChecker] vLLM available:', vllmAvailable, 'python:', cachedPythonPath || 'none', 'executable:', cachedExecutablePath || 'none');
+  return vllmAvailable;
 }
 
 /**
@@ -49,10 +140,12 @@ export async function isVLLMAvailable(): Promise<boolean> {
  */
 export async function getVLLMVersion(): Promise<string | null> {
   try {
-    const pythonPath = process.env.VLLM_PYTHON_PATH || 'python';
-    
-    const { stdout } = await execAsync(
-      `${pythonPath} -c "import vllm; print(vllm.__version__)"`,
+    const pythonPath = cachedPythonPath || await findVLLMPythonPath();
+    if (!pythonPath) return null;
+
+    const { stdout } = await execFileAsync(
+      pythonPath,
+      ['-c', 'import vllm; print(vllm.__version__)'],
       { timeout: 5000 }
     );
 

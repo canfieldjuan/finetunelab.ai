@@ -273,11 +273,17 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   const buildGenerationDefaults = useCallback((): GenerationSettings => ({
     temperature: selectedModel?.default_temperature ?? 0.7,
     maxOutputTokens: selectedModel?.max_output_tokens ?? 2000,
-  }), [selectedModel?.default_temperature, selectedModel?.max_output_tokens]);
+    topP: selectedModel?.default_top_p ?? 1,
+    frequencyPenalty: 0,
+    presencePenalty: 0,
+  }), [selectedModel?.default_temperature, selectedModel?.default_top_p, selectedModel?.max_output_tokens]);
 
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>({
     temperature: 0.7,
     maxOutputTokens: 2000,
+    topP: 1,
+    frequencyPenalty: 0,
+    presencePenalty: 0,
   });
   const [generationSettingsDirty, setGenerationSettingsDirty] = useState(false);
 

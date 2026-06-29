@@ -62,6 +62,11 @@ export class AnthropicAdapter extends BaseProviderAdapter {
       temperature: options.temperature ?? config.default_temperature ?? 0.7,
     };
 
+    const topP = options.topP ?? config.default_top_p;
+    if (typeof topP === 'number' && topP < 1) {
+      body.top_p = topP;
+    }
+
     // Add system message with cache control (enables prompt caching)
     if (systemMessage) {
       body.system = [

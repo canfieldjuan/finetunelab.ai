@@ -10,6 +10,7 @@ export interface SelectedModelInfo {
   context_length: number;
   max_output_tokens?: number;
   default_temperature?: number;
+  default_top_p?: number;
 }
 
 export function useModelSelection() {
@@ -62,7 +63,7 @@ export function useModelSelection() {
       try {
         const { data, error } = await supabase
           .from('llm_models')
-          .select('id, name, context_length, max_output_tokens, default_temperature');
+          .select('id, name, context_length, max_output_tokens, default_temperature, default_top_p');
         if (error) {
           console.error('[useModelSelection] Supabase error:', error);
           throw error;

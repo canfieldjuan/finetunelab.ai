@@ -75,7 +75,10 @@ export async function* streamAnthropicResponse(
   model: string = 'claude-3-5-sonnet-20241022',
   temperature: number = 0.7,
   maxTokens: number = 2000,
-  tools?: ToolDefinition[]
+  tools?: ToolDefinition[],
+  generationOptions?: {
+    topP?: number;
+  }
 ): AsyncGenerator<string, void, unknown> {
   const anthropicMessages: MessageParam[] = messages
     .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
@@ -90,6 +93,7 @@ export async function* streamAnthropicResponse(
     temperature,
     messages: anthropicMessages,
     stream: true,
+    ...(generationOptions?.topP !== undefined && generationOptions.topP < 1 ? { top_p: generationOptions.topP } : {}),
     ...(mappedTools ? { tools: mappedTools } : {}),
   });
   for await (const part of stream) {
@@ -126,7 +130,10 @@ export async function runAnthropicWithToolCalls(
   temperature: number = 0.7,
   maxTokens: number = 2000,
   tools: ToolDefinition[] = [],
-  toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>
+  toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>,
+  generationOptions?: {
+    topP?: number;
+  }
 ): Promise<LLMResponse> {
   let anthropicMessages: MessageParam[] = messages
     .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
@@ -143,6 +150,7 @@ export async function runAnthropicWithToolCalls(
     max_tokens: maxTokens,
     temperature,
     messages: anthropicMessages,
+    ...(generationOptions?.topP !== undefined && generationOptions.topP < 1 ? { top_p: generationOptions.topP } : {}),
     ...(mappedTools ? { tools: mappedTools } : {}),
   });
   // Check for tool_use blocks in the response
@@ -183,6 +191,7 @@ export async function runAnthropicWithToolCalls(
         max_tokens: maxTokens,
         temperature,
         messages: anthropicMessages,
+        ...(generationOptions?.topP !== undefined && generationOptions.topP < 1 ? { top_p: generationOptions.topP } : {}),
         ...(mappedTools ? { tools: mappedTools } : {}),
       });
     } catch (error) {

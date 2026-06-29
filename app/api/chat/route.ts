@@ -142,7 +142,13 @@ export async function POST(req: NextRequest) {
     let enableDeepResearch: boolean | undefined;
     let contextInjectionEnabled: boolean | undefined;
     let enableThinking: boolean | undefined;
-    let generationSettings: { temperature?: unknown; maxOutputTokens?: unknown } | undefined;
+    let generationSettings: {
+      temperature?: unknown;
+      maxOutputTokens?: unknown;
+      topP?: unknown;
+      frequencyPenalty?: unknown;
+      presencePenalty?: unknown;
+    } | undefined;
     try {
       ({
         messages,
@@ -177,6 +183,15 @@ export async function POST(req: NextRequest) {
       : undefined;
     const requestedMaxOutputTokens = typeof generationSettings?.maxOutputTokens === 'number'
       ? Math.min(32768, Math.max(64, Math.floor(generationSettings.maxOutputTokens)))
+      : undefined;
+    const requestedTopP = typeof generationSettings?.topP === 'number'
+      ? Math.min(1, Math.max(0.01, generationSettings.topP))
+      : undefined;
+    const requestedFrequencyPenalty = typeof generationSettings?.frequencyPenalty === 'number'
+      ? Math.min(2, Math.max(-2, generationSettings.frequencyPenalty))
+      : undefined;
+    const requestedPresencePenalty = typeof generationSettings?.presencePenalty === 'number'
+      ? Math.min(2, Math.max(-2, generationSettings.presencePenalty))
       : undefined;
 
     console.log('[API] ===== RECEIVED REQUEST =====');
@@ -778,7 +793,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       model: string,
       temperature: number,
       maxTokens: number,
-      tools?: ToolDefinition[]
+      tools?: ToolDefinition[],
+      generationOptions?: {
+        topP?: number;
+        frequencyPenalty?: number;
+        presencePenalty?: number;
+      }
     ) => AsyncGenerator<string, void, unknown>;
     let runLLMWithToolCalls: (
       messages: ChatMessage[],
@@ -786,7 +806,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       temperature: number,
       maxTokens: number,
       tools: ToolDefinition[],
-      toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>
+      toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>,
+      generationOptions?: {
+        topP?: number;
+        frequencyPenalty?: number;
+        presencePenalty?: number;
+      }
     ) => Promise<string | { content: string; usage: { input_tokens: number; output_tokens: number }; toolsCalled?: Array<{name: string; success: boolean; error?: string}> }>;
     if (provider === 'anthropic') {
       model = llmConfig.anthropic?.model || 'claude-3-5-sonnet-20241022';
@@ -1081,6 +1106,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               tools: activeTools,
               temperature: effectiveTemperature,
               maxTokens: safeMaxTokens,
+              topP: requestedTopP,
+              frequencyPenalty: requestedFrequencyPenalty,
+              presencePenalty: requestedPresencePenalty,
               userId: userId || undefined,
               toolCallHandler,
               enableThinking,
@@ -1106,7 +1134,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 effectiveTemperature,
                 safeMaxTokens,
                 tools,
-                toolCallHandler
+                toolCallHandler,
+                {
+                  topP: requestedTopP,
+                  frequencyPenalty: requestedFrequencyPenalty,
+                  presencePenalty: requestedPresencePenalty,
+                }
               );
               // Load model config for metadata (legacy path)
               try {
@@ -1251,7 +1284,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           effectiveTemperature,
           safeMaxTokens,
           tools,
-          toolCallHandler
+          toolCallHandler,
+          {
+            topP: requestedTopP,
+            frequencyPenalty: requestedFrequencyPenalty,
+            presencePenalty: requestedPresencePenalty,
+          }
         );
 
         // Create metadata object for persistence (legacy path)
@@ -1974,6 +2012,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                   {
                     temperature: effectiveTemperature,
                     maxTokens: effectiveMaxTokens,
+                    topP: requestedTopP,
+                    frequencyPenalty: requestedFrequencyPenalty,
+                    presencePenalty: requestedPresencePenalty,
                     tools: tools.length > 0 ? activeTools : undefined,
                     userId: userId || undefined,
                     onMetadata: (meta) => {
@@ -2027,7 +2068,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                       model,
                       effectiveTemperature,
                       effectiveMaxTokens,
-                      activeTools
+                      activeTools,
+                      {
+                        topP: requestedTopP,
+                        frequencyPenalty: requestedFrequencyPenalty,
+                        presencePenalty: requestedPresencePenalty,
+                      }
                     )) {
                       if (!firstChunkReceived && chunk.length > 0) {
                         ttftMs = Date.now() - streamStartTime;
@@ -2082,7 +2128,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                   model,
                   effectiveTemperature,
                   effectiveMaxTokens,
-                  activeTools
+                  activeTools,
+                  {
+                    topP: requestedTopP,
+                    frequencyPenalty: requestedFrequencyPenalty,
+                    presencePenalty: requestedPresencePenalty,
+                  }
                 )) {
                 if (!firstChunkReceived && chunk.length > 0) {
                   ttftMs = Date.now() - streamStartTime;

@@ -193,6 +193,9 @@ export async function PATCH(
     if (body.price_per_output_token !== undefined) dto.price_per_output_token = body.price_per_output_token;
     if (body.default_temperature !== undefined) dto.default_temperature = body.default_temperature;
     if (body.default_top_p !== undefined) dto.default_top_p = body.default_top_p;
+    if (body.metadata !== undefined && body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)) {
+      dto.metadata = body.metadata;
+    }
     if (body.enabled !== undefined) dto.enabled = body.enabled;
     if (body.is_default !== undefined) dto.is_default = body.is_default;
 

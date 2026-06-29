@@ -15,6 +15,10 @@ const swapServer = vi.fn();
 const getServerStatus = vi.fn();
 const stopServer = vi.fn();
 const getSecret = vi.fn();
+const llmModelWrites: { inserts: unknown[]; updates: unknown[] } = {
+  inserts: [],
+  updates: [],
+};
 const supabaseState = vi.hoisted(() => ({
   supabaseAdmin: null as unknown,
 }));
@@ -102,18 +106,24 @@ function llmModelsQuery() {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     single: vi.fn(async () => ({ data: null, error: null })),
-    insert: vi.fn(() => ({
-      select: vi.fn(() => ({
-        single: vi.fn(async () => ({ data: { id: 'model-1' }, error: null })),
-      })),
-    })),
-    update: vi.fn(() => ({
-      eq: vi.fn(() => ({
+    insert: vi.fn((payload: unknown) => {
+      llmModelWrites.inserts.push(payload);
+      return {
         select: vi.fn(() => ({
           single: vi.fn(async () => ({ data: { id: 'model-1' }, error: null })),
         })),
-      })),
-    })),
+      };
+    }),
+    update: vi.fn((payload: unknown) => {
+      llmModelWrites.updates.push(payload);
+      return {
+        eq: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: vi.fn(async () => ({ data: { id: 'model-1' }, error: null })),
+          })),
+        })),
+      };
+    }),
   };
 }
 
@@ -131,6 +141,8 @@ describe('POST /api/training/deploy', () => {
     getServerStatus.mockResolvedValue({ status: STATUS.RUNNING });
     getSecret.mockResolvedValue(null);
     supabaseState.supabaseAdmin = null;
+    llmModelWrites.inserts = [];
+    llmModelWrites.updates = [];
     from.mockImplementation((table: string) => {
       if (table === 'llm_models') {
         return llmModelsQuery();
@@ -179,6 +191,11 @@ describe('POST /api/training/deploy', () => {
         tensor_parallel_size: 1,
         dtype: 'auto',
         trust_remote_code: true,
+        enable_auto_tool_choice: true,
+        tool_call_parser: 'qwen3_xml',
+        chat_template: '/templates/qwen3.jinja',
+        chat_template_content_format: 'openai',
+        parse_qwen_xml_tool_calls: true,
       },
     }));
 
@@ -201,11 +218,28 @@ describe('POST /api/training/deploy', () => {
             gpu_memory_utilization: 0.72,
             max_model_len: 4096,
             trust_remote_code: true,
+            enable_auto_tool_choice: true,
+            tool_call_parser: 'qwen3_xml',
+            chat_template: '/templates/qwen3.jinja',
+            chat_template_content_format: 'openai',
           }),
         }),
         scope: 'user',
       })
     );
+    expect(llmModelWrites.inserts).toHaveLength(1);
+    expect(llmModelWrites.inserts[0]).toEqual(expect.objectContaining({
+      supports_functions: true,
+      metadata: expect.objectContaining({
+        vllm_runtime: expect.objectContaining({
+          enable_auto_tool_choice: true,
+          tool_call_parser: 'qwen3_xml',
+          chat_template: '/templates/qwen3.jinja',
+          chat_template_content_format: 'openai',
+          parse_qwen_xml_tool_calls: true,
+        }),
+      }),
+    }));
   });
 
   it('treats already-running local swap results as successful deploys', async () => {

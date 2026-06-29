@@ -145,12 +145,28 @@ export interface VLLMPodDeploymentRequest {
   max_model_len?: number;        // Max context length
   quantization?: 'awq' | 'gptq' | 'squeezellm' | 'fp8' | null;
   tensor_parallel_size?: number; // For multi-GPU
+  enable_auto_tool_choice?: boolean;
+  tool_call_parser?: string;
+  chat_template?: string;
+  chat_template_content_format?: 'auto' | 'openai' | 'string';
   budget_limit?: number;
   volume_size_gb?: number;
   // Network volume support
   use_network_volume?: boolean;
   data_center_id?: string;       // e.g., 'US-EAST-1', required if use_network_volume is true
   network_volume_id?: string;  // To attach an existing volume
+}
+
+export function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_./:=@+-]+$/.test(value)) {
+    return value;
+  }
+
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function buildVLLMDockerArgs(model: string, args: string[]): string {
+  return ['vllm', 'serve', '--model', model, ...args].map(shellQuote).join(' ');
 }
 
 // ============================================================================
@@ -350,8 +366,14 @@ export class RunPodServerlessService {
       const vllmArgs: string[] = ['--host', '0.0.0.0', '--port', '8000'];
       const maxModelLen = request.max_model_len || 32768;
       vllmArgs.push('--max-model-len', maxModelLen.toString());
-      vllmArgs.push('--enable-auto-tool-choice');
-      vllmArgs.push('--tool-call-parser', 'hermes');
+      if (request.enable_auto_tool_choice ?? true) {
+        vllmArgs.push('--enable-auto-tool-choice');
+        vllmArgs.push('--tool-call-parser', request.tool_call_parser || 'hermes');
+      }
+      if (request.chat_template) vllmArgs.push('--chat-template', request.chat_template);
+      if (request.chat_template_content_format) {
+        vllmArgs.push('--chat-template-content-format', request.chat_template_content_format);
+      }
       if (request.quantization) vllmArgs.push('--quantization', request.quantization);
       if (request.tensor_parallel_size && request.tensor_parallel_size > 1) {
         vllmArgs.push('--tensor-parallel-size', request.tensor_parallel_size.toString());
@@ -424,7 +446,7 @@ export class RunPodServerlessService {
           containerDiskInGb: 20,
           env: envVars,
           ports: '8000/http',
-          dockerArgs: `vllm serve --model ${request.model_id} ${vllmArgs.join(' ')}`,
+          dockerArgs: buildVLLMDockerArgs(request.model_id, vllmArgs),
           volumeMountPath: '/root/.cache',
         },
       };
@@ -434,7 +456,7 @@ export class RunPodServerlessService {
         (variables.input as typeof variables.input & { networkVolumeId?: string }).networkVolumeId = networkVolumeIdToAttach;
         variables.input.volumeMountPath = volumeMountPath;
         const modelFolderName = request.model_id.split('/').pop();
-        variables.input.dockerArgs = `vllm serve --model ${volumeMountPath}/${modelFolderName} ${vllmArgs.join(' ')}`;
+        variables.input.dockerArgs = buildVLLMDockerArgs(`${volumeMountPath}/${modelFolderName}`, vllmArgs);
       }
       
       console.log('[RunPodServerlessService] Creating vLLM pod:', {
