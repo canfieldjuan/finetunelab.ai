@@ -34,6 +34,7 @@ interface CachedServerData {
     started_at: string | null;
     stopped_at: string | null;
     last_health_check: string | null;
+    external: boolean;
   }>;
   modelLookup: Record<string, { id: string; name: string }>;
 }
@@ -148,6 +149,7 @@ export async function GET(req: NextRequest) {
           started_at: s.started_at,
           stopped_at: s.stopped_at,
           last_health_check: s.last_health_check,
+          external: Boolean(s.config_json?.external),
         })),
         modelLookup: modelLookupObj,
       };
@@ -203,7 +205,9 @@ export async function GET(req: NextRequest) {
         process_id: server.process_id,
         started_at: server.started_at,
         stopped_at: server.stopped_at,
-        last_health_check: server.last_health_check
+        last_health_check: server.last_health_check,
+        external: Boolean(server.external),
+        is_local: !Boolean(server.external)
       };
     });
 

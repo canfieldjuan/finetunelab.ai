@@ -10,17 +10,20 @@ The vLLM backend already has status, stop, and VRAM-safe swap APIs, but the Mode
 2. Show active, starting, stopped, and errored vLLM/Ollama server rows with model, endpoint, port, and PID context where available.
 3. Reuse existing `/api/servers/stop` and `/api/servers/swap` actions from the panel.
 4. Refresh the existing model-card server map after panel actions.
+5. Exclude external vLLM/Ollama records from the local runtime panel.
 
 ## Files touched
 
 - `app/models/page.tsx`
+- `app/api/servers/status/route.ts`
 - `components/models/LocalInferenceServersPanel.tsx`
+- `components/models/ModelCard.tsx`
 - `development/planning/2026-06-28_vllm-server-controls-plan.md`
 - `.agents/session-drift/2026-06-28-vllm-server-controls.md`
 
 ## Mechanism
 
-The Models page already fetches `/api/servers/status`. This slice keeps the existing model-id map for cards and also stores the full server list. A new presentational/action component renders that list as a runtime control panel and calls the existing stop/swap endpoints with the current session token.
+The Models page already fetches `/api/servers/status`. This slice keeps the existing model-id map for cards and also stores the full server list. The status API now exposes `external` and `is_local` flags derived from `config_json.external`, so the panel can keep external endpoint records out of local process controls. A new presentational/action component renders local rows as a runtime control panel and calls the existing stop/swap endpoints with the current session token.
 
 ## Intentional
 

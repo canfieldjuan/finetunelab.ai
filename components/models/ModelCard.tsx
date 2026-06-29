@@ -32,6 +32,8 @@ export interface ServerInfo {
   started_at?: string | null;
   stopped_at?: string | null;
   last_health_check?: string | null;
+  external?: boolean;
+  is_local?: boolean;
 }
 
 interface ModelMetadata {

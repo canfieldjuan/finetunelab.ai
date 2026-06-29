@@ -46,7 +46,11 @@ export function LocalInferenceServersPanel({
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const localServers = useMemo(
-    () => servers.filter((server) => server.server_type === 'vllm' || server.server_type === 'ollama'),
+    () => servers.filter((server) =>
+      (server.server_type === 'vllm' || server.server_type === 'ollama') &&
+      server.is_local !== false &&
+      !server.external
+    ),
     [servers]
   );
   const activeServer = localServers.find(
