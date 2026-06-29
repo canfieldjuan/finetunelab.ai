@@ -193,3 +193,9 @@ deferred slice-1 Copilot finding about name-vs-id keying.
 - 2026-06-29 — Slice 3b built: keyed `McpClientManager` connections by server id
   (adapter dispatches by id), added `McpUserToolset`/`buildUserMcpToolset` (per-user,
   in-memory, no global table/registry). 61 MCP tests.
+- 2026-06-29 — Slice 3c built: wired MCP into `app/api/chat/route.ts` — build the
+  user's `McpUserToolset` at request time (gated on userId+admin client, failures
+  non-fatal), inject its definitions into the offered tool list, and route `mcp__*`
+  tool calls through `toolset.execute()` (user-scoped) instead of the global
+  executor. MCP client is now end-to-end: config (3b) → discover → offer → dispatch.
+  type-check + eslint clean; 61 MCP unit tests. (gap #1 — MCP client — DONE)

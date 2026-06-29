@@ -27,6 +27,8 @@ import { traceService } from '@/lib/tracing/trace.service';
 import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
 import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
+import { buildUserMcpToolset, type McpUserToolset } from '@/lib/tools/mcp/user-toolset';
+import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
 import { completeTraceWithFullData, completeTraceBasic } from './trace-completion-helper';
@@ -78,6 +80,25 @@ function isToolDefinition(value: unknown): value is ToolDefinition {
   if (tool.type !== 'function') return false;
   const fn = tool.function;
   return !!fn && typeof fn === 'object' && typeof fn.name === 'string';
+}
+
+/** Run a user-scoped MCP tool, shaped like executePortalChatTool's result. */
+async function runMcpToolCall(
+  toolset: McpUserToolset,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<{ data: unknown; error: string | null; executionTimeMs: number }> {
+  const started = Date.now();
+  try {
+    const data = await toolset.execute(toolName, args);
+    return { data, error: null, executionTimeMs: Date.now() - started };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : String(error),
+      executionTimeMs: Date.now() - started,
+    };
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -219,10 +240,10 @@ export async function POST(req: NextRequest) {
     console.log('[API] Final tools names:', tools.map(t => t.function.name));
 
     // Keep tools as-is for trace logging (empty array is meaningful)
-    const activeTools = tools.length > 0 ? tools : undefined;
+    let activeTools = tools.length > 0 ? tools : undefined;
 
     // For traces, always pass tools array (even if empty) to show what was available
-    const toolsForTrace = tools;
+    let toolsForTrace = tools;
 
     // ========================================================================
     // WIDGET MODE DETECTION & API KEY VALIDATION
@@ -332,6 +353,38 @@ export async function POST(req: NextRequest) {
     console.log('[API] Request with', messages.length, 'messages,', tools.length, 'tools');
     if (tools.length > 0) {
       console.log('[API] [DEBUG] Tools available to LLM:', tools.map((t: ToolDefinition) => t.function.name).join(', '));
+    }
+
+    // ========================================================================
+    // MCP: build the requesting user's tools at request time (per-user, NEVER
+    // global — see PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md). Offer their
+    // definitions to the model here; route their calls through the user-scoped
+    // toolset in toolCallHandler below. A build failure never breaks chat.
+    // ========================================================================
+    let mcpToolset: McpUserToolset | null = null;
+    if (userId && supabaseAdmin) {
+      try {
+        mcpToolset = await buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager());
+        const mcpDefs = mcpToolset.definitions();
+        if (mcpDefs.length > 0) {
+          tools.push(
+            ...mcpDefs.map((def) => ({
+              type: 'function' as const,
+              function: {
+                name: def.name,
+                description: def.description,
+                parameters: def.parameters as Record<string, unknown>,
+              },
+            })),
+          );
+          activeTools = tools.length > 0 ? tools : undefined;
+          toolsForTrace = tools;
+          console.log('[API] MCP: injected', mcpDefs.length, 'user MCP tool(s)');
+        }
+      } catch (mcpErr) {
+        console.error('[API] MCP toolset build failed (continuing without MCP tools):', mcpErr);
+        mcpToolset = null;
+      }
     }
 
     // ========================================================================
@@ -882,7 +935,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       const toolStartTime = Date.now();
-      const result = await executePortalChatTool(toolName, args, convId, undefined, userId || undefined, undefined, toolTraceContext);
+      // MCP tools are user-scoped and never in the global registry, so route them
+      // through this user's toolset; everything else uses the portal executor.
+      const result = mcpToolset?.has(toolName)
+        ? await runMcpToolCall(mcpToolset, toolName, args)
+        : await executePortalChatTool(toolName, args, convId, undefined, userId || undefined, undefined, toolTraceContext);
       const toolExecutionTime = Date.now() - toolStartTime;
 
       // Capture web_search results for SSE previews (standard search path only)
