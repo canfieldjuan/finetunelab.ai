@@ -13,23 +13,23 @@ describe('resolveChatUser', () => {
     expect(verifySession).toHaveBeenCalledWith('Bearer tokenA');
   });
 
-  it('falls back to the body userId (unauthenticated) when the token is invalid', async () => {
+  it('treats an invalid bearer as anonymous instead of trusting the body userId', async () => {
     const result = await resolveChatUser({
       authHeader: 'Bearer bad',
       requestUserId: 'body-user',
       verifySession: vi.fn().mockResolvedValue(null),
     });
-    expect(result).toEqual({ userId: 'body-user', isAuthenticated: false });
+    expect(result).toEqual({ userId: null, isAuthenticated: false });
   });
 
-  it('uses the body userId (unauthenticated) when no auth header is present', async () => {
+  it('does not trust the body userId when no auth header is present', async () => {
     const verifySession = vi.fn();
     const result = await resolveChatUser({
       authHeader: null,
       requestUserId: 'body-user',
       verifySession,
     });
-    expect(result).toEqual({ userId: 'body-user', isAuthenticated: false });
+    expect(result).toEqual({ userId: null, isAuthenticated: false });
     expect(verifySession).not.toHaveBeenCalled();
   });
 
@@ -40,7 +40,7 @@ describe('resolveChatUser', () => {
       requestUserId: 'body-user',
       verifySession,
     });
-    expect(result).toEqual({ userId: 'body-user', isAuthenticated: false });
+    expect(result).toEqual({ userId: null, isAuthenticated: false });
     expect(verifySession).not.toHaveBeenCalled();
   });
 
@@ -50,13 +50,13 @@ describe('resolveChatUser', () => {
       requestUserId: 'body-user',
       verifySession: vi.fn().mockRejectedValue(new Error('network')),
     });
-    expect(result).toEqual({ userId: 'body-user', isAuthenticated: false });
+    expect(result).toEqual({ userId: null, isAuthenticated: false });
   });
 
-  it('uses memory userId as a last resort, then null', async () => {
+  it('does not trust memory userId as authentication', async () => {
     const noToken = { authHeader: null, verifySession: vi.fn() };
     expect(await resolveChatUser({ ...noToken, requestUserId: null, memoryUserId: 'mem' })).toEqual({
-      userId: 'mem',
+      userId: null,
       isAuthenticated: false,
     });
     expect(await resolveChatUser({ ...noToken, requestUserId: null })).toEqual({

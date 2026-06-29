@@ -36,6 +36,8 @@ const createChildSpan = vi.hoisted(() => vi.fn());
 const endTrace = vi.hoisted(() => vi.fn());
 const completeTraceWithFullData = vi.hoisted(() => vi.fn());
 const completeTraceBasic = vi.hoisted(() => vi.fn());
+const gatherConversationContext = vi.hoisted(() => vi.fn());
+const graphragEnhancePrompt = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/llm/unified-client', () => ({
   unifiedLLMClient: {
@@ -95,7 +97,7 @@ vi.mock('@/lib/context', () => ({
 }));
 
 vi.mock('@/lib/context/context-provider.service', () => ({
-  gatherConversationContext: vi.fn(),
+  gatherConversationContext,
 }));
 
 vi.mock('@/lib/graphrag', () => ({
@@ -105,7 +107,7 @@ vi.mock('@/lib/graphrag', () => ({
     },
   },
   graphragService: {
-    enhancePrompt: vi.fn(),
+    enhancePrompt: graphragEnhancePrompt,
     formatCitations: vi.fn(() => []),
   },
 }));
@@ -271,6 +273,16 @@ describe('POST /api/chat MCP tool use smoke', () => {
     endTrace.mockResolvedValue(undefined);
     completeTraceWithFullData.mockResolvedValue(undefined);
     completeTraceBasic.mockResolvedValue(undefined);
+    gatherConversationContext.mockResolvedValue({
+      contextTypes: [],
+      estimatedTokens: 0,
+      systemMessage: '',
+    });
+    graphragEnhancePrompt.mockResolvedValue({
+      contextUsed: false,
+      sources: [],
+      metadata: {},
+    });
   });
 
   it('offers authenticated-user MCP tools and dispatches MCP calls through the scoped toolset', async () => {
@@ -343,17 +355,25 @@ describe('POST /api/chat MCP tool use smoke', () => {
     const response = await POST(makeRequest({
       messages: [{ role: 'user', content: 'Look up the deflection audit docs.' }],
       modelId: 'model-vllm-qwen',
-      userId: 'user-1',
+      userId: 'victim-user',
+      conversationId: 'victim-conversation',
+      memory: { userId: 'memory-victim' },
       forceNonStreaming: true,
-      contextInjectionEnabled: false,
     }));
 
     expect(response.status).toBe(200);
     const events = parseSseEvents(await response.text());
 
     expect(buildUserMcpToolset).not.toHaveBeenCalled();
+    expect(gatherConversationContext).not.toHaveBeenCalled();
+    expect(graphragEnhancePrompt).not.toHaveBeenCalled();
+    expect(getModelConfig).toHaveBeenCalledWith('model-vllm-qwen', undefined, expect.any(Object));
     expect(mcpExecute).not.toHaveBeenCalled();
     expect(executePortalChatTool).not.toHaveBeenCalled();
+    expect(startTrace).toHaveBeenCalledWith(expect.objectContaining({
+      userId: undefined,
+      conversationId: undefined,
+    }));
     expect(events).toContainEqual(expect.objectContaining({
       content: 'No MCP tools were offered.',
     }));

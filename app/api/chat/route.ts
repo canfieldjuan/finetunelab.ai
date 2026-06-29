@@ -372,6 +372,13 @@ export async function POST(req: NextRequest) {
       });
       userId = resolved.userId;
       isAuthenticatedUser = resolved.isAuthenticated;
+      if (!isAuthenticatedUser) {
+        // A body-supplied conversation id is also untrusted without a verified
+        // session. Drop it so normal-mode anonymous calls cannot load history,
+        // infer model settings, create signed exports, or tag traces for another
+        // user's conversation.
+        conversationId = null;
+      }
 
       // Create service role client for DB operations (bypasses RLS)
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;

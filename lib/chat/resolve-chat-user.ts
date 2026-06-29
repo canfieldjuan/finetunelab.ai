@@ -1,8 +1,9 @@
 // Resolve the chat request's user in "normal mode".
 //
-// Security-critical: a VERIFIED session always wins over a body-supplied userId.
-// A valid token can't be paired with a victim's body `userId` to act as them (esp.
-// to load their MCP servers). Only a verified session is treated as authenticated.
+// Security-critical: only a VERIFIED session resolves to a user id.
+// Body- or memory-supplied ids are caller claims, not authentication, and must not
+// unlock per-user data such as MCP servers, model rows, context, documents, or
+// conversation history.
 // Extracted from the chat route so the invariant is unit-testable.
 
 export interface ResolvedChatUser {
@@ -23,7 +24,7 @@ export interface ResolveChatUserParams {
 }
 
 export async function resolveChatUser(params: ResolveChatUserParams): Promise<ResolvedChatUser> {
-  const { authHeader, requestUserId, memoryUserId, verifySession } = params;
+  const { authHeader, verifySession } = params;
 
   if (authHeader && /^Bearer\s+.+/i.test(authHeader)) {
     try {
@@ -37,6 +38,6 @@ export async function resolveChatUser(params: ResolveChatUserParams): Promise<Re
     }
   }
 
-  // Unverified fallback (NOT authenticated, not MCP-eligible): body-supplied id.
-  return { userId: requestUserId || memoryUserId || null, isAuthenticated: false };
+  // Unverified normal-mode callers are anonymous for all per-user data paths.
+  return { userId: null, isAuthenticated: false };
 }

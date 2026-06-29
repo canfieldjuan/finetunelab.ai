@@ -227,3 +227,7 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   body-supplied id (no impersonation). Unverified callers fall back to body userId
   (no MCP), preserving existing behavior. Resolves the slice-3c regular-chat-auth
   follow-up. (MCP client gap #1 now usable in the primary chat UI.)
+- 2026-06-29 - Normal-mode auth data gate: unverified normal-mode callers no
+  longer fall back to body/memory `userId`, and body-supplied `conversationId`
+  is dropped without a verified session. This closes the #62 residual where
+  service-role DB/context/model paths could still act on a claimed user id.
