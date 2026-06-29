@@ -34,6 +34,18 @@ describe('mcpToolName', () => {
     expect(name.length).toBe(64);
     expect(name).toMatch(/^[a-zA-Z0-9_-]{1,64}$/);
   });
+
+  it('keeps distinct long names distinct via a hash suffix (no clamp collision)', () => {
+    // A long server name would otherwise truncate away the tool suffix and collide.
+    const a = mcpToolName('s'.repeat(60), 'toolA');
+    const b = mcpToolName('s'.repeat(60), 'toolB');
+    const c = mcpToolName('s'.repeat(60), 'a-very-long-distinct-tool-name-here');
+    expect(new Set([a, b, c]).size).toBe(3);
+    for (const n of [a, b, c]) {
+      expect(n.length).toBeLessThanOrEqual(64);
+      expect(n).toMatch(/^[a-zA-Z0-9_-]{1,64}$/);
+    }
+  });
 });
 
 describe('normalizeInputSchema', () => {

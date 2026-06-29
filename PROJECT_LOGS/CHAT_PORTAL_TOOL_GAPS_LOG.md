@@ -169,3 +169,7 @@ When wiring discovery/registration, before a tool is registered/offered:
   a token-redacted summary (no decrypted bearer leaks to UI/API); server names
   validated to [A-Za-z0-9_-] (DB-unique == namespace-unique). Recorded connect-time
   SSRF (resolve-time) as a Slice-3 P1 above.
+- 2026-06-29 — Slice 2 review round 2: `mcpToolName` now appends an FNV-1a hash
+  suffix when the composed name exceeds 64 chars (a long server/tool name could
+  previously truncate away the `__<tool>` suffix and collide). Resolves the last
+  inline finding on #45.

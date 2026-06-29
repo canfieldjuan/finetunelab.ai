@@ -15,21 +15,35 @@ const MCP_TOOL_PREFIX = 'mcp';
 // to that character set and clamp the *composed* name to 64 so declaring MCP tools
 // to OpenAI (slice 3) doesn't 400.
 const MAX_TOOL_NAME_LENGTH = 64;
+const NAME_HASH_LENGTH = 8;
 
 /** Sanitize a name segment to provider-safe characters: [a-zA-Z0-9_-]. */
 function sanitizeSegment(segment: string): string {
   return segment.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
+/** Deterministic FNV-1a short hash (for collision-avoidance, not security). */
+function shortHash(input: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(NAME_HASH_LENGTH, '0');
+}
+
 /**
- * Namespaced tool name: `mcp__<server>__<tool>`, clamped to {@link MAX_TOOL_NAME_LENGTH}.
- *
- * Note: truncation could in theory collide for two pathologically long names that
- * share a 64-char prefix; acceptable for v1 (revisit with a hash suffix if it bites).
+ * Namespaced tool name: `mcp__<server>__<tool>`, bounded to {@link MAX_TOOL_NAME_LENGTH}
+ * (OpenAI requires `^[a-zA-Z0-9_-]{1,64}$`). When the composed name exceeds the limit
+ * it is truncated AND suffixed with a hash of the full name, so a long server/tool name
+ * can't make distinct tools collapse to the same provider name (a plain clamp could
+ * drop the `__<tool>` suffix entirely).
  */
 export function mcpToolName(serverName: string, toolName: string): string {
   const name = `${MCP_TOOL_PREFIX}__${sanitizeSegment(serverName)}__${sanitizeSegment(toolName)}`;
-  return name.length <= MAX_TOOL_NAME_LENGTH ? name : name.slice(0, MAX_TOOL_NAME_LENGTH);
+  if (name.length <= MAX_TOOL_NAME_LENGTH) return name;
+  const head = name.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1);
+  return `${head}_${shortHash(name)}`;
 }
 
 interface JsonSchemaObject {
