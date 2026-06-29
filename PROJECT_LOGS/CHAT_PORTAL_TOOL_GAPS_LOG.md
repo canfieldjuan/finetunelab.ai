@@ -249,3 +249,8 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   display-name-only changes should reuse the connection while refreshing cached
   metadata, and stdio command/args/env changes should reconnect. This robust
   testing slice carries those forward.
+- 2026-06-29 - MCP tool execution telemetry: `tool_executions` now has a
+  versioned migration with nullable `tool_id`, `tool_source`, and `metadata`, and
+  `/api/chat` records MCP tool calls with `tool_source='mcp'` after scoped
+  execution. MCP tools still stay out of the global `tools` table. Remaining MCP
+  follow-up: browser-level live SSE verification with a real MCP server.

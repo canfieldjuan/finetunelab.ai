@@ -5,7 +5,7 @@ import type { ChatMessage, ToolDefinition } from '@/lib/llm/openai';
 import { streamAnthropicResponse, runAnthropicWithToolCalls } from '@/lib/llm/anthropic';
 import { graphragService, graphragConfig } from '@/lib/graphrag';
 import type { EmbedderConfig } from '@/lib/graphrag/graphiti/client';
-import { executePortalChatTool } from '@/lib/tools/toolManager';
+import { executePortalChatTool, recordToolExecution } from '@/lib/tools/toolManager';
 import type { EnhancedPrompt, SearchSource, GraphRAGRetrievalMetadata } from '@/lib/graphrag';
 import { supabase } from '@/lib/supabaseClient';
 import { loadLLMConfig } from '@/lib/config/llmConfig';
@@ -998,8 +998,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       // MCP tools are user-scoped and never in the global registry, so route them
       // through this user's toolset; everything else uses the portal executor
       // (which also enforces the offered-tool allowlist from main).
-      const result = mcpToolset?.has(toolName)
-        ? await runMcpToolCall(mcpToolset, toolName, args)
+      const isMcpToolCall = mcpToolset?.has(toolName) === true;
+      const activeMcpToolset = isMcpToolCall ? mcpToolset : null;
+      const result = activeMcpToolset
+        ? await runMcpToolCall(activeMcpToolset, toolName, args)
         : await executePortalChatTool(
             toolName,
             args,
@@ -1011,6 +1013,20 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             { allowedToolNames: offeredToolNames },
           );
       const toolExecutionTime = Date.now() - toolStartTime;
+
+      if (isMcpToolCall) {
+        await recordToolExecution({
+          conversationId: convId,
+          toolId: null,
+          toolName,
+          toolSource: 'mcp',
+          inputParams: args,
+          outputResult: result.data,
+          errorMessage: result.error,
+          executionTimeMs: result.executionTimeMs,
+          metadata: { scoped: true },
+        });
+      }
 
       // Capture web_search results for SSE previews (standard search path only)
       try {

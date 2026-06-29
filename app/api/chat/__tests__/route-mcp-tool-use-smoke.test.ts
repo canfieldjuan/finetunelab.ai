@@ -5,6 +5,7 @@ import type { ToolDefinition } from '@/lib/llm/openai';
 const unifiedChat = vi.hoisted(() => vi.fn());
 const getModelConfig = vi.hoisted(() => vi.fn());
 const executePortalChatTool = vi.hoisted(() => vi.fn());
+const recordToolExecution = vi.hoisted(() => vi.fn());
 const buildUserMcpToolset = vi.hoisted(() => vi.fn());
 const getSharedMcpClientManager = vi.hoisted(() => vi.fn(() => ({ kind: 'shared-mcp-manager' })));
 const mcpExecute = vi.hoisted(() => vi.fn());
@@ -53,6 +54,7 @@ vi.mock('@/lib/models/model-manager.service', () => ({
 
 vi.mock('@/lib/tools/toolManager', () => ({
   executePortalChatTool,
+  recordToolExecution,
 }));
 
 vi.mock('@/lib/tools/mcp/user-toolset', () => ({
@@ -241,6 +243,7 @@ describe('POST /api/chat MCP tool use smoke', () => {
     createClientMock.mockImplementation(() => makeSupabaseClient());
     buildUserMcpToolset.mockResolvedValue(mcpToolset);
     mcpExecute.mockResolvedValue({ answer: 'MCP doc result' });
+    recordToolExecution.mockResolvedValue(undefined);
     getModelConfig.mockResolvedValue({
       id: 'model-vllm-qwen',
       name: 'Local Qwen',
@@ -327,6 +330,17 @@ describe('POST /api/chat MCP tool use smoke', () => {
     );
     expect(mcpExecute).toHaveBeenCalledWith('mcp__docs__lookup', { query: 'deflection audit' });
     expect(executePortalChatTool).not.toHaveBeenCalled();
+    expect(recordToolExecution).toHaveBeenCalledWith({
+      conversationId: '',
+      toolId: null,
+      toolName: 'mcp__docs__lookup',
+      toolSource: 'mcp',
+      inputParams: { query: 'deflection audit' },
+      outputResult: { answer: 'MCP doc result' },
+      errorMessage: null,
+      executionTimeMs: expect.any(Number),
+      metadata: { scoped: true },
+    });
     expect(createChildSpan).toHaveBeenCalledWith(
       expect.objectContaining({
         traceId: 'trace-1',
@@ -404,6 +418,7 @@ describe('POST /api/chat MCP tool use smoke', () => {
     expect(getModelConfig).toHaveBeenCalledWith('model-vllm-qwen', undefined, expect.any(Object));
     expect(mcpExecute).not.toHaveBeenCalled();
     expect(executePortalChatTool).not.toHaveBeenCalled();
+    expect(recordToolExecution).not.toHaveBeenCalled();
     expect(startTrace).toHaveBeenCalledWith(expect.objectContaining({
       userId: undefined,
       conversationId: undefined,
@@ -411,5 +426,57 @@ describe('POST /api/chat MCP tool use smoke', () => {
     expect(events).toContainEqual(expect.objectContaining({
       content: 'No MCP tools were offered.',
     }));
+  });
+
+  it('records failed MCP tool calls in tool execution telemetry', async () => {
+    mcpExecute.mockRejectedValueOnce(new Error('MCP lookup failed'));
+    unifiedChat.mockImplementationOnce(
+      async (_modelId: string, _messages: unknown, options: { toolCallHandler?: (name: string, args: Record<string, unknown>) => Promise<unknown> }) => {
+        const toolResult = await options.toolCallHandler?.('mcp__docs__lookup', {
+          query: 'missing doc',
+        });
+
+        expect(toolResult).toEqual({ error: 'MCP lookup failed' });
+
+        return {
+          content: 'The MCP lookup failed.',
+          usage: { input_tokens: 10, output_tokens: 6 },
+          toolsCalled: [{ name: 'mcp__docs__lookup', success: false, error: 'MCP lookup failed' }],
+        };
+      },
+    );
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(
+      {
+        messages: [{ role: 'user', content: 'Look up a missing doc.' }],
+        modelId: 'model-vllm-qwen',
+        forceNonStreaming: true,
+        contextInjectionEnabled: false,
+      },
+      { Authorization: 'Bearer session-token' },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(recordToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: '',
+      toolId: null,
+      toolName: 'mcp__docs__lookup',
+      toolSource: 'mcp',
+      inputParams: { query: 'missing doc' },
+      outputResult: null,
+      errorMessage: 'MCP lookup failed',
+      executionTimeMs: expect.any(Number),
+      metadata: { scoped: true },
+    }));
+    expect(endTrace).toHaveBeenCalledWith(
+      expect.objectContaining({ spanId: 'span-tool-1' }),
+      expect.objectContaining({
+        status: 'failed',
+        errorMessage: 'MCP lookup failed',
+        errorType: 'ToolExecutionError',
+      }),
+    );
   });
 });

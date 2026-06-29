@@ -60,6 +60,7 @@ vi.mock('../../supabaseClient', () => ({
       throw new Error(`Unexpected table: ${table}`);
     },
   },
+  supabaseAdmin: null,
 }));
 
 function tool(name: string, enabled = true): ToolDefinition {
@@ -196,6 +197,37 @@ describe('toolManager registry boundaries', () => {
       error: null,
     });
     expect(supabaseMock.executionRows).toHaveLength(1);
+  });
+
+  it('records MCP tool executions without a global tool id', async () => {
+    const { recordToolExecution } = await import('../toolManager');
+
+    await recordToolExecution({
+      conversationId: 'conversation-id',
+      toolId: null,
+      toolName: 'mcp__docs__lookup',
+      toolSource: 'mcp',
+      inputParams: { query: 'deflection audit' },
+      outputResult: { answer: 'MCP doc result' },
+      errorMessage: null,
+      executionTimeMs: 12,
+      metadata: { scoped: true },
+    });
+
+    expect(supabaseMock.executionRows).toEqual([
+      {
+        conversation_id: 'conversation-id',
+        message_id: null,
+        tool_id: null,
+        tool_name: 'mcp__docs__lookup',
+        tool_source: 'mcp',
+        input_params: { query: 'deflection audit' },
+        output_result: { answer: 'MCP doc result' },
+        error_message: null,
+        execution_time_ms: 12,
+        metadata: { scoped: true },
+      },
+    ]);
   });
 
   it('checks database availability before portal parameter validation', async () => {

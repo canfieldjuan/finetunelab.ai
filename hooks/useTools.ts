@@ -87,12 +87,14 @@ export function useTools(conversationId?: string) {
         const newExecution: ToolExecution = {
           id: Date.now().toString(), // Temporary ID
           conversationId,
-          messageId: messageId || '',
-          toolId: '', // Will be filled by database
+          messageId: messageId || null,
+          toolId: null, // Will be filled by database
           toolName,
+          toolSource: 'portal',
           inputParams: params,
           outputResult: result.data,
           executionTimeMs: result.executionTimeMs,
+          metadata: {},
           createdAt: new Date().toISOString(),
         };
         setToolExecutions(prev => [newExecution, ...prev]);
