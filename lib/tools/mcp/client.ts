@@ -78,7 +78,13 @@ export class McpClientManager {
     const attempt = (async () => {
       const client = new Client(CLIENT_INFO);
       const transport = this.buildTransport(config);
-      await client.connect(transport, { timeout: this.requestTimeoutMs });
+      try {
+        await client.connect(transport, { timeout: this.requestTimeoutMs });
+      } catch (error) {
+        // Don't leak a half-open transport / spawned stdio process on failure.
+        await client.close().catch(() => {});
+        throw error;
+      }
       // If the server later closes the transport (stdio crash, HTTP session end),
       // drop the entry so isConnected() doesn't go stale and connect() can re-establish.
       client.onclose = () => {

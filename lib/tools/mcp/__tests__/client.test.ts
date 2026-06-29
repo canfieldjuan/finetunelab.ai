@@ -157,6 +157,15 @@ describe('McpClientManager', () => {
     expect(result).toEqual({ content: [], structuredContent: { answer: 42 }, isError: false });
   });
 
+  it('closes the client if connect fails (no leaked transport/process)', async () => {
+    sdk.connect.mockRejectedValueOnce(new Error('handshake failed'));
+    const manager = new McpClientManager();
+
+    await expect(manager.connect(httpServer)).rejects.toThrow('handshake failed');
+    expect(sdk.close).toHaveBeenCalledTimes(1);
+    expect(manager.isConnected('http-server')).toBe(false);
+  });
+
   it('throws when listing/calling an unconnected server', async () => {
     const manager = new McpClientManager();
     await expect(manager.listTools('nope')).rejects.toThrow(/Not connected/);
