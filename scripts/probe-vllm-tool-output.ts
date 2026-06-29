@@ -95,6 +95,7 @@ type CliOptions = {
   enableWebSearch: boolean;
   webSearchProvider?: string;
   searchCache: boolean;
+  listCases: boolean;
 };
 
 function usage(): string {
@@ -113,6 +114,7 @@ Options:
   --timeout-ms <n>       Fetch timeout per round. Default: 60000
   --out <path>           Transcript JSON output path. Default: output/vllm-tool-probes/<timestamp>.json
   --env-file <path>      Load an additional dotenv file before portal tools. Repeatable
+  --list-cases           Print available probe cases and exit without provider calls
   --no-parse-qwen-xml    Disable Qwen XML fallback parsing in adapter metadata
   --enable-web-search    Set TOOL_WEBSEARCH_ENABLED=true before loading portal tools
   --web-search-provider  Set SEARCH_PRIMARY_PROVIDER and SEARCH_FALLBACK_PROVIDER for the probe
@@ -198,6 +200,7 @@ function parseCliOptions(argv: string[]): CliOptions {
     enableWebSearch: hasFlag(flags, 'enable-web-search'),
     webSearchProvider: getFlag(flags, 'web-search-provider'),
     searchCache: hasFlag(flags, 'search-cache'),
+    listCases: hasFlag(flags, 'list-cases'),
   };
 }
 
@@ -732,6 +735,15 @@ async function main() {
   applyToolEnv(options);
   const portalTools = await loadPortalTools();
   const cases = buildCases(portalTools);
+
+  if (options.listCases) {
+    console.log('[Probe] Available vLLM tool probe cases:');
+    for (const probeCase of cases) {
+      console.log(`- ${probeCase.name}: ${probeCase.description}`);
+    }
+    return;
+  }
+
   const selected = options.selectedCases.length
     ? cases.filter(probeCase => options.selectedCases.includes(probeCase.name))
     : cases;
