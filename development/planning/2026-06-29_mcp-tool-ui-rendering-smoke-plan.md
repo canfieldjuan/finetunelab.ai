@@ -40,6 +40,7 @@ The existing `tools_metadata` client path stores normalized tool calls on the as
 
 - `npm ci` installed this fresh worktree's dependencies.
 - `npx vitest run components/hooks/__tests__/chatToolStream.test.ts components/chat/__tests__/MessageList.test.tsx` passed: 10 tests.
+- `npx vitest run components/hooks/__tests__/chatToolStream.test.ts components/chat/__tests__/MessageList.test.tsx app/api/chat/__tests__/route-tool-use-smoke.test.ts app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts` passed after merging current `origin/main`: 13 tests.
 - `npm run type-check` passed.
 - `npm run lint` passed with existing repo warnings and no errors.
 
