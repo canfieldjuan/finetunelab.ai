@@ -15,6 +15,19 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 type McpTransport = StreamableHTTPClientTransport | StdioClientTransport;
 
+/**
+ * SSRF-guarded fetch used by the HTTP transport. Re-validates the target on EVERY
+ * request (the transport sends multiple), so a host that rebinds to a private IP
+ * after connect is caught on the next request, and redirects are refused so a public
+ * endpoint can't 3xx to an internal host. Residual: a micro-TOCTOU between this
+ * resolution and fetch's own; true socket-level IP-pinning is a deeper follow-up.
+ */
+async function ssrfGuardedFetch(url: string | URL, init?: RequestInit): Promise<Response> {
+  const parsed = assertSafeHttpUrl(typeof url === 'string' ? url : url.href);
+  await assertResolvedHostIsPublic(parsed.hostname);
+  return fetch(url, { ...init, redirect: 'error' });
+}
+
 interface Connection {
   client: Client;
   config: McpServerConfig;
@@ -49,10 +62,12 @@ export class McpClientManager {
           `[MCP] Server "${config.name}" url must use http(s), got: ${parsed.protocol}`,
         );
       }
-      const opts = config.authToken
-        ? { requestInit: { headers: { Authorization: `Bearer ${config.authToken}` } } }
-        : undefined;
-      return new StreamableHTTPClientTransport(parsed, opts);
+      const requestInit: RequestInit = { redirect: 'error' };
+      if (config.authToken) {
+        requestInit.headers = { Authorization: `Bearer ${config.authToken}` };
+      }
+      // Custom fetch re-validates the host on every request + refuses redirects.
+      return new StreamableHTTPClientTransport(parsed, { requestInit, fetch: ssrfGuardedFetch });
     }
 
     if (config.transport === 'stdio') {

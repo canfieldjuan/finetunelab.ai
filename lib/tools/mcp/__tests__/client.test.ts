@@ -97,7 +97,10 @@ describe('McpClientManager', () => {
     expect(sdk.connect).toHaveBeenCalledTimes(1);
     expect(sdk.HttpTransportCtor).toHaveBeenCalledWith(
       new URL('https://example.com/mcp'),
-      { requestInit: { headers: { Authorization: 'Bearer secret-token' } } },
+      expect.objectContaining({
+        requestInit: { redirect: 'error', headers: { Authorization: 'Bearer secret-token' } },
+        fetch: expect.any(Function),
+      }),
     );
   });
 

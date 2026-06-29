@@ -56,15 +56,33 @@ describe('isPrivateIpAddress', () => {
     }
   });
 
-  it('flags loopback/ULA/link-local + IPv4-mapped IPv6', () => {
-    for (const ip of ['::1', 'fe80::1', 'fc00::1', 'fd12::1', '::ffff:127.0.0.1', '::ffff:192.168.1.1']) {
+  it('flags non-globally-routable IPv4 (CGNAT, test-nets, reserved, multicast)', () => {
+    for (const ip of [
+      '0.1.2.3', // 0.0.0.0/8
+      '100.64.0.1', '100.127.255.255', // CGNAT 100.64.0.0/10
+      '192.0.0.1', // IETF 192.0.0.0/24
+      '192.0.2.5', // TEST-NET-1
+      '198.18.0.1', '198.19.255.1', // benchmarking 198.18.0.0/15
+      '198.51.100.7', // TEST-NET-2
+      '203.0.113.9', // TEST-NET-3
+      '224.0.0.1', '239.1.1.1', // multicast 224.0.0.0/4
+      '240.0.0.1', '255.255.255.255', // reserved + broadcast
+    ]) {
       expect(isPrivateIpAddress(ip), ip).toBe(true);
     }
   });
 
-  it('allows public IPv4 and IPv6', () => {
+  it('flags loopback/ULA/link-local + IPv4-mapped + doc IPv6', () => {
+    for (const ip of ['::1', 'fe80::1', 'fc00::1', 'fd12::1', '2001:db8::1', '::ffff:127.0.0.1', '::ffff:192.168.1.1']) {
+      expect(isPrivateIpAddress(ip), ip).toBe(true);
+    }
+  });
+
+  it('allows public IPv4 and IPv6 (incl. CGNAT range boundaries)', () => {
     expect(isPrivateIpAddress('8.8.8.8')).toBe(false);
     expect(isPrivateIpAddress('172.32.0.1')).toBe(false);
+    expect(isPrivateIpAddress('100.63.0.1')).toBe(false); // just below CGNAT (100.64/10)
+    expect(isPrivateIpAddress('100.128.0.1')).toBe(false); // just above CGNAT
     expect(isPrivateIpAddress('2606:4700::1')).toBe(false);
     expect(isPrivateIpAddress('::ffff:8.8.8.8')).toBe(false);
   });

@@ -20,20 +20,37 @@ function isPrivateIpv6Literal(addr: string): boolean {
   if (addr === '::1' || addr === '::') return true;
   if (/^fe[89ab]/.test(addr)) return true; // link-local fe80::/10
   if (/^f[cd]/.test(addr)) return true; // unique-local fc00::/7
+  if (addr.startsWith('2001:db8')) return true; // documentation 2001:db8::/32
   if (addr.includes('::ffff:')) return true; // IPv4-mapped (e.g. ::ffff:7f00:1) — reject
   return false;
+}
+
+// Any IPv4 range that is not globally routable (loopback, private, CGNAT, link-local,
+// test-nets, benchmarking, multicast, reserved, "this network", broadcast).
+function isNonGlobalIpv4(host: string): boolean {
+  return (
+    /^0\./.test(host) || // 0.0.0.0/8 "this network"
+    /^10\./.test(host) || // private
+    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host) || // 100.64.0.0/10 CGNAT
+    /^127\./.test(host) || // loopback
+    /^169\.254\./.test(host) || // link-local
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) || // 172.16.0.0/12 private
+    /^192\.0\.0\./.test(host) || // 192.0.0.0/24 IETF protocol assignments
+    /^192\.0\.2\./.test(host) || // TEST-NET-1
+    /^192\.168\./.test(host) || // private
+    /^198\.1[89]\./.test(host) || // 198.18.0.0/15 benchmarking
+    /^198\.51\.100\./.test(host) || // TEST-NET-2
+    /^203\.0\.113\./.test(host) || // TEST-NET-3
+    /^(22[4-9]|23\d)\./.test(host) || // 224.0.0.0/4 multicast
+    /^(24\d|25[0-5])\./.test(host) // 240.0.0.0/4 reserved + 255.255.255.255 broadcast
+  );
 }
 
 function isPrivateIpv4OrLocalName(host: string): boolean {
   if (BLOCKED_HOSTNAMES.has(host)) return true;
   if (host.endsWith('.local') || host.endsWith('.internal')) return true;
   // WHATWG URL normalizes shorthand/hex IPv4 (127.1, 0x7f...) to dotted decimal.
-  if (/^127\./.test(host)) return true;
-  if (/^10\./.test(host)) return true;
-  if (/^192\.168\./.test(host)) return true;
-  if (/^169\.254\./.test(host)) return true;
-  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return true;
-  return false;
+  return isNonGlobalIpv4(host);
 }
 
 function isPrivateOrLocalHost(hostname: string): boolean {
