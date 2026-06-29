@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { McpClientManager } from '../client';
 import { McpUserToolset, buildUserMcpToolset } from '../user-toolset';
@@ -39,6 +39,9 @@ function fakeManager(overrides: Partial<Record<'connect' | 'listTools' | 'callTo
 
 describe('McpUserToolset', () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('loads tools from each server and exposes namespaced definitions', async () => {
     const manager = fakeManager();
@@ -79,6 +82,30 @@ describe('McpUserToolset', () => {
 
     expect(toolset.toolNames()).toEqual(['mcp__fs__ok']);
   });
+
+  it('times out one slow server without dropping faster server tools', async () => {
+    vi.useFakeTimers();
+    const listTools = vi.fn((id: string) => {
+      if (id === 'srv-http') {
+        return new Promise<never>(() => {});
+      }
+      return Promise.resolve([
+        { name: 'ok', description: '', inputSchema: { type: 'object', properties: {} } },
+      ]);
+    });
+    const toolset = new McpUserToolset(fakeManager({ listTools }));
+
+    const loadPromise = toolset.load([httpServer, stdioServer], { perServerTimeoutMs: 25 });
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(listTools).toHaveBeenCalledWith('srv-http');
+    expect(listTools).toHaveBeenCalledWith('host-stdio:fs');
+
+    await vi.advanceTimersByTimeAsync(25);
+    await loadPromise;
+
+    expect(toolset.toolNames()).toEqual(['mcp__fs__ok']);
+  });
 });
 
 describe('buildUserMcpToolset', () => {
@@ -91,5 +118,30 @@ describe('buildUserMcpToolset', () => {
     const toolset = await buildUserMcpToolset('user-1', {} as SupabaseClient, manager);
     expect(svc.listEnabledServers).toHaveBeenCalledWith('user-1');
     expect(toolset.toolNames()).toEqual(['mcp__github__do_thing']);
+  });
+
+  it('forwards per-server timeout options to the loaded toolset', async () => {
+    vi.useFakeTimers();
+    svc.listEnabledServers.mockResolvedValue([httpServer, stdioServer]);
+    const listTools = vi.fn((id: string) => {
+      if (id === 'srv-http') {
+        return new Promise<never>(() => {});
+      }
+      return Promise.resolve([
+        { name: 'ok', description: '', inputSchema: { type: 'object', properties: {} } },
+      ]);
+    });
+    const manager = fakeManager({ listTools });
+
+    const buildPromise = buildUserMcpToolset(
+      'user-1',
+      {} as SupabaseClient,
+      manager,
+      { perServerTimeoutMs: 25 },
+    );
+    await vi.advanceTimersByTimeAsync(25);
+    const toolset = await buildPromise;
+
+    expect(toolset.toolNames()).toEqual(['mcp__fs__ok']);
   });
 });

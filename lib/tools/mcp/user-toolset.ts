@@ -21,6 +21,12 @@ interface ResolvedTool {
   toolName: string;
 }
 
+export interface McpUserToolsetLoadOptions {
+  perServerTimeoutMs?: number;
+}
+
+const DEFAULT_PER_SERVER_TIMEOUT_MS = 3000;
+
 export class McpUserToolset {
   private readonly tools = new Map<string, ResolvedTool>(); // keyed by namespaced tool name
 
@@ -30,24 +36,54 @@ export class McpUserToolset {
    * Connect each server, list its tools, and adapt them. Per-server failures are
    * logged and skipped so one unreachable server doesn't break the rest.
    */
-  async load(servers: McpServerConfig[]): Promise<void> {
-    for (const server of servers) {
-      try {
-        await this.manager.connect(server);
-        const descriptors = await this.manager.listTools(server.id);
-        for (const descriptor of descriptors) {
-          const definition = mcpToolToDefinition(server, descriptor, this.manager);
-          this.tools.set(definition.name, {
-            definition,
-            serverId: server.id,
-            serverName: server.name,
-            toolName: descriptor.name,
-          });
-        }
-      } catch (error) {
-        console.error(`[MCP] Failed to load tools from server "${server.name}":`, error);
+  async load(servers: McpServerConfig[], options: McpUserToolsetLoadOptions = {}): Promise<void> {
+    const timeoutMs = options.perServerTimeoutMs ?? DEFAULT_PER_SERVER_TIMEOUT_MS;
+
+    await Promise.all(servers.map(async (server) => {
+      const tools = await this.loadServerWithTimeout(server, timeoutMs);
+      for (const tool of tools) {
+        this.tools.set(tool.definition.name, tool);
       }
+    }));
+  }
+
+  private async loadServerWithTimeout(server: McpServerConfig, timeoutMs: number): Promise<ResolvedTool[]> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const discoveryPromise = this.discoverServerTools(server);
+    // If the timeout wins, the discovery promise may still reject later. Attach a
+    // handler so that late failure does not become an unhandled rejection.
+    discoveryPromise.catch(() => {});
+
+    try {
+      const timeoutPromise = new Promise<null>((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), timeoutMs);
+      });
+      const result = await Promise.race([discoveryPromise, timeoutPromise]);
+      if (result === null) {
+        console.warn(`[MCP] Timed out loading tools from server "${server.name}" after ${timeoutMs}ms`);
+        return [];
+      }
+      return result;
+    } catch (error) {
+      console.error(`[MCP] Failed to load tools from server "${server.name}":`, error);
+      return [];
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
+  }
+
+  private async discoverServerTools(server: McpServerConfig): Promise<ResolvedTool[]> {
+    await this.manager.connect(server);
+    const descriptors = await this.manager.listTools(server.id);
+    return descriptors.map((descriptor) => {
+      const definition = mcpToolToDefinition(server, descriptor, this.manager);
+      return {
+        definition,
+        serverId: server.id,
+        serverName: server.name,
+        toolName: descriptor.name,
+      };
+    });
   }
 
   /** Neutral tool definitions to offer the model (request-time injection in 3c). */
@@ -83,9 +119,10 @@ export async function buildUserMcpToolset(
   userId: string,
   supabase: SupabaseClient,
   manager: McpClientManager,
+  options: McpUserToolsetLoadOptions = {},
 ): Promise<McpUserToolset> {
   const servers = await new McpServerConfigService(supabase).listEnabledServers(userId);
   const toolset = new McpUserToolset(manager);
-  await toolset.load(servers);
+  await toolset.load(servers, options);
   return toolset;
 }
