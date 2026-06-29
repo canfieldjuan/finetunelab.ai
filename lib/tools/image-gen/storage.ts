@@ -68,11 +68,19 @@ function extensionFor(contentType?: string, explicit?: string): string {
   }
 }
 
+export interface UploadedImage {
+  /** Short-lived signed URL for immediate delivery. */
+  signedUrl: string;
+  /** Storage object path, so the URL can be re-signed after it expires. */
+  path: string;
+}
+
 /**
- * Upload `imageBytes` and return a signed URL. Throws {@link ImageStorageError}
- * if the upload or signing step fails.
+ * Upload `imageBytes` and return a signed URL plus the storage path it was minted
+ * from (so it can be re-signed later). Throws {@link ImageStorageError} if the
+ * upload or signing step fails.
  */
-export async function uploadGeneratedImage(params: UploadImageParams): Promise<string> {
+export async function uploadGeneratedImage(params: UploadImageParams): Promise<UploadedImage> {
   const {
     supabase,
     userId,
@@ -103,5 +111,5 @@ export async function uploadGeneratedImage(params: UploadImageParams): Promise<s
     );
   }
 
-  return signed.data.signedUrl;
+  return { signedUrl: signed.data.signedUrl, path };
 }

@@ -33,15 +33,16 @@ function makeClient(overrides?: {
 const bytes = new Uint8Array([1, 2, 3]);
 
 describe('uploadGeneratedImage', () => {
-  it('uploads under a per-user path and returns a signed URL', async () => {
+  it('uploads under a per-user path and returns a signed URL + the storage path', async () => {
     const { client, from, upload } = makeClient();
-    const url = await uploadGeneratedImage({ supabase: client, userId: 'user-42', imageBytes: bytes });
+    const result = await uploadGeneratedImage({ supabase: client, userId: 'user-42', imageBytes: bytes });
 
-    expect(url).toBe('https://signed.example/img.png');
+    expect(result.signedUrl).toBe('https://signed.example/img.png');
+    expect(result.path).toMatch(/^user-42\/[0-9a-f-]+\.png$/);
     expect(from).toHaveBeenCalledWith(CHAT_IMAGES_BUCKET);
 
     const [path, body, opts] = upload.mock.calls[0];
-    expect(path).toMatch(/^user-42\/[0-9a-f-]+\.png$/);
+    expect(result.path).toBe(path); // returned path matches what was uploaded
     expect(body).toBe(bytes);
     expect(opts).toMatchObject({ contentType: 'image/png', upsert: false });
   });

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS image_jobs (
   status TEXT NOT NULL,
   options JSONB,
   result_url TEXT,
+  result_path TEXT,
   source TEXT,
   attribution JSONB,
   error TEXT,

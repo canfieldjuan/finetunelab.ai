@@ -58,6 +58,30 @@ export const FLUX_DEFAULTS = {
   filenamePrefix: 'finetunelab',
 } as const;
 
+/** Supported pixel bounds — clamps caller/model-supplied dimensions so a value
+ * like 50000 or a negative number can't make the backend attempt an enormous or
+ * invalid latent allocation. */
+const MIN_DIMENSION = 256;
+const MAX_DIMENSION = 2048;
+const DIMENSION_MULTIPLE = 64;
+
+/** Clamp a requested dimension to a safe, supported, multiple-of-64 value. */
+function clampDimension(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  const bounded = Math.min(MAX_DIMENSION, Math.max(MIN_DIMENSION, Math.round(value)));
+  return Math.round(bounded / DIMENSION_MULTIPLE) * DIMENSION_MULTIPLE;
+}
+
+/** Steps clamp — keep generation bounded regardless of caller input. */
+function clampSteps(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return Math.min(50, Math.max(1, Math.round(value)));
+}
+
 /**
  * Construct the Flux.1-dev GGUF text-to-image workflow.
  * Flux runs with cfg=1.0 (negative conditioning is inert) and uses
@@ -69,9 +93,9 @@ export function buildFluxWorkflow(params: FluxWorkflowParams): ComfyWorkflow {
     throw new Error('buildFluxWorkflow: prompt is required');
   }
 
-  const width = params.width ?? FLUX_DEFAULTS.width;
-  const height = params.height ?? FLUX_DEFAULTS.height;
-  const steps = params.steps ?? FLUX_DEFAULTS.steps;
+  const width = clampDimension(params.width, FLUX_DEFAULTS.width);
+  const height = clampDimension(params.height, FLUX_DEFAULTS.height);
+  const steps = clampSteps(params.steps, FLUX_DEFAULTS.steps);
   const seed = params.seed ?? 0;
   const guidance = params.guidance ?? FLUX_DEFAULTS.guidance;
   const unetName = params.unetName ?? FLUX_DEFAULTS.unetName;

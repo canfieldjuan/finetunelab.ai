@@ -51,8 +51,9 @@ describe('imageJobService', () => {
     get.mockResolvedValue({ ...pendingJob });
     generateImage.mockResolvedValue({ url: 'https://img/x.png', source: 'comfyui', prompt: 'a fox' });
 
-    await imageJobService.runImageJob('j1');
+    await imageJobService.runImageJob('j1', 'u1');
 
+    expect(get).toHaveBeenCalledWith('j1', 'u1'); // owner-scoped read
     expect(generateImage).toHaveBeenCalledWith({ prompt: 'a fox', userId: 'u1', options: undefined });
     expect(update).toHaveBeenCalledTimes(2); // running, then completed
     const final = update.mock.calls[update.mock.calls.length - 1][0];
@@ -71,7 +72,7 @@ describe('imageJobService', () => {
       attribution: { authorName: 'Jane', authorUrl: 'a', sourceName: 'Unsplash', sourceUrl: 's' },
     });
 
-    await imageJobService.runImageJob('j1');
+    await imageJobService.runImageJob('j1', 'u1');
     const final = update.mock.calls[update.mock.calls.length - 1][0];
     expect(final.source).toBe('unsplash');
     expect(final.attribution?.authorName).toBe('Jane');
@@ -81,7 +82,7 @@ describe('imageJobService', () => {
     get.mockResolvedValue({ ...pendingJob });
     generateImage.mockRejectedValue(new Error('no backend'));
 
-    await expect(imageJobService.runImageJob('j1')).resolves.toBeUndefined();
+    await expect(imageJobService.runImageJob('j1', 'u1')).resolves.toBeUndefined();
     const final = update.mock.calls[update.mock.calls.length - 1][0];
     expect(final.status).toBe('failed');
     expect(final.error).toMatch(/no backend/);
@@ -90,7 +91,7 @@ describe('imageJobService', () => {
 
   it('no-ops when the job id is unknown', async () => {
     get.mockResolvedValue(null);
-    await imageJobService.runImageJob('missing');
+    await imageJobService.runImageJob('missing', 'u1');
     expect(update).not.toHaveBeenCalled();
     expect(generateImage).not.toHaveBeenCalled();
   });

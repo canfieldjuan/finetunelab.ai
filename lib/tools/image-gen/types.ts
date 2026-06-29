@@ -39,6 +39,12 @@ export interface ImageGenResult {
   height?: number;
   /** Present for Unsplash results; absent for generated images. */
   attribution?: ImageAttribution;
+  /**
+   * For ComfyUI results: the Supabase Storage object path the signed `url` was
+   * minted from, so the URL can be re-signed after it expires. Absent for
+   * Unsplash (its CDN URL is permanent).
+   */
+  storagePath?: string;
 }
 
 /** Caller-tunable generation options (sane defaults applied per backend). */
@@ -68,6 +74,8 @@ export interface ImageJob {
   options?: ImageGenOptions;
   /** Set on success: the delivered image URL. */
   resultUrl?: string;
+  /** Set on success (ComfyUI only): storage path the signed URL can be re-minted from. */
+  resultPath?: string;
   /** Set on success: which backend produced it. */
   source?: ImageSource;
   /** Set on success when the source requires attribution (Unsplash). */

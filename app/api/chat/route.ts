@@ -373,6 +373,19 @@ export async function POST(req: NextRequest) {
       supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     }
 
+    // SECURITY: generate_image writes per-user data (an image_jobs row + a storage
+    // object in the user's folder, both under the service role), so a truthy-but-
+    // UNVERIFIED userId (e.g. public widget mode, where userId is the owner's id
+    // but isAuthenticatedUser is false) must not be able to start jobs as the owner.
+    // Gate both the OFFERING and the execution allowlist on a verified session,
+    // mirroring the MCP gate below.
+    if (!isAuthenticatedUser) {
+      tools = tools.filter((tool: ToolDefinition) => tool.function.name !== 'generate_image');
+      activeTools = tools.length > 0 ? tools : undefined;
+      toolsForTrace = tools;
+      offeredToolNames.delete('generate_image');
+    }
+
     if (!messages || !Array.isArray(messages)) {
       return new Response('Invalid messages format', { status: 400 });
     }

@@ -41,8 +41,8 @@ describe('generate_image tool', () => {
       userId: 'u1',
       options: { width: 512 },
     });
-    // runner fired forget-style
-    expect(runImageJob).toHaveBeenCalledWith('job-9');
+    // runner fired forget-style, scoped to the authenticated user
+    expect(runImageJob).toHaveBeenCalledWith('job-9', 'u1');
   });
 
   it('omits options when no dimensions are given', async () => {

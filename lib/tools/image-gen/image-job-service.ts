@@ -13,6 +13,7 @@
 import { randomUUID } from 'crypto';
 import { generateImage } from './service';
 import { imageJobStore } from './image-job-store';
+import { withTimeout } from '../timeout';
 import type { ImageGenOptions, ImageJob } from './types';
 
 export interface StartImageJobParams {
@@ -20,6 +21,10 @@ export interface StartImageJobParams {
   userId: string;
   options?: ImageGenOptions;
 }
+
+/** Overall wall-clock bound on a background job (covers Unsplash/upload/sign
+ * stalls the ComfyUI client's own deadline doesn't reach). */
+const IMAGE_JOB_TIMEOUT_MS = parseInt(process.env.IMAGE_JOB_TIMEOUT_MS || '300000', 10);
 
 class ImageJobService {
   /** Create and persist a 'pending' job. Does not run the work. */
@@ -46,25 +51,35 @@ class ImageJobService {
    * Never throws for a generation failure — it records 'failed' on the job so
    * the fire-and-forget caller has nothing to handle.
    */
-  async runImageJob(jobId: string): Promise<void> {
-    const job = await imageJobStore.get(jobId);
+  async runImageJob(jobId: string, userId: string): Promise<void> {
+    const job = await imageJobStore.get(jobId, userId);
     if (!job) {
-      console.error(`[ImageJob] runImageJob: job ${jobId} not found`);
+      console.error(`[ImageJob] runImageJob: job ${jobId} not found for this user`);
       return;
     }
 
     job.status = 'running';
     job.updatedAt = new Date().toISOString();
-    await imageJobStore.update(job);
+    const running = await imageJobStore.update(job);
+    if (!running.success) {
+      // Persisting 'running' failed; generation still proceeds, but log so a
+      // stuck-'pending' row is explainable. The timeout below still bounds it.
+      console.warn(`[ImageJob] failed to mark job ${jobId} running: ${running.error}`);
+    }
 
     try {
-      const result = await generateImage({
-        prompt: job.prompt,
-        userId: job.userId,
-        options: job.options,
-      });
+      const result = await withTimeout(
+        generateImage({
+          prompt: job.prompt,
+          userId: job.userId,
+          options: job.options,
+        }),
+        IMAGE_JOB_TIMEOUT_MS,
+        `image job ${jobId}`,
+      );
       job.status = 'completed';
       job.resultUrl = result.url;
+      job.resultPath = result.storagePath;
       job.source = result.source;
       job.attribution = result.attribution;
       job.completedAt = new Date().toISOString();

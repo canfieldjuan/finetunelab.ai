@@ -60,4 +60,21 @@ describe('buildFluxWorkflow', () => {
   it('throws on an empty prompt', () => {
     expect(() => buildFluxWorkflow({ prompt: '   ' })).toThrow(/prompt is required/);
   });
+
+  it('clamps absurd or invalid dimensions to safe, supported values', () => {
+    const huge = buildFluxWorkflow({ prompt: 'x', width: 50000, height: -10 });
+    expect(huge.latent.inputs.width).toBe(2048); // clamped to MAX
+    expect(huge.latent.inputs.height).toBe(FLUX_DEFAULTS.height); // invalid -> default
+
+    const nan = buildFluxWorkflow({ prompt: 'x', width: Number.NaN });
+    expect(nan.latent.inputs.width).toBe(FLUX_DEFAULTS.width);
+
+    const odd = buildFluxWorkflow({ prompt: 'x', width: 700, height: 700 });
+    expect((odd.latent.inputs.width as number) % 64).toBe(0); // snapped to multiple of 64
+  });
+
+  it('clamps steps to a bounded range', () => {
+    expect(buildFluxWorkflow({ prompt: 'x', steps: 9999 }).sampler.inputs.steps).toBe(50);
+    expect(buildFluxWorkflow({ prompt: 'x', steps: -5 }).sampler.inputs.steps).toBe(FLUX_DEFAULTS.steps);
+  });
 });

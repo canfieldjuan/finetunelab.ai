@@ -68,7 +68,7 @@ const generateImageTool: ToolDefinition = {
       options: Object.keys(options).length > 0 ? options : undefined,
     });
     imageJobService
-      .runImageJob(job.id)
+      .runImageJob(job.id, userId)
       .catch((err) => console.error('[generate_image] job runner failed:', err));
 
     return {

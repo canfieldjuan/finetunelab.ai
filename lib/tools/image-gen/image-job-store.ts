@@ -19,6 +19,7 @@ interface ImageJobRow {
   status: string;
   options: ImageGenOptions | null;
   result_url: string | null;
+  result_path: string | null;
   source: string | null;
   attribution: ImageAttribution | null;
   error: string | null;
@@ -62,18 +63,22 @@ class ImageJobStore {
 
   async update(job: ImageJob): Promise<{ success: boolean; error?: string }> {
     try {
+      // Owner-scoped even under the service role (RLS is bypassed here), so the
+      // owner check is the default and never depends on the id being unguessable.
       const { error } = await this.getClient()
         .from(TABLE)
         .update({
           status: job.status,
           result_url: job.resultUrl ?? null,
+          result_path: job.resultPath ?? null,
           source: job.source ?? null,
           attribution: job.attribution ?? null,
           error: job.error ?? null,
           updated_at: new Date().toISOString(),
           completed_at: job.completedAt ?? null,
         })
-        .eq('id', job.id);
+        .eq('id', job.id)
+        .eq('user_id', job.userId);
       if (error) {
         console.error('[ImageJob] update error:', error);
         return { success: false, error: error.message };
@@ -86,12 +91,15 @@ class ImageJobStore {
     }
   }
 
-  async get(jobId: string): Promise<ImageJob | null> {
+  async get(jobId: string, userId: string): Promise<ImageJob | null> {
     try {
+      // Owner-scoped by construction (the service role bypasses RLS), so a
+      // client-supplied job id can never read another user's job.
       const { data, error } = await this.getClient()
         .from(TABLE)
         .select('*')
         .eq('id', jobId)
+        .eq('user_id', userId)
         .single();
       if (error || !data) {
         if (error?.code !== 'PGRST116') {
@@ -107,6 +115,7 @@ class ImageJobStore {
         status: row.status as ImageJob['status'],
         options: row.options ?? undefined,
         resultUrl: row.result_url ?? undefined,
+        resultPath: row.result_path ?? undefined,
         source: (row.source as ImageSource | null) ?? undefined,
         attribution: row.attribution ?? undefined,
         error: row.error ?? undefined,

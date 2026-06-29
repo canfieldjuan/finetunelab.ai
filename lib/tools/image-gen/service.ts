@@ -100,14 +100,15 @@ export async function generateImage(
     if (generated) {
       // Generation succeeded: upload errors propagate (NOT a fallback case).
       const supabase = await resolveStorageClient(config.supabase);
-      const url = await uploadGeneratedImage({
+      const uploaded = await uploadGeneratedImage({
         supabase,
         userId: params.userId,
         imageBytes: generated.imageBytes,
         contentType: generated.mimeType,
       });
       return {
-        url,
+        url: uploaded.signedUrl,
+        storagePath: uploaded.path,
         source: 'comfyui',
         prompt,
         width: params.options?.width ?? FLUX_DEFAULTS.width,
