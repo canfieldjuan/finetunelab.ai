@@ -12,6 +12,7 @@ const sdk = vi.hoisted(() => ({
   ClientCtor: vi.fn(),
   HttpTransportCtor: vi.fn(),
   StdioTransportCtor: vi.fn(),
+  instances: [] as Array<{ onclose?: () => void }>,
 }));
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
@@ -20,8 +21,10 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
     listTools = sdk.listTools;
     callTool = sdk.callTool;
     close = sdk.close;
+    onclose?: () => void;
     constructor() {
       sdk.ClientCtor();
+      sdk.instances.push(this);
     }
   },
 }));
@@ -62,6 +65,7 @@ const stdioServer: McpServerConfig = {
 describe('McpClientManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sdk.instances.length = 0;
     sdk.connect.mockResolvedValue(undefined);
     sdk.close.mockResolvedValue(undefined);
     sdk.listTools.mockResolvedValue({
@@ -105,16 +109,42 @@ describe('McpClientManager', () => {
     );
   });
 
-  it('lists tools mapped to descriptors', async () => {
+  it('rejects non-http(s) urls (SSRF/egress hardening at the core)', async () => {
+    const manager = new McpClientManager();
+    await expect(
+      manager.connect({ id: 'z', name: 'file-srv', transport: 'http', url: 'file:///etc/passwd', enabled: true }),
+    ).rejects.toThrow(/http\(s\)/);
+  });
+
+  it('deduplicates concurrent connects to the same server', async () => {
+    const manager = new McpClientManager();
+    await Promise.all([manager.connect(httpServer), manager.connect(httpServer)]);
+    expect(sdk.ClientCtor).toHaveBeenCalledTimes(1);
+    expect(sdk.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('lists all tools across pagination cursors', async () => {
+    sdk.listTools
+      .mockResolvedValueOnce({
+        tools: [{ name: 'a', description: '', inputSchema: { type: 'object', properties: {} } }],
+        nextCursor: 'cursor-1',
+      })
+      .mockResolvedValueOnce({
+        tools: [{ name: 'b', description: '', inputSchema: { type: 'object', properties: {} } }],
+      });
+
     const manager = new McpClientManager();
     await manager.connect(httpServer);
     const tools = await manager.listTools('http-server');
-    expect(tools).toEqual([
-      { name: 'echo', description: 'echoes', inputSchema: { type: 'object', properties: {} } },
-    ]);
+
+    expect(tools.map((t) => t.name)).toEqual(['a', 'b']);
+    expect(sdk.listTools).toHaveBeenCalledTimes(2);
+    expect(sdk.listTools).toHaveBeenNthCalledWith(2, { cursor: 'cursor-1' }, { timeout: 30000 });
   });
 
-  it('calls a tool with name + arguments and normalizes isError', async () => {
+  it('calls a tool with name + arguments and carries structuredContent', async () => {
+    sdk.callTool.mockResolvedValue({ content: [], structuredContent: { answer: 42 }, isError: false });
+
     const manager = new McpClientManager();
     await manager.connect(httpServer);
     const result = await manager.callTool('http-server', 'echo', { msg: 'hi' });
@@ -124,13 +154,22 @@ describe('McpClientManager', () => {
       undefined,
       { timeout: 30000 },
     );
-    expect(result).toEqual({ content: [{ type: 'text', text: 'pong' }], isError: false });
+    expect(result).toEqual({ content: [], structuredContent: { answer: 42 }, isError: false });
   });
 
   it('throws when listing/calling an unconnected server', async () => {
     const manager = new McpClientManager();
     await expect(manager.listTools('nope')).rejects.toThrow(/Not connected/);
     await expect(manager.callTool('nope', 'echo', {})).rejects.toThrow(/Not connected/);
+  });
+
+  it('drops the connection when the transport closes (onclose)', async () => {
+    const manager = new McpClientManager();
+    await manager.connect(httpServer);
+    expect(manager.isConnected('http-server')).toBe(true);
+
+    sdk.instances.at(-1)?.onclose?.();
+    expect(manager.isConnected('http-server')).toBe(false);
   });
 
   it('disconnect closes the client and removes the connection', async () => {

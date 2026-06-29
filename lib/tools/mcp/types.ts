@@ -44,5 +44,7 @@ export interface McpToolDescriptor {
 export interface McpToolCallResult {
   /** Raw MCP content blocks (e.g. `[{ type: 'text', text: '...' }]`). */
   content: unknown;
+  /** Structured payload returned by tools that declare an `outputSchema`. */
+  structuredContent?: Record<string, unknown>;
   isError: boolean;
 }

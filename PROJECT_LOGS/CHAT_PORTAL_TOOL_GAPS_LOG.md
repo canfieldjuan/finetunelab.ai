@@ -105,10 +105,32 @@ admin-only**. Hard requirements for the config layer:
 - Treat all MCP servers (even http) as untrusted input; never echo resolved auth
   tokens back to clients.
 
+**HTTP transport = outbound request surface (SSRF/egress).** `http` is the
+non-admin-safe alternative to stdio, but once non-admins can configure server URLs,
+the app server makes outbound requests to attacker-chosen hosts *with resolved auth
+headers attached*. Slice 1 rejects non-`http(s)` protocols at the core
+(`client.ts buildTransport`). **Slices 2-3 must additionally** allowlist/deny
+internal + link-local + private targets (`localhost`, `127.0.0.1`,
+`169.254.169.254`, RFC1918 ranges, `::1`, etc.) before user-managed config lands, so
+"http-only for non-admins" doesn't become SSRF/secret egress. Never return resolved
+auth tokens to clients.
+
 **Provider tool-name limits.** OpenAI function names must match
 `^[a-zA-Z0-9_-]{1,64}$` (no dot, ≤64). The MCP adapter's `mcpToolName` sanitizes to
 that set and clamps to 64 (see `lib/tools/mcp/adapter.ts`); keep this when persisting
 names to the `tools` table in Slice 3.
+
+## Slice 3 (registration) follow-ups — from PR #42 review
+
+When wiring discovery/registration, before a tool is registered/offered:
+- **Filter task-required tools.** MCP tools advertising `execution.taskSupport:
+  'required'` can't run via plain `callTool` — don't register/offer them (or
+  implement the task call path first), else the model is offered tools that always
+  error.
+- **Nested arg schemas.** `normalizeInputSchema` currently maps only top-level
+  `properties`/`required`; nested object/array param shapes are flattened to a bare
+  `type`. Fine for simple tools; revisit (extend `ToolParameter` / pass through inner
+  schema) if complex MCP tools need full structure for the model.
 
 ## Status log
 
@@ -118,3 +140,9 @@ names to the `tools` table in Slice 3.
 - 2026-06-28 — Slice 1 PR #42 opened. Review fix-ups: tool-name sanitizer now drops
   dots + clamps to 64 (OpenAI-safe); recorded the stdio-RCE admin-gate constraint
   for slices 2–3 (above).
+- 2026-06-28 — Slice 1 round 2 (codex + reviewer): listTools now follows pagination
+  cursors; callTool carries `structuredContent` (preferred when no text); schema
+  normalization maps integer→number and preserves non-string enum types
+  (`ToolParameter.enum` widened); connects deduped + `onclose` clears stale entries;
+  http transport rejects non-http(s). Recorded HTTP SSRF/egress + task-required-tool
+  + nested-schema follow-ups (above).

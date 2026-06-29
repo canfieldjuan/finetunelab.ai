@@ -25,6 +25,9 @@ interface Connection {
  */
 export class McpClientManager {
   private readonly connections = new Map<string, Connection>();
+  // In-flight connects, so concurrent connect() calls for the same server share
+  // one attempt (avoids spawning duplicate clients / orphan stdio processes).
+  private readonly pending = new Map<string, Promise<void>>();
   private readonly requestTimeoutMs: number;
 
   constructor(opts?: { requestTimeoutMs?: number }) {
@@ -36,10 +39,19 @@ export class McpClientManager {
       if (!config.url) {
         throw new Error(`[MCP] Server "${config.name}" uses http transport but has no url`);
       }
+      const parsed = new URL(config.url);
+      // Constrain the transport to web protocols. The config layer (slices 2-3)
+      // must additionally allowlist/block internal targets to prevent SSRF once
+      // non-admins can configure http servers — see the gap log.
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error(
+          `[MCP] Server "${config.name}" url must use http(s), got: ${parsed.protocol}`,
+        );
+      }
       const opts = config.authToken
         ? { requestInit: { headers: { Authorization: `Bearer ${config.authToken}` } } }
         : undefined;
-      return new StreamableHTTPClientTransport(new URL(config.url), opts);
+      return new StreamableHTTPClientTransport(parsed, opts);
     }
 
     if (config.transport === 'stdio') {
@@ -56,14 +68,31 @@ export class McpClientManager {
     throw new Error(`[MCP] Server "${config.name}" has unknown transport: ${String(config.transport)}`);
   }
 
-  /** Connect to a server. No-op if already connected (idempotent). */
+  /** Connect to a server. No-op if already connected; concurrent calls are deduped. */
   async connect(config: McpServerConfig): Promise<void> {
     if (this.connections.has(config.name)) return;
 
-    const client = new Client(CLIENT_INFO);
-    const transport = this.buildTransport(config);
-    await client.connect(transport, { timeout: this.requestTimeoutMs });
-    this.connections.set(config.name, { client, config });
+    const inFlight = this.pending.get(config.name);
+    if (inFlight) return inFlight;
+
+    const attempt = (async () => {
+      const client = new Client(CLIENT_INFO);
+      const transport = this.buildTransport(config);
+      await client.connect(transport, { timeout: this.requestTimeoutMs });
+      // If the server later closes the transport (stdio crash, HTTP session end),
+      // drop the entry so isConnected() doesn't go stale and connect() can re-establish.
+      client.onclose = () => {
+        this.connections.delete(config.name);
+      };
+      this.connections.set(config.name, { client, config });
+    })();
+
+    this.pending.set(config.name, attempt);
+    try {
+      await attempt;
+    } finally {
+      this.pending.delete(config.name);
+    }
   }
 
   isConnected(serverName: string): boolean {
@@ -82,15 +111,24 @@ export class McpClientManager {
     return conn.client;
   }
 
-  /** List the tools a connected server exposes. */
+  /** List every tool a connected server exposes, following pagination cursors. */
   async listTools(serverName: string): Promise<McpToolDescriptor[]> {
     const client = this.getClient(serverName);
-    const result = await client.listTools(undefined, { timeout: this.requestTimeoutMs });
-    return (result.tools ?? []).map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    }));
+    const tools: McpToolDescriptor[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const result = await client.listTools(
+        cursor ? { cursor } : undefined,
+        { timeout: this.requestTimeoutMs },
+      );
+      for (const tool of result.tools ?? []) {
+        tools.push({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema });
+      }
+      cursor = result.nextCursor;
+    } while (cursor);
+
+    return tools;
   }
 
   /** Call a tool on a connected server. */
@@ -107,6 +145,7 @@ export class McpClientManager {
     );
     return {
       content: result.content,
+      structuredContent: result.structuredContent as Record<string, unknown> | undefined,
       isError: result.isError === true,
     };
   }

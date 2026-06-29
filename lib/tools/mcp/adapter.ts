@@ -38,6 +38,18 @@ interface JsonSchemaObject {
   required?: string[];
 }
 
+// JSON Schema 'integer' has no JS typeof equivalent; the repo's tool validator
+// checks `typeof value`, so map 'integer' -> 'number' to keep numeric args valid.
+function normalizeSchemaType(type: string | string[] | undefined): string | string[] {
+  if (Array.isArray(type)) return type.map((entry) => (entry === 'integer' ? 'number' : entry));
+  if (type === 'integer') return 'number';
+  return type ?? 'string';
+}
+
+function isPrimitive(value: unknown): value is string | number | boolean {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
 /** Normalize an MCP `inputSchema` into the registry ToolDefinition.parameters shape. */
 export function normalizeInputSchema(inputSchema: unknown): ToolDefinition['parameters'] {
   const schema = (inputSchema && typeof inputSchema === 'object' ? inputSchema : {}) as JsonSchemaObject;
@@ -54,9 +66,11 @@ export function normalizeInputSchema(inputSchema: unknown): ToolDefinition['para
       enum?: unknown;
     };
     properties[key] = {
-      type: prop.type ?? 'string',
+      type: normalizeSchemaType(prop.type),
       description: typeof prop.description === 'string' ? prop.description : '',
-      ...(Array.isArray(prop.enum) ? { enum: prop.enum.map((v) => String(v)) } : {}),
+      // Keep enum values in their original JSON types (numeric/boolean enums must
+      // not be stringified or the provider contract + validator break).
+      ...(Array.isArray(prop.enum) ? { enum: prop.enum.filter(isPrimitive) } : {}),
     };
   }
 
@@ -98,8 +112,11 @@ export function normalizeMcpResult(result: McpToolCallResult): unknown {
     throw new Error(text || 'MCP tool call failed');
   }
 
-  // Prefer flattened text; fall back to the raw blocks for structured content.
-  return text || blocks;
+  // Prefer flattened text; then structuredContent (tools with an outputSchema may
+  // return only structuredContent with empty content); else the raw blocks.
+  if (text) return text;
+  if (result.structuredContent !== undefined) return result.structuredContent;
+  return blocks;
 }
 
 function describe(server: McpServerConfig, mcpTool: McpToolDescriptor): string {

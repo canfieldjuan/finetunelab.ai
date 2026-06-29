@@ -47,7 +47,7 @@ export function testAnalyticsExportRegistration(): void {
   console.log('Available operations:');
   const operationProp = params.properties.operation;
   if (operationProp && 'enum' in operationProp && operationProp.enum) {
-    operationProp.enum.forEach((op: string) => {
+    operationProp.enum.forEach((op) => {
       console.log(`  - ${op}`);
     });
   }

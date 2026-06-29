@@ -65,6 +65,25 @@ describe('normalizeInputSchema', () => {
     const params = normalizeInputSchema({ properties: {}, required: ['ok', 5, null] });
     expect(params.required).toEqual(['ok']);
   });
+
+  it('maps JSON Schema integer to number (validator checks typeof)', () => {
+    const params = normalizeInputSchema({
+      properties: { count: { type: 'integer' }, mixed: { type: ['integer', 'null'] } },
+    });
+    expect(params.properties.count.type).toBe('number');
+    expect(params.properties.mixed.type).toEqual(['number', 'null']);
+  });
+
+  it('preserves enum values in their original JSON types', () => {
+    const params = normalizeInputSchema({
+      properties: {
+        n: { type: 'number', enum: [1, 2] },
+        b: { type: 'boolean', enum: [true, false] },
+      },
+    });
+    expect(params.properties.n.enum).toEqual([1, 2]);
+    expect(params.properties.b.enum).toEqual([true, false]);
+  });
 });
 
 describe('normalizeMcpResult', () => {
@@ -93,6 +112,23 @@ describe('normalizeMcpResult', () => {
 
   it('throws a generic message on isError with no text', () => {
     expect(() => normalizeMcpResult({ content: [], isError: true })).toThrow('MCP tool call failed');
+  });
+
+  it('returns structuredContent when there is no text content', () => {
+    const structured = { answer: 42 };
+    expect(normalizeMcpResult({ content: [], structuredContent: structured, isError: false })).toEqual(
+      structured,
+    );
+  });
+
+  it('prefers text over structuredContent when both are present', () => {
+    expect(
+      normalizeMcpResult({
+        content: [{ type: 'text', text: 'hello' }],
+        structuredContent: { answer: 42 },
+        isError: false,
+      }),
+    ).toBe('hello');
   });
 });
 
