@@ -201,11 +201,11 @@ export async function getVLLMRuntimeStatus(): Promise<VLLMRuntimeStatus> {
     },
     message: externalConfigured
       ? 'External vLLM endpoint is configured'
+      : requiresExternal
+        ? 'External vLLM endpoint is required in this runtime'
       : localAvailable
         ? 'Local vLLM is installed and ready'
-        : requiresExternal
-          ? 'External vLLM endpoint is required in this runtime'
-          : 'vLLM not found. Install with: pip install vllm',
+        : 'vLLM not found. Install with: pip install vllm',
   };
 }
 

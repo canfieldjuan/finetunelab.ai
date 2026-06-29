@@ -124,6 +124,7 @@ describe('vLLM checker', () => {
       external_configured: false,
       cloud_runtime: true,
       requires_external: true,
+      message: 'External vLLM endpoint is required in this runtime',
     });
   });
 });
