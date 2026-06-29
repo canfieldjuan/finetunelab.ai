@@ -199,3 +199,12 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   tool calls through `toolset.execute()` (user-scoped) instead of the global
   executor. MCP client is now end-to-end: config (3b) → discover → offer → dispatch.
   type-check + eslint clean; 61 MCP unit tests. (gap #1 — MCP client — DONE)
+- 2026-06-29 — Slice 3c review round (codex P1+P2s): MCP load now gated on an
+  AUTHENTICATED userId (verified widget/batch paths) — NOT a request-body claim;
+  moved below the widget admin-client setup so widget users load MCP too; bounded
+  discovery with an 8s deadline (non-fatal) so a slow MCP server can't stall chat.
+  Follow-ups (open): refresh shared connection when a server's url/auth changes
+  (connect no-ops on cached id); MCP calls don't write a `tool_executions` row
+  (no tools-table id) so they're invisible in tool telemetry.
+  NOTE: 'normal mode' (body-supplied userId, unverified) will NOT load MCP — if the
+  main chat path uses it, it must authenticate (widget key / session) for MCP.

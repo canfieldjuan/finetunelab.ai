@@ -82,6 +82,10 @@ function isToolDefinition(value: unknown): value is ToolDefinition {
   return !!fn && typeof fn === 'object' && typeof fn.name === 'string';
 }
 
+// Max time to spend discovering a user's MCP tools before proceeding without them,
+// so a slow/hung MCP server never stalls the chat request.
+const MCP_DISCOVERY_DEADLINE_MS = 8000;
+
 /** Run a user-scoped MCP tool, shaped like executePortalChatTool's result. */
 async function runMcpToolCall(
   toolset: McpUserToolset,
@@ -263,6 +267,10 @@ export async function POST(req: NextRequest) {
 
     // Extract user ID from request (from auth/memory or widget API key)
     let userId: string | null = null;
+    // True only when userId came from a VERIFIED source (widget API key or batch
+    // auth), never from a request-body claim. Gates per-user MCP loading so a
+    // claimed userId can't trigger connecting to that user's servers / auth.
+    let isAuthenticatedUser = false;
 
     if (isWidgetMode && apiKey) {
       // Widget mode: Validate API key and extract user_id
@@ -278,6 +286,7 @@ export async function POST(req: NextRequest) {
       }
 
       userId = validationResult.userId;
+      isAuthenticatedUser = true;
       console.log('[API] Widget mode: API key validated, user_id:', userId);
     } else if (isBatchTestMode && authHeader) {
       // Batch test mode: Check if this is service role authentication
@@ -306,6 +315,7 @@ export async function POST(req: NextRequest) {
         }
 
         userId = userIdHeader;
+        isAuthenticatedUser = true;
         supabaseAdmin = serviceRoleClient;
       } else {
         // Regular user session token validation
@@ -328,6 +338,7 @@ export async function POST(req: NextRequest) {
         }
 
         userId = user.id;
+        isAuthenticatedUser = true;
         console.log('[API] Batch test mode: Session validated, user_id:', userId);
 
         // Use service role for RLS bypass
@@ -355,37 +366,8 @@ export async function POST(req: NextRequest) {
       console.log('[API] [DEBUG] Tools available to LLM:', tools.map((t: ToolDefinition) => t.function.name).join(', '));
     }
 
-    // ========================================================================
-    // MCP: build the requesting user's tools at request time (per-user, NEVER
-    // global — see PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md). Offer their
-    // definitions to the model here; route their calls through the user-scoped
-    // toolset in toolCallHandler below. A build failure never breaks chat.
-    // ========================================================================
+    // The user's per-request MCP toolset (built below, after auth + admin client).
     let mcpToolset: McpUserToolset | null = null;
-    if (userId && supabaseAdmin) {
-      try {
-        mcpToolset = await buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager());
-        const mcpDefs = mcpToolset.definitions();
-        if (mcpDefs.length > 0) {
-          tools.push(
-            ...mcpDefs.map((def) => ({
-              type: 'function' as const,
-              function: {
-                name: def.name,
-                description: def.description,
-                parameters: def.parameters as Record<string, unknown>,
-              },
-            })),
-          );
-          activeTools = tools.length > 0 ? tools : undefined;
-          toolsForTrace = tools;
-          console.log('[API] MCP: injected', mcpDefs.length, 'user MCP tool(s)');
-        }
-      } catch (mcpErr) {
-        console.error('[API] MCP toolset build failed (continuing without MCP tools):', mcpErr);
-        mcpToolset = null;
-      }
-    }
 
     // ========================================================================
     // WIDGET MODE: Create service role client for RLS bypass
@@ -395,6 +377,46 @@ export async function POST(req: NextRequest) {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
       const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
       supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    }
+
+    // ========================================================================
+    // MCP: build the requesting user's tools at request time (per-user, NEVER
+    // global — see PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md). Runs only for an
+    // AUTHENTICATED user (not a body-claimed id), now that the admin client is set
+    // for every auth path. Bounded by a deadline and non-fatal, so a slow or
+    // misconfigured MCP server can't stall or break chat. Offer the definitions
+    // here; route the calls through the user-scoped toolset in toolCallHandler.
+    // ========================================================================
+    if (isAuthenticatedUser && userId && supabaseAdmin) {
+      try {
+        const toolset = await Promise.race([
+          buildUserMcpToolset(userId, supabaseAdmin, getSharedMcpClientManager()),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), MCP_DISCOVERY_DEADLINE_MS)),
+        ]);
+        if (!toolset) {
+          console.warn('[API] MCP discovery exceeded deadline; continuing without MCP tools');
+        } else {
+          mcpToolset = toolset;
+          const mcpDefs = mcpToolset.definitions();
+          if (mcpDefs.length > 0) {
+            tools.push(
+              ...mcpDefs.map((def) => ({
+                type: 'function' as const,
+                function: {
+                  name: def.name,
+                  description: def.description,
+                  parameters: def.parameters as Record<string, unknown>,
+                },
+              })),
+            );
+            activeTools = tools.length > 0 ? tools : undefined;
+            toolsForTrace = tools;
+            console.log('[API] MCP: injected', mcpDefs.length, 'user MCP tool(s)');
+          }
+        }
+      } catch (mcpErr) {
+        console.error('[API] MCP toolset build failed (continuing without MCP tools):', mcpErr);
+      }
     }
 
     // ========================================================================
