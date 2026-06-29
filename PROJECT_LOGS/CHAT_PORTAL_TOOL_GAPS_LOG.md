@@ -91,8 +91,30 @@ Note: two same-named `ToolDefinition` types exist — registry (`lib/tools/types
 top-level name/parameters/execute) vs wire (`{function:{…}}`); keep MCP consistent
 across both.
 
+## Security constraints (MCP build)
+
+**stdio transport = arbitrary host command execution.** A `stdio` MCP server config
+is a command + args the server process spawns — i.e. host RCE. This is fine in Slice 1
+(code-config only, single operator), but once `mcp_servers` becomes DB-backed
+(Slice 2) and portal-reachable (Slice 3), **configuring a `stdio` command MUST be
+admin-only**. Hard requirements for the config layer:
+- Slice 2/3: a non-admin user may NOT create/edit a `stdio` server (only `http`).
+  Enforce server-side (RLS + API check), not just in the UI.
+- Slice 3's portal allowlist / registration is where stdio servers must be gated to
+  admins before their tools are registered or offered.
+- Treat all MCP servers (even http) as untrusted input; never echo resolved auth
+  tokens back to clients.
+
+**Provider tool-name limits.** OpenAI function names must match
+`^[a-zA-Z0-9_-]{1,64}$` (no dot, ≤64). The MCP adapter's `mcpToolName` sanitizes to
+that set and clamps to 64 (see `lib/tools/mcp/adapter.ts`); keep this when persisting
+names to the `tools` table in Slice 3.
+
 ## Status log
 
 - 2026-06-28 — Gap analysis logged. Starting MCP client (item 1).
 - 2026-06-28 — Confirmed tool layer is already provider-agnostic (adapters gate on
   supports_functions); recorded as a hard constraint for the MCP build.
+- 2026-06-28 — Slice 1 PR #42 opened. Review fix-ups: tool-name sanitizer now drops
+  dots + clamps to 64 (OpenAI-safe); recorded the stdio-RCE admin-gate constraint
+  for slices 2–3 (above).

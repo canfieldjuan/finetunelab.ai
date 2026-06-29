@@ -10,15 +10,26 @@ import type { McpClientManager } from './client';
 import type { McpServerConfig, McpToolCallResult, McpToolDescriptor } from './types';
 
 const MCP_TOOL_PREFIX = 'mcp';
+// Provider tool-name constraint: OpenAI requires names to match
+// ^[a-zA-Z0-9_-]{1,64}$ (NO dot, max 64 chars); Anthropic is similar. We sanitize
+// to that character set and clamp the *composed* name to 64 so declaring MCP tools
+// to OpenAI (slice 3) doesn't 400.
+const MAX_TOOL_NAME_LENGTH = 64;
 
-/** Sanitize a name segment so the composed tool name is safe for providers. */
+/** Sanitize a name segment to provider-safe characters: [a-zA-Z0-9_-]. */
 function sanitizeSegment(segment: string): string {
-  return segment.trim().replace(/[^a-zA-Z0-9_.-]/g, '_');
+  return segment.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
-/** Namespaced tool name: `mcp__<server>__<tool>`. */
+/**
+ * Namespaced tool name: `mcp__<server>__<tool>`, clamped to {@link MAX_TOOL_NAME_LENGTH}.
+ *
+ * Note: truncation could in theory collide for two pathologically long names that
+ * share a 64-char prefix; acceptable for v1 (revisit with a hash suffix if it bites).
+ */
 export function mcpToolName(serverName: string, toolName: string): string {
-  return `${MCP_TOOL_PREFIX}__${sanitizeSegment(serverName)}__${sanitizeSegment(toolName)}`;
+  const name = `${MCP_TOOL_PREFIX}__${sanitizeSegment(serverName)}__${sanitizeSegment(toolName)}`;
+  return name.length <= MAX_TOOL_NAME_LENGTH ? name : name.slice(0, MAX_TOOL_NAME_LENGTH);
 }
 
 interface JsonSchemaObject {

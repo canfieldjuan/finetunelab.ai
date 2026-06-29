@@ -22,6 +22,18 @@ describe('mcpToolName', () => {
     expect(mcpToolName('github', 'create_issue')).toBe('mcp__github__create_issue');
     expect(mcpToolName('my server', 'do/thing')).toBe('mcp__my_server__do_thing');
   });
+
+  it('drops dots (not allowed in OpenAI function names)', () => {
+    const name = mcpToolName('srv', 'tools.list');
+    expect(name).toBe('mcp__srv__tools_list');
+    expect(name).not.toContain('.');
+  });
+
+  it('clamps the composed name to 64 provider-safe chars', () => {
+    const name = mcpToolName('a'.repeat(60), 'b'.repeat(60));
+    expect(name.length).toBe(64);
+    expect(name).toMatch(/^[a-zA-Z0-9_-]{1,64}$/);
+  });
 });
 
 describe('normalizeInputSchema', () => {
