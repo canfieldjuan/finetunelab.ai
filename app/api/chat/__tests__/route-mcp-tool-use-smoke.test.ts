@@ -298,7 +298,6 @@ describe('POST /api/chat MCP tool use smoke', () => {
       {
         messages: [{ role: 'user', content: 'Look up the deflection audit docs.' }],
         modelId: 'model-vllm-qwen',
-        widgetSessionId: 'widget-session-1',
         forceNonStreaming: true,
         contextInjectionEnabled: false,
       },

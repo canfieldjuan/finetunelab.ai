@@ -25,7 +25,7 @@ The test mocks Supabase auth/session validation, model lookup, MCP toolset const
 
 ## Intentional
 
-- The smoke uses batch/session authentication because the route intentionally does not load MCP tools from a body-claimed user id or public widget key.
+- The positive smoke uses the normal portal request shape: bearer session auth without `widgetSessionId`. The route intentionally does not load MCP tools from a body-claimed user id or public widget key.
 - This does not start vLLM or an MCP server. Live provider/runtime testing remains covered by the probe and future browser smoke.
 - The test mocks persistence and trace dependencies so it can stay cheap and deterministic.
 
@@ -39,10 +39,10 @@ The test mocks Supabase auth/session validation, model lookup, MCP toolset const
 
 - `npm ci` installed this fresh worktree's dependencies.
 - `npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts` passed: 2 tests.
-- `npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts lib/tools/mcp/__tests__/adapter.test.ts lib/tools/mcp/__tests__/user-toolset.test.ts lib/tools/__tests__/toolManager.test.ts` passed: 32 tests.
+- `npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts lib/chat/__tests__/resolve-chat-user.test.ts lib/tools/mcp/__tests__/adapter.test.ts lib/tools/mcp/__tests__/user-toolset.test.ts lib/tools/__tests__/toolManager.test.ts` passed: 38 tests.
 - `npm run type-check` passed.
 - `npm run lint` passed with existing repo warnings and no errors.
 
 ## Estimated diff size
 
-Target: under 400 LOC. Current diff is about 392 insertions; the size is mostly route-test mocks needed to keep `/api/chat` deterministic without live Supabase, vLLM, or MCP services.
+Soft cap target: about 400 LOC. Current diff is about 427 insertions; the overage is intentional and comes from route-test mocks needed to keep `/api/chat` deterministic without live Supabase, vLLM, or MCP services plus the added review-requested negative auth-gate case.
