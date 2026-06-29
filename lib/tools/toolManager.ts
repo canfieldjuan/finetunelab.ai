@@ -3,7 +3,7 @@
 // Date: October 10, 2025
 // Updated: Phase 5 - Uses modular registry instead of builtinTools
 
-import { supabase } from '../supabaseClient';
+import { supabase, supabaseAdmin } from '../supabaseClient';
 import { getToolByName } from './registry';
 import { isPortalChatTool } from './registry-sync';
 import { toolValidator } from './validator';
@@ -21,13 +21,15 @@ export interface Tool {
 export interface ToolExecution {
   id: string;
   conversationId: string;
-  messageId: string;
-  toolId: string;
+  messageId: string | null;
+  toolId: string | null;
   toolName: string;
+  toolSource: 'portal' | 'mcp';
   inputParams: unknown;
   outputResult: unknown;
   errorMessage?: string;
   executionTimeMs: number;
+  metadata: unknown;
   createdAt: string;
 }
 
@@ -36,6 +38,19 @@ export interface ExecuteToolOptions {
   honorConfigEnabled?: boolean;
   validateParameters?: boolean;
   allowedToolNames?: ReadonlySet<string> | readonly string[];
+}
+
+export interface RecordToolExecutionInput {
+  conversationId?: string | null;
+  messageId?: string | null;
+  toolId?: string | null;
+  toolName: string;
+  toolSource?: 'portal' | 'mcp';
+  inputParams: unknown;
+  outputResult: unknown;
+  errorMessage?: string | null;
+  executionTimeMs: number;
+  metadata?: Record<string, unknown>;
 }
 
 function toTool(row: {
@@ -249,15 +264,16 @@ export async function executeTool(
   const executionTimeMs = Date.now() - startTime;
 
   // Log execution
-  await supabase.from('tool_executions').insert({
-    conversation_id: conversationId,
-    message_id: messageId || null,
-    tool_id: toolData.id,
-    tool_name: toolName,
-    input_params: params,
-    output_result: result,
-    error_message: errorMsg,
-    execution_time_ms: executionTimeMs,
+  await recordToolExecution({
+    conversationId,
+    messageId,
+    toolId: toolData.id,
+    toolName,
+    toolSource: 'portal',
+    inputParams: params,
+    outputResult: result,
+    errorMessage: errorMsg,
+    executionTimeMs,
   });
 
   return {
@@ -265,6 +281,26 @@ export async function executeTool(
     error: errorMsg,
     executionTimeMs
   };
+}
+
+export async function recordToolExecution(input: RecordToolExecutionInput): Promise<void> {
+  const client = supabaseAdmin ?? supabase;
+  const { error } = await client.from('tool_executions').insert({
+    conversation_id: input.conversationId || null,
+    message_id: input.messageId || null,
+    tool_id: input.toolId || null,
+    tool_name: input.toolName,
+    tool_source: input.toolSource ?? 'portal',
+    input_params: input.inputParams ?? {},
+    output_result: input.outputResult ?? null,
+    error_message: input.errorMessage ?? null,
+    execution_time_ms: input.executionTimeMs,
+    metadata: input.metadata ?? {},
+  });
+
+  if (error) {
+    console.error('[ToolManager] Failed to record tool execution:', error);
+  }
 }
 
 export async function executePortalChatTool(
@@ -320,10 +356,12 @@ export async function getToolExecutions(
     messageId: e.message_id,
     toolId: e.tool_id,
     toolName: e.tool_name,
+    toolSource: e.tool_source ?? 'portal',
     inputParams: e.input_params,
     outputResult: e.output_result,
     errorMessage: e.error_message,
     executionTimeMs: e.execution_time_ms,
+    metadata: e.metadata ?? {},
     createdAt: e.created_at,
   })) || [];
 
