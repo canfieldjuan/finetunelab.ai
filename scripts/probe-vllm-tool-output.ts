@@ -27,6 +27,8 @@ type PortalTools = {
   calculator: PortalTool;
   datetime: PortalTool;
   webSearch: PortalTool;
+  emailAnalysis: PortalTool;
+  emailSecurity: PortalTool;
 };
 
 type ProbeCase = {
@@ -227,13 +229,17 @@ async function loadPortalTools(): Promise<PortalTools> {
     { default: calculator },
     { default: datetime },
     { default: webSearch },
+    { default: emailAnalysis },
+    { emailSecurityTool: emailSecurity },
   ] = await Promise.all([
     import('../lib/tools/calculator'),
     import('../lib/tools/datetime'),
     import('../lib/tools/web-search'),
+    import('../lib/tools/intelligent_email/analysis.tool'),
+    import('../lib/tools/intelligent_email/security.tool'),
   ]);
 
-  return { calculator, datetime, webSearch };
+  return { calculator, datetime, webSearch, emailAnalysis, emailSecurity };
 }
 
 function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
@@ -243,6 +249,32 @@ function sanitizeHeaders(headers: Record<string, string>): Record<string, string
       /authorization|api-key/i.test(key) ? '[REDACTED]' : value,
     ])
   );
+}
+
+function redactSensitiveText(value: string): string {
+  return value
+    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED_EMAIL]')
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[REDACTED_SSN]')
+    .replace(/\b(?:\d[ -]*?){13,16}\b/g, '[REDACTED_CARD]')
+    .replace(/\b(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}\b/g, '[REDACTED_PHONE]');
+}
+
+function sanitizeTranscriptValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return redactSensitiveText(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeTranscriptValue(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [key, sanitizeTranscriptValue(nested)])
+    );
+  }
+
+  return value;
 }
 
 function responseHeaders(headers: Headers): Record<string, string> {
@@ -328,10 +360,83 @@ function validateWebSearchResult(toolName: string, result: unknown): ProbeIssue[
   return [];
 }
 
+function validateEmailSecurityResult(toolName: string, result: unknown): ProbeIssue[] {
+  if (toolName !== 'email_security') return [];
+
+  const payload = objectResult(result);
+  if (!payload) {
+    return [{
+      level: 'error',
+      code: 'email_security_result_not_object',
+      message: 'email_security returned a non-object result.',
+    }];
+  }
+
+  if (payload.success !== true) {
+    return [{
+      level: 'error',
+      code: 'email_security_not_successful',
+      message: `email_security returned success=${String(payload.success)}.`,
+    }];
+  }
+
+  const analysis = objectResult(payload.result);
+  if (!analysis || !('hasPII' in analysis) || !Array.isArray(analysis.detectedItems)) {
+    return [{
+      level: 'error',
+      code: 'email_security_unexpected_shape',
+      message: 'email_security detect_pii did not return hasPII plus detectedItems.',
+    }];
+  }
+
+  if (analysis.hasPII !== true || analysis.detectedItems.length === 0) {
+    return [{
+      level: 'error',
+      code: 'email_security_missed_probe_pii',
+      message: 'email_security did not detect the fake PII markers in the probe email.',
+    }];
+  }
+
+  return [];
+}
+
+function validateEmailAnalysisResult(toolName: string, result: unknown): ProbeIssue[] {
+  if (toolName !== 'email_analysis') return [];
+
+  const payload = objectResult(result);
+  if (!payload) {
+    return [{
+      level: 'error',
+      code: 'email_analysis_result_not_object',
+      message: 'email_analysis returned a non-object result.',
+    }];
+  }
+
+  if (payload.success !== true || payload.action !== 'summarize_thread') {
+    return [{
+      level: 'error',
+      code: 'email_analysis_not_successful',
+      message: `email_analysis returned action=${String(payload.action)} success=${String(payload.success)}.`,
+    }];
+  }
+
+  if (typeof payload.summary !== 'string' || !Array.isArray(payload.keyPoints) || typeof payload.messageCount !== 'number') {
+    return [{
+      level: 'error',
+      code: 'email_analysis_unexpected_shape',
+      message: 'email_analysis summary result did not include summary, keyPoints, and messageCount.',
+    }];
+  }
+
+  return [];
+}
+
 function buildCases(tools: PortalTools): ProbeCase[] {
   const calculatorLlmTool = llmToolFromPortalTool(tools.calculator);
   const datetimeLlmTool = llmToolFromPortalTool(tools.datetime);
   const webSearchLlmTool = llmToolFromPortalTool(tools.webSearch);
+  const emailAnalysisLlmTool = llmToolFromPortalTool(tools.emailAnalysis);
+  const emailSecurityLlmTool = llmToolFromPortalTool(tools.emailSecurity);
 
   return [
     {
@@ -414,6 +519,40 @@ function buildCases(tools: PortalTools): ProbeCase[] {
         {
           role: 'user',
           content: 'Use web_search to search for OpenAI API official documentation. Request 3 results, no deep search, no summarization, and no deep research. Then summarize the result titles briefly.',
+        },
+      ],
+    },
+    {
+      name: 'email-security-pii-dry-run',
+      description: 'Model should call email_security detect_pii on a fake email without sending anything.',
+      tools: [emailSecurityLlmTool],
+      expectToolCalls: true,
+      validateToolResult: validateEmailSecurityResult,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are testing tool calling. For email security checks, call email_security. Do not send email or call any sending tool.',
+        },
+        {
+          role: 'user',
+          content: 'Use email_security with action detect_pii on this fake test email. From: qa.sender@example.test. To: qa.recipient@example.test. Subject: Fake onboarding record. Body: This fake fixture includes email qa.recipient@example.test, phone 555-010-1234, and SSN 000-00-0000. After the tool result, answer with the PII types only.',
+        },
+      ],
+    },
+    {
+      name: 'email-analysis-summary-dry-run',
+      description: 'Model should call email_analysis summarize_thread with a JSON-string emailThread payload.',
+      tools: [emailAnalysisLlmTool],
+      expectToolCalls: true,
+      validateToolResult: validateEmailAnalysisResult,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are testing tool calling. For email thread summaries, call email_analysis. Pass emailThread as a JSON string, not as an object. Do not send email.',
+        },
+        {
+          role: 'user',
+          content: 'Use email_analysis with action summarize_thread on this fake thread, passing the emailThread argument as a JSON string: {"subject":"Migration follow-up","messages":[{"from":"alex@example.test","to":["sam@example.test"],"subject":"Migration follow-up","body":"Can you confirm the Q3 migration checklist is ready before the Friday review?","date":"2026-06-28T14:00:00Z"},{"from":"sam@example.test","to":["alex@example.test"],"subject":"Re: Migration follow-up","body":"The checklist is ready. Remaining action items are updating the rollback note and confirming the owner for search telemetry.","date":"2026-06-28T15:30:00Z"}]}. After the tool result, answer with one sentence.',
         },
       ],
     },
@@ -517,6 +656,10 @@ async function executeProbeTool(
       return tools.datetime.execute(argumentsRecord);
     case tools.webSearch.name:
       return tools.webSearch.execute(argumentsRecord, 'vllm-tool-probe');
+    case tools.emailAnalysis.name:
+      return tools.emailAnalysis.execute(argumentsRecord, 'vllm-tool-probe');
+    case tools.emailSecurity.name:
+      return tools.emailSecurity.execute(argumentsRecord, 'vllm-tool-probe');
     default:
       throw new Error(`No probe executor for tool "${toolName}".`);
   }
@@ -583,7 +726,7 @@ async function runCase(
       request: {
         url: formatted.url,
         headers: sanitizeHeaders(formatted.headers),
-        body: formatted.body,
+        body: sanitizeTranscriptValue(formatted.body) as Record<string, unknown>,
       },
       issues: [],
     };
@@ -601,8 +744,8 @@ async function runCase(
         status: response.status,
         statusText: response.statusText,
         headers: responseHeaders(response.headers),
-        body: parsed,
-        rawText: text,
+        body: sanitizeTranscriptValue(parsed),
+        rawText: redactSensitiveText(text),
       };
 
       if (!response.ok) {
@@ -616,8 +759,8 @@ async function runCase(
 
       const adapterResponse = await adapter.parseResponse(response, parsed, request);
       roundRecord.parsed = {
-        content: adapterResponse.content,
-        toolCalls: adapterResponse.toolCalls,
+        content: adapterResponse.content ? redactSensitiveText(adapterResponse.content) : adapterResponse.content,
+        toolCalls: sanitizeTranscriptValue(adapterResponse.toolCalls) as AdapterResponse['toolCalls'],
         usage: adapterResponse.usage,
       };
 
@@ -651,14 +794,22 @@ async function runCase(
             code: 'unoffered_tool_call',
             message: result.error,
           });
-          toolResults.push({ name: toolCall.name, arguments: toolCall.arguments, result });
+          toolResults.push({
+            name: toolCall.name,
+            arguments: sanitizeTranscriptValue(toolCall.arguments) as Record<string, unknown>,
+            result: sanitizeTranscriptValue(result),
+          });
           nextMessages.push(toolMessage(toolCall, result));
           continue;
         }
 
         try {
           const result = await executeProbeTool(portalTools, toolCall.name, toolCall.arguments);
-          toolResults.push({ name: toolCall.name, arguments: toolCall.arguments, result });
+          toolResults.push({
+            name: toolCall.name,
+            arguments: sanitizeTranscriptValue(toolCall.arguments) as Record<string, unknown>,
+            result: sanitizeTranscriptValue(result),
+          });
           if (probeCase.validateToolResult) {
             roundRecord.issues.push(...probeCase.validateToolResult(toolCall.name, result));
           }
@@ -672,7 +823,11 @@ async function runCase(
             code: 'tool_execution_error',
             message: result.error,
           });
-          toolResults.push({ name: toolCall.name, arguments: toolCall.arguments, result });
+          toolResults.push({
+            name: toolCall.name,
+            arguments: sanitizeTranscriptValue(toolCall.arguments) as Record<string, unknown>,
+            result: sanitizeTranscriptValue(result),
+          });
           nextMessages.push(toolMessage(toolCall, result));
         }
       }
@@ -720,7 +875,7 @@ async function runCase(
     description: probeCase.description,
     status: summarizeStatus(issues),
     rounds,
-    finalContent,
+    finalContent: finalContent ? redactSensitiveText(finalContent) : finalContent,
     toolsCalled,
     issues,
   };

@@ -243,6 +243,7 @@ export class OpenAIAdapter extends BaseProviderAdapter {
     if (
       (!toolCalls || toolCalls.length === 0) &&
       vllmRuntime.parse_qwen_xml_tool_calls &&
+      (request?.options.tools?.length ?? 0) > 0 &&
       content.includes('<tool_call>')
     ) {
       const recoveredToolCalls = this.parseQwenXmlToolCalls(content);
@@ -274,7 +275,13 @@ export class OpenAIAdapter extends BaseProviderAdapter {
   }
 
   private stripQwenXmlToolCalls(content: string): string {
-    return content.replace(/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/g, '').trim();
+    const withoutClosedBlocks = content.replace(/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/g, '');
+    const danglingOpenIndex = withoutClosedBlocks.lastIndexOf('<tool_call>');
+    if (danglingOpenIndex === -1) {
+      return withoutClosedBlocks.trim();
+    }
+
+    return withoutClosedBlocks.slice(0, danglingOpenIndex).trim();
   }
 
   private parseQwenXmlToolCalls(content: string): Array<{
@@ -287,12 +294,26 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       name: string;
       arguments: Record<string, unknown>;
     }> = [];
+    const blocks: string[] = [];
     const regex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
     let match: RegExpExecArray | null;
 
     while ((match = regex.exec(content)) !== null) {
+      blocks.push(match[1]);
+    }
+
+    const lastOpenIndex = content.lastIndexOf('<tool_call>');
+    const lastCloseIndex = content.lastIndexOf('</tool_call>');
+    if (lastOpenIndex !== -1 && lastOpenIndex > lastCloseIndex) {
+      const danglingBlock = content.slice(lastOpenIndex + '<tool_call>'.length).trim();
+      if (danglingBlock) {
+        blocks.push(danglingBlock);
+      }
+    }
+
+    for (const block of blocks) {
       try {
-        const parsed = JSON.parse(match[1]);
+        const parsed = JSON.parse(block);
         const name = typeof parsed.name === 'string' ? parsed.name : '';
         const parsedArgs = parsed.arguments;
         const args = parsedArgs && typeof parsedArgs === 'object' && !Array.isArray(parsedArgs)
