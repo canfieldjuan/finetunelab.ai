@@ -73,6 +73,13 @@ export const graphragQueryConfig = {
 };
 
 /**
+ * Image Generation Tool Configuration
+ */
+export const imageGenConfig = {
+  enabled: process.env.TOOL_IMAGE_GEN_ENABLED === 'true', // Default: false (requires setup)
+};
+
+/**
  * Global Tool System Configuration
  */
 export const globalToolConfig = {
@@ -90,5 +97,6 @@ export const toolConfigs = {
   datetime: datetimeConfig,
   webSearch: webSearchConfig,
   graphragQuery: graphragQueryConfig,
+  imageGen: imageGenConfig,
   global: globalToolConfig,
 };

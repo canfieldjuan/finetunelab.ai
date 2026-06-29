@@ -51,6 +51,34 @@ export interface ImageGenOptions {
   steps?: number;
 }
 
+/** Lifecycle of an async image-generation job. */
+export type ImageJobStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+/**
+ * A persisted async image-generation job. The `generate_image` tool creates one
+ * (status 'pending') and returns immediately; a background runner transitions it
+ * to 'running' then 'completed'/'failed' and fills in the result. Mirrors the
+ * deep-research job model.
+ */
+export interface ImageJob {
+  id: string;
+  userId: string;
+  prompt: string;
+  status: ImageJobStatus;
+  options?: ImageGenOptions;
+  /** Set on success: the delivered image URL. */
+  resultUrl?: string;
+  /** Set on success: which backend produced it. */
+  source?: ImageSource;
+  /** Set on success when the source requires attribution (Unsplash). */
+  attribution?: ImageAttribution;
+  /** Set on failure. */
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
 /** Base error for the image-gen service. */
 export class ImageGenError extends Error {
   readonly statusCode: number;
