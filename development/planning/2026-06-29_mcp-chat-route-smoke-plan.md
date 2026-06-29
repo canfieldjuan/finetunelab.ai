@@ -9,8 +9,9 @@ The MCP client lane now has per-user toolsets and the chat route can inject auth
 1. Add a unit smoke for the authenticated `/api/chat` path with one mocked MCP tool.
 2. Assert the route passes the MCP tool definition into `unifiedLLMClient.chat`.
 3. Assert an MCP tool call runs through `McpUserToolset.execute` and not `executePortalChatTool`.
-4. Update the vLLM tool-use runbook so the MCP-backed route smoke is no longer described as unverified.
-5. Keep this slice test/runbook only unless the smoke exposes a real route bug.
+4. Add a negative route smoke proving body-claimed users without authenticated session context do not get MCP tools.
+5. Update the vLLM tool-use runbook so the MCP-backed route smoke is no longer described as unverified.
+6. Keep this slice test/runbook only unless the smoke exposes a real route bug.
 
 ## Files touched
 
@@ -20,7 +21,7 @@ The MCP client lane now has per-user toolsets and the chat route can inject auth
 
 ## Mechanism
 
-The test mocks Supabase auth/session validation, model lookup, MCP toolset construction, and the unified LLM client. The mocked LLM client inspects the offered tool list, invokes the route's `toolCallHandler` with the MCP tool name, and returns a normal non-streaming response. The assertions prove both halves of the route behavior: MCP definitions are offered to the model, and MCP execution stays scoped to the requesting user's toolset.
+The test mocks Supabase auth/session validation, model lookup, MCP toolset construction, and the unified LLM client. The mocked LLM client inspects the offered tool list, invokes the route's `toolCallHandler` with the MCP tool name, and returns a normal non-streaming response. The assertions prove both halves of the route behavior: MCP definitions are offered to the model, and MCP execution stays scoped to the requesting user's toolset. A companion negative request sends only a body-claimed `userId` and asserts MCP discovery/execution stays off.
 
 ## Intentional
 
@@ -37,8 +38,8 @@ The test mocks Supabase auth/session validation, model lookup, MCP toolset const
 ## Verification
 
 - `npm ci` installed this fresh worktree's dependencies.
-- `npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts` passed: 1 test.
-- `npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts lib/tools/mcp/__tests__/adapter.test.ts lib/tools/mcp/__tests__/user-toolset.test.ts lib/tools/__tests__/toolManager.test.ts` passed: 31 tests.
+- `npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts` passed: 2 tests.
+- `npx vitest run app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts lib/tools/mcp/__tests__/adapter.test.ts lib/tools/mcp/__tests__/user-toolset.test.ts lib/tools/__tests__/toolManager.test.ts` passed: 32 tests.
 - `npm run type-check` passed.
 - `npm run lint` passed with existing repo warnings and no errors.
 

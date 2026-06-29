@@ -325,4 +325,38 @@ describe('POST /api/chat MCP tool use smoke', () => {
     }));
     expect(events).toContain('[DONE]');
   });
+
+  it('does not offer MCP tools for an unauthenticated body-claimed user', async () => {
+    unifiedChat.mockImplementationOnce(
+      async (_modelId: string, _messages: unknown, options: { tools?: ToolDefinition[] }) => {
+        expect(options.tools?.map((tool) => tool.function.name) ?? []).not.toContain('mcp__docs__lookup');
+
+        return {
+          content: 'No MCP tools were offered.',
+          usage: { input_tokens: 8, output_tokens: 5 },
+          toolsCalled: [],
+        };
+      },
+    );
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      messages: [{ role: 'user', content: 'Look up the deflection audit docs.' }],
+      modelId: 'model-vllm-qwen',
+      userId: 'user-1',
+      forceNonStreaming: true,
+      contextInjectionEnabled: false,
+    }));
+
+    expect(response.status).toBe(200);
+    const events = parseSseEvents(await response.text());
+
+    expect(buildUserMcpToolset).not.toHaveBeenCalled();
+    expect(mcpExecute).not.toHaveBeenCalled();
+    expect(executePortalChatTool).not.toHaveBeenCalled();
+    expect(events).toContainEqual(expect.objectContaining({
+      content: 'No MCP tools were offered.',
+    }));
+  });
 });

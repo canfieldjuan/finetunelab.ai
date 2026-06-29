@@ -65,6 +65,7 @@ This covers:
 - Authenticated-user MCP tool discovery in `/api/chat`.
 - MCP tool definitions being offered to `unifiedLLMClient.chat`.
 - MCP tool calls dispatching through the scoped `McpUserToolset` instead of the global portal registry.
+- The route-level security gate: body-claimed users without authenticated session context do not get MCP tools.
 - Non-streaming SSE metadata for an MCP-backed tool call.
 
 ## Probe Cases
