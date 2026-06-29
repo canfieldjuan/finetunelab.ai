@@ -19,7 +19,9 @@ describe('assertSafeHttpUrl', () => {
   it('rejects internal/private/link-local targets (SSRF)', () => {
     for (const host of [
       'http://localhost/mcp',
+      'http://localhost./mcp', // trailing-dot loopback spelling
       'http://127.0.0.1/mcp',
+      'http://127.1/mcp', // WHATWG normalizes to 127.0.0.1
       'http://10.0.0.5/mcp',
       'http://192.168.1.10/mcp',
       'http://169.254.169.254/latest/meta-data',
@@ -27,13 +29,19 @@ describe('assertSafeHttpUrl', () => {
       'http://172.31.255.255/mcp',
       'http://service.local/mcp',
       'http://[::1]/mcp',
+      'http://[::ffff:127.0.0.1]/mcp', // IPv4-mapped IPv6 loopback
+      'http://[::ffff:192.168.1.1]/mcp', // IPv4-mapped IPv6 private
     ]) {
       expect(() => assertSafeHttpUrl(host), host).toThrow(/not allowed/);
     }
   });
 
-  it('allows public IPs and 172 ranges outside the private block', () => {
+  it('allows public IPs, public domains, and public IPv6 (no false positives)', () => {
     expect(assertSafeHttpUrl('http://172.32.0.1/mcp').hostname).toBe('172.32.0.1');
     expect(assertSafeHttpUrl('https://8.8.8.8/mcp').hostname).toBe('8.8.8.8');
+    // Public DNS names that happen to start with fc/fd must NOT be flagged as IPv6 ULA.
+    expect(assertSafeHttpUrl('https://fda.gov/mcp').hostname).toBe('fda.gov');
+    expect(assertSafeHttpUrl('https://fc-barcelona.com/mcp').hostname).toBe('fc-barcelona.com');
+    expect(assertSafeHttpUrl('http://[2606:4700::1]/mcp').hostname).toBe('[2606:4700::1]');
   });
 });

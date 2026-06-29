@@ -128,6 +128,12 @@ names to the `tools` table in Slice 3.
 ## Slice 3 (registration) follow-ups — from PR #42 review
 
 When wiring discovery/registration, before a tool is registered/offered:
+- **Connect-time SSRF check (P1, authoritative).** The Slice-2 `url-guard` runs at
+  config-write time, but owners can INSERT rows directly via RLS (the DB only checks
+  the scheme), and string checks can't stop DNS rebinding (public host → private IP).
+  So the real defense is at connect time: resolve the host and reject
+  loopback/link-local/private/IPv4-mapped IPs before opening the transport. Reuse the
+  range logic from `url-guard.ts`.
 - **Filter task-required tools.** MCP tools advertising `execution.taskSupport:
   'required'` can't run via plain `callTool` — don't register/offer them (or
   implement the task call path first), else the model is offered tools that always
@@ -156,3 +162,10 @@ When wiring discovery/registration, before a tool is registered/offered:
   `mcp_servers` migration (http-only CHECK + RLS), `host-config.ts` (stdio from
   `MCP_STDIO_SERVERS`), `url-guard.ts` (http(s) + private-target SSRF block),
   `server-config.service.ts` (http CRUD + merged `listEnabledServers`), with tests.
+- 2026-06-29 — Slice 2 PR #45 review round (codex P1s + reviewer): moved migration to
+  `supabase/migrations/` (the actual runner path — gate DB layer now applies); fixed
+  url-guard (public domains like fda.gov no longer false-flagged as IPv6 ULA;
+  IPv4-mapped IPv6 + trailing-dot loopback now blocked); public service methods return
+  a token-redacted summary (no decrypted bearer leaks to UI/API); server names
+  validated to [A-Za-z0-9_-] (DB-unique == namespace-unique). Recorded connect-time
+  SSRF (resolve-time) as a Slice-3 P1 above.

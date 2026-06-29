@@ -73,15 +73,28 @@ describe('McpServerConfigService', () => {
         enabled: true,
       }),
     );
-    // Returned config decrypts the token back.
+    // Returned shape is the token-redacted summary (never the decrypted token).
     expect(config).toEqual({
       id: 'srv-1',
       name: 'github',
       transport: 'http',
       url: 'https://api.example.com/mcp',
-      authToken: 'tok',
       enabled: true,
+      hasAuthToken: true,
     });
+    expect(config).not.toHaveProperty('authToken');
+  });
+
+  it('createHttpServer rejects invalid (collision-prone) names before the DB', async () => {
+    const { supabase, builder } = makeSupabase({ data: null, error: null });
+    const service = new McpServerConfigService(supabase);
+
+    for (const name of ['my server', '!!!', '', 'a'.repeat(101)]) {
+      await expect(
+        service.createHttpServer('u1', { name, url: 'https://api.example.com/mcp' }),
+      ).rejects.toThrow(/Server name must be/);
+    }
+    expect(builder.insert).not.toHaveBeenCalled();
   });
 
   it('createHttpServer rejects internal/private urls before touching the DB', async () => {

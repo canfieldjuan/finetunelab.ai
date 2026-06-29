@@ -14,14 +14,18 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
-  name TEXT NOT NULL CHECK (length(name) > 0 AND length(name) <= 100),
+  -- Name doubles as the tool namespace (`mcp__<name>__<tool>`), which is sanitized
+  -- to [a-zA-Z0-9_-]. Restrict the stored name to that same set so DB uniqueness
+  -- matches namespace uniqueness (no "my server" vs "my_server" collisions).
+  name TEXT NOT NULL CHECK (name ~ '^[A-Za-z0-9_-]{1,100}$'),
 
   -- HTTP only, enforced at the database. Do NOT relax without revisiting the
   -- stdio-RCE threat model — stdio must stay host-config-only.
   transport TEXT NOT NULL DEFAULT 'http' CHECK (transport = 'http'),
 
-  -- Remote endpoint (http/https). The application additionally blocks
-  -- internal/private/link-local targets (SSRF) before storing/connecting.
+  -- Remote endpoint (http/https). NOTE: the DB only checks the scheme; the
+  -- authoritative internal/private-target (SSRF) check is at connect time
+  -- (resolve-time) in the application — owners can INSERT directly via RLS.
   url TEXT NOT NULL CHECK (url ~* '^https?://'),
 
   -- Optional auth token, encrypted at rest by the app (lib/models/encryption).

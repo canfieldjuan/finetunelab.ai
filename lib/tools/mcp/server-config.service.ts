@@ -14,6 +14,17 @@ import { assertSafeHttpUrl } from './url-guard';
 
 const TABLE = 'mcp_servers';
 
+// Server name doubles as the tool namespace (mcp__<name>__<tool>), which is
+// sanitized to [A-Za-z0-9_-]. Restrict the stored name to that same set so DB
+// uniqueness == namespace uniqueness (mirrors the DB CHECK; prevents "my server"
+// vs "my_server" collisions).
+const NAME_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+function assertValidName(name: string): void {
+  if (!NAME_PATTERN.test(name)) {
+    throw new Error(`[MCP] Server name must be 1-100 chars of [A-Za-z0-9_-]: "${name}"`);
+  }
+}
+
 export interface CreateHttpServerInput {
   name: string;
   url: string;
@@ -29,6 +40,16 @@ export interface UpdateHttpServerInput {
   enabled?: boolean;
 }
 
+/** UI/API-safe view of a server — NEVER includes the decrypted auth token. */
+export interface McpServerSummary {
+  id: string;
+  name: string;
+  transport: 'http';
+  url?: string;
+  enabled: boolean;
+  hasAuthToken: boolean;
+}
+
 interface McpServerRow {
   id: string;
   user_id: string;
@@ -39,6 +60,8 @@ interface McpServerRow {
   enabled: boolean;
 }
 
+// Internal: includes the decrypted token for the client manager. NEVER return this
+// shape from a UI/API surface — use rowToSummary for anything user-facing.
 function rowToConfig(row: McpServerRow): McpServerConfig {
   return {
     id: row.id,
@@ -50,18 +73,30 @@ function rowToConfig(row: McpServerRow): McpServerConfig {
   };
 }
 
+function rowToSummary(row: McpServerRow): McpServerSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    transport: 'http',
+    url: row.url ?? undefined,
+    enabled: row.enabled,
+    hasAuthToken: !!row.auth_token_encrypted,
+  };
+}
+
 export class McpServerConfigService {
   constructor(private readonly supabase: SupabaseClient) {}
 
-  /** All of a user's configured (http) MCP servers. */
-  async listUserServers(userId: string): Promise<McpServerConfig[]> {
+  /** All of a user's configured (http) MCP servers (token-redacted). */
+  async listUserServers(userId: string): Promise<McpServerSummary[]> {
     const { data, error } = await this.supabase.from(TABLE).select('*').eq('user_id', userId);
     if (error) throw new Error(error.message);
-    return ((data ?? []) as McpServerRow[]).map(rowToConfig);
+    return ((data ?? []) as McpServerRow[]).map(rowToSummary);
   }
 
   /** Create an http MCP server for a user. (No stdio path exists by design.) */
-  async createHttpServer(userId: string, input: CreateHttpServerInput): Promise<McpServerConfig> {
+  async createHttpServer(userId: string, input: CreateHttpServerInput): Promise<McpServerSummary> {
+    assertValidName(input.name);
     assertSafeHttpUrl(input.url);
 
     const { data, error } = await this.supabase
@@ -78,7 +113,7 @@ export class McpServerConfigService {
       .single();
 
     if (error) throw new Error(error.message);
-    return rowToConfig(data as McpServerRow);
+    return rowToSummary(data as McpServerRow);
   }
 
   /** Update an http MCP server the user owns. */
@@ -86,7 +121,8 @@ export class McpServerConfigService {
     userId: string,
     id: string,
     input: UpdateHttpServerInput,
-  ): Promise<McpServerConfig> {
+  ): Promise<McpServerSummary> {
+    if (input.name !== undefined) assertValidName(input.name);
     if (input.url !== undefined) assertSafeHttpUrl(input.url);
 
     const patch: Record<string, unknown> = {};
@@ -106,7 +142,7 @@ export class McpServerConfigService {
       .single();
 
     if (error) throw new Error(error.message);
-    return rowToConfig(data as McpServerRow);
+    return rowToSummary(data as McpServerRow);
   }
 
   /** Delete an http MCP server the user owns. */
