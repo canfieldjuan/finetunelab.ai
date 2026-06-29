@@ -85,10 +85,14 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   // jobIds we've already opened an image stream for (dedupe across stream chunks).
   const subscribedImageJobsRef = useRef<Set<string>>(new Set());
+  // Latest active conversation, so an async image result isn't appended into a
+  // different conversation the user switched to mid-generation.
+  const activeIdRef = useRef(activeId);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const lastScrolledMessagesLength = useRef<number>(0);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -168,6 +172,11 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     // completion, append the image to the conversation as markdown (renders via
     // MessageContent's img path; data-URIs are already blocked there).
     const subscribeToImageJob = (imgJobId: string, imgPrompt: string, streamToken: string) => {
+      const originatingConversationId = activeId;
+      // Escape the user-controlled prompt so it can't break out of the markdown
+      // image alt text (e.g. a `]` terminating the label and injecting a URL).
+      const escapeMarkdownAlt = (s: string) =>
+        s.replace(/[[\]]/g, '\\$&').replace(/[\r\n]+/g, ' ').trim();
       try {
         const es = new EventSource(
           `/api/image/stream?jobId=${encodeURIComponent(imgJobId)}&token=${encodeURIComponent(streamToken)}`
@@ -182,23 +191,26 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             if (evt.type === 'image_complete' && typeof evt.url === 'string') {
               if (done) return;
               done = true;
-              const alt = imgPrompt || 'generated image';
+              close();
+              // Drop the result if the user has since switched conversations.
+              if (activeIdRef.current !== originatingConversationId) return;
+              const alt = escapeMarkdownAlt(imgPrompt || 'generated image');
               let content = `![${alt}](${evt.url})`;
               const attr = evt.attribution;
               if (attr && typeof attr === 'object' && typeof attr.authorName === 'string') {
                 content += `\n\n*Photo by [${attr.authorName}](${attr.authorUrl}) on [${attr.sourceName}](${attr.sourceUrl})*`;
               }
-              setMessages((prev) => [...prev, { id: `img-${imgJobId}`, role: 'assistant', content }]);
-              close();
+              setMessages((prev) => [...prev, { id: `temp-img-${imgJobId}`, role: 'assistant', content }]);
             } else if (evt.type === 'image_failed') {
               if (done) return;
               done = true;
+              close();
+              if (activeIdRef.current !== originatingConversationId) return;
               const detail = typeof evt.error === 'string' ? `: ${evt.error}` : '';
               setMessages((prev) => [
                 ...prev,
-                { id: `img-${imgJobId}`, role: 'assistant', content: `_Image generation failed${detail}._` },
+                { id: `temp-img-${imgJobId}`, role: 'assistant', content: `_Image generation failed${detail}._` },
               ]);
-              close();
             }
           } catch {
             // ignore malformed event
