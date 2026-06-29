@@ -15,6 +15,7 @@ import {
   reduceWebSearchStreamEvent,
 } from './chatSearchStream';
 import { normalizeToolCalls } from './chatToolStream';
+import { buildAssistantMessageMetadata, normalizeGraphRAGCitations } from './chatMessageMetadata';
 import { getSseDataLine, splitSseLines } from './sseStream';
 
 
@@ -117,6 +118,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     let toolsCalled: ReturnType<typeof normalizeToolCalls>;
     let graphragCitations: Citation[] | undefined;
     let graphragContextsUsed: number | undefined;
+    let graphragUsed: boolean | undefined;
+    let graphragNodes: number | undefined;
+    let graphragChunks: number | undefined;
+    let graphragRetrievalMs: number | undefined;
+    let graphragRelevance: number | undefined;
+    let graphragGrounded: boolean | undefined;
+    let graphragMethod: string | undefined;
     let modelId: string | null = null;
     let provider: string | null = null;
     let modelName: string | null = null;
@@ -137,6 +145,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                   content: assistantMessage,
                   citations: graphragCitations,
                   contextsUsed: graphragContextsUsed,
+                  graphrag_used: graphragUsed,
+                  graphrag_nodes: graphragNodes,
+                  graphrag_chunks: graphragChunks,
+                  graphrag_retrieval_ms: graphragRetrievalMs,
+                  graphrag_relevance: graphragRelevance,
+                  graphrag_grounded: graphragGrounded,
+                  graphrag_method: graphragMethod,
                   tools_called: toolsCalled,
                   webSearchResults
                 }
@@ -169,8 +184,15 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           try {
             const parsed = JSON.parse(data);
             if (parsed.type === "graphrag_metadata") {
-              graphragCitations = parsed.citations;
+              graphragCitations = normalizeGraphRAGCitations(parsed.citations);
               graphragContextsUsed = parsed.contextsUsed;
+              graphragUsed = parsed.graphrag_used;
+              graphragNodes = parsed.graphrag_nodes;
+              graphragChunks = parsed.graphrag_chunks;
+              graphragRetrievalMs = parsed.graphrag_retrieval_ms;
+              graphragRelevance = parsed.graphrag_relevance;
+              graphragGrounded = parsed.graphrag_grounded;
+              graphragMethod = parsed.graphrag_method;
 
               // Note: graphrag_tokens will come in token_usage event, not here
               log.debug('useChat', 'GraphRAG metadata received', {
@@ -365,6 +387,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               content: assistantMessage,
               citations: graphragCitations,
               contextsUsed: graphragContextsUsed,
+              graphrag_used: graphragUsed,
+              graphrag_nodes: graphragNodes,
+              graphrag_chunks: graphragChunks,
+              graphrag_retrieval_ms: graphragRetrievalMs,
+              graphrag_relevance: graphragRelevance,
+              graphrag_grounded: graphragGrounded,
+              graphrag_method: graphragMethod,
               tools_called: toolsCalled,
               webSearchResults
             }
@@ -396,17 +425,23 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     });
 
     // Create metadata object for persistence (matching server-side implementation)
-    const messageMetadataFields = {
-      ...(modelId && modelName && provider ? {
-        model_name: modelName,
-        provider: provider,
-        model_id: modelId,
-      } : {}),
-      ...(webSearchResults && webSearchResults.length > 0 ? { web_search_results: webSearchResults } : {}),
-    };
-    const messageMetadata = Object.keys(messageMetadataFields).length > 0
-      ? { ...messageMetadataFields, timestamp: new Date().toISOString() }
-      : undefined;
+    const messageMetadata = buildAssistantMessageMetadata({
+      modelId,
+      modelName,
+      provider,
+      webSearchResults,
+      graphRAG: {
+        citations: graphragCitations,
+        contextsUsed: graphragContextsUsed,
+        graphUsed: graphragUsed,
+        nodesRetrieved: graphragNodes,
+        chunksUsed: graphragChunks,
+        retrievalMs: graphragRetrievalMs,
+        relevance: graphragRelevance,
+        grounded: graphragGrounded,
+        method: graphragMethod,
+      },
+    });
 
     if (user && activeId && !allowAnonymous) {
       void supabase
@@ -442,6 +477,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                       ...aiMsg,
                       citations: graphragCitations,
                       contextsUsed: graphragContextsUsed,
+                      graphrag_used: graphragUsed,
+                      graphrag_nodes: graphragNodes,
+                      graphrag_chunks: graphragChunks,
+                      graphrag_retrieval_ms: graphragRetrievalMs,
+                      graphrag_relevance: graphragRelevance,
+                      graphrag_grounded: graphragGrounded,
+                      graphrag_method: graphragMethod,
                       tools_called: toolsCalled,
                       webSearchResults
                     }

@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
 import { normalizeToolCalls } from './chatToolStream';
+import { hydrateGraphRAGMessageFields } from './chatMessageMetadata';
 import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 
 interface ConversationData {
@@ -25,6 +26,34 @@ interface ValidationResult {
     invalidCount?: number;
   };
   valid: ConversationData[];
+}
+
+export function buildValidationMessageProjection(messages: Message[]): Message[] {
+  return messages.map((msg: Message) => ({
+    id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    metadata: msg.metadata,
+    content_json: msg.content_json,
+    tools_called: msg.tools_called,
+    webSearchResults: msg.webSearchResults,
+    citations: msg.citations,
+    contextsUsed: msg.contextsUsed,
+    graphrag_used: msg.graphrag_used,
+    graphrag_nodes: msg.graphrag_nodes,
+    graphrag_chunks: msg.graphrag_chunks,
+    graphrag_retrieval_ms: msg.graphrag_retrieval_ms,
+    graphrag_relevance: msg.graphrag_relevance,
+    graphrag_grounded: msg.graphrag_grounded,
+    graphrag_method: msg.graphrag_method,
+    // Include all metadata fields for MessageMetadata component
+    model_id: msg.model_id,
+    model_name: msg.model_name,
+    provider: msg.provider,
+    input_tokens: msg.input_tokens,
+    output_tokens: msg.output_tokens,
+    latency_ms: msg.latency_ms,
+  }));
 }
 
 /**
@@ -157,23 +186,14 @@ export function useMessages(
                 enrichedMsg.webSearchResults = webSearchResults;
               }
 
+              Object.assign(enrichedMsg, hydrateGraphRAGMessageFields(meta));
+
               if (meta.model_name) {
                 enrichedMsg.model_name = meta.model_name;
                 enrichedCount++;
                 // Also use persisted provider if message provider field is missing
                 if (!enrichedMsg.provider && meta.provider) {
                   enrichedMsg.provider = meta.provider;
-                }
-
-                // Extract GraphRAG metadata if available
-                if (meta.graphrag) {
-                  enrichedMsg.graphrag_used = meta.graphrag.graph_used;
-                  enrichedMsg.graphrag_nodes = meta.graphrag.nodes_retrieved;
-                  enrichedMsg.graphrag_chunks = meta.graphrag.context_chunks_used;
-                  enrichedMsg.graphrag_retrieval_ms = meta.graphrag.retrieval_time_ms;
-                  enrichedMsg.graphrag_relevance = meta.graphrag.context_relevance_score;
-                  enrichedMsg.graphrag_grounded = meta.graphrag.answer_grounded_in_graph;
-                  enrichedMsg.graphrag_method = meta.graphrag.retrieval_method;
                 }
 
                 // Apply content truncation if needed
@@ -219,22 +239,7 @@ export function useMessages(
             id: activeId,
             user_id: userId,
             created_at: new Date().toISOString(),
-            messages: processedMessages.map((msg: Message) => ({
-              id: msg.id,
-              role: msg.role,
-              content: msg.content,
-              metadata: msg.metadata,
-              content_json: msg.content_json,
-              tools_called: msg.tools_called,
-              webSearchResults: msg.webSearchResults,
-              // Include all metadata fields for MessageMetadata component
-              model_id: msg.model_id,
-              model_name: msg.model_name,
-              provider: msg.provider,
-              input_tokens: msg.input_tokens,
-              output_tokens: msg.output_tokens,
-              latency_ms: msg.latency_ms,
-            })),
+            messages: buildValidationMessageProjection(processedMessages),
           };
 
           // Validate messages if validation function provided
