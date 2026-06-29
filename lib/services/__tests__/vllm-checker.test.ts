@@ -42,6 +42,9 @@ describe('vLLM checker', () => {
     delete process.env.VLLM_PYTHON_PATH;
     delete process.env.PYTHON_PATH;
     delete process.env.VLLM_EXECUTABLE_PATH;
+    delete process.env.VLLM_EXTERNAL_URL;
+    delete process.env.VERCEL;
+    delete process.env.RENDER;
   });
 
   it('checks env-provided Python paths with execFile argv instead of shell interpolation', async () => {
@@ -76,5 +79,24 @@ describe('vLLM checker', () => {
     expect(execFileCalls.map(([file]) => file)).not.toContain(
       'python; echo injected -c "import vllm; print(\'OK\')"'
     );
+  });
+
+  it('treats configured external vLLM as effectively available without exposing paths', async () => {
+    process.env.VLLM_EXTERNAL_URL = 'https://vllm.example.com';
+    mockExecFile(() => ({ error: new Error('missing local vllm') }));
+
+    const { getVLLMRuntimeStatus } = await import('../vllm-checker');
+
+    await expect(getVLLMRuntimeStatus()).resolves.toMatchObject({
+      available: true,
+      mode: 'external',
+      local_available: false,
+      external_configured: true,
+      version: null,
+      configured: {
+        executable_path: false,
+        python_path: false,
+      },
+    });
   });
 });
