@@ -221,6 +221,7 @@ import { analyticsExportTool } from './analytics-export';
 // import { unifiedExportTool } from './unified-export'; // TODO: Re-enable when unified-export is implemented
 import { trainingControlTool } from './trainingControl';
 import graphragQueryTool from './graphrag';
+import generateImageTool from './image-gen/tool';
 
 // Auto-register client-safe tools
 console.log('[ToolRegistry] Auto-registering client-safe tools...');
@@ -240,6 +241,7 @@ registerTool(analyticsExportTool); // Deprecated - keeping during grace period
 // registerTool(unifiedExportTool); // TODO: Re-enable when unified-export is implemented
 registerTool(trainingControlTool);
 registerTool(graphragQueryTool);
+registerTool(generateImageTool);
 
 // REMOVED: Server-only tools (filesystem, system_monitor) - security risk in cloud deployments
 // These tools are kept in codebase but not registered for chat portal use

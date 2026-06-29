@@ -39,6 +39,12 @@ export interface ImageGenResult {
   height?: number;
   /** Present for Unsplash results; absent for generated images. */
   attribution?: ImageAttribution;
+  /**
+   * For ComfyUI results: the Supabase Storage object path the signed `url` was
+   * minted from, so the URL can be re-signed after it expires. Absent for
+   * Unsplash (its CDN URL is permanent).
+   */
+  storagePath?: string;
 }
 
 /** Caller-tunable generation options (sane defaults applied per backend). */
@@ -49,6 +55,36 @@ export interface ImageGenOptions {
   seed?: number;
   /** Sampling steps for ComfyUI; ignored by Unsplash. */
   steps?: number;
+}
+
+/** Lifecycle of an async image-generation job. */
+export type ImageJobStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+/**
+ * A persisted async image-generation job. The `generate_image` tool creates one
+ * (status 'pending') and returns immediately; a background runner transitions it
+ * to 'running' then 'completed'/'failed' and fills in the result. Mirrors the
+ * deep-research job model.
+ */
+export interface ImageJob {
+  id: string;
+  userId: string;
+  prompt: string;
+  status: ImageJobStatus;
+  options?: ImageGenOptions;
+  /** Set on success: the delivered image URL. */
+  resultUrl?: string;
+  /** Set on success (ComfyUI only): storage path the signed URL can be re-minted from. */
+  resultPath?: string;
+  /** Set on success: which backend produced it. */
+  source?: ImageSource;
+  /** Set on success when the source requires attribution (Unsplash). */
+  attribution?: ImageAttribution;
+  /** Set on failure. */
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
 }
 
 /** Base error for the image-gen service. */

@@ -20,6 +20,7 @@ export const PORTAL_CHAT_TOOL_NAMES = new Set([
   'intelligent_email',
   'email_analysis',
   'email_security',
+  'generate_image',
 ]);
 
 export function isPortalChatTool(tool: Pick<ToolDefinition, 'name'>): boolean {
