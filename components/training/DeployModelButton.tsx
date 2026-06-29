@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import { Rocket, Loader2, CheckCircle, XCircle, Package, AlertCircle, ExternalLink, Cloud } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
@@ -44,6 +45,11 @@ import { CheckpointSelector } from './CheckpointSelector';
 import type { TrainingCheckpoint } from '@/lib/training/checkpoint.types';
 import { STATUS, Status } from '@/lib/constants';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  VLLM_CHAT_TEMPLATE_CONTENT_FORMATS,
+  VLLM_TOOL_CALL_PARSERS,
+  type VLLMChatTemplateContentFormat,
+} from '@/lib/models/vllm-runtime';
 
 interface DeployModelButtonProps {
   jobId: string;
@@ -158,6 +164,12 @@ export function DeployModelButton({
   // vLLM configuration
   const [maxModelLen, setMaxModelLen] = useState<number>(8192);
   const [gpuMemoryUtil, setGpuMemoryUtil] = useState<number>(0.7); // Default 70% - safe for dev environments
+  const [enableAutoToolChoice, setEnableAutoToolChoice] = useState<boolean>(true);
+  const [toolCallParser, setToolCallParser] = useState<string>('hermes');
+  const [chatTemplate, setChatTemplate] = useState<string>('');
+  const [chatTemplateContentFormat, setChatTemplateContentFormat] =
+    useState<VLLMChatTemplateContentFormat>('auto');
+  const [parseQwenXmlToolCalls, setParseQwenXmlToolCalls] = useState<boolean>(false);
 
   // Serverless-specific configuration
   const [gpuMemoryUtilization, setGpuMemoryUtilization] = useState<number>(0.85); // Default 85% for serverless
@@ -260,6 +272,8 @@ export function DeployModelButton({
     return null;
   }
 
+  const isVllmBackedDeployment = serverType === STATUS.VLLM || serverType === STATUS.RUNPOD;
+
   const handleDeploy = async () => {
     setDeploymentStatus(STATUS.DEPLOYING);
     setErrorMessage('');
@@ -300,6 +314,13 @@ export function DeployModelButton({
               acceleratorType: fireworksGpu,
               region: fireworksRegion,
               precision: fireworksPrecision,
+            }),
+            ...(isVllmBackedDeployment && {
+              enable_auto_tool_choice: enableAutoToolChoice,
+              tool_call_parser: toolCallParser,
+              chat_template: chatTemplate.trim() || undefined,
+              chat_template_content_format: chatTemplateContentFormat,
+              parse_qwen_xml_tool_calls: parseQwenXmlToolCalls,
             }),
           },
         }),
@@ -866,6 +887,85 @@ export function DeployModelButton({
                     <li>• Port: Auto-allocated (8002-8020)</li>
                     <li>• Security: Bound to localhost only</li>
                   </ul>
+                </div>
+              </div>
+            )}
+
+            {isVllmBackedDeployment && (
+              <div className="rounded-lg border p-4 bg-muted/50 space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium">vLLM Tool Runtime</h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Match these to the parser and chat template your model expects for tool calls.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tool-call-parser">Tool Call Parser</Label>
+                    <Select value={toolCallParser} onValueChange={setToolCallParser}>
+                      <SelectTrigger id="tool-call-parser">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VLLM_TOOL_CALL_PARSERS.map((parser) => (
+                          <SelectItem key={parser} value={parser}>
+                            {parser}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="chat-template-format">Template Content Format</Label>
+                    <Select
+                      value={chatTemplateContentFormat}
+                      onValueChange={(value) =>
+                        setChatTemplateContentFormat(value as VLLMChatTemplateContentFormat)
+                      }
+                    >
+                      <SelectTrigger id="chat-template-format">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VLLM_CHAT_TEMPLATE_CONTENT_FORMATS.map((format) => (
+                          <SelectItem key={format} value={format}>
+                            {format}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="chat-template">Chat Template</Label>
+                  <Textarea
+                    id="chat-template"
+                    value={chatTemplate}
+                    onChange={(event) => setChatTemplate(event.target.value)}
+                    placeholder="Optional path or inline template"
+                    className="min-h-24 font-mono text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={enableAutoToolChoice}
+                      onCheckedChange={(checked) => setEnableAutoToolChoice(Boolean(checked))}
+                    />
+                    Auto tool choice
+                  </label>
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={parseQwenXmlToolCalls}
+                      onCheckedChange={(checked) => setParseQwenXmlToolCalls(Boolean(checked))}
+                    />
+                    Parse Qwen XML fallback
+                  </label>
                 </div>
               </div>
             )}
