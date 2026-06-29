@@ -220,6 +220,7 @@ export async function POST(req: NextRequest) {
 
     // Keep tools as-is for trace logging (empty array is meaningful)
     const activeTools = tools.length > 0 ? tools : undefined;
+    const offeredToolNames = new Set(tools.map((tool) => tool.function.name));
 
     // For traces, always pass tools array (even if empty) to show what was available
     const toolsForTrace = tools;
@@ -882,7 +883,16 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       const toolStartTime = Date.now();
-      const result = await executePortalChatTool(toolName, args, convId, undefined, userId || undefined, undefined, toolTraceContext);
+      const result = await executePortalChatTool(
+        toolName,
+        args,
+        convId,
+        undefined,
+        userId || undefined,
+        undefined,
+        toolTraceContext,
+        { allowedToolNames: offeredToolNames }
+      );
       const toolExecutionTime = Date.now() - toolStartTime;
 
       // Capture web_search results for SSE previews (standard search path only)

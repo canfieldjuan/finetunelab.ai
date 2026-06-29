@@ -155,6 +155,49 @@ describe('toolManager registry boundaries', () => {
     expect(supabaseMock.executionRows).toHaveLength(0);
   });
 
+  it('blocks portal tool calls that were not offered in the current request', async () => {
+    const { executePortalChatTool } = await import('../toolManager');
+
+    const result = await executePortalChatTool(
+      'calculator',
+      { action: 'calculate' },
+      'conversation-id',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { allowedToolNames: new Set(['web_search']) }
+    );
+
+    expect(result).toMatchObject({
+      data: null,
+      error: 'Tool was not offered for this request: calculator',
+      executionTimeMs: 0,
+    });
+    expect(supabaseMock.executionRows).toHaveLength(0);
+  });
+
+  it('executes portal tool calls that were offered in the current request', async () => {
+    const { executePortalChatTool } = await import('../toolManager');
+
+    const result = await executePortalChatTool(
+      'calculator',
+      { action: 'calculate' },
+      'conversation-id',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { allowedToolNames: ['calculator'] }
+    );
+
+    expect(result).toMatchObject({
+      data: { ok: true, name: 'calculator' },
+      error: null,
+    });
+    expect(supabaseMock.executionRows).toHaveLength(1);
+  });
+
   it('checks database availability before portal parameter validation', async () => {
     supabaseMock.rows = [];
     const { executePortalChatTool } = await import('../toolManager');

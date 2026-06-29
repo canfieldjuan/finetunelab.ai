@@ -35,6 +35,7 @@ export interface ExecuteToolOptions {
   enforcePortalChatTool?: boolean;
   honorConfigEnabled?: boolean;
   validateParameters?: boolean;
+  allowedToolNames?: ReadonlySet<string> | readonly string[];
 }
 
 function toTool(row: {
@@ -139,6 +140,19 @@ export async function executeTool(
   console.log('[ToolManager] Executing tool:', toolName, 'with params:', params);
 
   const startTime = Date.now();
+
+  if (options.allowedToolNames) {
+    const allowedToolNames = options.allowedToolNames instanceof Set
+      ? options.allowedToolNames
+      : new Set(options.allowedToolNames);
+    if (!allowedToolNames.has(toolName)) {
+      return {
+        data: null,
+        error: `Tool was not offered for this request: ${toolName}`,
+        executionTimeMs: 0
+      };
+    }
+  }
 
   // Get tool definition
   const toolDef = getToolByName(toolName);
@@ -260,7 +274,8 @@ export async function executePortalChatTool(
   messageId?: string,
   userId?: string,
   supabaseClient?: unknown,
-  traceContext?: unknown
+  traceContext?: unknown,
+  options: Pick<ExecuteToolOptions, 'allowedToolNames'> = {}
 ): Promise<{ data: unknown; error: string | null; executionTimeMs: number }> {
   return executeTool(
     toolName,
@@ -274,6 +289,7 @@ export async function executePortalChatTool(
       enforcePortalChatTool: true,
       honorConfigEnabled: true,
       validateParameters: true,
+      allowedToolNames: options.allowedToolNames,
     }
   );
 }
