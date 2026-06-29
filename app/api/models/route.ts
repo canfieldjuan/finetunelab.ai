@@ -327,6 +327,9 @@ export async function POST(request: NextRequest) {
       price_per_output_token: body.price_per_output_token,
       default_temperature: body.default_temperature ?? parseFloat(process.env.MODELS_DEFAULT_TEMPERATURE || '0.7'),
       default_top_p: body.default_top_p ?? parseFloat(process.env.MODELS_DEFAULT_TOP_P || '1.0'),
+      metadata: body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+        ? body.metadata
+        : undefined,
       enabled: body.enabled ?? true,
       is_default: body.is_default ?? false,
     };

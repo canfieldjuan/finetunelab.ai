@@ -11,6 +11,12 @@ import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { AuthType, LLMModelDisplay, UpdateModelDTO } from '@/lib/models/llm-model.types';
+import {
+  getVllmRuntimeMetadata,
+  VLLM_CHAT_TEMPLATE_CONTENT_FORMATS,
+  VLLM_TOOL_CALL_PARSERS,
+  withVllmRuntimeMetadata,
+} from '@/lib/models/vllm-runtime';
 
 interface EditModelDialogProps {
   isOpen: boolean;
@@ -36,6 +42,11 @@ interface EditFormState {
   price_per_output_token: string;
   default_temperature: string;
   default_top_p: string;
+  vllm_enable_auto_tool_choice: boolean;
+  vllm_tool_call_parser: string;
+  vllm_chat_template: string;
+  vllm_chat_template_content_format: string;
+  vllm_parse_qwen_xml_tool_calls: boolean;
   enabled: boolean;
   is_default: boolean;
 }
@@ -56,6 +67,11 @@ const DEFAULT_FORM_STATE: EditFormState = {
   price_per_output_token: '',
   default_temperature: '0.7',
   default_top_p: '1',
+  vllm_enable_auto_tool_choice: true,
+  vllm_tool_call_parser: 'hermes',
+  vllm_chat_template: '',
+  vllm_chat_template_content_format: 'auto',
+  vllm_parse_qwen_xml_tool_calls: false,
   enabled: true,
   is_default: false,
 };
@@ -80,6 +96,7 @@ export function EditModelDialog({
   // Sync form state when dialog opens or model changes
   useEffect(() => {
     if (model && isOpen) {
+      const vllmRuntime = getVllmRuntimeMetadata(model.metadata);
       setFormData({
         name: model.name,
         description: model.description || '',
@@ -96,6 +113,11 @@ export function EditModelDialog({
         price_per_output_token: model.price_per_output_token?.toString() ?? '',
         default_temperature: model.default_temperature.toString(),
         default_top_p: model.default_top_p.toString(),
+        vllm_enable_auto_tool_choice: vllmRuntime.enable_auto_tool_choice ?? true,
+        vllm_tool_call_parser: vllmRuntime.tool_call_parser || 'hermes',
+        vllm_chat_template: vllmRuntime.chat_template || '',
+        vllm_chat_template_content_format: vllmRuntime.chat_template_content_format || 'auto',
+        vllm_parse_qwen_xml_tool_calls: vllmRuntime.parse_qwen_xml_tool_calls ?? false,
         enabled: model.enabled,
         is_default: model.is_default,
       });
@@ -215,6 +237,20 @@ export function EditModelDialog({
       payload.default_top_p = topP;
     }
 
+    if (model.provider === 'vllm' || model.provider === 'runpod') {
+      const currentVllmRuntime = getVllmRuntimeMetadata(model.metadata);
+      const nextVllmRuntime = {
+        enable_auto_tool_choice: formData.vllm_enable_auto_tool_choice,
+        tool_call_parser: formData.vllm_tool_call_parser.trim() || undefined,
+        chat_template: formData.vllm_chat_template.trim() || undefined,
+        chat_template_content_format: formData.vllm_chat_template_content_format as 'auto' | 'openai' | 'string',
+        parse_qwen_xml_tool_calls: formData.vllm_parse_qwen_xml_tool_calls,
+      };
+      if (JSON.stringify(currentVllmRuntime) !== JSON.stringify(nextVllmRuntime)) {
+        payload.metadata = withVllmRuntimeMetadata(model.metadata, nextVllmRuntime);
+      }
+    }
+
     if (formData.enabled !== model.enabled) {
       payload.enabled = formData.enabled;
     }
@@ -289,6 +325,7 @@ export function EditModelDialog({
   }
 
   const supportsServedModelName = model.provider === 'vllm' || model.provider === 'ollama';
+  const supportsVllmRuntimeControls = model.provider === 'vllm' || model.provider === 'runpod';
 
   return (
     <div
@@ -385,6 +422,82 @@ export function EditModelDialog({
                   disabled={submitting}
                   placeholder="Optional"
                 />
+              </div>
+            )}
+
+            {supportsVllmRuntimeControls && (
+              <div className="md:col-span-2 border border-input rounded-md p-4 bg-muted/20 space-y-4">
+                <div>
+                  <p className="text-sm font-medium">vLLM Tool Runtime</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Match these to the parser/template used when this vLLM server starts.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tool Call Parser</label>
+                    <select
+                      value={formData.vllm_tool_call_parser}
+                      onChange={(e) => handleFieldChange('vllm_tool_call_parser', e.target.value)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                      disabled={submitting}
+                    >
+                      {VLLM_TOOL_CALL_PARSERS.map(parser => (
+                        <option key={parser} value={parser}>{parser}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Template Content Format</label>
+                    <select
+                      value={formData.vllm_chat_template_content_format}
+                      onChange={(e) => handleFieldChange('vllm_chat_template_content_format', e.target.value)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                      disabled={submitting}
+                    >
+                      {VLLM_CHAT_TEMPLATE_CONTENT_FORMATS.map(format => (
+                        <option key={format} value={format}>{format}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Chat Template</label>
+                  <input
+                    type="text"
+                    value={formData.vllm_chat_template}
+                    onChange={(e) => handleFieldChange('vllm_chat_template', e.target.value)}
+                    placeholder="Optional path or template string"
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                    disabled={submitting}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={formData.vllm_enable_auto_tool_choice}
+                      onChange={(e) => handleFieldChange('vllm_enable_auto_tool_choice', e.target.checked)}
+                      disabled={submitting}
+                      className="rounded border-input"
+                    />
+                    Auto tool choice
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={formData.vllm_parse_qwen_xml_tool_calls}
+                      onChange={(e) => handleFieldChange('vllm_parse_qwen_xml_tool_calls', e.target.checked)}
+                      disabled={submitting}
+                      className="rounded border-input"
+                    />
+                    Parse Qwen XML fallback
+                  </label>
+                </div>
               </div>
             )}
 

@@ -145,6 +145,10 @@ export interface VLLMPodDeploymentRequest {
   max_model_len?: number;        // Max context length
   quantization?: 'awq' | 'gptq' | 'squeezellm' | 'fp8' | null;
   tensor_parallel_size?: number; // For multi-GPU
+  enable_auto_tool_choice?: boolean;
+  tool_call_parser?: string;
+  chat_template?: string;
+  chat_template_content_format?: 'auto' | 'openai' | 'string';
   budget_limit?: number;
   volume_size_gb?: number;
   // Network volume support
@@ -350,8 +354,14 @@ export class RunPodServerlessService {
       const vllmArgs: string[] = ['--host', '0.0.0.0', '--port', '8000'];
       const maxModelLen = request.max_model_len || 32768;
       vllmArgs.push('--max-model-len', maxModelLen.toString());
-      vllmArgs.push('--enable-auto-tool-choice');
-      vllmArgs.push('--tool-call-parser', 'hermes');
+      if (request.enable_auto_tool_choice ?? true) {
+        vllmArgs.push('--enable-auto-tool-choice');
+        vllmArgs.push('--tool-call-parser', request.tool_call_parser || 'hermes');
+      }
+      if (request.chat_template) vllmArgs.push('--chat-template', request.chat_template);
+      if (request.chat_template_content_format) {
+        vllmArgs.push('--chat-template-content-format', request.chat_template_content_format);
+      }
       if (request.quantization) vllmArgs.push('--quantization', request.quantization);
       if (request.tensor_parallel_size && request.tensor_parallel_size > 1) {
         vllmArgs.push('--tensor-parallel-size', request.tensor_parallel_size.toString());

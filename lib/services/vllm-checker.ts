@@ -11,7 +11,38 @@ const execAsync = promisify(exec);
 
 let vllmAvailable: boolean | null = null;
 let lastCheck: number = 0;
+let cachedPythonPath: string | null = null;
 const CACHE_DURATION = 60000; // Cache for 1 minute
+
+async function findVLLMPythonPath(): Promise<string | null> {
+  const candidates = [
+    process.env.VLLM_PYTHON_PATH,
+    process.env.PYTHON_PATH,
+    'python3',
+    'python',
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const pythonPath of candidates) {
+    try {
+      const { stdout } = await execAsync(
+        `${pythonPath} -c "import vllm; print('OK')"`,
+        { timeout: 5000 }
+      );
+
+      if (stdout.trim() === 'OK') {
+        return pythonPath;
+      }
+    } catch (error) {
+      console.log(
+        '[vLLMChecker] Python candidate missing vLLM:',
+        pythonPath,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  return null;
+}
 
 /**
  * Check if vLLM is available
@@ -22,26 +53,12 @@ export async function isVLLMAvailable(): Promise<boolean> {
     return vllmAvailable;
   }
 
-  try {
-    const pythonPath = process.env.VLLM_PYTHON_PATH || 'python';
-    
-    // Try to import vllm
-    const { stdout } = await execAsync(
-      `${pythonPath} -c "import vllm; print('OK')"`,
-      { timeout: 5000 }
-    );
+  cachedPythonPath = await findVLLMPythonPath();
+  vllmAvailable = Boolean(cachedPythonPath);
+  lastCheck = Date.now();
 
-    vllmAvailable = stdout.trim() === 'OK';
-    lastCheck = Date.now();
-    
-    console.log('[vLLMChecker] vLLM available:', vllmAvailable);
-    return vllmAvailable;
-  } catch (error) {
-    console.log('[vLLMChecker] vLLM not available:', error instanceof Error ? error.message : String(error));
-    vllmAvailable = false;
-    lastCheck = Date.now();
-    return false;
-  }
+  console.log('[vLLMChecker] vLLM available:', vllmAvailable, 'python:', cachedPythonPath || 'none');
+  return vllmAvailable;
 }
 
 /**
@@ -49,8 +66,9 @@ export async function isVLLMAvailable(): Promise<boolean> {
  */
 export async function getVLLMVersion(): Promise<string | null> {
   try {
-    const pythonPath = process.env.VLLM_PYTHON_PATH || 'python';
-    
+    const pythonPath = cachedPythonPath || await findVLLMPythonPath();
+    if (!pythonPath) return null;
+
     const { stdout } = await execAsync(
       `${pythonPath} -c "import vllm; print(vllm.__version__)"`,
       { timeout: 5000 }

@@ -83,6 +83,9 @@ export interface WidgetConfig {
 export interface GenerationSettings {
   temperature: number;
   maxOutputTokens: number;
+  topP: number;
+  frequencyPenalty: number;
+  presencePenalty: number;
 }
 
 /**

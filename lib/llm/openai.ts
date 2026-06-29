@@ -84,7 +84,12 @@ export async function* streamOpenAIResponse(
   model: string = DEFAULT_MODEL,
   temperature: number = DEFAULT_TEMPERATURE,
   maxTokens: number = DEFAULT_MAX_TOKENS,
-  tools?: ToolDefinition[]
+  tools?: ToolDefinition[],
+  generationOptions?: {
+    topP?: number;
+    frequencyPenalty?: number;
+    presencePenalty?: number;
+  }
 ): AsyncGenerator<string, void, unknown> {
   try {
     const client = getOpenAIClient();
@@ -93,6 +98,9 @@ export async function* streamOpenAIResponse(
       messages: messages as ChatCompletionMessageParam[],
       temperature,
       max_tokens: maxTokens,
+      ...(generationOptions?.topP !== undefined ? { top_p: generationOptions.topP } : {}),
+      ...(generationOptions?.frequencyPenalty !== undefined ? { frequency_penalty: generationOptions.frequencyPenalty } : {}),
+      ...(generationOptions?.presencePenalty !== undefined ? { presence_penalty: generationOptions.presencePenalty } : {}),
       stream: true,
       ...(tools && tools.length > 0 ? { tools: tools as ChatCompletionTool[] } : {}),
     });
@@ -155,7 +163,12 @@ export async function runOpenAIWithToolCalls(
   temperature: number = DEFAULT_TEMPERATURE,
   maxTokens: number = DEFAULT_MAX_TOKENS,
   tools?: ToolDefinition[],
-  toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>
+  toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>,
+  generationOptions?: {
+    topP?: number;
+    frequencyPenalty?: number;
+    presencePenalty?: number;
+  }
 ): Promise<LLMResponse> {
   let currentMessages = messages;
   // METRIC: Accumulate token usage across all tool call rounds
@@ -180,6 +193,9 @@ export async function runOpenAIWithToolCalls(
       messages: currentMessages as ChatCompletionMessageParam[],
       temperature,
       max_tokens: maxTokens,
+      ...(generationOptions?.topP !== undefined ? { top_p: generationOptions.topP } : {}),
+      ...(generationOptions?.frequencyPenalty !== undefined ? { frequency_penalty: generationOptions.frequencyPenalty } : {}),
+      ...(generationOptions?.presencePenalty !== undefined ? { presence_penalty: generationOptions.presencePenalty } : {}),
       ...(tools && tools.length > 0 ? { tools: tools as ChatCompletionTool[] } : {}),
     });
 

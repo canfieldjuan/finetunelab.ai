@@ -62,7 +62,14 @@ export class RunPodAdapter extends BaseProviderAdapter {
     const sampling_params: Record<string, unknown> = {
       temperature: options.temperature ?? config.default_temperature ?? 0.7,
       max_tokens: options.maxTokens ?? config.max_output_tokens ?? 2000,
+      top_p: options.topP ?? config.default_top_p ?? 1,
     };
+    if (typeof options.frequencyPenalty === 'number') {
+      sampling_params.frequency_penalty = options.frequencyPenalty;
+    }
+    if (typeof options.presencePenalty === 'number') {
+      sampling_params.presence_penalty = options.presencePenalty;
+    }
 
     // Detect if model supports chat format or needs completion format
     const useChatFormat = this.isChatModel(config.model_id, config.is_chat_model);

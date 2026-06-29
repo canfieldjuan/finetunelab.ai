@@ -51,6 +51,27 @@ export function GenerationControls({
     });
   };
 
+  const updateTopP = (value: number) => {
+    onChange({
+      ...settings,
+      topP: Number(clampNumber(value, 0.01, 1).toFixed(2)),
+    });
+  };
+
+  const updateFrequencyPenalty = (value: number) => {
+    onChange({
+      ...settings,
+      frequencyPenalty: Number(clampNumber(value, -2, 2).toFixed(2)),
+    });
+  };
+
+  const updatePresencePenalty = (value: number) => {
+    onChange({
+      ...settings,
+      presencePenalty: Number(clampNumber(value, -2, 2).toFixed(2)),
+    });
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -91,6 +112,56 @@ export function GenerationControls({
               value={[settings.temperature]}
               onValueChange={(value) => updateTemperature(value[0])}
             />
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="chat-top-p" className="text-xs">
+                Top P
+              </Label>
+              <span className="text-xs text-muted-foreground">
+                {settings.topP.toFixed(2)}
+              </span>
+            </div>
+            <Slider
+              id="chat-top-p"
+              min={0.01}
+              max={1}
+              step={0.01}
+              value={[settings.topP]}
+              onValueChange={(value) => updateTopP(value[0])}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="chat-frequency-penalty" className="text-xs">
+                Frequency penalty
+              </Label>
+              <Input
+                id="chat-frequency-penalty"
+                type="number"
+                min={-2}
+                max={2}
+                step={0.1}
+                value={settings.frequencyPenalty}
+                onChange={(event) => updateFrequencyPenalty(Number(event.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="chat-presence-penalty" className="text-xs">
+                Presence penalty
+              </Label>
+              <Input
+                id="chat-presence-penalty"
+                type="number"
+                min={-2}
+                max={2}
+                step={0.1}
+                value={settings.presencePenalty}
+                onChange={(event) => updatePresencePenalty(Number(event.target.value))}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

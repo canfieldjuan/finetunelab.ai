@@ -48,6 +48,7 @@ type BulkModelInput = {
   price_per_output_token?: unknown;
   default_temperature?: unknown;
   default_top_p?: unknown;
+  metadata?: unknown;
 };
 
 type BulkModelSummary = {
@@ -141,6 +142,11 @@ function buildBulkDto({
       asNumber(model.default_top_p) ??
       asNumber(body.default_top_p) ??
       parseFloat(process.env.MODELS_DEFAULT_TOP_P || '1.0'),
+    metadata: model.metadata && typeof model.metadata === 'object' && !Array.isArray(model.metadata)
+      ? model.metadata as Record<string, unknown>
+      : body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+        ? body.metadata as Record<string, unknown>
+        : undefined,
     enabled: true,
     is_default: false,
   };

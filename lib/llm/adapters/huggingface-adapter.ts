@@ -96,6 +96,7 @@ export class HuggingFaceAdapter extends BaseProviderAdapter {
         })),
         temperature: options.temperature ?? config.default_temperature ?? 0.7,
         max_tokens: options.maxTokens ?? config.max_output_tokens ?? 2000,
+        top_p: options.topP ?? config.default_top_p ?? 1,
         stream: options.stream ?? false,
       };
     } else {
@@ -107,6 +108,7 @@ export class HuggingFaceAdapter extends BaseProviderAdapter {
         messages: [{ role: 'user', content: prompt }],
         temperature: options.temperature ?? config.default_temperature ?? 0.7,
         max_tokens: options.maxTokens ?? config.max_output_tokens ?? 2000,
+        top_p: options.topP ?? config.default_top_p ?? 1,
         stream: options.stream ?? false,
       };
     }

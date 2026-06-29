@@ -110,6 +110,18 @@ function localTargetServer({
           tensor_parallel_size: Number(config?.tensor_parallel_size ?? 1),
           dtype: typeof config?.dtype === 'string' ? config.dtype as ServerConfigJson['dtype'] : 'auto',
           trust_remote_code: Boolean(config?.trust_remote_code ?? false),
+          enable_auto_tool_choice: typeof config?.enable_auto_tool_choice === 'boolean'
+            ? config.enable_auto_tool_choice
+            : true,
+          tool_call_parser: typeof config?.tool_call_parser === 'string'
+            ? config.tool_call_parser
+            : 'hermes',
+          chat_template: typeof config?.chat_template === 'string'
+            ? config.chat_template
+            : undefined,
+          chat_template_content_format: typeof config?.chat_template_content_format === 'string'
+            ? config.chat_template_content_format as ServerConfigJson['chat_template_content_format']
+            : undefined,
         }
       : {
           context_length: Number(config?.context_length ?? 4096),
@@ -146,6 +158,10 @@ function startLocalServerFromTarget(
         tensorParallelSize: config.tensor_parallel_size ?? 1,
         dtype: config.dtype ?? 'auto',
         trustRemoteCode: config.trust_remote_code ?? false,
+        enableAutoToolChoice: config.enable_auto_tool_choice ?? true,
+        toolCallParser: config.tool_call_parser ?? 'hermes',
+        chatTemplate: config.chat_template,
+        chatTemplateContentFormat: config.chat_template_content_format,
       },
       userId,
       server.training_job_id ?? undefined,
@@ -570,6 +586,13 @@ export async function POST(req: NextRequest) {
           gpu_type: (config?.gpu_type || 'NVIDIA RTX A4000') as RunPodServerlessGPU,
           gpu_count: config?.gpu_count || 1,
           hf_token: hfToken,
+          max_model_len: config?.max_model_len,
+          quantization: config?.quantization,
+          tensor_parallel_size: config?.tensor_parallel_size,
+          enable_auto_tool_choice: config?.enable_auto_tool_choice ?? true,
+          tool_call_parser: config?.tool_call_parser || 'hermes',
+          chat_template: config?.chat_template,
+          chat_template_content_format: config?.chat_template_content_format,
           budget_limit: config?.budget_limit || 5,
           volume_size_gb: config?.volume_size_gb || 50,
           use_network_volume: config?.use_network_volume,
@@ -614,6 +637,13 @@ export async function POST(req: NextRequest) {
           gpu_type: config?.gpu_type || 'NVIDIA RTX A4000',
           budget_limit: config?.budget_limit || 5,
           deployment_type: 'runpod_vllm',
+          vllm_runtime: {
+            enable_auto_tool_choice: config?.enable_auto_tool_choice ?? true,
+            tool_call_parser: config?.tool_call_parser || 'hermes',
+            chat_template: config?.chat_template || undefined,
+            chat_template_content_format: config?.chat_template_content_format,
+            parse_qwen_xml_tool_calls: config?.parse_qwen_xml_tool_calls ?? false,
+          },
         },
       };
 
@@ -1161,6 +1191,17 @@ export async function POST(req: NextRequest) {
       deployment_type: 'standard',
       storage_saved: false
     };
+    const vllmRuntimeInfo = server_type === STATUS.VLLM
+      ? {
+          vllm_runtime: {
+            enable_auto_tool_choice: config?.enable_auto_tool_choice ?? true,
+            tool_call_parser: config?.tool_call_parser || 'hermes',
+            chat_template: config?.chat_template || undefined,
+            chat_template_content_format: config?.chat_template_content_format,
+            parse_qwen_xml_tool_calls: config?.parse_qwen_xml_tool_calls ?? false,
+          },
+        }
+      : {};
 
     // ========================================================================
     // Helper: Determine readable model_id for analytics display
@@ -1232,6 +1273,7 @@ export async function POST(req: NextRequest) {
             display_name: modelName,
             checkpoint_path: checkpoint_path,
             ...storageInfo,
+            ...vllmRuntimeInfo,
           },
         })
         .eq('id', existingModel.id)
@@ -1269,6 +1311,7 @@ export async function POST(req: NextRequest) {
             display_name: modelName,
             checkpoint_path: checkpoint_path,
             ...storageInfo,
+            ...vllmRuntimeInfo,
           },
         })
         .select()

@@ -55,6 +55,7 @@ export class OllamaAdapter extends BaseProviderAdapter {
       stream: options.stream ?? false,
       options: {
         temperature: options.temperature ?? config.default_temperature ?? 0.7,
+        top_p: options.topP ?? config.default_top_p ?? 1,
         num_predict: options.maxTokens ?? config.max_output_tokens ?? 2000,
       },
     };

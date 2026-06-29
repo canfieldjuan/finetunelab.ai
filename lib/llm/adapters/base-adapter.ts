@@ -16,6 +16,9 @@ export interface AdapterRequest {
   options: {
     temperature?: number;
     maxTokens?: number;
+    topP?: number;
+    frequencyPenalty?: number;
+    presencePenalty?: number;
     tools?: ToolDefinition[];
     stream?: boolean;
     enableThinking?: boolean;
@@ -62,7 +65,11 @@ export interface ProviderAdapter {
   /**
    * Parse provider-specific response into standardized LLMResponse
    */
-  parseResponse(response: Response, responseBody: unknown): Promise<AdapterResponse>;
+  parseResponse(
+    response: Response,
+    responseBody: unknown,
+    request?: AdapterRequest
+  ): Promise<AdapterResponse>;
 
   /**
    * Parse streaming chunk into text content
@@ -169,7 +176,11 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
     body: Record<string, unknown>;
   };
 
-  abstract parseResponse(response: Response, responseBody: unknown): Promise<AdapterResponse>;
+  abstract parseResponse(
+    response: Response,
+    responseBody: unknown,
+    request?: AdapterRequest
+  ): Promise<AdapterResponse>;
 
   abstract parseStreamChunk(chunk: string): string | null;
 

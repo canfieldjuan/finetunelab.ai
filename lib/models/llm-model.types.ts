@@ -111,6 +111,7 @@ export interface CreateModelDTO {
   price_per_output_token?: number;
   default_temperature?: number;
   default_top_p?: number;
+  metadata?: Record<string, unknown>;
   enabled?: boolean;
   is_default?: boolean; // Set as user's default model
   // Training metadata (optional)
@@ -140,6 +141,7 @@ export interface UpdateModelDTO {
   price_per_output_token?: number;
   default_temperature?: number;
   default_top_p?: number;
+  metadata?: Record<string, unknown>;
   enabled?: boolean;
   is_default?: boolean; // Set as user's default model
   // Training metadata (optional)
@@ -240,5 +242,6 @@ export interface ModelConfig {
   max_output_tokens: number;
   default_temperature: number;
   default_top_p: number;
+  metadata?: Record<string, unknown> | null;
   is_chat_model?: boolean; // Override auto-detection: true=chat format, false=completion format, undefined=auto-detect
 }

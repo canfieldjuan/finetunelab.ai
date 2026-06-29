@@ -36,6 +36,7 @@ export function buildCreateModelRecord(dto: CreateModelDTO, userId?: string) {
     price_per_output_token: dto.price_per_output_token || null,
     default_temperature: dto.default_temperature ?? 0.7,
     default_top_p: dto.default_top_p ?? 1.0,
+    metadata: dto.metadata || null,
     enabled: dto.enabled ?? true,
     is_global: userId ? false : true,
     is_default: dto.is_default ?? false,
@@ -80,6 +81,9 @@ export function buildUpdateModelRecord(dto: UpdateModelDTO): Record<string, unkn
   }
   if (dto.default_top_p !== undefined) {
     updates.default_top_p = dto.default_top_p;
+  }
+  if (dto.metadata !== undefined) {
+    updates.metadata = dto.metadata;
   }
   if (dto.enabled !== undefined) updates.enabled = dto.enabled;
   if (dto.is_default !== undefined) updates.is_default = dto.is_default;
@@ -438,6 +442,7 @@ class ModelManagerService {
         max_output_tokens: data.max_output_tokens,
         default_temperature: data.default_temperature,
         default_top_p: data.default_top_p,
+        metadata: data.metadata || null,
       };
 
       console.log('[ModelManager] Config retrieved for:', config.name);

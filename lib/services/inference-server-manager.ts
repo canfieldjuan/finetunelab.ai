@@ -107,6 +107,10 @@ export interface VLLMConfig {
   tensorParallelSize?: number; // Multi-GPU support
   dtype?: 'auto' | 'half' | 'float16' | 'bfloat16' | 'float32';
   trustRemoteCode?: boolean;
+  enableAutoToolChoice?: boolean;
+  toolCallParser?: string;
+  chatTemplate?: string;
+  chatTemplateContentFormat?: 'auto' | 'openai' | 'string';
 }
 
 export interface OllamaConfig {
@@ -267,10 +271,20 @@ export class InferenceServerManager {
         // Use 4-bit quantization to fit large models in VRAM
         '--quantization', 'bitsandbytes',
         '--load-format', 'bitsandbytes',
-        // Add required flags for tool use
-        '--enable-auto-tool-choice',
-        '--tool-call-parser', 'hermes',
       ];
+
+      if (config.enableAutoToolChoice ?? true) {
+        args.push('--enable-auto-tool-choice');
+        args.push('--tool-call-parser', config.toolCallParser || 'hermes');
+      }
+
+      if (config.chatTemplate) {
+        args.push('--chat-template', config.chatTemplate);
+      }
+
+      if (config.chatTemplateContentFormat) {
+        args.push('--chat-template-content-format', config.chatTemplateContentFormat);
+      }
 
       // Add LoRA-specific flags if this is a LoRA adapter
       if (isLoraAdapter && loraAdapterPath) {

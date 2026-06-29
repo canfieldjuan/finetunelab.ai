@@ -15,6 +15,12 @@ import { Button } from '@/components/ui/button';
 import { X, Sparkles, Zap, Eye } from 'lucide-react';
 import { ALL_TEMPLATES } from '@/lib/models/model-templates';
 import type { CreateModelDTO, ModelProvider, AuthType, ModelTemplate, DiscoveredModel } from '@/lib/models/llm-model.types';
+import {
+  getVllmRuntimeMetadata,
+  VLLM_CHAT_TEMPLATE_CONTENT_FORMATS,
+  VLLM_TOOL_CALL_PARSERS,
+  withVllmRuntimeMetadata,
+} from '@/lib/models/vllm-runtime';
 import { apiConfig } from '@/lib/config/api';
 
 interface AddModelDialogProps {
@@ -43,6 +49,11 @@ const DEFAULT_FORM_DATA: Partial<CreateModelDTO> = {
   max_output_tokens: 2000,
   default_temperature: 0.7,
   default_top_p: 1.0,
+  metadata: withVllmRuntimeMetadata(null, {
+    enable_auto_tool_choice: true,
+    tool_call_parser: 'hermes',
+    parse_qwen_xml_tool_calls: false,
+  }),
   is_default: false,
 };
 
@@ -64,6 +75,11 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
     max_model_len: undefined as number | undefined,
     tensor_parallel_size: 1,
     context_length: 4096,
+    enable_auto_tool_choice: true,
+    tool_call_parser: 'hermes',
+    chat_template: '',
+    chat_template_content_format: 'auto' as 'auto' | 'openai' | 'string',
+    parse_qwen_xml_tool_calls: false,
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -127,6 +143,11 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
         max_model_len: undefined,
         tensor_parallel_size: 1,
         context_length: template.context_length || 4096,
+        enable_auto_tool_choice: true,
+        tool_call_parser: 'hermes',
+        chat_template: '',
+        chat_template_content_format: 'auto',
+        parse_qwen_xml_tool_calls: false,
       });
     }
 
@@ -195,6 +216,19 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       setManualModelEntry(false);
     }
 
+    setError(null);
+  };
+
+  const handleVllmRuntimeChange = (
+    field: keyof ReturnType<typeof getVllmRuntimeMetadata>,
+    value: unknown
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      metadata: withVllmRuntimeMetadata(prev.metadata, {
+        [field]: value,
+      }),
+    }));
     setError(null);
   };
 
@@ -286,6 +320,11 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
       max_model_len: undefined,
       tensor_parallel_size: 1,
       context_length: 4096,
+      enable_auto_tool_choice: true,
+      tool_call_parser: 'hermes',
+      chat_template: '',
+      chat_template_content_format: 'auto',
+      parse_qwen_xml_tool_calls: false,
     });
   };
 
@@ -328,6 +367,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
             max_output_tokens: formData.max_output_tokens,
             default_temperature: formData.default_temperature,
             default_top_p: formData.default_top_p,
+            metadata: formData.metadata,
             models: batch.map((model) => ({
               model_id: model.id,
               name: model.id,
@@ -478,6 +518,11 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
               max_model_len: localDeploymentConfig.max_model_len,
               tensor_parallel_size: localDeploymentConfig.tensor_parallel_size,
               context_length: localDeploymentConfig.context_length,
+              enable_auto_tool_choice: localDeploymentConfig.enable_auto_tool_choice,
+              tool_call_parser: localDeploymentConfig.tool_call_parser,
+              chat_template: localDeploymentConfig.chat_template || undefined,
+              chat_template_content_format: localDeploymentConfig.chat_template_content_format,
+              parse_qwen_xml_tool_calls: localDeploymentConfig.parse_qwen_xml_tool_calls,
             },
           }),
         });
@@ -649,6 +694,7 @@ export function AddModelDialog({ isOpen, onClose, onSuccess, sessionToken }: Add
             onSelectAllDiscoveredModels={() => setSelectedDiscoveredModelIds(discoveredModels.map((model) => model.id))}
             onClearDiscoveredModels={() => setSelectedDiscoveredModelIds([])}
             onBulkImport={handleBulkImport}
+            onVllmRuntimeChange={handleVllmRuntimeChange}
             discoverError={discoverError}
             manualModelEntry={manualModelEntry}
             onManualModelEntry={() => setManualModelEntry(true)}
@@ -968,6 +1014,11 @@ interface LocalModelFormProps {
     max_model_len?: number;
     tensor_parallel_size: number;
     context_length: number;
+    enable_auto_tool_choice: boolean;
+    tool_call_parser: string;
+    chat_template: string;
+    chat_template_content_format: 'auto' | 'openai' | 'string';
+    parse_qwen_xml_tool_calls: boolean;
   };
   onChange: (field: keyof CreateModelDTO, value: unknown) => void;
   onDeploymentChange: (field: string, value: unknown) => void;
@@ -1120,6 +1171,78 @@ function LocalModelForm({
                 disabled={submitting}
               />
             </div>
+
+            <div className="border border-input rounded-md p-4 bg-muted/20 space-y-4">
+              <div>
+                <p className="text-sm font-medium">vLLM Tool Runtime</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  These settings are passed to the vLLM process when it starts.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Tool Call Parser</label>
+                  <select
+                    value={deploymentConfig.tool_call_parser}
+                    onChange={(e) => onDeploymentChange('tool_call_parser', e.target.value)}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                    disabled={submitting}
+                  >
+                    {VLLM_TOOL_CALL_PARSERS.map(parser => (
+                      <option key={parser} value={parser}>{parser}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Template Content Format</label>
+                  <select
+                    value={deploymentConfig.chat_template_content_format}
+                    onChange={(e) => onDeploymentChange('chat_template_content_format', e.target.value)}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                    disabled={submitting}
+                  >
+                    {VLLM_CHAT_TEMPLATE_CONTENT_FORMATS.map(format => (
+                      <option key={format} value={format}>{format}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Chat Template</label>
+                <input
+                  type="text"
+                  value={deploymentConfig.chat_template}
+                  onChange={(e) => onDeploymentChange('chat_template', e.target.value)}
+                  placeholder="Optional path or template string"
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                  disabled={submitting}
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={deploymentConfig.enable_auto_tool_choice}
+                  onChange={(e) => onDeploymentChange('enable_auto_tool_choice', e.target.checked)}
+                  disabled={submitting}
+                  className="rounded border-input"
+                />
+                Auto tool choice
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={deploymentConfig.parse_qwen_xml_tool_calls}
+                  onChange={(e) => onDeploymentChange('parse_qwen_xml_tool_calls', e.target.checked)}
+                  disabled={submitting}
+                  className="rounded border-input"
+                />
+                Parse Qwen XML fallback
+              </label>
+            </div>
           </>
         )}
 
@@ -1188,6 +1311,10 @@ interface ManualFormProps {
   onSelectAllDiscoveredModels: () => void;
   onClearDiscoveredModels: () => void;
   onBulkImport: () => void;
+  onVllmRuntimeChange: (
+    field: keyof ReturnType<typeof getVllmRuntimeMetadata>,
+    value: unknown
+  ) => void;
   discoverError: string | null;
   manualModelEntry: boolean;
   onManualModelEntry: () => void;
@@ -1218,6 +1345,7 @@ function ManualForm({
   onSelectAllDiscoveredModels,
   onClearDiscoveredModels,
   onBulkImport,
+  onVllmRuntimeChange,
   discoverError,
   manualModelEntry,
   onManualModelEntry,
@@ -1226,8 +1354,10 @@ function ManualForm({
   // `manualModelEntry` is owned by the parent so it resets when connection params change.
   const canDiscover = DISCOVERY_SUPPORTED_PROVIDERS.includes(formData.provider as ModelProvider);
   const supportsServedModelName = SERVED_MODEL_NAME_PROVIDERS.includes(formData.provider as ModelProvider);
+  const supportsVllmRuntimeControls = formData.provider === 'vllm' || formData.provider === 'runpod';
   const showModelDropdown = discoveredModels.length > 0 && !manualModelEntry;
   const selectedDiscoveredCount = selectedDiscoveredModelIds.length;
+  const vllmRuntime = getVllmRuntimeMetadata(formData.metadata);
 
   const handleModelSelect = (modelId: string) => {
     onChange('model_id', modelId);
@@ -1904,6 +2034,82 @@ function ManualForm({
             <p className="text-xs text-muted-foreground mt-1">
               Optional request name when it differs from Model ID.
             </p>
+          </div>
+        )}
+
+        {supportsVllmRuntimeControls && (
+          <div className="md:col-span-2 border border-input rounded-md p-4 bg-muted/20 space-y-4">
+            <div>
+              <p className="text-sm font-medium">vLLM Tool Runtime</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Match these to the parser/template used when this vLLM server starts.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Tool Call Parser</label>
+                <select
+                  value={vllmRuntime.tool_call_parser || 'hermes'}
+                  onChange={(e) => onVllmRuntimeChange('tool_call_parser', e.target.value)}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                  disabled={submitting}
+                >
+                  {VLLM_TOOL_CALL_PARSERS.map(parser => (
+                    <option key={parser} value={parser}>{parser}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Template Content Format</label>
+                <select
+                  value={vllmRuntime.chat_template_content_format || 'auto'}
+                  onChange={(e) => onVllmRuntimeChange('chat_template_content_format', e.target.value)}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                  disabled={submitting}
+                >
+                  {VLLM_CHAT_TEMPLATE_CONTENT_FORMATS.map(format => (
+                    <option key={format} value={format}>{format}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Chat Template</label>
+              <input
+                type="text"
+                value={vllmRuntime.chat_template || ''}
+                onChange={(e) => onVllmRuntimeChange('chat_template', e.target.value)}
+                placeholder="Optional path or template string"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background font-mono text-sm"
+                disabled={submitting}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={vllmRuntime.enable_auto_tool_choice ?? true}
+                  onChange={(e) => onVllmRuntimeChange('enable_auto_tool_choice', e.target.checked)}
+                  disabled={submitting}
+                  className="rounded border-input"
+                />
+                Auto tool choice
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={vllmRuntime.parse_qwen_xml_tool_calls ?? false}
+                  onChange={(e) => onVllmRuntimeChange('parse_qwen_xml_tool_calls', e.target.checked)}
+                  disabled={submitting}
+                  className="rounded border-input"
+                />
+                Parse Qwen XML fallback
+              </label>
+            </div>
           </div>
         )}
 
