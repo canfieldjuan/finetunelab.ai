@@ -19,7 +19,9 @@ function isPrivateIpv6Literal(addr: string): boolean {
   // `addr` is an IPv6 address with brackets already stripped, lowercased.
   if (addr === '::1' || addr === '::') return true;
   if (/^fe[89ab]/.test(addr)) return true; // link-local fe80::/10
+  if (/^fe[cdef]/.test(addr)) return true; // deprecated site-local fec0::/10
   if (/^f[cd]/.test(addr)) return true; // unique-local fc00::/7
+  if (/^ff/.test(addr)) return true; // multicast ff00::/8
   if (addr.startsWith('2001:db8')) return true; // documentation 2001:db8::/32
   if (addr.includes('::ffff:')) return true; // IPv4-mapped (e.g. ::ffff:7f00:1) — reject
   return false;

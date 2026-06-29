@@ -73,7 +73,7 @@ describe('isPrivateIpAddress', () => {
   });
 
   it('flags loopback/ULA/link-local + IPv4-mapped + doc IPv6', () => {
-    for (const ip of ['::1', 'fe80::1', 'fc00::1', 'fd12::1', '2001:db8::1', '::ffff:127.0.0.1', '::ffff:192.168.1.1']) {
+    for (const ip of ['::1', 'fe80::1', 'fec0::1', 'fc00::1', 'fd12::1', 'ff02::1', '2001:db8::1', '::ffff:127.0.0.1', '::ffff:192.168.1.1']) {
       expect(isPrivateIpAddress(ip), ip).toBe(true);
     }
   });
