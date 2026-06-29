@@ -129,6 +129,10 @@ Environment aliases:
   VLLM_SERVED_MODEL_NAME, VLLM_PROBE_API_KEY, VLLM_API_KEY`;
 }
 
+function writeLine(message = ''): void {
+  process.stdout.write(`${message}\n`);
+}
+
 function readFlags(argv: string[]): Map<string, string[]> {
   const flags = new Map<string, string[]>();
 
@@ -173,7 +177,7 @@ function parseCliOptions(argv: string[]): CliOptions {
   const flags = readFlags(argv);
 
   if (hasFlag(flags, 'help')) {
-    console.log(usage());
+    writeLine(usage());
     process.exit(0);
   }
 
@@ -892,9 +896,9 @@ async function main() {
   const cases = buildCases(portalTools);
 
   if (options.listCases) {
-    console.log('[Probe] Available vLLM tool probe cases:');
+    writeLine('[Probe] Available vLLM tool probe cases:');
     for (const probeCase of cases) {
-      console.log(`- ${probeCase.name}: ${probeCase.description}`);
+      writeLine(`- ${probeCase.name}: ${probeCase.description}`);
     }
     return;
   }
@@ -915,26 +919,26 @@ async function main() {
   const modelConfig = makeModelConfig(options);
   const startedAt = new Date().toISOString();
 
-  console.log('[Probe] vLLM tool-call smoke probe');
-  console.log('[Probe] Base URL:', options.baseUrl);
-  console.log('[Probe] Model:', options.model);
-  console.log('[Probe] Qwen XML fallback:', options.parseQwenXmlToolCalls ? 'enabled' : 'disabled');
-  console.log('[Probe] Web search:', process.env.TOOL_WEBSEARCH_ENABLED === 'true' ? 'enabled' : 'disabled');
-  console.log('[Probe] Search provider:', process.env.SEARCH_PRIMARY_PROVIDER ?? '(default)');
-  console.log('[Probe] Search cache:', options.searchCache ? 'enabled' : 'disabled');
-  console.log('[Probe] Cases:', selected.map(probeCase => probeCase.name).join(', '));
+  writeLine('[Probe] vLLM tool-call smoke probe');
+  writeLine(`[Probe] Base URL: ${options.baseUrl}`);
+  writeLine(`[Probe] Model: ${options.model}`);
+  writeLine(`[Probe] Qwen XML fallback: ${options.parseQwenXmlToolCalls ? 'enabled' : 'disabled'}`);
+  writeLine(`[Probe] Web search: ${process.env.TOOL_WEBSEARCH_ENABLED === 'true' ? 'enabled' : 'disabled'}`);
+  writeLine(`[Probe] Search provider: ${process.env.SEARCH_PRIMARY_PROVIDER ?? '(default)'}`);
+  writeLine(`[Probe] Search cache: ${options.searchCache ? 'enabled' : 'disabled'}`);
+  writeLine(`[Probe] Cases: ${selected.map(probeCase => probeCase.name).join(', ')}`);
 
   const results: ProbeResult[] = [];
   for (const probeCase of selected) {
-    console.log(`\n[Probe] Running ${probeCase.name}: ${probeCase.description}`);
+    writeLine(`\n[Probe] Running ${probeCase.name}: ${probeCase.description}`);
     const result = await runCase(probeCase, adapter, modelConfig, options, portalTools);
     results.push(result);
-    console.log(`[Probe] ${probeCase.name}: ${result.status}`);
+    writeLine(`[Probe] ${probeCase.name}: ${result.status}`);
     if (result.toolsCalled.length > 0) {
-      console.log(`[Probe]   tools: ${result.toolsCalled.join(', ')}`);
+      writeLine(`[Probe]   tools: ${result.toolsCalled.join(', ')}`);
     }
     for (const issue of result.issues) {
-      console.log(`[Probe]   ${issue.level.toUpperCase()} ${issue.code}: ${issue.message}`);
+      writeLine(`[Probe]   ${issue.level.toUpperCase()} ${issue.code}: ${issue.message}`);
     }
   }
 
@@ -961,7 +965,7 @@ async function main() {
 
   await mkdir(path.dirname(options.outFile), { recursive: true });
   await writeFile(options.outFile, `${JSON.stringify(transcript, null, 2)}\n`, 'utf8');
-  console.log(`\n[Probe] Wrote transcript: ${options.outFile}`);
+  writeLine(`\n[Probe] Wrote transcript: ${options.outFile}`);
 
   const hasErrors = results.some(result => result.status === 'error');
   const hasWarnings = results.some(result => result.status === 'warn');
