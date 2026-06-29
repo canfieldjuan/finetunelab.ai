@@ -262,6 +262,11 @@ describe('SecretsPage provider model import', () => {
         }),
       ])
     );
+    const importedModelIds = bulkBody.models.map((model: { model_id: string }) => model.model_id);
+    expect(importedModelIds).toContain('claude-sonnet-4-5-20250929');
+    expect(importedModelIds).toContain('claude-haiku-4-5-20251001');
+    expect(importedModelIds).not.toContain('claude-sonnet-4.5');
+    expect(importedModelIds).not.toContain('claude-haiku-4.5');
     expect(bulkBody.models).toHaveLength(5);
   });
 
@@ -296,7 +301,7 @@ describe('SecretsPage provider model import', () => {
     await openProviderDialog('HuggingFace');
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
-    expect(await screen.findByText('Imported 4 curated HuggingFace models.')).toBeInTheDocument();
+    expect(await screen.findByText('Imported 3 curated HuggingFace models.')).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/models/discover')).toBe(false);
 
     const bulkCall = fetchMock.mock.calls.find(([url]) => url === '/api/models/bulk');
@@ -305,7 +310,12 @@ describe('SecretsPage provider model import', () => {
     expect(bulkBody.provider).toBe('huggingface');
     expect(bulkBody.base_url).toBe('https://router.huggingface.co/v1');
     expect(bulkBody.auth_type).toBe('bearer');
-    expect(bulkBody.models).toHaveLength(4);
+    expect(bulkBody.models).toHaveLength(3);
+    expect(bulkBody.models.map((model: { model_id: string }) => model.model_id)).toEqual([
+      'mistralai/Mistral-7B-Instruct-v0.3',
+      'meta-llama/Meta-Llama-3.1-8B-Instruct',
+      'HuggingFaceH4/zephyr-7b-beta',
+    ]);
     expect(bulkBody.models).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -318,6 +328,7 @@ describe('SecretsPage provider model import', () => {
     );
     expect(bulkBody.models.map((model: { name: string }) => model.name)).not.toContain('Import Custom Model');
     expect(bulkBody.models.map((model: { model_id: string }) => model.model_id)).not.toContain('Qwen/Qwen2.5-0.5B');
+    expect(bulkBody.models.map((model: { model_id: string }) => model.model_id)).not.toContain('gpt2');
   });
 
   it('counts every unimported curated model when a bulk request fails', async () => {

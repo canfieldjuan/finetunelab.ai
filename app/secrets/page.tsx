@@ -68,6 +68,7 @@ const AUTO_DISCOVERY_IMPORT_CONFIG: Partial<Record<ModelProvider, AutoDiscoveryI
 };
 
 const CURATED_TEMPLATE_IMPORT_PROVIDERS = new Set<ModelProvider>(['anthropic', 'huggingface']);
+const CURATED_TEMPLATE_IMPORT_EXCLUDED_IDS = new Set(['huggingface-gpt2']);
 
 const NON_CHAT_MODEL_ID_PATTERNS = [
   /(^|[/:_-])(?:text-)?embedd?ings?([/:_-]|$)/,
@@ -135,6 +136,7 @@ function isAutoImportableTemplate(template: ModelTemplate): boolean {
   return (
     CURATED_TEMPLATE_IMPORT_PROVIDERS.has(template.provider) &&
     !template.id.includes('custom') &&
+    !CURATED_TEMPLATE_IMPORT_EXCLUDED_IDS.has(template.id) &&
     !placeholderPattern.test(template.name) &&
     !placeholderPattern.test(template.base_url) &&
     !placeholderPattern.test(template.model_id)
