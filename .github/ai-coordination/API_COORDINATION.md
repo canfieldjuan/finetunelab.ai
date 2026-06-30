@@ -19,6 +19,19 @@
   - Client: `lib/snippet-revision/client.ts`
   - Tests: `lib/snippet-revision/__tests__/client.test.ts`
 
+**Chat Attachments Backend Contract**
+- **Started:** 2026-06-29
+- **Model:** Codex
+- **Branch:** `codex/chat-attachments-plan`
+- **Work:** Implemented authenticated per-chat attachment APIs for the chat portal; UI controls remain a follow-up.
+- **Plan:** `development/planning/2026-06-29_chat-attachments-plan.md`
+- **Endpoints:** `POST /api/chat/attachments`, `DELETE /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
+- **Files:**
+  - API: `app/api/chat/attachments/route.ts`, `app/api/chat/route.ts`
+  - Service/types: `lib/chat/attachments.ts`
+  - Migration: `supabase/migrations/20260630000000_create_chat_attachments.sql`
+  - Tests: `app/api/chat/attachments/__tests__/route.test.ts`, `app/api/chat/__tests__/route-tool-use-smoke.test.ts`, `supabase/migrations/__tests__/chat-attachments-schema.test.ts`
+
 ### Recently Completed
 
 **Training Statistics API**
@@ -32,6 +45,92 @@
 ---
 
 ## 📋 API Endpoint Contracts
+
+### Chat Attachment APIs
+
+#### POST /api/chat/attachments
+
+**Purpose:** Upload a private file for use as bounded context in a single authenticated chat turn.
+
+**Authentication:** Required Supabase bearer session. Widget/API-key mode is not supported for attachments.
+
+**Request:** `multipart/form-data`
+```typescript
+{
+  file: File;              // txt, md, pdf, docx, ts, tsx, js, jsx, py
+  conversationId: string;  // UUID, must belong to the authenticated user
+}
+```
+
+**Response (201):**
+```typescript
+{
+  success: true;
+  attachment: {
+    id: string;
+    filename: string;
+    contentType: string | null;
+    sizeBytes: number;
+    kind: "text" | "document" | "code" | "image" | "unknown";
+    extractedChars: number;
+    status: "uploaded" | "attaching" | "attached" | "deleted";
+  };
+}
+```
+
+**Limits:** 10 MB per file, 11 MB multipart request pre-parse ceiling including envelope overhead, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file. Upload requests must include a bounded `Content-Length`; unbounded/chunked multipart uploads are rejected before `request.formData()`.
+
+**MIME behavior:** Extension validation is authoritative for code/text attachments. TypeScript `.ts` files may arrive as `video/mp2t` from common upload environments and are accepted as code after extension validation.
+
+**Write ownership:** Attachment row and storage mutations are server-owned through the upload/chat routes. Authenticated clients may read their own rows/files but must not insert, update, or delete `chat_attachments` rows directly. Upload row creation goes through `create_chat_attachment_with_capacity`, which serializes per-user/conversation inserts with an advisory transaction lock before enforcing the five-`uploaded` cap.
+
+#### DELETE /api/chat/attachments
+
+**Purpose:** Clear uploaded attachments that were selected but abandoned before a chat turn is sent, so pending rows do not permanently count against the per-turn upload capacity.
+
+**Authentication:** Required Supabase bearer session. Widget/API-key mode is not supported for attachments.
+
+**Request:**
+```typescript
+{
+  conversationId: string;  // UUID
+  attachmentIds: string[]; // max 5, must still be status "uploaded"
+}
+```
+
+**Response (200):**
+```typescript
+{
+  success: true;
+  deletedIds: string[];
+}
+```
+
+**Behavior:** The route verifies the authenticated user, marks only still-`uploaded` rows in that conversation as `deleted`, and removes the private storage objects best-effort after the database transition. Rows already `attaching`/`attached` are refused.
+
+#### POST /api/chat attachmentIds
+
+**Purpose:** Let an authenticated chat turn reference uploaded per-chat attachments by id.
+
+**Request addition:**
+```typescript
+{
+  attachmentIds?: string[]; // UUIDs, max 5, same user and conversation as the request
+}
+```
+
+**Behavior:**
+- Only honored for verified, non-widget chat requests with a real `conversationId`.
+- Rejects malformed non-UUID attachment ids and attachment-bearing conversation ids as client 400s before querying UUID columns.
+- Loads with a service-role query scoped by `user_id`, `conversation_id`, and requested ids.
+- Rejects missing, deleted, already-attached, cross-user, or cross-conversation attachment ids before the model call.
+- Appends delimited attachment text to the latest user message after GraphRAG enhancement.
+- Atomically claims rows with `status = "uploaded"` by moving them to `attaching` before model execution, so concurrent sends cannot reuse the same upload.
+- Releases claimed rows back to `uploaded` only if the model turn fails before output begins. After output has started, a finalize failure leaves the claim unreleased rather than making a consumed attachment reusable.
+- Rejects the turn before model execution when the selected model context window is too small for the prompt plus attachment context.
+- Emits an SSE `attachment_metadata` event with `attachment_ids` and compact attachment DTOs after successful streaming finalization so the regular portal client can persist traceability metadata only on successful assistant messages.
+- Caps total injected attachment text at 40,000 chars per turn and finalizes successful rows as `attached`.
+- Keeps `chat_attachments.message_id` nullable because regular portal user messages are currently persisted by the client outside `/api/chat`.
 
 ### Snippet Revision APIs
 
@@ -287,6 +386,22 @@ export async function GET(request: NextRequest) {
 ---
 
 ## 📝 Decisions Log
+
+### 2026-06-29: Chat Attachments Need Message-Scoped Contracts
+
+**Decision:** Per-chat attachments should use a private, message-scoped attachment
+contract instead of reusing the durable GraphRAG document upload path.
+
+**Planned endpoints:**
+- `POST /api/chat/attachments` to upload and extract authenticated attachments
+- `/api/chat` accepts verified attachment ids for the current user turn
+
+**Rationale:**
+- GraphRAG uploads commit files to the user's durable knowledge base.
+- The chat route currently accepts only text messages, so an upload-only UI would
+  not let the model safely use one-turn file context.
+- Attachment text must be ownership-checked, conversation-scoped, and token-bounded
+  before prompt injection.
 
 ### 2025-12-19: Training Stats API
 

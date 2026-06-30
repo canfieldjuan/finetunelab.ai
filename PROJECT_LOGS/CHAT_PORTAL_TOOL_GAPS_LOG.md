@@ -309,3 +309,17 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   CRUD routes, a Secrets/Integrations portal panel, read-only host stdio display,
   and route/component tests. Generic Open WebUI-style local portal gaps refreshed
   above; marketing Audit Resolution tools remain out of this lane.
+- 2026-06-29 - Per-chat attachments planning started: root gap is a missing
+  message-scoped attachment contract, not just a missing upload button. Existing
+  uploads either become durable GraphRAG documents or training datasets, while
+  `/api/chat` only accepts text messages. Plan recorded in
+  `development/planning/2026-06-29_chat-attachments-plan.md`; first
+  implementation slice should add private `chat_attachments` storage/schema,
+  `/api/chat/attachments`, and bounded attachment injection into `/api/chat`
+  before UI controls.
+- 2026-06-30 - Per-chat attachments backend contract implemented: added private
+  `chat_attachments` schema/storage migration, authenticated
+  `POST /api/chat/attachments`, and `/api/chat` `attachmentIds` verification,
+  bounded prompt injection, and `attached` status updates. Slice is backend-only:
+  UI picker/chips, signed previews/downloads, GraphRAG promotion, and vision
+  inputs remain follow-ups.

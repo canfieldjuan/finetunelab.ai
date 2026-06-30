@@ -1,0 +1,194 @@
+# Chat Attachments Plan
+
+## Why this slice exists
+
+`PROJECT_LOGS/CHAT_PORTAL_TOOL_GAPS_LOG.md` marks **per-chat file attachments** as
+one of the remaining Open WebUI-like chat portal gaps. The root cause is not a
+missing button: the chat contract is text-only. Existing upload flows either
+create durable GraphRAG knowledge-base documents or training datasets, so there
+is no authenticated, private, message-scoped attachment object that `/api/chat`
+can verify, persist, render, and inject into one turn.
+
+This slice should fix that upstream contract first. Once the route can accept
+verified attachment ids and include bounded extracted content, the UI can safely
+offer attachment controls without turning every file into a global knowledge-base
+document.
+
+## Existing surfaces traced
+
+- `components/chat/ChatInput.tsx` accepts text, STT controls, stop/send only.
+- `components/hooks/useChat.ts` sends JSON to `/api/chat` with `messages`, tools,
+  conversation/model ids, and flags; no attachment payload exists.
+- `app/api/chat/route.ts` receives `ChatMessage[]` and enhances text with memory,
+  conversation history, GraphRAG, tools, and metadata.
+- `components/chat/types.ts` has no first-class message attachment type.
+- `app/api/graphrag/upload/route.ts` + `lib/graphrag/service/document-service.ts`
+  already validate/upload/parse supported document and code files, but those
+  uploads create durable `documents` rows and process into GraphRAG.
+- `lib/graphrag/schema.sql` has a `documents` table and private `documents`
+  bucket policies; this is knowledge-base storage, not per-chat storage.
+
+## Implemented first slice
+
+1. Add a versioned migration for private chat attachments.
+   - `chat_attachments` table:
+     - `id uuid primary key`
+     - `user_id uuid not null`
+     - `conversation_id uuid not null`
+     - `message_id uuid null` so files can be uploaded before the user message
+       row exists, then attached after send
+     - `filename text not null`
+     - `content_type text`
+     - `size_bytes integer not null`
+     - `storage_bucket text not null default 'chat-attachments'`
+     - `storage_path text not null`
+     - `kind text not null` such as `text`, `document`, `code`, `image`,
+       `unknown`
+     - `extracted_text text null`
+     - `extracted_chars integer default 0`
+     - `status text not null` such as `uploaded`, `attaching`, `attached`,
+       `deleted`
+     - `metadata jsonb not null default '{}'::jsonb`
+     - timestamps
+   - Add indexes for `user_id`, `conversation_id`, `message_id`, and `created_at`.
+   - Add RLS so users can only select their own rows; attachment row writes are
+     server-owned so clients cannot forge `extracted_text`, `status`, or
+     ownership fields that `/api/chat` later trusts.
+   - Add a server-owned `create_chat_attachment_with_capacity` database function
+     that takes a per-user/conversation advisory transaction lock and inserts a
+     row only while the current `uploaded` count is below the configured cap.
+   - Add a private `chat-attachments` storage bucket with read-only user
+     visibility. Storage writes are paired with server-side validation in the
+     upload route.
+
+2. Add `/api/chat/attachments`.
+   - `POST` accepts `multipart/form-data` with `file` and `conversationId`.
+   - Auth must be a verified Supabase session, matching `/api/graphrag/upload`.
+   - Require a bounded `Content-Length` and reject known-over-limit multipart
+     bodies before calling `request.formData()`.
+   - Verify the conversation belongs to the authenticated user before upload.
+   - Validate size, extension, MIME, and count limits.
+   - Accept the common `video/mp2t` MIME value for `.ts` uploads after the
+     extension allowlist has classified the file as TypeScript code.
+   - Upload to `chat-attachments/{userId}/{conversationId}/{attachmentId}/...`.
+   - For text/code/docs, reuse existing GraphRAG parser primitives to extract
+     text, then store a bounded `extracted_text` preview for chat injection.
+   - Persist the row through the database-side capacity function so parallel
+     uploads cannot stale-read the five-file pending cap.
+   - Return a compact attachment DTO: id, filename, contentType, sizeBytes, kind,
+     extractedChars, status.
+   - `DELETE` accepts UUID `conversationId` and `attachmentIds` JSON for
+     still-pending uploaded rows, marks them `deleted`, and removes private
+     storage objects best-effort so abandoned pre-send uploads do not block
+     future uploads.
+
+3. Extend `/api/chat` with attachment ids.
+   - Request body gets `attachmentIds?: string[]` for the current user message.
+   - Server loads those ids with service role only after verifying the session
+     user and conversation ownership; the service-role query itself is scoped by
+     `user_id` and `conversation_id`.
+   - Reject malformed non-UUID attachment and attachment-bearing conversation
+     ids before they reach the database UUID query path.
+   - Reject attachments not owned by the user, not in the conversation, deleted,
+     already attached, or over per-turn limits.
+   - Inject bounded text into the prompt with clear source labels after GraphRAG
+     enhancement so the attachment context is not overwritten.
+   - Claim rows atomically with `status = uploaded -> attaching` before the model
+     turn, release the claim back to `uploaded` if the turn fails, and finalize
+     successful turns as `attached`.
+   - Reject turns whose prompt plus attachment context would exceed the selected
+     model's context window before calling the model.
+   - Emit `attachment_metadata` over SSE after successful attachment finalization
+     so regular portal client persistence records `attachment_ids` and compact
+     attachment DTOs only on successful assistant messages.
+   - `message_id` remains nullable in this slice because regular portal user
+     messages are currently persisted by the client outside `/api/chat`.
+   - Persist compact attachment metadata on assistant messages for traceability.
+
+4. UI wiring follow-up.
+   - Add an attachment icon button to `ChatInput` and selected-file chips above
+     the input.
+   - Upload selected files before send; only send attachment ids to `/api/chat`.
+   - Keep send disabled while attachment upload is pending.
+   - Render user-message attachment chips in `MessageList` or the message body
+     component.
+
+## Scope boundaries
+
+- Do not ingest per-chat attachments into GraphRAG by default.
+- Do not add code execution or filesystem browsing.
+- Do not send image bytes to models in this slice. Images are not accepted by
+  the upload route yet; model vision input belongs to the separate multimodal
+  input gap.
+- Do not support public/widget chat attachments until the authenticated path is
+  proven; widget API keys are public and should not grant private file upload.
+
+## Security and limits
+
+- Authentication: verified Supabase session only.
+- Ownership: attachment, conversation, and eventual message must share the same
+  `user_id`.
+- Storage: private bucket; server-owned writes; no public URLs; signed URLs only
+  if a render path needs them.
+- Implemented limits:
+  - max 5 files per chat turn
+  - max 10 MB per file
+  - max 20,000 extracted chars per file
+  - max 40,000 injected chars per chat turn
+  - allowed extensions for slice 1: `txt`, `md`, `pdf`, `docx`, `ts`, `tsx`,
+    `js`, `jsx`, `py`
+- Prompt injection: include filename and bounded extracted text as data, not as
+  instructions. Keep a clear delimiter around file content.
+
+## Tests
+
+- Migration/schema test:
+  - table exists with nullable `message_id`
+  - RLS policies and indexes exist
+  - storage bucket/policy SQL is idempotent
+  - atomic capacity insert function exists, uses an advisory transaction lock,
+    and rejects the sixth still-`uploaded` row in a real Postgres database
+- `/api/chat/attachments` route tests:
+  - rejects missing/invalid auth
+  - rejects a conversation owned by another user
+  - rejects missing or known-over-limit `Content-Length` before parsing form data
+  - rejects malformed conversation ids before upload/delete UUID filters
+  - rejects disallowed type and oversize files
+  - accepts TypeScript uploads reported as `video/mp2t`
+  - uploads and extracts a text/code file
+  - removes the uploaded storage object when the database-side capacity gate
+    rejects a concurrent upload after file storage
+  - deletes abandoned still-uploaded attachments
+  - refuses to delete attachments that are already consumed
+  - rejects malformed attachment ids before delete queries
+- `/api/chat` route tests:
+  - rejects malformed attachment and attachment-bearing conversation ids before
+    attachment-store queries
+  - rejects attachment ids from another user or conversation
+  - rejects already-attached ids so rows are one-turn only
+  - injects bounded attachment text into the model messages
+  - emits attachment metadata over SSE for regular chat persistence
+  - claims accepted rows as `attaching`, finalizes successful turns as
+    `attached`, releases failed turns back to `uploaded`, and rejects a
+    simulated same-id claim race before calling the model
+  - rejects oversized attachment context for small selected model windows and
+    releases the claim
+  - withholds streaming attachment metadata until output succeeds and the claim
+    finalizes
+  - does not release a claimed streaming attachment after output has started if
+    finalization fails
+  - releases a claimed streaming attachment if finalization fails after the
+    model stream completes without emitting non-empty output
+  - does not load attachments for unsupported modes
+- Client tests:
+  - deferred to UI slice
+  - `useChat` sends attachment ids with the user turn
+  - selected attachment chips can be removed before send
+  - send waits for uploads to finish
+
+## Follow-ups
+
+- Promote an attached file to the durable knowledge graph on explicit user action.
+- Rich attachment previews and signed download links.
+- Vision-capable model path for image attachments.
+- Per-chat artifact panel that can show generated/attached files together.

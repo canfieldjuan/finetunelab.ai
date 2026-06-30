@@ -5,6 +5,7 @@ import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
 import type { GenerationSettings } from '../chat/types';
 import type { Citation } from "@/lib/graphrag/service";
+import type { ChatAttachmentDto } from '@/lib/chat/attachments';
 import type { User } from '@supabase/supabase-js';
 import type { ContextTracker } from '../../lib/context/context-tracker';
 import type { ContextUsage } from '@/lib/context/types';
@@ -134,6 +135,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     let modelId: string | null = null;
     let provider: string | null = null;
     let modelName: string | null = null;
+    let attachmentIds: string[] | undefined;
+    let attachments: ChatAttachmentDto[] | undefined;
     let deepResearchDetected = false; // Track if we've already detected deep research to avoid repeated regex
     // Actual token counts from API (will be populated by token_usage event)
     let actualInputTokens: number | null = null;
@@ -159,7 +162,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                   graphrag_grounded: graphragGrounded,
                   graphrag_method: graphragMethod,
                   tools_called: toolsCalled,
-                  webSearchResults
+                  webSearchResults,
+                  attachment_ids: attachmentIds,
+                  attachments
                 }
               : m
           )
@@ -367,6 +372,16 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               modelName = parsed.model_name;
             }
 
+            if (parsed.type === "attachment_metadata") {
+              attachmentIds = Array.isArray(parsed.attachment_ids)
+                ? parsed.attachment_ids.filter((id: unknown): id is string => typeof id === 'string')
+                : undefined;
+              attachments = Array.isArray(parsed.attachments)
+                ? (parsed.attachments as ChatAttachmentDto[])
+                : undefined;
+              updateMessageThrottled();
+            }
+
             // Capture token usage for context tracking AND message persistence
             if (parsed.type === "token_usage") {
               const inputTokens = parsed.input_tokens || 0;
@@ -484,7 +499,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               graphrag_grounded: graphragGrounded,
               graphrag_method: graphragMethod,
               tools_called: toolsCalled,
-              webSearchResults
+              webSearchResults,
+              attachment_ids: attachmentIds,
+              attachments
             }
           : m
       )
@@ -519,6 +536,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       modelName,
       provider,
       webSearchResults,
+      attachmentIds,
+      attachments,
       graphRAG: {
         citations: graphragCitations,
         contextsUsed: graphragContextsUsed,

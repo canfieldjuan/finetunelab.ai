@@ -1,0 +1,249 @@
+-- Private, message-scoped chat attachments.
+-- These rows are intentionally separate from GraphRAG documents: an attachment
+-- supplies bounded context to one chat turn and is not ingested into the user's
+-- durable knowledge graph unless a future explicit promotion flow does that.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS public.chat_attachments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  message_id UUID REFERENCES public.messages(id) ON DELETE SET NULL,
+  filename TEXT NOT NULL CHECK (length(filename) > 0),
+  content_type TEXT,
+  size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+  storage_bucket TEXT NOT NULL DEFAULT 'chat-attachments',
+  storage_path TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  extracted_text TEXT,
+  extracted_chars INTEGER NOT NULL DEFAULT 0 CHECK (extracted_chars >= 0),
+  status TEXT NOT NULL DEFAULT 'uploaded',
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (storage_bucket, storage_path)
+);
+
+ALTER TABLE public.chat_attachments
+  ADD COLUMN IF NOT EXISTS message_id UUID REFERENCES public.messages(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS extracted_text TEXT,
+  ADD COLUMN IF NOT EXISTS extracted_chars INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'uploaded',
+  ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+UPDATE public.chat_attachments
+   SET extracted_chars = 0
+ WHERE extracted_chars IS NULL;
+
+UPDATE public.chat_attachments
+   SET status = 'uploaded'
+ WHERE status IS NULL;
+
+UPDATE public.chat_attachments
+   SET metadata = '{}'::jsonb
+ WHERE metadata IS NULL;
+
+UPDATE public.chat_attachments
+   SET updated_at = COALESCE(updated_at, NOW());
+
+ALTER TABLE public.chat_attachments
+  ALTER COLUMN extracted_chars SET DEFAULT 0,
+  ALTER COLUMN extracted_chars SET NOT NULL,
+  ALTER COLUMN status SET DEFAULT 'uploaded',
+  ALTER COLUMN status SET NOT NULL,
+  ALTER COLUMN metadata SET DEFAULT '{}'::jsonb,
+  ALTER COLUMN metadata SET NOT NULL,
+  ALTER COLUMN updated_at SET DEFAULT NOW(),
+  ALTER COLUMN updated_at SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_constraint
+     WHERE conname = 'chat_attachments_kind_check'
+       AND conrelid = 'public.chat_attachments'::regclass
+  ) THEN
+    ALTER TABLE public.chat_attachments
+      ADD CONSTRAINT chat_attachments_kind_check
+      CHECK (kind IN ('text', 'document', 'code', 'image', 'unknown'));
+  END IF;
+
+  ALTER TABLE public.chat_attachments
+    DROP CONSTRAINT IF EXISTS chat_attachments_status_check;
+
+  ALTER TABLE public.chat_attachments
+    ADD CONSTRAINT chat_attachments_status_check
+    CHECK (status IN ('uploaded', 'attaching', 'attached', 'deleted'));
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_user_id
+  ON public.chat_attachments(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_conversation_id
+  ON public.chat_attachments(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_message_id
+  ON public.chat_attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_status
+  ON public.chat_attachments(status);
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_created_at
+  ON public.chat_attachments(created_at DESC);
+
+CREATE OR REPLACE FUNCTION public.create_chat_attachment_with_capacity(
+  p_id UUID,
+  p_user_id UUID,
+  p_conversation_id UUID,
+  p_filename TEXT,
+  p_content_type TEXT,
+  p_size_bytes INTEGER,
+  p_storage_bucket TEXT,
+  p_storage_path TEXT,
+  p_kind TEXT,
+  p_extracted_text TEXT,
+  p_extracted_chars INTEGER,
+  p_metadata JSONB,
+  p_max_uploaded INTEGER DEFAULT 5
+)
+RETURNS TABLE (
+  id UUID,
+  filename TEXT,
+  content_type TEXT,
+  size_bytes INTEGER,
+  kind TEXT,
+  extracted_chars INTEGER,
+  status TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, storage
+AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':' || p_conversation_id::text, 0));
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.conversations
+     WHERE conversations.id = p_conversation_id
+       AND conversations.user_id = p_user_id
+  ) THEN
+    RAISE EXCEPTION 'Conversation not found for authenticated user'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF (
+    SELECT COUNT(*)
+      FROM public.chat_attachments
+     WHERE chat_attachments.user_id = p_user_id
+       AND chat_attachments.conversation_id = p_conversation_id
+       AND chat_attachments.status = 'uploaded'
+  ) >= p_max_uploaded THEN
+    RAISE EXCEPTION 'A chat turn can include at most % attachments', p_max_uploaded
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN QUERY
+  INSERT INTO public.chat_attachments (
+    id,
+    user_id,
+    conversation_id,
+    filename,
+    content_type,
+    size_bytes,
+    storage_bucket,
+    storage_path,
+    kind,
+    extracted_text,
+    extracted_chars,
+    status,
+    metadata
+  )
+  VALUES (
+    p_id,
+    p_user_id,
+    p_conversation_id,
+    p_filename,
+    p_content_type,
+    p_size_bytes,
+    p_storage_bucket,
+    p_storage_path,
+    p_kind,
+    p_extracted_text,
+    p_extracted_chars,
+    'uploaded',
+    COALESCE(p_metadata, '{}'::jsonb)
+  )
+  RETURNING
+    chat_attachments.id,
+    chat_attachments.filename,
+    chat_attachments.content_type,
+    chat_attachments.size_bytes,
+    chat_attachments.kind,
+    chat_attachments.extracted_chars,
+    chat_attachments.status;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_chat_attachment_with_capacity(
+  UUID, UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER, JSONB, INTEGER
+) FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.create_chat_attachment_with_capacity(
+      UUID, UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER, JSONB, INTEGER
+    ) FROM anon';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.create_chat_attachment_with_capacity(
+      UUID, UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER, JSONB, INTEGER
+    ) FROM authenticated';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.create_chat_attachment_with_capacity(
+      UUID, UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER, JSONB, INTEGER
+    ) TO service_role';
+  END IF;
+END $$;
+
+ALTER TABLE public.chat_attachments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS chat_attachments_select_own ON public.chat_attachments;
+CREATE POLICY chat_attachments_select_own
+  ON public.chat_attachments
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS chat_attachments_insert_own ON public.chat_attachments;
+DROP POLICY IF EXISTS chat_attachments_update_own ON public.chat_attachments;
+DROP POLICY IF EXISTS chat_attachments_delete_own ON public.chat_attachments;
+-- Attachment row mutations are intentionally server-owned. The public anon key
+-- must not be able to create or rewrite extracted_text/status rows that
+-- /api/chat later trusts as prompt context.
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('chat-attachments', 'chat-attachments', false)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "chat-attachments: users upload to own folder" ON storage.objects;
+DROP POLICY IF EXISTS "chat-attachments: users read own files" ON storage.objects;
+CREATE POLICY "chat-attachments: users read own files" ON storage.objects
+  FOR SELECT
+  USING (
+    bucket_id = 'chat-attachments'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "chat-attachments: users delete own files" ON storage.objects;
+-- Storage writes are also server-owned; the upload route validates size, type,
+-- conversation ownership, extraction limits, and row creation together.
+
+COMMENT ON TABLE public.chat_attachments IS
+  'Private per-chat files attached to a user turn; separate from durable GraphRAG documents';
+COMMENT ON COLUMN public.chat_attachments.message_id IS
+  'Nullable because files upload before a user message row may exist';
+COMMENT ON COLUMN public.chat_attachments.extracted_text IS
+  'Bounded server-extracted text used as one-turn chat context';

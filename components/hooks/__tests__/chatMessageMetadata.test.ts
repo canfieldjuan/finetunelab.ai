@@ -11,6 +11,18 @@ describe('chat message metadata helpers', () => {
       modelName: 'Local 7B',
       provider: 'vllm',
       timestamp: '2026-06-29T01:10:00.000Z',
+      attachmentIds: ['attachment-1'],
+      attachments: [
+        {
+          id: 'attachment-1',
+          filename: 'notes.ts',
+          contentType: 'video/mp2t',
+          sizeBytes: 42,
+          kind: 'code',
+          extractedChars: 30,
+          status: 'attached',
+        },
+      ],
       graphRAG: {
         citations: [
           {
@@ -35,6 +47,18 @@ describe('chat message metadata helpers', () => {
       provider: 'vllm',
       model_id: 'model-1',
       timestamp: '2026-06-29T01:10:00.000Z',
+      attachment_ids: ['attachment-1'],
+      attachments: [
+        {
+          id: 'attachment-1',
+          filename: 'notes.ts',
+          contentType: 'video/mp2t',
+          sizeBytes: 42,
+          kind: 'code',
+          extractedChars: 30,
+          status: 'attached',
+        },
+      ],
       graphrag: {
         citations: [
           {

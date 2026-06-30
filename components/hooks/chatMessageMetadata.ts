@@ -1,4 +1,5 @@
 import type { Citation } from '@/lib/graphrag/service';
+import type { ChatAttachmentDto } from '@/lib/chat/attachments';
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 
 export interface GraphRAGMessageMetadataInput {
@@ -18,6 +19,8 @@ export interface AssistantMessageMetadataInput {
   modelName?: string | null;
   provider?: string | null;
   webSearchResults?: WebSearchDocument[];
+  attachmentIds?: string[];
+  attachments?: ChatAttachmentDto[];
   graphRAG?: GraphRAGMessageMetadataInput;
   timestamp?: string;
 }
@@ -123,6 +126,12 @@ export function buildAssistantMessageMetadata(input: AssistantMessageMetadataInp
     } : {}),
     ...(input.webSearchResults && input.webSearchResults.length > 0 ? {
       web_search_results: input.webSearchResults,
+    } : {}),
+    ...(input.attachmentIds && input.attachmentIds.length > 0 ? {
+      attachment_ids: input.attachmentIds,
+    } : {}),
+    ...(input.attachments && input.attachments.length > 0 ? {
+      attachments: input.attachments,
     } : {}),
     ...(graphRAGMetadata ? {
       graphrag: graphRAGMetadata,

@@ -10,7 +10,11 @@
 
 ### In Progress
 
-*No current type work*
+**Chat Attachment Types**
+- **Started:** 2026-06-30
+- **Branch:** `codex/chat-attachments-plan`
+- **Location:** `lib/chat/attachments.ts`
+- **Status:** Backend DTOs exported; UI consumption remains a follow-up slice.
 
 ### Recently Completed
 
@@ -22,6 +26,39 @@
 ---
 
 ## 📦 Shared Type Definitions
+
+### Chat Attachment Types
+
+#### ChatAttachmentDto
+
+**Location:** `lib/chat/attachments.ts`
+
+```typescript
+interface ChatAttachmentDto {
+  id: string;
+  filename: string;
+  contentType: string | null;
+  sizeBytes: number;
+  kind: "text" | "document" | "code" | "image" | "unknown";
+  extractedChars: number;
+  status: "uploaded" | "attached" | "deleted";
+}
+```
+
+**Usage:**
+- Backend: returned from `POST /api/chat/attachments`.
+- Chat route: persisted in assistant metadata when `attachmentIds` are accepted.
+- Future UI: use this DTO for upload chips and message attachment display.
+
+#### Chat Request Attachment Field
+
+```typescript
+interface ChatRequestAttachmentFields {
+  attachmentIds?: string[];
+}
+```
+
+**Rules:** max 5 ids, authenticated non-widget chat only, same `user_id` and `conversation_id`.
 
 ### Training Types
 
