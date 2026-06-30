@@ -19,6 +19,19 @@
   - Client: `lib/snippet-revision/client.ts`
   - Tests: `lib/snippet-revision/__tests__/client.test.ts`
 
+**Chat Attachments Backend Contract**
+- **Started:** 2026-06-29
+- **Model:** Codex
+- **Branch:** `codex/chat-attachments-plan`
+- **Work:** Implemented authenticated per-chat attachment APIs for the chat portal; UI controls remain a follow-up.
+- **Plan:** `development/planning/2026-06-29_chat-attachments-plan.md`
+- **Endpoints:** `POST /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
+- **Files:**
+  - API: `app/api/chat/attachments/route.ts`, `app/api/chat/route.ts`
+  - Service/types: `lib/chat/attachments.ts`
+  - Migration: `supabase/migrations/20260630000000_create_chat_attachments.sql`
+  - Tests: `app/api/chat/attachments/__tests__/route.test.ts`, `app/api/chat/__tests__/route-tool-use-smoke.test.ts`, `supabase/migrations/__tests__/chat-attachments-schema.test.ts`
+
 ### Recently Completed
 
 **Training Statistics API**
@@ -32,6 +45,58 @@
 ---
 
 ## 📋 API Endpoint Contracts
+
+### Chat Attachment APIs
+
+#### POST /api/chat/attachments
+
+**Purpose:** Upload a private file for use as bounded context in a single authenticated chat turn.
+
+**Authentication:** Required Supabase bearer session. Widget/API-key mode is not supported for attachments.
+
+**Request:** `multipart/form-data`
+```typescript
+{
+  file: File;              // txt, md, pdf, docx, ts, tsx, js, jsx, py
+  conversationId: string;  // must belong to the authenticated user
+}
+```
+
+**Response (201):**
+```typescript
+{
+  success: true;
+  attachment: {
+    id: string;
+    filename: string;
+    contentType: string | null;
+    sizeBytes: number;
+    kind: "text" | "document" | "code" | "image" | "unknown";
+    extractedChars: number;
+    status: "uploaded" | "attached" | "deleted";
+  };
+}
+```
+
+**Limits:** 10 MB per file, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file.
+
+#### POST /api/chat attachmentIds
+
+**Purpose:** Let an authenticated chat turn reference uploaded per-chat attachments by id.
+
+**Request addition:**
+```typescript
+{
+  attachmentIds?: string[]; // max 5, same user and conversation as the request
+}
+```
+
+**Behavior:**
+- Only honored for verified, non-widget chat requests with a real `conversationId`.
+- Rejects missing, deleted, cross-user, or cross-conversation attachment ids before the model call.
+- Appends delimited attachment text to the latest user message after GraphRAG enhancement.
+- Caps total injected attachment text at 40,000 chars per turn and marks accepted rows `attached`.
+- Keeps `chat_attachments.message_id` nullable because regular portal user messages are currently persisted by the client outside `/api/chat`.
 
 ### Snippet Revision APIs
 
@@ -287,6 +352,22 @@ export async function GET(request: NextRequest) {
 ---
 
 ## 📝 Decisions Log
+
+### 2026-06-29: Chat Attachments Need Message-Scoped Contracts
+
+**Decision:** Per-chat attachments should use a private, message-scoped attachment
+contract instead of reusing the durable GraphRAG document upload path.
+
+**Planned endpoints:**
+- `POST /api/chat/attachments` to upload and extract authenticated attachments
+- `/api/chat` accepts verified attachment ids for the current user turn
+
+**Rationale:**
+- GraphRAG uploads commit files to the user's durable knowledge base.
+- The chat route currently accepts only text messages, so an upload-only UI would
+  not let the model safely use one-turn file context.
+- Attachment text must be ownership-checked, conversation-scoped, and token-bounded
+  before prompt injection.
 
 ### 2025-12-19: Training Stats API
 

@@ -31,6 +31,15 @@ import { buildUserMcpToolset, type McpUserToolset } from '@/lib/tools/mcp/user-t
 import { signImageStreamToken } from '@/lib/tools/image-gen/stream-token';
 import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
 import { resolveChatUser } from '@/lib/chat/resolve-chat-user';
+import {
+  appendAttachmentContextToLatestUserMessage,
+  ChatAttachmentError,
+  markChatAttachmentsAttached,
+  normalizeChatAttachmentIds,
+  resolveChatAttachmentsForTurn,
+  type ChatAttachmentDto,
+  type ResolvedChatAttachments,
+} from '@/lib/chat/attachments';
 import { normalizeGenerationSettings, type RawGenerationSettings } from '@/lib/llm/generation-settings';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
@@ -60,6 +69,8 @@ type AssistantMessageMetadata = {
   model_id?: string;
   timestamp: string;
   web_search_results?: WebSearchDocument[];
+  attachment_ids?: string[];
+  attachments?: ChatAttachmentDto[];
 };
 
 function isWebSearchDocument(value: unknown): value is RawWebSearchDocument {
@@ -172,6 +183,7 @@ export async function POST(req: NextRequest) {
     let contextInjectionEnabled: boolean | undefined;
     let enableThinking: boolean | undefined;
     let generationSettings: RawGenerationSettings | undefined;
+    let rawAttachmentIds: unknown;
     try {
       ({
         messages,
@@ -188,6 +200,7 @@ export async function POST(req: NextRequest) {
         contextInjectionEnabled,
         enableThinking,
         generationSettings,
+        attachmentIds: rawAttachmentIds,
       } = await req.json());
 
       // DEBUG: Log what we received from the request
@@ -389,6 +402,49 @@ export async function POST(req: NextRequest) {
 
     if (!messages || !Array.isArray(messages)) {
       return new Response('Invalid messages format', { status: 400 });
+    }
+
+    let requestedAttachmentIds: string[] = [];
+    try {
+      requestedAttachmentIds = normalizeChatAttachmentIds(rawAttachmentIds);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid attachmentIds';
+      return new Response(JSON.stringify({ error: message }), {
+        status: error instanceof ChatAttachmentError ? error.status : 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    let resolvedChatAttachments: ResolvedChatAttachments | null = null;
+    if (requestedAttachmentIds.length > 0) {
+      const latestUserMessage = messages[messages.length - 1];
+      if (!isAuthenticatedUser || isWidgetMode || isBatchTestMode || !userId || !conversationId || !supabaseAdmin) {
+        return new Response(JSON.stringify({ error: 'Attachments require an authenticated non-widget chat conversation' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (!latestUserMessage || latestUserMessage.role !== 'user' || typeof latestUserMessage.content !== 'string') {
+        return new Response(JSON.stringify({ error: 'Attachments must be sent with a user message' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      try {
+        resolvedChatAttachments = await resolveChatAttachmentsForTurn({
+          supabase: supabaseAdmin,
+          userId,
+          conversationId,
+          attachmentIds: requestedAttachmentIds,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load chat attachments';
+        return new Response(JSON.stringify({ error: message }), {
+          status: error instanceof ChatAttachmentError ? error.status : 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     console.log('[API] Request with', messages.length, 'messages,', tools.length, 'tools');
@@ -780,6 +836,26 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         console.error('[API] GraphRAG enhancement error:', error);
         // Continue without GraphRAG on error
       }
+    }
+
+    if (resolvedChatAttachments) {
+      appendAttachmentContextToLatestUserMessage(enhancedMessages, resolvedChatAttachments.context);
+      try {
+        await markChatAttachmentsAttached({
+          supabase: supabaseAdmin!,
+          attachmentIds: resolvedChatAttachments.ids,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to mark chat attachments attached';
+        return new Response(JSON.stringify({ error: message }), {
+          status: error instanceof ChatAttachmentError ? error.status : 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      console.log('[API] Injected chat attachment context:', {
+        attachmentCount: resolvedChatAttachments.attachments.length,
+        injectedChars: resolvedChatAttachments.injectedChars,
+      });
     }
 
     // ========================================================================
@@ -1205,6 +1281,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           provider: actualModelConfig?.provider || provider,
           model_id: selectedModelId,
           timestamp: new Date().toISOString(),
+          ...(resolvedChatAttachments && {
+            attachment_ids: resolvedChatAttachments.ids,
+            attachments: resolvedChatAttachments.attachments,
+          }),
           // Add GraphRAG metadata if available
           ...(graphRAGMetadata?.metadata && {
             graphrag: {
@@ -1327,6 +1407,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 provider: actualModelConfig?.provider || provider,
                 model_id: model,
                 timestamp: new Date().toISOString(),
+                ...(resolvedChatAttachments && {
+                  attachment_ids: resolvedChatAttachments.ids,
+                  attachments: resolvedChatAttachments.attachments,
+                }),
                 // Add GraphRAG metadata if available
                 ...(graphRAGMetadata?.metadata && {
                   graphrag: {
@@ -1475,6 +1559,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           provider: actualModelConfig?.provider || provider,
           model_id: model,
           timestamp: new Date().toISOString(),
+          ...(resolvedChatAttachments && {
+            attachment_ids: resolvedChatAttachments.ids,
+            attachments: resolvedChatAttachments.attachments,
+          }),
           // Add GraphRAG metadata if available
           ...(graphRAGMetadata?.metadata && {
             graphrag: {
@@ -2105,6 +2193,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         provider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || 'unknown',
         model_id: selectedModelId || model || 'unknown',
         timestamp: new Date().toISOString(),
+        ...(resolvedChatAttachments && {
+          attachment_ids: resolvedChatAttachments.ids,
+          attachments: resolvedChatAttachments.attachments,
+        }),
         // Add GraphRAG metadata if available
         ...(graphRAGMetadata?.metadata && {
           graphrag: {

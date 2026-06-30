@@ -47,6 +47,73 @@ function parseSseEvents(text: string): unknown[] {
     .map((payload) => JSON.parse(payload));
 }
 
+function makeAuthenticatedSessionClient(userId = 'user-1') {
+  return {
+    auth: {
+      getUser: vi.fn(async () => ({
+        data: { user: { id: userId } },
+        error: null,
+      })),
+    },
+  };
+}
+
+function makeChatAdminClient(options?: {
+  attachments?: unknown[];
+  attachmentLoadError?: { message: string } | null;
+  attachmentUpdateError?: { message: string } | null;
+}) {
+  const attachmentSelectQuery = {
+    in: vi.fn(async () => ({
+      data: options?.attachments ?? [],
+      error: options?.attachmentLoadError ?? null,
+    })),
+  };
+  const attachmentUpdateQuery = {
+    in: vi.fn(async () => ({
+      error: options?.attachmentUpdateError ?? null,
+    })),
+  };
+  const chatAttachmentsTable = {
+    select: vi.fn(() => attachmentSelectQuery),
+    update: vi.fn(() => attachmentUpdateQuery),
+  };
+
+  const conversationsQuery = {
+    select: vi.fn(() => conversationsQuery),
+    eq: vi.fn(() => conversationsQuery),
+    single: vi.fn(async () => ({
+      data: { llm_model_id: null, session_id: 'session-1' },
+      error: null,
+    })),
+  };
+
+  const from = vi.fn((table: string) => {
+    if (table === 'chat_attachments') return chatAttachmentsTable;
+    if (table === 'conversations') return conversationsQuery;
+    return {
+      select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn() })) })),
+      insert: vi.fn(),
+      update: vi.fn(),
+    };
+  });
+
+  return {
+    client: {
+      from,
+      auth: {
+        admin: {
+          getUserById: vi.fn(),
+        },
+      },
+    },
+    from,
+    chatAttachmentsTable,
+    attachmentSelectQuery,
+    attachmentUpdateQuery,
+  };
+}
+
 vi.mock('@/lib/llm/unified-client', () => ({
   unifiedLLMClient: {
     chat: unifiedChat,
@@ -357,5 +424,129 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(secondCallResult).toEqual(
       expect.objectContaining({ status: 'image_generation_already_started', jobId: 'img-job-1' }),
     );
+  });
+
+  it('injects verified chat attachment text into the model turn and marks it attached', async () => {
+    const admin = makeChatAdminClient({
+      attachments: [
+        {
+          id: 'attachment-1',
+          user_id: 'user-1',
+          conversation_id: 'conv-1',
+          message_id: null,
+          filename: 'notes.txt',
+          content_type: 'text/plain',
+          size_bytes: 28,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/conv-1/attachment-1/notes.txt',
+          kind: 'text',
+          extracted_text: 'hello from the attached notes',
+          extracted_chars: 29,
+          status: 'uploaded',
+          metadata: {},
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+
+    let modelMessages: Array<{ role: string; content: string }> = [];
+    unifiedChat.mockImplementationOnce(async (_modelId, messages) => {
+      modelMessages = messages as Array<{ role: string; content: string }>;
+      return {
+        content: 'I read the attachment.',
+        usage: {
+          input_tokens: 20,
+          output_tokens: 8,
+        },
+      };
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: 'conv-1',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'Summarize this file.',
+        },
+      ],
+      attachmentIds: ['attachment-1'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    const streamText = await response.text();
+    expect(response.status, streamText).toBe(200);
+    expect(modelMessages.length).toBeGreaterThan(0);
+    const latestUserMessage = modelMessages.filter((message) => message.role === 'user').at(-1);
+    expect(latestUserMessage?.content).toContain('Summarize this file.');
+    expect(latestUserMessage?.content).toContain('Attached files for this turn');
+    expect(latestUserMessage?.content).toContain('hello from the attached notes');
+    expect(latestUserMessage?.content).toContain('<attachment filename="notes.txt"');
+    expect(admin.chatAttachmentsTable.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'attached',
+      updated_at: expect.any(String),
+    }));
+    expect(admin.attachmentUpdateQuery.in).toHaveBeenCalledWith('id', ['attachment-1']);
+  });
+
+  it('rejects chat attachment ids from another conversation before calling the model', async () => {
+    const admin = makeChatAdminClient({
+      attachments: [
+        {
+          id: 'attachment-1',
+          user_id: 'user-1',
+          conversation_id: 'other-conv',
+          message_id: null,
+          filename: 'notes.txt',
+          content_type: 'text/plain',
+          size_bytes: 28,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/other-conv/attachment-1/notes.txt',
+          kind: 'text',
+          extracted_text: 'wrong conversation',
+          extracted_chars: 18,
+          status: 'uploaded',
+          metadata: {},
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    unifiedChat.mockResolvedValueOnce({
+      content: 'Should not run.',
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+      },
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: 'conv-1',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'Read this file.',
+        },
+      ],
+      attachmentIds: ['attachment-1'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Attachment does not belong to this conversation' });
+    expect(unifiedChat).not.toHaveBeenCalled();
+    expect(admin.chatAttachmentsTable.update).not.toHaveBeenCalled();
   });
 });
