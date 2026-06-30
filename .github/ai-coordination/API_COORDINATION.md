@@ -32,6 +32,16 @@
   - Migration: `supabase/migrations/20260630000000_create_chat_attachments.sql`
   - Tests: `app/api/chat/attachments/__tests__/route.test.ts`, `app/api/chat/__tests__/route-tool-use-smoke.test.ts`, `supabase/migrations/__tests__/chat-attachments-schema.test.ts`
 
+**Chat Attachment Upload Hardening**
+- **Started:** 2026-06-30
+- **Model:** Codex
+- **Branch:** `codex/chat-attachment-hardening`
+- **Work:** Stacked follow-up on PR #85 that requires bounded upload bodies before multipart parsing and bounds attachment text extraction before UI drives regular uploads.
+- **Files:**
+  - API: `app/api/chat/attachments/route.ts`
+  - Service: `lib/chat/attachments.ts`
+  - Tests: `app/api/chat/attachments/__tests__/route.test.ts`
+
 ### Recently Completed
 
 **Training Statistics API**
@@ -78,7 +88,7 @@
 }
 ```
 
-**Limits:** 10 MB per file, 11 MB multipart request pre-parse ceiling including envelope overhead, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file. Upload requests must include a bounded `Content-Length`; unbounded/chunked multipart uploads are rejected before `request.formData()`.
+**Limits:** 10 MB per file, 11 MB multipart request pre-parse ceiling including envelope overhead, valid bounded `Content-Length` required before `request.formData()`, 15s extraction timeout, 50 MB DOCX uncompressed-entry ceiling, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file.
 
 **MIME behavior:** Extension validation is authoritative for code/text attachments. TypeScript `.ts` files may arrive as `video/mp2t` from common upload environments and are accepted as code after extension validation.
 

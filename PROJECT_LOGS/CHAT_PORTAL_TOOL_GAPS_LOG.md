@@ -323,3 +323,8 @@ deferred slice-1 Copilot finding about name-vs-id keying.
   bounded prompt injection, and `attached` status updates. Slice is backend-only:
   UI picker/chips, signed previews/downloads, GraphRAG promotion, and vision
   inputs remain follow-ups.
+- 2026-06-30 - Per-chat attachment upload hardening started: before UI upload
+  controls, require a valid `Content-Length` for `/api/chat/attachments`, keep
+  the pre-parse multipart body ceiling structural, add parser timeout coverage,
+  and reject DOCX archives whose declared uncompressed entries exceed the safe
+  extraction ceiling.
