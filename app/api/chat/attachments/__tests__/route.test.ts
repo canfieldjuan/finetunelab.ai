@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
+import { EventEmitter } from 'events';
+import * as yazl from 'yazl';
 
 const createClient = vi.hoisted(() => vi.fn());
 const parseAttachment = vi.hoisted(() => vi.fn());
@@ -40,6 +42,102 @@ function makeJsonRequest(body: unknown, headers?: Record<string, string>): NextR
     headers: new Headers(headers ?? {}),
     json: vi.fn(async () => body),
   } as unknown as NextRequest;
+}
+
+function toArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  ) as ArrayBuffer;
+}
+
+function makeZipWithEntryUncompressedSize(uncompressedSize: number): ArrayBuffer {
+  const filename = Buffer.from('[Content_Types].xml');
+  const localHeader = Buffer.alloc(30 + filename.length);
+  let offset = 0;
+  localHeader.writeUInt32LE(0x04034b50, offset); offset += 4;
+  localHeader.writeUInt16LE(20, offset); offset += 2;
+  localHeader.writeUInt16LE(0, offset); offset += 2;
+  localHeader.writeUInt16LE(8, offset); offset += 2;
+  localHeader.writeUInt16LE(0, offset); offset += 2;
+  localHeader.writeUInt16LE(0, offset); offset += 2;
+  localHeader.writeUInt32LE(0, offset); offset += 4;
+  localHeader.writeUInt32LE(0, offset); offset += 4;
+  localHeader.writeUInt32LE(uncompressedSize, offset); offset += 4;
+  localHeader.writeUInt16LE(filename.length, offset); offset += 2;
+  localHeader.writeUInt16LE(0, offset); offset += 2;
+  filename.copy(localHeader, offset);
+
+  const centralDirectoryOffset = localHeader.length;
+  const centralDirectory = Buffer.alloc(46 + filename.length);
+  offset = 0;
+  centralDirectory.writeUInt32LE(0x02014b50, offset); offset += 4;
+  centralDirectory.writeUInt16LE(20, offset); offset += 2;
+  centralDirectory.writeUInt16LE(20, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(8, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt32LE(0, offset); offset += 4;
+  centralDirectory.writeUInt32LE(0, offset); offset += 4;
+  centralDirectory.writeUInt32LE(uncompressedSize, offset); offset += 4;
+  centralDirectory.writeUInt16LE(filename.length, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt32LE(0, offset); offset += 4;
+  centralDirectory.writeUInt32LE(0, offset); offset += 4;
+  filename.copy(centralDirectory, offset);
+
+  const endOfCentralDirectory = Buffer.alloc(22);
+  offset = 0;
+  endOfCentralDirectory.writeUInt32LE(0x06054b50, offset); offset += 4;
+  endOfCentralDirectory.writeUInt16LE(0, offset); offset += 2;
+  endOfCentralDirectory.writeUInt16LE(0, offset); offset += 2;
+  endOfCentralDirectory.writeUInt16LE(1, offset); offset += 2;
+  endOfCentralDirectory.writeUInt16LE(1, offset); offset += 2;
+  endOfCentralDirectory.writeUInt32LE(centralDirectory.length, offset); offset += 4;
+  endOfCentralDirectory.writeUInt32LE(centralDirectoryOffset, offset); offset += 4;
+  endOfCentralDirectory.writeUInt16LE(0, offset);
+
+  return toArrayBuffer(Buffer.concat([localHeader, centralDirectory, endOfCentralDirectory]));
+}
+
+async function makeZipWithEntryContent(content: Buffer): Promise<ArrayBuffer> {
+  const zipfile = new yazl.ZipFile();
+  const chunks: Buffer[] = [];
+
+  const output = new Promise<ArrayBuffer>((resolve, reject) => {
+    zipfile.outputStream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    zipfile.outputStream.on('error', reject);
+    zipfile.outputStream.on('end', () => resolve(toArrayBuffer(Buffer.concat(chunks))));
+  });
+
+  zipfile.addBuffer(content, 'word/document.xml');
+  zipfile.end();
+
+  return output;
+}
+
+function rewriteZipUncompressedSizes(zip: ArrayBuffer, uncompressedSize: number): ArrayBuffer {
+  const buffer = Buffer.from(zip);
+  const localHeaderSignature = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+  const centralDirectorySignature = Buffer.from([0x50, 0x4b, 0x01, 0x02]);
+
+  let offset = buffer.indexOf(localHeaderSignature);
+  while (offset !== -1) {
+    buffer.writeUInt32LE(uncompressedSize, offset + 22);
+    offset = buffer.indexOf(localHeaderSignature, offset + localHeaderSignature.length);
+  }
+
+  offset = buffer.indexOf(centralDirectorySignature);
+  while (offset !== -1) {
+    buffer.writeUInt32LE(uncompressedSize, offset + 24);
+    offset = buffer.indexOf(centralDirectorySignature, offset + centralDirectorySignature.length);
+  }
+
+  return toArrayBuffer(buffer);
 }
 
 function makeUploadSupabase(options?: {
@@ -361,6 +459,227 @@ describe('POST /api/chat/attachments', () => {
     expect(supabase.upload).not.toHaveBeenCalled();
   });
 
+  it('rejects docx files whose archive expands beyond the extraction limit', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File(
+        [makeZipWithEntryUncompressedSize(60 * 1024 * 1024)],
+        'large.docx',
+        { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      ),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Attachment document expands beyond the safe extraction limit',
+    });
+    expect(parseAttachment).not.toHaveBeenCalled();
+    expect(supabase.upload).not.toHaveBeenCalled();
+  });
+
+  it('rejects docx files that underreport their inflated archive size', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+    const zip = await makeZipWithEntryContent(Buffer.alloc(50 * 1024 * 1024 + 1));
+    const underreportedZip = rewriteZipUncompressedSizes(zip, 1);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File(
+        [underreportedZip],
+        'underreported.docx',
+        { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      ),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Attachment document expands beyond the safe extraction limit',
+    });
+    expect(parseAttachment).not.toHaveBeenCalled();
+    expect(supabase.upload).not.toHaveBeenCalled();
+  });
+
+  it('times out docx archive inspection before parser work receives a fresh budget', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+    const zip = await makeZipWithEntryContent(Buffer.from('<document />'));
+    const nowSpy = vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(0)
+      .mockReturnValue(15_000);
+
+    try {
+      const { POST } = await import('../route');
+      const response = await POST(makeRequest(makeAttachmentForm(
+        new File(
+          [zip],
+          'slow-inspection.docx',
+          { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+        ),
+      ), {
+        authorization: 'Bearer session-token',
+      }));
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: 'Attachment text extraction timed out',
+      });
+      expect(parseAttachment).not.toHaveBeenCalled();
+      expect(supabase.upload).not.toHaveBeenCalled();
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('closes docx archive inspection streams when the timeout wins', async () => {
+    vi.useFakeTimers();
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const readStreamDestroy = vi.fn();
+    const readStream = Object.assign(new EventEmitter(), {
+      destroy: readStreamDestroy,
+    });
+    const zipfileClose = vi.fn();
+    const zipfileOpenReadStream = vi.fn((
+      _entry: unknown,
+      callback: (error: Error | null, stream?: typeof readStream) => void,
+    ) => {
+      callback(null, readStream);
+    });
+    const zipfileReadEntry = vi.fn(function readEntry(this: EventEmitter) {
+      this.emit('entry', {
+        fileName: 'word/document.xml',
+        uncompressedSize: 1,
+      });
+    });
+    const zipfile = Object.assign(new EventEmitter(), {
+      close: zipfileClose,
+      openReadStream: zipfileOpenReadStream,
+      readEntry: zipfileReadEntry,
+    });
+    const fromBuffer = vi.fn((
+      _buffer: Buffer,
+      _options: unknown,
+      callback: (error: Error | null, openedZipfile?: unknown) => void,
+    ) => {
+      callback(null, zipfile);
+    });
+
+    vi.doMock('yauzl', () => ({ fromBuffer }));
+
+    try {
+      const { POST } = await import('../route');
+      const responsePromise = POST(makeRequest(makeAttachmentForm(
+        new File(
+          [Buffer.from('PK')],
+          'hanging-inspection.docx',
+          { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+        ),
+      ), {
+        authorization: 'Bearer session-token',
+      }));
+
+      await vi.waitFor(() => {
+        expect(zipfile.openReadStream).toHaveBeenCalled();
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+      const response = await responsePromise;
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: 'Attachment text extraction timed out',
+      });
+      expect(fromBuffer).toHaveBeenCalled();
+      expect(readStreamDestroy).toHaveBeenCalledWith(expect.any(Error));
+      expect(zipfileClose).toHaveBeenCalled();
+      expect(parseAttachment).not.toHaveBeenCalled();
+      expect(supabase.upload).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock('yauzl');
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out slow text extraction before upload', async () => {
+    vi.useFakeTimers();
+    try {
+      const supabase = makeUploadSupabase();
+      createClient.mockReturnValue(supabase.client);
+      let parserSignal: AbortSignal | undefined;
+      let sawAbort = false;
+      parseAttachment.mockImplementation((_buffer: Buffer, _fileType: string, options?: { signal?: AbortSignal }) => {
+        parserSignal = options?.signal;
+        parserSignal?.addEventListener('abort', () => {
+          sawAbort = true;
+        });
+        return new Promise(() => undefined);
+      });
+
+      const { POST } = await import('../route');
+      const responsePromise = POST(makeRequest(makeAttachmentForm(), {
+        authorization: 'Bearer session-token',
+      }));
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      const response = await responsePromise;
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: 'Attachment text extraction timed out',
+      });
+      expect(parserSignal).toBeDefined();
+      expect(parserSignal?.aborted).toBe(true);
+      expect(sawAbort).toBe(true);
+      expect(supabase.upload).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out parser work that spends the budget before yielding', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+    let now = 0;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    parseAttachment.mockImplementation(() => {
+      now = 15_000;
+      return Promise.resolve({
+        text: 'late parse',
+        metadata: { encoding: 'utf8' },
+        fileType: 'txt',
+      });
+    });
+
+    try {
+      const { POST } = await import('../route');
+      const response = await POST(makeRequest(makeAttachmentForm(), {
+        authorization: 'Bearer session-token',
+      }));
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: 'Attachment text extraction timed out',
+      });
+      expect(supabase.upload).not.toHaveBeenCalled();
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it('uploads, extracts, and returns a compact attachment DTO', async () => {
     const supabase = makeUploadSupabase();
     createClient.mockReturnValue(supabase.client);
@@ -384,7 +703,11 @@ describe('POST /api/chat/attachments', () => {
         status: 'uploaded',
       },
     });
-    expect(parseAttachment).toHaveBeenCalledWith(expect.any(Buffer), 'txt');
+    expect(parseAttachment).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'txt',
+      expect.objectContaining({ signal: expect.any(Object) }),
+    );
     expect(supabase.upload).toHaveBeenCalledWith(
       expect.stringMatching(/^user-1\/22222222-2222-4222-8222-222222222222\/[0-9a-f-]+\/notes\.txt$/),
       expect.any(File),
@@ -430,7 +753,11 @@ describe('POST /api/chat/attachments', () => {
     }));
 
     expect(response.status).toBe(201);
-    expect(parseAttachment).toHaveBeenCalledWith(expect.any(Buffer), 'ts');
+    expect(parseAttachment).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'ts',
+      expect.objectContaining({ signal: expect.any(Object) }),
+    );
     expect(supabase.attachmentRows[0]).toEqual(expect.objectContaining({
       filename: 'example.ts',
       content_type: 'video/mp2t',

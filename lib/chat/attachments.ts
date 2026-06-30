@@ -1,13 +1,18 @@
 import { randomUUID } from 'crypto';
+import type { Readable } from 'stream';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import * as yauzl from 'yauzl';
 import { parserFactory } from '@/lib/graphrag/parsers';
 import type { DocumentFileType } from '@/lib/graphrag/types';
 
 export const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
 export const CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+export const CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES = CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES + 1024 * 1024;
 export const CHAT_ATTACHMENT_MAX_FILES_PER_TURN = 5;
 export const CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE = 20_000;
 export const CHAT_ATTACHMENT_MAX_INJECTED_CHARS_PER_TURN = 40_000;
+export const CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS = 15_000;
+export const CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type ChatAttachmentKind = 'text' | 'document' | 'code' | 'image' | 'unknown';
@@ -181,6 +186,197 @@ function sanitizeFilename(filename: string): string {
   return sanitized.slice(0, 160) || 'attachment';
 }
 
+function createExtractionTimeoutError() {
+  return new ChatAttachmentError('Attachment text extraction timed out', 422);
+}
+
+function getExtractionAbortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : createExtractionTimeoutError();
+}
+
+function throwIfExtractionAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw getExtractionAbortError(signal);
+  }
+}
+
+async function withExtractionTimeout<T>(
+  operation: (controls: { signal: AbortSignal; throwIfTimedOut: () => void }) => Promise<T>,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const startedAt = Date.now();
+  const abortController = new AbortController();
+  let timeoutError: ChatAttachmentError | undefined;
+  const abortWithTimeout = () => {
+    timeoutError ??= createExtractionTimeoutError();
+    if (!abortController.signal.aborted) {
+      abortController.abort(timeoutError);
+    }
+    return timeoutError;
+  };
+  const throwIfTimedOut = () => {
+    throwIfExtractionAborted(abortController.signal);
+    if (Date.now() - startedAt >= CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS) {
+      throw abortWithTimeout();
+    }
+  };
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(abortWithTimeout());
+    }, CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS);
+  });
+  const operationPromise = (async () => {
+    const result = await operation({
+      signal: abortController.signal,
+      throwIfTimedOut,
+    });
+    throwIfTimedOut();
+    return result;
+  })();
+
+  try {
+    return await Promise.race([
+      operationPromise,
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function inspectDocxArchive(
+  buffer: Buffer,
+  signal: AbortSignal,
+): Promise<{ entries: number; uncompressedBytes: number }> {
+  throwIfExtractionAborted(signal);
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(buffer, { lazyEntries: true, validateEntrySizes: false }, (openError, zipfile) => {
+      if (signal.aborted) {
+        zipfile?.close();
+        reject(getExtractionAbortError(signal));
+        return;
+      }
+      if (openError || !zipfile) {
+        reject(new ChatAttachmentError('Attachment is not a valid DOCX archive'));
+        return;
+      }
+
+      let settled = false;
+      let entries = 0;
+      let declaredUncompressedBytes = 0;
+      let uncompressedBytes = 0;
+      let activeReadStream: Readable | null = null;
+
+      const cleanupAbortListener = () => {
+        signal.removeEventListener('abort', abortInspection);
+      };
+
+      const finish = (result: { entries: number; uncompressedBytes: number }) => {
+        if (settled) return;
+        settled = true;
+        cleanupAbortListener();
+        zipfile.close();
+        resolve(result);
+      };
+
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanupAbortListener();
+        activeReadStream?.destroy(error);
+        zipfile.close();
+        reject(error);
+      };
+
+      function abortInspection() {
+        fail(getExtractionAbortError(signal));
+      }
+
+      signal.addEventListener('abort', abortInspection, { once: true });
+
+      zipfile.on('entry', (entry: yauzl.Entry) => {
+        if (settled) return;
+        if (signal.aborted) {
+          fail(getExtractionAbortError(signal));
+          return;
+        }
+        entries += 1;
+        declaredUncompressedBytes += entry.uncompressedSize;
+        if (declaredUncompressedBytes > CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES) {
+          fail(new ChatAttachmentError('Attachment document expands beyond the safe extraction limit', 413));
+          return;
+        }
+        if (entry.fileName.endsWith('/')) {
+          zipfile.readEntry();
+          return;
+        }
+
+        zipfile.openReadStream(entry, (streamError, readStream) => {
+          if (streamError || !readStream) {
+            fail(new ChatAttachmentError(
+              streamError instanceof Error
+                ? `Attachment DOCX archive could not be inspected: ${streamError.message}`
+                : 'Attachment DOCX archive could not be inspected',
+            ));
+            return;
+          }
+          if (signal.aborted) {
+            readStream.destroy(getExtractionAbortError(signal));
+            fail(getExtractionAbortError(signal));
+            return;
+          }
+
+          activeReadStream = readStream;
+
+          readStream.on('data', (chunk: Buffer) => {
+            if (settled) return;
+            if (signal.aborted) {
+              fail(getExtractionAbortError(signal));
+              return;
+            }
+            uncompressedBytes += chunk.length;
+            if (uncompressedBytes > CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES) {
+              fail(new ChatAttachmentError('Attachment document expands beyond the safe extraction limit', 413));
+            }
+          });
+
+          readStream.on('end', () => {
+            activeReadStream = null;
+            if (!settled && !signal.aborted) zipfile.readEntry();
+          });
+
+          readStream.on('error', (error) => {
+            fail(new ChatAttachmentError(
+              error instanceof Error
+                ? `Attachment DOCX archive could not be inspected: ${error.message}`
+                : 'Attachment DOCX archive could not be inspected',
+            ));
+          });
+        });
+      });
+
+      zipfile.on('end', () => {
+        if (settled) return;
+        finish({ entries, uncompressedBytes });
+      });
+
+      zipfile.on('error', (error) => {
+        fail(new ChatAttachmentError(
+          error instanceof Error
+            ? `Attachment DOCX archive could not be inspected: ${error.message}`
+            : 'Attachment DOCX archive could not be inspected',
+        ));
+      });
+
+      if (signal.aborted) {
+        fail(getExtractionAbortError(signal));
+      } else {
+        zipfile.readEntry();
+      }
+    });
+  });
+}
+
 async function extractAttachmentText(file: File, fileType: DocumentFileType) {
   const buffer = Buffer.from(await file.arrayBuffer());
   if ((fileType === 'pdf' || fileType === 'docx') && !parserFactory.validateFileType(buffer, fileType)) {
@@ -188,7 +384,12 @@ async function extractAttachmentText(file: File, fileType: DocumentFileType) {
   }
 
   try {
-    const parsed = await parserFactory.parse(buffer, fileType);
+    const { archiveMetadata, parsed } = await withExtractionTimeout(async ({ signal, throwIfTimedOut }) => {
+      const archiveMetadata = fileType === 'docx' ? await inspectDocxArchive(buffer, signal) : null;
+      throwIfTimedOut();
+      const parsed = await parserFactory.parse(buffer, fileType, { signal });
+      return { archiveMetadata, parsed };
+    });
     const fullText = parsed.text || '';
     const extractedText = fullText.slice(0, CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE);
     return {
@@ -196,6 +397,11 @@ async function extractAttachmentText(file: File, fileType: DocumentFileType) {
       extractedChars: extractedText.length,
       metadata: {
         ...parsed.metadata,
+        ...(archiveMetadata ? {
+          archiveEntries: archiveMetadata.entries,
+          uncompressedBytes: archiveMetadata.uncompressedBytes,
+          uncompressedLimitBytes: CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES,
+        } : {}),
         fileType,
         originalExtractedChars: fullText.length,
         extractionTruncated: fullText.length > extractedText.length,

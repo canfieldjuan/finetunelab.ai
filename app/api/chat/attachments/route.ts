@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
-  CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES,
   ChatAttachmentError,
   createChatAttachmentFromFile,
   deleteUploadedChatAttachments,
@@ -15,10 +15,6 @@ export const maxDuration = 60;
 const FALLBACK_SUPABASE_URL = 'https://xxxxxxxxxxxxx.supabase.co';
 const FALLBACK_SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MjAsImV4cCI6MTk2MDc2ODgyMH0.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
-const MULTIPART_BODY_OVERHEAD_BYTES = 1024 * 1024;
-const CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES =
-  CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES + MULTIPART_BODY_OVERHEAD_BYTES;
-
 function isUploadFile(value: FormDataEntryValue | null): value is File {
   return (
     !!value &&
@@ -63,7 +59,8 @@ function parseContentLength(headers: Headers): number | null {
   const value = headers.get('content-length');
   if (!value) return null;
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  if (!Number.isInteger(parsed) || parsed < 0) return null;
+  return parsed;
 }
 
 export async function POST(request: NextRequest) {
