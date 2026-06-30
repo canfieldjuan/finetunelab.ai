@@ -148,4 +148,117 @@ describe('UnifiedLLMClient tool continuations', () => {
       },
     ]);
   });
+
+  it('keeps recovered vLLM XML tool call ids unique across multiple tool rounds', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        choices: [
+          {
+            message: {
+              content: `<tool_call>
+{"name":"search_docs","arguments":{"query":"alpha"}}
+</tool_call>`,
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 5,
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        choices: [
+          {
+            message: {
+              content: `<tool_call>
+{"name":"search_docs","arguments":{"query":"beta"}}
+</tool_call>`,
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 14,
+          completion_tokens: 5,
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        choices: [
+          {
+            message: {
+              content: 'Found both documents.',
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 18,
+          completion_tokens: 7,
+        },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { UnifiedLLMClient } = await import('../unified-client');
+    const client = new UnifiedLLMClient();
+    const toolCallHandler = vi.fn(async (_toolName: string, args: Record<string, unknown>) => ({
+      result: args.query,
+    }));
+
+    const response = await client.chat(
+      'model-vllm-qwen',
+      [{ role: 'user', content: 'search docs twice' }],
+      {
+        tools,
+        toolCallHandler,
+        skipGuardrails: true,
+      }
+    );
+
+    expect(response.content).toBe('Found both documents.');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(toolCallHandler).toHaveBeenCalledTimes(2);
+    const thirdRequest = JSON.parse(fetchMock.mock.calls[2][1].body as string);
+
+    expect(thirdRequest.messages).toEqual([
+      { role: 'user', content: 'search docs twice' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'qwen-xml-tool-0',
+            type: 'function',
+            function: {
+              name: 'search_docs',
+              arguments: JSON.stringify({ query: 'alpha' }),
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: JSON.stringify({ result: 'alpha' }),
+        tool_call_id: 'qwen-xml-tool-0',
+        name: 'search_docs',
+      },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'qwen-xml-tool-1',
+            type: 'function',
+            function: {
+              name: 'search_docs',
+              arguments: JSON.stringify({ query: 'beta' }),
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: JSON.stringify({ result: 'beta' }),
+        tool_call_id: 'qwen-xml-tool-1',
+        name: 'search_docs',
+      },
+    ]);
+  });
 });

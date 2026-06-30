@@ -121,9 +121,15 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       body.max_tokens = maxTokensValue;
     }
 
+    const vllmRuntime = getVllmRuntimeMetadata(config.metadata);
+
     // Add tools if provided and supported
     if (options.tools && options.tools.length > 0 && config.supports_functions) {
       body.tools = options.tools;
+
+      if (config.provider === 'vllm' && vllmRuntime.enable_auto_tool_choice !== false) {
+        body.tool_choice = 'auto';
+      }
     }
 
     // Add streaming flag if requested
@@ -239,14 +245,17 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       });
     }
 
-    const vllmRuntime = getVllmRuntimeMetadata(request?.config.metadata);
+    const responseVllmRuntime = getVllmRuntimeMetadata(request?.config.metadata);
     if (
       (!toolCalls || toolCalls.length === 0) &&
-      vllmRuntime.parse_qwen_xml_tool_calls &&
+      responseVllmRuntime.parse_qwen_xml_tool_calls &&
       (request?.options.tools?.length ?? 0) > 0 &&
       content.includes('<tool_call>')
     ) {
-      const recoveredToolCalls = this.parseQwenXmlToolCalls(content);
+      const recoveredToolCalls = this.parseQwenXmlToolCalls(
+        content,
+        this.getNextQwenXmlToolCallIndex(request?.messages),
+      );
       if (recoveredToolCalls?.length) {
         toolCalls = recoveredToolCalls;
         content = this.stripQwenXmlToolCalls(content);
@@ -286,7 +295,22 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       .trim();
   }
 
-  private parseQwenXmlToolCalls(content: string): Array<{
+  private getNextQwenXmlToolCallIndex(messages?: ChatMessage[]): number {
+    let nextIndex = 0;
+    for (const message of messages ?? []) {
+      for (const toolCall of message.tool_calls ?? []) {
+        const match = /^qwen-xml-tool-(\d+)$/.exec(toolCall.id);
+        if (!match) continue;
+        const index = Number(match[1]);
+        if (Number.isInteger(index)) {
+          nextIndex = Math.max(nextIndex, index + 1);
+        }
+      }
+    }
+    return nextIndex;
+  }
+
+  private parseQwenXmlToolCalls(content: string, startIndex = 0): Array<{
     id: string;
     name: string;
     arguments: Record<string, unknown>;
@@ -324,7 +348,7 @@ export class OpenAIAdapter extends BaseProviderAdapter {
 
         if (name) {
           calls.push({
-            id: `qwen-xml-tool-${calls.length}`,
+            id: `qwen-xml-tool-${startIndex + calls.length}`,
             name,
             arguments: args,
           });

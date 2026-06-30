@@ -45,6 +45,42 @@ const lookupCaseTool = {
 };
 
 describe('OpenAIAdapter', () => {
+  it('sends explicit auto tool choice for vLLM tool requests', () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config,
+      messages: [{ role: 'user', content: 'search docs' }],
+      options: { stream: false, tools: [searchDocsTool] },
+    };
+
+    const { body } = adapter.formatRequest(request);
+
+    expect(body.tools).toEqual([searchDocsTool]);
+    expect(body.tool_choice).toBe('auto');
+  });
+
+  it('does not force auto tool choice when vLLM runtime disables it', () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config: {
+        ...config,
+        metadata: {
+          vllm_runtime: {
+            enable_auto_tool_choice: false,
+            parse_qwen_xml_tool_calls: true,
+          },
+        },
+      },
+      messages: [{ role: 'user', content: 'search docs' }],
+      options: { stream: false, tools: [searchDocsTool] },
+    };
+
+    const { body } = adapter.formatRequest(request);
+
+    expect(body.tools).toEqual([searchDocsTool]);
+    expect(body.tool_choice).toBeUndefined();
+  });
+
   it('recovers Qwen XML tool calls without leaking XML into content', async () => {
     const adapter = new OpenAIAdapter();
     const request: AdapterRequest = {
@@ -229,6 +265,61 @@ Done.`,
         id: 'qwen-xml-tool-1',
         name: 'lookup_case',
         arguments: { id: 'case-1' },
+      },
+    ]);
+  });
+
+  it('continues recovered Qwen XML tool call ids from prior chat history', async () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config,
+      messages: [
+        { role: 'user', content: 'search docs' },
+        {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'qwen-xml-tool-0',
+              type: 'function',
+              function: {
+                name: 'search_docs',
+                arguments: JSON.stringify({ query: 'alpha' }),
+              },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          content: JSON.stringify({ result: 'alpha' }),
+          tool_call_id: 'qwen-xml-tool-0',
+          name: 'search_docs',
+        },
+      ],
+      options: { stream: false, tools: [searchDocsTool, lookupCaseTool] },
+    };
+
+    const response = await adapter.parseResponse(
+      new Response(null),
+      {
+        choices: [
+          {
+            message: {
+              content: `<tool_call>
+{"name":"lookup_case","arguments":{"id":"case-2"}}
+</tool_call>`,
+            },
+          },
+        ],
+      },
+      request
+    );
+
+    expect(response.toolCalls).toEqual([
+      {
+        id: 'qwen-xml-tool-1',
+        name: 'lookup_case',
+        arguments: { id: 'case-2' },
       },
     ]);
   });
