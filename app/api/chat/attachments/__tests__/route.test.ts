@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
+import * as yazl from 'yazl';
 
 const createClient = vi.hoisted(() => vi.fn());
 const parseAttachment = vi.hoisted(() => vi.fn());
@@ -40,6 +41,102 @@ function makeJsonRequest(body: unknown, headers?: Record<string, string>): NextR
     headers: new Headers(headers ?? {}),
     json: vi.fn(async () => body),
   } as unknown as NextRequest;
+}
+
+function toArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  ) as ArrayBuffer;
+}
+
+function makeZipWithEntryUncompressedSize(uncompressedSize: number): ArrayBuffer {
+  const filename = Buffer.from('[Content_Types].xml');
+  const localHeader = Buffer.alloc(30 + filename.length);
+  let offset = 0;
+  localHeader.writeUInt32LE(0x04034b50, offset); offset += 4;
+  localHeader.writeUInt16LE(20, offset); offset += 2;
+  localHeader.writeUInt16LE(0, offset); offset += 2;
+  localHeader.writeUInt16LE(8, offset); offset += 2;
+  localHeader.writeUInt16LE(0, offset); offset += 2;
+  localHeader.writeUInt16LE(0, offset); offset += 2;
+  localHeader.writeUInt32LE(0, offset); offset += 4;
+  localHeader.writeUInt32LE(0, offset); offset += 4;
+  localHeader.writeUInt32LE(uncompressedSize, offset); offset += 4;
+  localHeader.writeUInt16LE(filename.length, offset); offset += 2;
+  localHeader.writeUInt16LE(0, offset); offset += 2;
+  filename.copy(localHeader, offset);
+
+  const centralDirectoryOffset = localHeader.length;
+  const centralDirectory = Buffer.alloc(46 + filename.length);
+  offset = 0;
+  centralDirectory.writeUInt32LE(0x02014b50, offset); offset += 4;
+  centralDirectory.writeUInt16LE(20, offset); offset += 2;
+  centralDirectory.writeUInt16LE(20, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(8, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt32LE(0, offset); offset += 4;
+  centralDirectory.writeUInt32LE(0, offset); offset += 4;
+  centralDirectory.writeUInt32LE(uncompressedSize, offset); offset += 4;
+  centralDirectory.writeUInt16LE(filename.length, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt16LE(0, offset); offset += 2;
+  centralDirectory.writeUInt32LE(0, offset); offset += 4;
+  centralDirectory.writeUInt32LE(0, offset); offset += 4;
+  filename.copy(centralDirectory, offset);
+
+  const endOfCentralDirectory = Buffer.alloc(22);
+  offset = 0;
+  endOfCentralDirectory.writeUInt32LE(0x06054b50, offset); offset += 4;
+  endOfCentralDirectory.writeUInt16LE(0, offset); offset += 2;
+  endOfCentralDirectory.writeUInt16LE(0, offset); offset += 2;
+  endOfCentralDirectory.writeUInt16LE(1, offset); offset += 2;
+  endOfCentralDirectory.writeUInt16LE(1, offset); offset += 2;
+  endOfCentralDirectory.writeUInt32LE(centralDirectory.length, offset); offset += 4;
+  endOfCentralDirectory.writeUInt32LE(centralDirectoryOffset, offset); offset += 4;
+  endOfCentralDirectory.writeUInt16LE(0, offset);
+
+  return toArrayBuffer(Buffer.concat([localHeader, centralDirectory, endOfCentralDirectory]));
+}
+
+async function makeZipWithEntryContent(content: Buffer): Promise<ArrayBuffer> {
+  const zipfile = new yazl.ZipFile();
+  const chunks: Buffer[] = [];
+
+  const output = new Promise<ArrayBuffer>((resolve, reject) => {
+    zipfile.outputStream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    zipfile.outputStream.on('error', reject);
+    zipfile.outputStream.on('end', () => resolve(toArrayBuffer(Buffer.concat(chunks))));
+  });
+
+  zipfile.addBuffer(content, 'word/document.xml');
+  zipfile.end();
+
+  return output;
+}
+
+function rewriteZipUncompressedSizes(zip: ArrayBuffer, uncompressedSize: number): ArrayBuffer {
+  const buffer = Buffer.from(zip);
+  const localHeaderSignature = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+  const centralDirectorySignature = Buffer.from([0x50, 0x4b, 0x01, 0x02]);
+
+  let offset = buffer.indexOf(localHeaderSignature);
+  while (offset !== -1) {
+    buffer.writeUInt32LE(uncompressedSize, offset + 22);
+    offset = buffer.indexOf(localHeaderSignature, offset + localHeaderSignature.length);
+  }
+
+  offset = buffer.indexOf(centralDirectorySignature);
+  while (offset !== -1) {
+    buffer.writeUInt32LE(uncompressedSize, offset + 24);
+    offset = buffer.indexOf(centralDirectorySignature, offset + centralDirectorySignature.length);
+  }
+
+  return toArrayBuffer(buffer);
 }
 
 function makeUploadSupabase(options?: {
@@ -309,6 +406,56 @@ describe('POST /api/chat/attachments', () => {
     });
     expect(supabase.conversationsQuery.maybeSingle).not.toHaveBeenCalled();
     expect(supabase.upload).not.toHaveBeenCalled();
+  });
+
+  it('rejects docx files whose archive expands beyond the extraction limit', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File(
+        [makeZipWithEntryUncompressedSize(60 * 1024 * 1024)],
+        'large.docx',
+        { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      ),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Attachment document expands beyond the safe extraction limit',
+    });
+    expect(parseAttachment).not.toHaveBeenCalled();
+    expect(supabase.upload).not.toHaveBeenCalled();
+  });
+
+  it('times out slow text extraction before upload', async () => {
+    vi.useFakeTimers();
+    try {
+      const supabase = makeUploadSupabase();
+      createClient.mockReturnValue(supabase.client);
+      parseAttachment.mockImplementation(() => new Promise(() => undefined));
+
+      const { POST } = await import('../route');
+      const responsePromise = POST(makeRequest(makeAttachmentForm(), {
+        authorization: 'Bearer session-token',
+      }));
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      const response = await responsePromise;
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: 'Attachment text extraction timed out',
+      });
+      expect(supabase.upload).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('uploads, extracts, and returns a compact attachment DTO', async () => {

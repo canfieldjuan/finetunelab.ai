@@ -63,6 +63,7 @@ document.
    - Auth must be a verified Supabase session, matching `/api/graphrag/upload`.
    - Require a bounded `Content-Length` and reject known-over-limit multipart
      bodies before calling `request.formData()`.
+   - Bound attachment extraction with a timeout and DOCX inflated-byte ceiling.
    - Verify the conversation belongs to the authenticated user before upload.
    - Validate size, extension, MIME, and count limits.
    - Accept the common `video/mp2t` MIME value for `.ts` uploads after the
@@ -128,6 +129,10 @@ document.
 - Implemented limits:
   - max 5 files per chat turn
   - max 10 MB per file
+  - valid `Content-Length` required before multipart parsing
+  - max 11 MB multipart body including envelope overhead
+  - max 15 seconds for text extraction
+  - max 50 MB total uncompressed DOCX ZIP entries before parsing
   - max 20,000 extracted chars per file
   - max 40,000 injected chars per chat turn
   - allowed extensions for slice 1: `txt`, `md`, `pdf`, `docx`, `ts`, `tsx`,
@@ -146,6 +151,9 @@ document.
   - rejects a conversation owned by another user
   - rejects missing or known-over-limit `Content-Length` before parsing form data
   - rejects malformed conversation ids before upload/delete UUID filters
+  - rejects DOCX archives that expand beyond the extraction ceiling
+  - times out slow extraction before upload
+  - rejects DOCX archives that underreport their inflated size
   - rejects disallowed type and oversize files
   - accepts TypeScript uploads reported as `video/mp2t`
   - uploads and extracts a text/code file
