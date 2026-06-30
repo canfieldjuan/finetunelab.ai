@@ -186,13 +186,14 @@ export async function runAnthropicWithToolCalls(
           content: [toolResultBlock],
         },
       ];
+      const followUpMappedTools = mapToAnthropicTools(tools);
       response = await anthropic.messages.create({
         model,
         max_tokens: maxTokens,
         temperature,
         messages: anthropicMessages,
         ...(generationOptions?.topP !== undefined && generationOptions.topP < 1 ? { top_p: generationOptions.topP } : {}),
-        ...(mappedTools ? { tools: mappedTools } : {}),
+        ...(followUpMappedTools ? { tools: followUpMappedTools } : {}),
       });
     } catch (error) {
       // METRIC: Track tool call failure

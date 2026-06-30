@@ -415,6 +415,22 @@ contract instead of reusing the durable GraphRAG document upload path.
 - Attachment text must be ownership-checked, conversation-scoped, and token-bounded
   before prompt injection.
 
+### 2026-06-29: Chat Async Started Tools Are Single-Shot Per Turn
+
+**Decision:** When `/api/chat` tools return an async `*_started` acknowledgement, the route makes that async mode single-shot for the same chat turn. Tools that are purely async are removed from later tool-call offerings; mixed-mode tools keep their synchronous mode available while blocking repeat async work.
+
+**Files:**
+- `app/api/chat/route.ts`
+- `app/api/chat/__tests__/route-tool-use-smoke.test.ts`
+
+**Current tools covered:**
+- `generate_image` after `image_generation_started`: remove `generate_image` from later offered tools and from `offeredToolNames`
+- `web_search` deep research after `deep_research_started` or `research_started`: keep `web_search` offered, but force later `research` / `deepResearchConfirmed` attempts to `false` so standard search still works
+
+**Rationale:**
+- Async tools deliver completion out-of-band, so repeated calls can queue duplicate background work and exhaust model tool-round limits.
+- Structural capability changes are required; prompt instructions or advisory tool-result text are only defense-in-depth.
+
 ### 2025-12-19: Training Stats API
 
 **Decision:** Return job counts broken down by status

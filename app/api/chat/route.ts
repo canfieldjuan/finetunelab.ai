@@ -99,6 +99,16 @@ function isToolDefinition(value: unknown): value is ToolDefinition {
   return !!fn && typeof fn === 'object' && typeof fn.name === 'string';
 }
 
+const REMOVABLE_ASYNC_STARTED_TOOL_NAMES = new Set(['generate_image']);
+
+function shouldRemoveToolAfterStartedAck(toolName: string, resultData: unknown): boolean {
+  if (!REMOVABLE_ASYNC_STARTED_TOOL_NAMES.has(toolName)) return false;
+  if (!resultData || typeof resultData !== 'object') return false;
+
+  const status = (resultData as { status?: unknown }).status;
+  return typeof status === 'string' && status.endsWith('_started');
+}
+
 // Max time to spend discovering a user's MCP tools before proceeding without them,
 // so a slow/hung MCP server never stalls the chat request.
 const MCP_DISCOVERY_DEADLINE_MS = 8000;
@@ -293,8 +303,22 @@ export async function POST(req: NextRequest) {
     let activeTools = tools.length > 0 ? tools : undefined;
     const offeredToolNames = new Set(tools.map((tool) => tool.function.name));
 
-    // For traces, always pass tools array (even if empty) to show what was available
-    let toolsForTrace = tools;
+    // For traces, snapshot the tools offered at LLM-call start. The live `tools`
+    // array may be pruned between tool rounds for single-shot tools.
+    let toolsForTrace = [...tools];
+
+    const removeOfferedToolForRemainingRounds = (toolName: string) => {
+      const currentToolsRef = tools;
+      tools = tools.filter((tool: ToolDefinition) => tool.function.name !== toolName);
+
+      // LLM clients keep the original tools array reference across tool rounds.
+      // Keep that live reference in sync so the next round cannot offer the tool.
+      currentToolsRef.splice(0, currentToolsRef.length, ...tools);
+      tools = currentToolsRef;
+
+      activeTools = tools.length > 0 ? tools : undefined;
+      offeredToolNames.delete(toolName);
+    };
 
     // ========================================================================
     // WIDGET MODE DETECTION & API KEY VALIDATION
@@ -438,10 +462,7 @@ export async function POST(req: NextRequest) {
     // Gate both the OFFERING and the execution allowlist on a verified session,
     // mirroring the MCP gate below.
     if (!isAuthenticatedUser) {
-      tools = tools.filter((tool: ToolDefinition) => tool.function.name !== 'generate_image');
-      activeTools = tools.length > 0 ? tools : undefined;
-      toolsForTrace = tools;
-      offeredToolNames.delete('generate_image');
+      removeOfferedToolForRemainingRounds('generate_image');
     }
 
     if (!messages || !Array.isArray(messages)) {
@@ -548,7 +569,7 @@ export async function POST(req: NextRequest) {
               })),
             );
             activeTools = tools.length > 0 ? tools : undefined;
-            toolsForTrace = tools;
+            toolsForTrace = [...tools];
             console.log('[API] MCP: injected', mcpDefs.length, 'user MCP tool(s)');
           }
         }
@@ -1113,6 +1134,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
     // Tool-call aware chat completion (provider-aware)
     let lastDeepResearchQuery: string | null = null;
+    let deepResearchStartedThisTurn = false;
     const imageStreamJobs: Array<{ jobId: string; prompt: string | null }> = [];
     const toolCallHandler = async (toolName: string, args: Record<string, unknown>) => {
       // Cap image generation to one job per chat turn. generate_image is async —
@@ -1158,7 +1180,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
       // Enforce deep research toggle server-side.
       // Without this, models can start deep research even when UI toggle is off.
-      if (toolName === 'web_search' && !allowDeepResearch) {
+      if (toolName === 'web_search' && (!allowDeepResearch || deepResearchStartedThisTurn)) {
         const wantsResearch = args.research === true || args.deepResearchConfirmed === true;
         if (wantsResearch) {
           args = {
@@ -1170,6 +1192,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       const toolStartTime = Date.now();
+      const toolDefForTrace = tools.find(t => t.function.name === toolName);
       // MCP tools are user-scoped and never in the global registry, so route them
       // through this user's toolset; everything else uses the portal executor
       // (which also enforces the offered-tool allowlist from main).
@@ -1214,6 +1237,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           // Capture deep research job id directly when present
           if ((status === 'deep_research_started' || status === 'research_started') && jobId) {
             lastDeepResearchJobId = String(jobId);
+            deepResearchStartedThisTurn = true;
             if (typeof args.query === 'string') {
               lastDeepResearchQuery = args.query;
             }
@@ -1240,6 +1264,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         console.log('[API] Could not capture generate_image result for SSE:', capErr);
       }
 
+      if (!result.error && shouldRemoveToolAfterStartedAck(toolName, result.data)) {
+        removeOfferedToolForRemainingRounds(toolName);
+      }
+
       // ========================================================================
       // TRACE: End tool call span with structured data
       // ========================================================================
@@ -1247,12 +1275,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         try {
           const { truncateObject } = await import('@/lib/tracing/trace-utils');
 
-          const toolDef = tools?.find(t => t.function.name === toolName);
-
           const inputData = {
             toolName,
             arguments: truncateObject(args, 5) as Record<string, unknown>,
-            toolDescription: toolDef?.function.description,
+            toolDescription: toolDefForTrace?.function.description,
           };
 
           if (result.error) {
