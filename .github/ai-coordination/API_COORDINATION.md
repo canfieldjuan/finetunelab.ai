@@ -10,7 +10,14 @@
 
 ### In Progress
 
-*No current API work*
+**Snippet Revision Client Boundary Follow-up**
+- **Started:** 2026-06-30
+- **Model:** Codex
+- **Branch:** `codex/snippet-revision-client-boundary-followup`
+- **Work:** Harden `requestSnippetRevision` successful-response validation against request context and preserve abort cancellation as a distinct client error.
+- **Files:**
+  - Client: `lib/snippet-revision/client.ts`
+  - Tests: `lib/snippet-revision/__tests__/client.test.ts`
 
 ### Recently Completed
 
@@ -25,6 +32,57 @@
 ---
 
 ## 📋 API Endpoint Contracts
+
+### Snippet Revision APIs
+
+#### POST /api/snippet-revision
+
+**Purpose:** Preview or apply a structured text snippet revision without model-specific assumptions.
+
+**Authentication:** Same-origin portal API behavior; the current route is a pure text helper and does not add auth behavior.
+
+**Request:**
+```typescript
+{
+  action: "preview" | "apply";
+  sourceText: string;
+  revision:
+    | { mode: "replace_text"; find: string; replace: string }
+    | { mode: "replace_range"; start: number; end: number; expectedText: string; replace: string };
+}
+```
+
+**Response (200):**
+```typescript
+{
+  result:
+    | {
+        ok: true;
+        applied: boolean;       // true only for action: "apply"
+        updatedText: string;
+        unchanged: boolean;
+        change: {
+          mode: "replace_text" | "replace_range";
+          start: number;
+          end: number;          // within sourceText.length
+          original: string;     // sourceText.slice(start, end)
+          replacement: string;
+        };
+      }
+    | {
+        ok: false;
+        applied: false;
+        code: "empty_find" | "target_not_found" | "target_ambiguous" | "target_mismatch" | "range_invalid" | "range_out_of_bounds";
+        message: string;
+      };
+}
+```
+
+**Client contract:**
+- `requestSnippetRevision` returns valid engine failures (`result.ok === false`) instead of throwing.
+- `requestSnippetRevision` throws `SnippetRevisionApiError` with `code: "invalid_response"` for stale/custom endpoint success payloads that do not match the submitted action, source text, or revision fields.
+- Successful `replace_text` responses must match the submitted `find`/`replace` and the unique matching source span; successful `replace_range` responses must match the submitted `start`/`end`/`expectedText`/`replace`.
+- `requestSnippetRevision` throws `SnippetRevisionApiError` with `code: "request_aborted"` for abort cancellation, including custom `AbortSignal.reason` throws, distinct from `request_failed`.
 
 ### Training APIs
 
@@ -242,6 +300,19 @@ export async function GET(request: NextRequest) {
 **Alternative Considered:**
 - Separate endpoints per status (`/stats/completed`, `/stats/running`)
 - Rejected: Too many endpoints, harder to maintain
+
+### 2026-06-30: Snippet Revision Client Boundary Validation
+
+**Decision:** Validate successful snippet revision client responses against the submitted request context, not only their standalone object shape.
+
+**Rationale:**
+- The route and client ship together today, but the client supports custom endpoints.
+- Stale/custom endpoints can return structurally valid yet impossible ranges, wrong `applied` state, or abort errors that should not look like network failures.
+- Failing closed with `invalid_response` protects future preview/apply UI from trusting impossible spans or commit state.
+
+**Alternative Considered:**
+- Trust any structurally valid `SnippetRevisionResult`.
+- Rejected: It preserves the TypeScript shape but lets stale endpoint drift leak into UI state.
 
 ---
 

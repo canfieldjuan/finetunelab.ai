@@ -1,6 +1,7 @@
 import {
   SNIPPET_REVISION_ERROR_CODES,
   type SnippetRevision,
+  type SnippetRevisionChange,
   type SnippetRevisionResult,
 } from './index';
 
@@ -56,13 +57,20 @@ export async function requestSnippetRevision(
       signal: options.signal,
     });
   } catch (error) {
+    if (isAbortError(error, options.signal)) {
+      throw new SnippetRevisionApiError('Snippet revision request was aborted.', {
+        code: 'request_aborted',
+        details: error,
+      });
+    }
+
     throw new SnippetRevisionApiError('Snippet revision request failed.', {
       code: 'request_failed',
       details: error,
     });
   }
 
-  const payload = await readJsonResponse(response);
+  const payload = await readJsonResponse(response, options.signal);
 
   if (!response.ok) {
     const apiError = parseApiError(payload);
@@ -73,7 +81,7 @@ export async function requestSnippetRevision(
     });
   }
 
-  if (!isRecord(payload) || !isSnippetRevisionResult(payload.result)) {
+  if (!isRecord(payload) || !isSnippetRevisionResult(payload.result, request)) {
     throw new SnippetRevisionApiError('Snippet revision API returned an invalid response.', {
       code: 'invalid_response',
       status: response.status,
@@ -84,10 +92,18 @@ export async function requestSnippetRevision(
   return payload.result;
 }
 
-async function readJsonResponse(response: Response): Promise<unknown> {
+async function readJsonResponse(response: Response, signal?: AbortSignal): Promise<unknown> {
   try {
     return await response.json();
   } catch (error) {
+    if (isAbortError(error, signal)) {
+      throw new SnippetRevisionApiError('Snippet revision request was aborted.', {
+        code: 'request_aborted',
+        status: response.status,
+        details: error,
+      });
+    }
+
     throw new SnippetRevisionApiError('Snippet revision API returned invalid JSON.', {
       code: 'invalid_json_response',
       status: response.status,
@@ -115,7 +131,10 @@ function parseApiError(payload: unknown): { code: string; message: string } {
   };
 }
 
-function isSnippetRevisionResult(value: unknown): value is SnippetRevisionResult {
+function isSnippetRevisionResult(
+  value: unknown,
+  request: SnippetRevisionApiRequest,
+): value is SnippetRevisionResult {
   if (!isRecord(value) || typeof value.ok !== 'boolean') {
     return false;
   }
@@ -126,14 +145,64 @@ function isSnippetRevisionResult(value: unknown): value is SnippetRevisionResult
       typeof value.message === 'string';
   }
 
-  return value.ok === true &&
-    typeof value.applied === 'boolean' &&
-    typeof value.updatedText === 'string' &&
-    typeof value.unchanged === 'boolean' &&
-    isSnippetRevisionChange(value.change);
+  if (
+    value.ok !== true ||
+    typeof value.applied !== 'boolean' ||
+    value.applied !== (request.action === 'apply') ||
+    typeof value.updatedText !== 'string' ||
+    typeof value.unchanged !== 'boolean' ||
+    !isSnippetRevisionChange(value.change, request.sourceText.length)
+  ) {
+    return false;
+  }
+
+  const expectedUpdatedText = [
+    request.sourceText.slice(0, value.change.start),
+    value.change.replacement,
+    request.sourceText.slice(value.change.end),
+  ].join('');
+
+  return changeMatchesSubmittedRevision(value.change, request) &&
+    value.change.original === request.sourceText.slice(value.change.start, value.change.end) &&
+    value.updatedText === expectedUpdatedText &&
+    value.unchanged === (expectedUpdatedText === request.sourceText);
 }
 
-function isSnippetRevisionChange(value: unknown): boolean {
+function changeMatchesSubmittedRevision(
+  change: SnippetRevisionChange,
+  request: SnippetRevisionApiRequest,
+): boolean {
+  const revision = request.revision;
+  if (change.mode !== revision.mode) {
+    return false;
+  }
+
+  if (revision.mode === 'replace_text') {
+    if (
+      revision.find.length === 0 ||
+      change.original !== revision.find ||
+      change.replacement !== revision.replace
+    ) {
+      return false;
+    }
+
+    const start = request.sourceText.indexOf(revision.find);
+    return start !== -1 &&
+      request.sourceText.indexOf(revision.find, start + 1) === -1 &&
+      change.start === start &&
+      change.end === start + revision.find.length;
+  }
+
+  return change.start === revision.start &&
+    change.end === revision.end &&
+    change.original === revision.expectedText &&
+    change.replacement === revision.replace;
+}
+
+function isSnippetRevisionChange(
+  value: unknown,
+  sourceTextLength: number,
+): value is SnippetRevisionChange {
   if (!isRecord(value)) {
     return false;
   }
@@ -145,8 +214,13 @@ function isSnippetRevisionChange(value: unknown): boolean {
     typeof value.end === 'number' &&
     Number.isInteger(value.end) &&
     value.end >= value.start &&
+    value.end <= sourceTextLength &&
     typeof value.original === 'string' &&
     typeof value.replacement === 'string';
+}
+
+function isAbortError(value: unknown, signal?: AbortSignal): boolean {
+  return (isRecord(value) && value.name === 'AbortError') || signal?.aborted === true;
 }
 
 function isSnippetRevisionErrorCode(value: unknown): boolean {
