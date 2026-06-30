@@ -78,7 +78,9 @@
 }
 ```
 
-**Limits:** 10 MB per file, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file.
+**Limits:** 10 MB per file, 11 MB multipart request pre-parse ceiling including envelope overhead, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file.
+
+**Write ownership:** Attachment row and storage mutations are server-owned through the upload/chat routes. Authenticated clients may read their own rows/files but must not insert, update, or delete `chat_attachments` rows directly.
 
 #### POST /api/chat attachmentIds
 
@@ -93,7 +95,8 @@
 
 **Behavior:**
 - Only honored for verified, non-widget chat requests with a real `conversationId`.
-- Rejects missing, deleted, cross-user, or cross-conversation attachment ids before the model call.
+- Loads with a service-role query scoped by `user_id`, `conversation_id`, and requested ids.
+- Rejects missing, deleted, already-attached, cross-user, or cross-conversation attachment ids before the model call.
 - Appends delimited attachment text to the latest user message after GraphRAG enhancement.
 - Caps total injected attachment text at 40,000 chars per turn and marks accepted rows `attached`.
 - Keeps `chat_attachments.message_id` nullable because regular portal user messages are currently persisted by the client outside `/api/chat`.

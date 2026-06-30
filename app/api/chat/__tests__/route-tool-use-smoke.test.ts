@@ -63,20 +63,52 @@ function makeChatAdminClient(options?: {
   attachmentLoadError?: { message: string } | null;
   attachmentUpdateError?: { message: string } | null;
 }) {
+  type QueryFilter = { column: string; value: unknown };
+  const attachmentRows = (options?.attachments ?? []).map((row) => ({
+    ...(row as Record<string, unknown>),
+  }));
+  const matchesFilters = (row: Record<string, unknown>, filters: QueryFilter[]) =>
+    filters.every((filter) => row[filter.column] === filter.value);
+
+  const attachmentSelectFilters: QueryFilter[] = [];
   const attachmentSelectQuery = {
-    in: vi.fn(async () => ({
-      data: options?.attachments ?? [],
+    eq: vi.fn((column: string, value: unknown) => {
+      attachmentSelectFilters.push({ column, value });
+      return attachmentSelectQuery;
+    }),
+    in: vi.fn(async (column: string, values: unknown[]) => ({
+      data: attachmentRows.filter(
+        (row) => values.includes(row[column]) && matchesFilters(row, attachmentSelectFilters),
+      ),
       error: options?.attachmentLoadError ?? null,
     })),
   };
+  const attachmentUpdateFilters: QueryFilter[] = [];
+  let attachmentUpdatePayload: Record<string, unknown> = {};
   const attachmentUpdateQuery = {
-    in: vi.fn(async () => ({
-      error: options?.attachmentUpdateError ?? null,
-    })),
+    eq: vi.fn((column: string, value: unknown) => {
+      attachmentUpdateFilters.push({ column, value });
+      return attachmentUpdateQuery;
+    }),
+    in: vi.fn(async (column: string, values: unknown[]) => {
+      if (!options?.attachmentUpdateError) {
+        for (const row of attachmentRows) {
+          if (values.includes(row[column]) && matchesFilters(row, attachmentUpdateFilters)) {
+            Object.assign(row, attachmentUpdatePayload);
+          }
+        }
+      }
+      return {
+        error: options?.attachmentUpdateError ?? null,
+      };
+    }),
   };
   const chatAttachmentsTable = {
     select: vi.fn(() => attachmentSelectQuery),
-    update: vi.fn(() => attachmentUpdateQuery),
+    update: vi.fn((payload: Record<string, unknown>) => {
+      attachmentUpdatePayload = payload;
+      return attachmentUpdateQuery;
+    }),
   };
 
   const conversationsQuery = {
@@ -111,6 +143,7 @@ function makeChatAdminClient(options?: {
     chatAttachmentsTable,
     attachmentSelectQuery,
     attachmentUpdateQuery,
+    attachmentRows,
   };
 }
 
@@ -492,6 +525,10 @@ describe('POST /api/chat tool-use smoke', () => {
       status: 'attached',
       updated_at: expect.any(String),
     }));
+    expect(admin.attachmentSelectQuery.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(admin.attachmentSelectQuery.eq).toHaveBeenCalledWith('conversation_id', 'conv-1');
+    expect(admin.attachmentUpdateQuery.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(admin.attachmentUpdateQuery.eq).toHaveBeenCalledWith('conversation_id', 'conv-1');
     expect(admin.attachmentUpdateQuery.in).toHaveBeenCalledWith('id', ['attachment-1']);
   });
 
@@ -546,6 +583,118 @@ describe('POST /api/chat tool-use smoke', () => {
 
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Attachment does not belong to this conversation' });
+    expect(unifiedChat).not.toHaveBeenCalled();
+    expect(admin.chatAttachmentsTable.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects chat attachment ids from another user before calling the model', async () => {
+    const admin = makeChatAdminClient({
+      attachments: [
+        {
+          id: 'attachment-1',
+          user_id: 'user-2',
+          conversation_id: 'conv-1',
+          message_id: null,
+          filename: 'notes.txt',
+          content_type: 'text/plain',
+          size_bytes: 28,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-2/conv-1/attachment-1/notes.txt',
+          kind: 'text',
+          extracted_text: 'wrong user',
+          extracted_chars: 10,
+          status: 'uploaded',
+          metadata: {},
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    unifiedChat.mockResolvedValueOnce({
+      content: 'Should not run.',
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+      },
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: 'conv-1',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'Read this file.',
+        },
+      ],
+      attachmentIds: ['attachment-1'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Attachment does not belong to this conversation' });
+    expect(admin.attachmentSelectQuery.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(admin.attachmentSelectQuery.eq).toHaveBeenCalledWith('conversation_id', 'conv-1');
+    expect(unifiedChat).not.toHaveBeenCalled();
+    expect(admin.chatAttachmentsTable.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects already-attached chat attachment ids before calling the model', async () => {
+    const admin = makeChatAdminClient({
+      attachments: [
+        {
+          id: 'attachment-1',
+          user_id: 'user-1',
+          conversation_id: 'conv-1',
+          message_id: null,
+          filename: 'notes.txt',
+          content_type: 'text/plain',
+          size_bytes: 28,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/conv-1/attachment-1/notes.txt',
+          kind: 'text',
+          extracted_text: 'already used',
+          extracted_chars: 12,
+          status: 'attached',
+          metadata: {},
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    unifiedChat.mockResolvedValueOnce({
+      content: 'Should not run.',
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+      },
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: 'conv-1',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'Read this file again.',
+        },
+      ],
+      attachmentIds: ['attachment-1'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Attachment has already been used in a chat turn' });
     expect(unifiedChat).not.toHaveBeenCalled();
     expect(admin.chatAttachmentsTable.update).not.toHaveBeenCalled();
   });

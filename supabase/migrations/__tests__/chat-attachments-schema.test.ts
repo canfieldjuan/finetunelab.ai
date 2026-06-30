@@ -16,6 +16,11 @@ function commandExists(command: string): boolean {
   }
 }
 
+const canRunSchemaTests =
+  commandExists('psql') &&
+  (!!process.env.CHAT_ATTACHMENTS_SCHEMA_TEST_DATABASE_URL || commandExists('docker'));
+const describeSchema = canRunSchemaTests ? describe : describe.skip;
+
 function runPsql(databaseUrl: string, sqlArgs: string[]): string {
   return execFileSync(
     'psql',
@@ -85,21 +90,12 @@ function waitForPostgres(databaseUrl: string): void {
   throw new Error(`Postgres did not become ready: ${lastError}`);
 }
 
-describe('chat_attachments schema migration', () => {
+describeSchema('chat_attachments schema migration', () => {
   let databaseUrl = process.env.CHAT_ATTACHMENTS_SCHEMA_TEST_DATABASE_URL || '';
   let containerId: string | null = null;
 
   beforeAll(() => {
-    if (!commandExists('psql')) {
-      throw new Error('psql is required for chat_attachments schema tests');
-    }
-
     if (!databaseUrl) {
-      if (!commandExists('docker')) {
-        throw new Error(
-          'Set CHAT_ATTACHMENTS_SCHEMA_TEST_DATABASE_URL or install Docker for chat_attachments schema tests',
-        );
-      }
       const container = startPostgresContainer();
       containerId = container.containerId;
       databaseUrl = container.databaseUrl;
@@ -230,6 +226,8 @@ describe('chat_attachments schema migration', () => {
 
     expect(policies).toEqual(expect.arrayContaining([
       'chat_attachments_select_own',
+    ]));
+    expect(policies).not.toEqual(expect.arrayContaining([
       'chat_attachments_insert_own',
       'chat_attachments_update_own',
       'chat_attachments_delete_own',
@@ -254,8 +252,10 @@ describe('chat_attachments schema migration', () => {
     ).map(([name]) => name);
 
     expect(storagePolicies).toEqual(expect.arrayContaining([
-      'chat-attachments: users upload to own folder',
       'chat-attachments: users read own files',
+    ]));
+    expect(storagePolicies).not.toEqual(expect.arrayContaining([
+      'chat-attachments: users upload to own folder',
       'chat-attachments: users delete own files',
     ]));
   });

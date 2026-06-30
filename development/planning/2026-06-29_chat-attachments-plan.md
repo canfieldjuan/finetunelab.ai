@@ -50,13 +50,18 @@ document.
      - `metadata jsonb not null default '{}'::jsonb`
      - timestamps
    - Add indexes for `user_id`, `conversation_id`, `message_id`, and `created_at`.
-   - Add RLS so users can only select/insert/update/delete their own rows.
-   - Add a private `chat-attachments` storage bucket with folder ownership
-     policies matching the existing `documents` / `chat-images` pattern.
+   - Add RLS so users can only select their own rows; attachment row writes are
+     server-owned so clients cannot forge `extracted_text`, `status`, or
+     ownership fields that `/api/chat` later trusts.
+   - Add a private `chat-attachments` storage bucket with read-only user
+     visibility. Storage writes are paired with server-side validation in the
+     upload route.
 
 2. Add `/api/chat/attachments`.
    - `POST` accepts `multipart/form-data` with `file` and `conversationId`.
    - Auth must be a verified Supabase session, matching `/api/graphrag/upload`.
+   - Reject known-over-limit multipart bodies by `Content-Length` before
+     calling `request.formData()`.
    - Verify the conversation belongs to the authenticated user before upload.
    - Validate size, extension, MIME, and count limits.
    - Upload to `chat-attachments/{userId}/{conversationId}/{attachmentId}/...`.
@@ -68,9 +73,10 @@ document.
 3. Extend `/api/chat` with attachment ids.
    - Request body gets `attachmentIds?: string[]` for the current user message.
    - Server loads those ids with service role only after verifying the session
-     user and conversation ownership.
+     user and conversation ownership; the service-role query itself is scoped by
+     `user_id` and `conversation_id`.
    - Reject attachments not owned by the user, not in the conversation, deleted,
-     or over per-turn limits.
+     already attached, or over per-turn limits.
    - Inject bounded text into the prompt with clear source labels after GraphRAG
      enhancement so the attachment context is not overwritten.
    - Mark accepted attachment rows as `attached`. `message_id` remains nullable in
@@ -101,8 +107,8 @@ document.
 - Authentication: verified Supabase session only.
 - Ownership: attachment, conversation, and eventual message must share the same
   `user_id`.
-- Storage: private bucket; no public URLs; signed URLs only if a render path needs
-  them.
+- Storage: private bucket; server-owned writes; no public URLs; signed URLs only
+  if a render path needs them.
 - Implemented limits:
   - max 5 files per chat turn
   - max 10 MB per file
@@ -122,10 +128,12 @@ document.
 - `/api/chat/attachments` route tests:
   - rejects missing/invalid auth
   - rejects a conversation owned by another user
+  - rejects known-over-limit multipart bodies before parsing form data
   - rejects disallowed type and oversize files
   - uploads and extracts a text/code file
 - `/api/chat` route tests:
   - rejects attachment ids from another user or conversation
+  - rejects already-attached ids so rows are one-turn only
   - injects bounded attachment text into the model messages
   - marks accepted rows as `attached`
   - does not load attachments for unsupported modes

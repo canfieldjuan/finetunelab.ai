@@ -19,7 +19,7 @@ vi.mock('@/lib/graphrag/parsers', () => ({
 function makeRequest(formData: FormData, headers?: Record<string, string>): NextRequest {
   return {
     headers: new Headers(headers ?? {}),
-    formData: async () => formData,
+    formData: vi.fn(async () => formData),
   } as unknown as NextRequest;
 }
 
@@ -110,6 +110,7 @@ describe('POST /api/chat/attachments', () => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
     parseAttachment.mockResolvedValue({
       text: 'hello world',
       metadata: { encoding: 'utf8' },
@@ -178,6 +179,27 @@ describe('POST /api/chat/attachments', () => {
     expect(supabase.upload).not.toHaveBeenCalled();
   });
 
+  it('rejects oversized multipart bodies before parsing form data', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+    const request = makeRequest(makeAttachmentForm(), {
+      authorization: 'Bearer session-token',
+      'content-length': String(11 * 1024 * 1024 + 1),
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(request);
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Attachment upload exceeds the request size limit',
+    });
+    expect(request.formData).not.toHaveBeenCalled();
+    expect(parseAttachment).not.toHaveBeenCalled();
+    expect(supabase.upload).not.toHaveBeenCalled();
+  });
+
   it('uploads, extracts, and returns a compact attachment DTO', async () => {
     const supabase = makeUploadSupabase();
     createClient.mockReturnValue(supabase.client);
@@ -215,5 +237,16 @@ describe('POST /api/chat/attachments', () => {
       extracted_chars: 11,
       status: 'uploaded',
     }));
+    expect(createClient).toHaveBeenNthCalledWith(
+      2,
+      'https://example.supabase.co',
+      'service-role-key',
+      expect.objectContaining({
+        auth: expect.objectContaining({
+          autoRefreshToken: false,
+          persistSession: false,
+        }),
+      }),
+    );
   });
 });

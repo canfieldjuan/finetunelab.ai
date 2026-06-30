@@ -843,6 +843,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       try {
         await markChatAttachmentsAttached({
           supabase: supabaseAdmin!,
+          userId: userId!,
+          conversationId: conversationId!,
           attachmentIds: resolvedChatAttachments.ids,
         });
       } catch (error) {

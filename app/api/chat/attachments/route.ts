@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
+  CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES,
   ChatAttachmentError,
   createChatAttachmentFromFile,
 } from '@/lib/chat/attachments';
@@ -11,6 +12,9 @@ export const maxDuration = 60;
 const FALLBACK_SUPABASE_URL = 'https://xxxxxxxxxxxxx.supabase.co';
 const FALLBACK_SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MjAsImV4cCI6MTk2MDc2ODgyMH0.M1YwMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE';
+const MULTIPART_BODY_OVERHEAD_BYTES = 1024 * 1024;
+const CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES =
+  CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES + MULTIPART_BODY_OVERHEAD_BYTES;
 
 function isUploadFile(value: FormDataEntryValue | null): value is File {
   return (
@@ -37,6 +41,28 @@ function createAuthenticatedClient(authHeader: string) {
   });
 }
 
+function createAttachmentWriteClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || FALLBACK_SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseServiceRoleKey) {
+    throw new ChatAttachmentError('Chat attachment upload is not configured', 500);
+  }
+
+  return createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+function parseContentLength(headers: Headers): number | null {
+  const value = headers.get('content-length');
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -54,6 +80,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
+    const contentLength = parseContentLength(request.headers);
+    if (contentLength !== null && contentLength > CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES) {
+      return NextResponse.json(
+        { success: false, error: 'Attachment upload exceeds the request size limit' },
+        { status: 413 },
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('file');
     const conversationId = formData.get('conversationId');
@@ -66,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     const attachment = await createChatAttachmentFromFile({
-      supabase,
+      supabase: createAttachmentWriteClient(),
       userId: user.id,
       conversationId: conversationId.trim(),
       file,

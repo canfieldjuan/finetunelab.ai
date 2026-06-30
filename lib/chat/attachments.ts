@@ -313,6 +313,8 @@ export async function resolveChatAttachmentsForTurn(params: {
   const { data, error } = await params.supabase
     .from('chat_attachments')
     .select('id, user_id, conversation_id, message_id, filename, content_type, size_bytes, storage_bucket, storage_path, kind, extracted_text, extracted_chars, status, metadata')
+    .eq('user_id', params.userId)
+    .eq('conversation_id', params.conversationId)
     .in('id', params.attachmentIds);
 
   if (error) {
@@ -324,7 +326,7 @@ export async function resolveChatAttachmentsForTurn(params: {
   const orderedRows = params.attachmentIds.map((id) => rowsById.get(id));
 
   if (orderedRows.some((row) => !row)) {
-    throw new ChatAttachmentError('One or more attachments were not found', 404);
+    throw new ChatAttachmentError('Attachment does not belong to this conversation', 403);
   }
 
   for (const row of orderedRows as ChatAttachmentRow[]) {
@@ -333,6 +335,9 @@ export async function resolveChatAttachmentsForTurn(params: {
     }
     if (row.status === 'deleted') {
       throw new ChatAttachmentError('Attachment is no longer available', 410);
+    }
+    if (row.status !== 'uploaded') {
+      throw new ChatAttachmentError('Attachment has already been used in a chat turn', 409);
     }
   }
 
@@ -395,6 +400,8 @@ export function appendAttachmentContextToLatestUserMessage<T extends { role: str
 
 export async function markChatAttachmentsAttached(params: {
   supabase: SupabaseClient;
+  userId: string;
+  conversationId: string;
   attachmentIds: string[];
   messageId?: string | null;
 }): Promise<void> {
@@ -408,6 +415,8 @@ export async function markChatAttachmentsAttached(params: {
   const { error } = await params.supabase
     .from('chat_attachments')
     .update(payload)
+    .eq('user_id', params.userId)
+    .eq('conversation_id', params.conversationId)
     .in('id', params.attachmentIds);
 
   if (error) {

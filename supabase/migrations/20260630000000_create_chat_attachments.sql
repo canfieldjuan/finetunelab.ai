@@ -103,52 +103,17 @@ CREATE POLICY chat_attachments_select_own
   USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS chat_attachments_insert_own ON public.chat_attachments;
-CREATE POLICY chat_attachments_insert_own
-  ON public.chat_attachments
-  FOR INSERT
-  WITH CHECK (
-    auth.uid() = user_id
-    AND EXISTS (
-      SELECT 1
-        FROM public.conversations c
-       WHERE c.id = chat_attachments.conversation_id
-         AND c.user_id = auth.uid()
-    )
-  );
-
 DROP POLICY IF EXISTS chat_attachments_update_own ON public.chat_attachments;
-CREATE POLICY chat_attachments_update_own
-  ON public.chat_attachments
-  FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (
-    auth.uid() = user_id
-    AND EXISTS (
-      SELECT 1
-        FROM public.conversations c
-       WHERE c.id = chat_attachments.conversation_id
-         AND c.user_id = auth.uid()
-    )
-  );
-
 DROP POLICY IF EXISTS chat_attachments_delete_own ON public.chat_attachments;
-CREATE POLICY chat_attachments_delete_own
-  ON public.chat_attachments
-  FOR DELETE
-  USING (auth.uid() = user_id);
+-- Attachment row mutations are intentionally server-owned. The public anon key
+-- must not be able to create or rewrite extracted_text/status rows that
+-- /api/chat later trusts as prompt context.
 
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('chat-attachments', 'chat-attachments', false)
 ON CONFLICT (id) DO NOTHING;
 
 DROP POLICY IF EXISTS "chat-attachments: users upload to own folder" ON storage.objects;
-CREATE POLICY "chat-attachments: users upload to own folder" ON storage.objects
-  FOR INSERT
-  WITH CHECK (
-    bucket_id = 'chat-attachments'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
-
 DROP POLICY IF EXISTS "chat-attachments: users read own files" ON storage.objects;
 CREATE POLICY "chat-attachments: users read own files" ON storage.objects
   FOR SELECT
@@ -158,12 +123,8 @@ CREATE POLICY "chat-attachments: users read own files" ON storage.objects
   );
 
 DROP POLICY IF EXISTS "chat-attachments: users delete own files" ON storage.objects;
-CREATE POLICY "chat-attachments: users delete own files" ON storage.objects
-  FOR DELETE
-  USING (
-    bucket_id = 'chat-attachments'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- Storage writes are also server-owned; the upload route validates size, type,
+-- conversation ownership, extraction limits, and row creation together.
 
 COMMENT ON TABLE public.chat_attachments IS
   'Private per-chat files attached to a user turn; separate from durable GraphRAG documents';
