@@ -88,6 +88,7 @@ describe('toolManager registry boundaries', () => {
     const tools = new Map([
       ['calculator', tool('calculator')],
       ['web_search', tool('web_search')],
+      ['read_url', tool('read_url', false)],
       ['evaluation_metrics', tool('evaluation_metrics')],
     ]);
     registryMock.getToolByName.mockImplementation((name: string) => tools.get(name));
@@ -108,11 +109,38 @@ describe('toolManager registry boundaries', () => {
         is_enabled: true,
         is_builtin: true,
       },
+      {
+        id: 'tool-read-url',
+        name: 'read_url',
+        description: 'db read url',
+        parameters: {},
+        is_enabled: true,
+        is_builtin: true,
+      },
     ];
     supabaseMock.executionRows = [];
   });
 
   it('keeps shared enabled-tool listing broader than the portal listing', async () => {
+    const { getEnabledPortalChatTools, getEnabledTools } = await import('../toolManager');
+
+    await expect(getEnabledTools()).resolves.toMatchObject({
+      data: [
+        { name: 'calculator' },
+        { name: 'evaluation_metrics' },
+      ],
+      error: null,
+    });
+
+    await expect(getEnabledPortalChatTools()).resolves.toMatchObject({
+      data: [
+        { name: 'calculator' },
+      ],
+      error: null,
+    });
+  });
+
+  it('does not list DB-enabled tools that are disabled by registry config', async () => {
     const { getEnabledPortalChatTools, getEnabledTools } = await import('../toolManager');
 
     await expect(getEnabledTools()).resolves.toMatchObject({
