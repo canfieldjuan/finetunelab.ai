@@ -9,9 +9,10 @@ PR #75 added the pure snippet revision engine and PR #77 exposed it through `POS
 1. Add a reusable `requestSnippetRevision` helper for `preview` and `apply` calls.
 2. Preserve the same data-agnostic request shape used by the API route.
 3. Return the engine's `SnippetRevisionResult` directly for UI consumers.
-4. Add a typed `SnippetRevisionApiError` for HTTP, API validation, network, and malformed-response failures.
-5. Add unit tests with injected fetchers so no browser or network dependency is required.
-6. Keep this slice independent from UI, chat tools, model calls, persistence, file writes, readability, and marketing presets.
+4. Validate successful response payloads deeply enough to protect downstream preview rendering.
+5. Add a typed `SnippetRevisionApiError` for HTTP, API validation, network, and malformed-response failures.
+6. Add unit tests with injected fetchers so no browser or network dependency is required.
+7. Keep this slice independent from UI, chat tools, model calls, persistence, file writes, readability, and marketing presets.
 
 ## Files touched
 
@@ -21,7 +22,7 @@ PR #75 added the pure snippet revision engine and PR #77 exposed it through `POS
 
 ## Mechanism
 
-The helper posts JSON to `/api/snippet-revision` by default and accepts optional `fetcher`, `endpoint`, and `signal` overrides. Successful API responses must contain a minimally valid `SnippetRevisionResult`; that result is returned as-is so future UI can branch on `result.ok`. Non-2xx responses are normalized into `SnippetRevisionApiError` with status, code, and optional details.
+The helper posts JSON to `/api/snippet-revision` by default and accepts optional `fetcher`, `endpoint`, and `signal` overrides. Successful API responses must contain a valid `SnippetRevisionResult`, including the required `change` fields for successful revisions; that result is returned as-is so future UI can branch on `result.ok`. Non-2xx responses are normalized into `SnippetRevisionApiError` with status, code, and optional details.
 
 ## Intentional
 
@@ -41,12 +42,12 @@ The helper posts JSON to `/api/snippet-revision` by default and accepts optional
 ## Verification
 
 - `npm ci` installed this fresh worktree's dependencies.
-- `npx vitest run lib/snippet-revision/__tests__/client.test.ts` passed: 6 tests.
-- `npx vitest run lib/snippet-revision/__tests__/snippet-revision.test.ts app/api/snippet-revision/__tests__/route.test.ts lib/snippet-revision/__tests__/client.test.ts` passed: 22 tests.
+- `npx vitest run lib/snippet-revision/__tests__/client.test.ts` passed: 8 tests.
+- `npx vitest run lib/snippet-revision/__tests__/snippet-revision.test.ts app/api/snippet-revision/__tests__/route.test.ts lib/snippet-revision/__tests__/client.test.ts` passed: 24 tests.
 - `npm run type-check` passed.
 - `npm run lint` passed with existing repo warnings and no errors.
 - `git diff --check` passed.
 
 ## Estimated diff size
 
-Current diff: 3 files, +331 / -0. This stays under the 400 LOC soft cap; the size comes from the helper, typed error class, response guards, and six unit tests covering success, safe engine rejection, API validation, network failure, malformed success payload, and the exported error class.
+Current diff: 3 files, +384 / -0. This stays under the 400 LOC soft cap; the size comes from the helper, typed error class, response guards, and eight unit tests covering success, safe engine rejection, API validation, network failure, malformed success payloads, and the exported error class.

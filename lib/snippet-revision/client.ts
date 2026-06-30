@@ -124,7 +124,21 @@ function isSnippetRevisionResult(value: unknown): value is SnippetRevisionResult
     typeof value.applied === 'boolean' &&
     typeof value.updatedText === 'string' &&
     typeof value.unchanged === 'boolean' &&
-    isRecord(value.change);
+    isSnippetRevisionChange(value.change);
+}
+
+function isSnippetRevisionChange(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (value.mode === 'replace_text' || value.mode === 'replace_range') &&
+    typeof value.start === 'number' &&
+    Number.isInteger(value.start) &&
+    typeof value.end === 'number' &&
+    Number.isInteger(value.end) &&
+    typeof value.original === 'string' &&
+    typeof value.replacement === 'string';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

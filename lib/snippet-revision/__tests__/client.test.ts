@@ -91,6 +91,24 @@ describe('requestSnippetRevision', () => {
     expect(fetcher).toHaveBeenCalledWith('/custom/snippet', expect.objectContaining({ signal }));
   });
 
+  it('returns engine target failures instead of throwing', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: false,
+        applied: false,
+        code: 'target_mismatch',
+        message: 'Range text no longer matches the originally selected text.',
+      },
+    }));
+
+    await expect(requestSnippetRevision(request, { fetcher })).resolves.toEqual({
+      ok: false,
+      applied: false,
+      code: 'target_mismatch',
+      message: 'Range text no longer matches the originally selected text.',
+    });
+  });
+
   it('normalizes API validation errors', async () => {
     const fetcher = vi.fn(async () => jsonResponse({
       error: {
@@ -122,6 +140,26 @@ describe('requestSnippetRevision', () => {
 
   it('rejects malformed success payloads', async () => {
     const fetcher = vi.fn(async () => jsonResponse({ nope: true }));
+
+    await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'invalid_response',
+      status: 200,
+    });
+  });
+
+  it('rejects malformed successful change payloads', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: true,
+        applied: false,
+        updatedText: 'Keep the point. Lose the polish.',
+        unchanged: false,
+        change: {
+          mode: 'replace_text',
+        },
+      },
+    }));
 
     await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
       name: 'SnippetRevisionApiError',
