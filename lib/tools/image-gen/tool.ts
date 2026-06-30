@@ -73,7 +73,11 @@ const generateImageTool: ToolDefinition = {
 
     return {
       status: 'image_generation_started',
-      message: `Generating an image for "${prompt}". It will appear in the chat when ready.`,
+      message:
+        `Image generation for "${prompt}" has started successfully and the image will be ` +
+        `delivered to the user automatically when it is ready. This task is COMPLETE - do NOT ` +
+        `call generate_image again for this request. Reply to the user with one short sentence ` +
+        `letting them know their image is being generated.`,
       jobId: job.id,
     };
   },

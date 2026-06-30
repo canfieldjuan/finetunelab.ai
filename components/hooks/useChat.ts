@@ -176,7 +176,11 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       // Escape the user-controlled prompt so it can't break out of the markdown
       // image alt text (e.g. a `]` terminating the label and injecting a URL).
       const escapeMarkdownAlt = (s: string) =>
-        s.replace(/[[\]]/g, '\\$&').replace(/[\r\n]+/g, ' ').trim();
+        s
+          .replace(/\\/g, '\\\\')
+          .replace(/[[\]]/g, '\\$&')
+          .replace(/[\r\n]+/g, ' ')
+          .trim();
       try {
         const es = new EventSource(
           `/api/image/stream?jobId=${encodeURIComponent(imgJobId)}&token=${encodeURIComponent(streamToken)}`
@@ -200,7 +204,10 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               if (attr && typeof attr === 'object' && typeof attr.authorName === 'string') {
                 content += `\n\n*Photo by [${attr.authorName}](${attr.authorUrl}) on [${attr.sourceName}](${attr.sourceUrl})*`;
               }
-              setMessages((prev) => [...prev, { id: `temp-img-${imgJobId}`, role: 'assistant', content }]);
+              setMessages((prev) => [
+                ...prev,
+                { id: `img-${imgJobId}`, role: 'assistant', content, skipJudgments: true },
+              ]);
             } else if (evt.type === 'image_failed') {
               if (done) return;
               done = true;
@@ -209,7 +216,12 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               const detail = typeof evt.error === 'string' ? `: ${evt.error}` : '';
               setMessages((prev) => [
                 ...prev,
-                { id: `temp-img-${imgJobId}`, role: 'assistant', content: `_Image generation failed${detail}._` },
+                {
+                  id: `img-failed-${imgJobId}`,
+                  role: 'assistant',
+                  content: `_Image generation failed${detail}._`,
+                  skipJudgments: true,
+                },
               ]);
             }
           } catch {

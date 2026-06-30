@@ -9,6 +9,9 @@ import {
 
 export const runtime = 'nodejs';
 
+/** How often to poll the persisted job status for terminal state. */
+const IMAGE_STREAM_POLL_MS = 1500;
+
 /**
  * SSE endpoint that streams the result of an async image-generation job.
  *
@@ -58,6 +61,7 @@ export async function GET(request: NextRequest) {
     async start(controller) {
       let settled = false;
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      let pollHandle: ReturnType<typeof setInterval> | undefined;
 
       const safeEnqueue = (event: Record<string, unknown>) => {
         try {
@@ -73,6 +77,7 @@ export async function GET(request: NextRequest) {
         safeEnqueue(event);
         imageSseService.off('image_event', handler);
         if (timeoutHandle) clearTimeout(timeoutHandle);
+        if (pollHandle) clearInterval(pollHandle);
         try {
           controller.close();
         } catch {
@@ -94,31 +99,48 @@ export async function GET(request: NextRequest) {
       imageSseService.on('image_event', handler);
       safeEnqueue({ type: IMAGE_EVENT_TYPES.CONNECTED, jobId });
 
-      // Race guard: if the job already reached a terminal state, emit it now.
-      const current = await imageJobStore.get(jobId, userId);
-      if (current?.status === 'completed') {
-        finish({
-          type: IMAGE_EVENT_TYPES.COMPLETE,
-          jobId,
-          status: 'completed',
-          url: current.resultUrl,
-          source: current.source,
-          attribution: current.attribution,
-          prompt: current.prompt,
-        });
-      } else if (current?.status === 'failed') {
-        finish({
-          type: IMAGE_EVENT_TYPES.FAILED,
-          jobId,
-          status: 'failed',
-          error: current.error,
-          prompt: current.prompt,
-        });
+      // Authoritative delivery: poll the persisted job status. The EventEmitter
+      // above is only a fast path; across Next's separate route bundles (the chat
+      // route's runner vs this route) the singleton isn't guaranteed to be shared,
+      // so the runner's emit may never reach this subscriber. Polling the DB (the
+      // source of truth) is what reliably delivers the result. Runs immediately
+      // (race-guard for an already-finished job) and then on an interval.
+      const checkTerminal = async () => {
+        if (settled) return;
+        const job = await imageJobStore.get(jobId, userId);
+        if (settled || !job) return;
+        if (job.status === 'completed') {
+          finish({
+            type: IMAGE_EVENT_TYPES.COMPLETE,
+            jobId,
+            status: 'completed',
+            url: job.resultUrl,
+            source: job.source,
+            attribution: job.attribution,
+            prompt: job.prompt,
+          });
+        } else if (job.status === 'failed') {
+          finish({
+            type: IMAGE_EVENT_TYPES.FAILED,
+            jobId,
+            status: 'failed',
+            error: job.error,
+            prompt: job.prompt,
+          });
+        }
+      };
+
+      await checkTerminal();
+      if (!settled) {
+        pollHandle = setInterval(() => {
+          void checkTerminal();
+        }, IMAGE_STREAM_POLL_MS);
       }
 
       request.signal.addEventListener('abort', () => {
         imageSseService.off('image_event', handler);
         if (timeoutHandle) clearTimeout(timeoutHandle);
+        if (pollHandle) clearInterval(pollHandle);
         try {
           controller.close();
         } catch {
@@ -131,6 +153,7 @@ export async function GET(request: NextRequest) {
       if (!settled) {
         timeoutHandle = setTimeout(() => {
           imageSseService.off('image_event', handler);
+          if (pollHandle) clearInterval(pollHandle);
           try {
             controller.close();
           } catch {

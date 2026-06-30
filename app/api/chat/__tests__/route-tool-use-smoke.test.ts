@@ -30,9 +30,9 @@ const vllmModelConfig: ModelConfig = {
   },
 };
 
-function makeRequest(body: unknown): NextRequest {
+function makeRequest(body: unknown, headers?: Record<string, string>): NextRequest {
   return {
-    headers: new Headers({ 'content-type': 'application/json' }),
+    headers: new Headers({ 'content-type': 'application/json', ...(headers ?? {}) }),
     json: async () => body,
   } as unknown as NextRequest;
 }
@@ -263,5 +263,100 @@ describe('POST /api/chat tool-use smoke', () => {
       'calculator',
       { expression: '2+2' },
     ]);
+  });
+
+  it('emits an image stream event for every generated image job', async () => {
+    createClient.mockReturnValueOnce({
+      auth: {
+        getUser: vi.fn(async () => ({
+          data: { user: { id: 'user-1' } },
+          error: null,
+        })),
+      },
+    });
+    createClient.mockReturnValueOnce({
+      from: vi.fn(),
+      auth: {
+        admin: {
+          getUserById: vi.fn(async () => ({
+            data: { user: { id: 'user-1' } },
+            error: null,
+          })),
+        },
+      },
+    });
+    executePortalChatTool
+      .mockResolvedValueOnce({
+        data: { status: 'image_generation_started', jobId: 'img-job-1' },
+        error: null,
+        executionTimeMs: 1,
+      })
+      .mockResolvedValueOnce({
+        data: { status: 'image_generation_started', jobId: 'img-job-2' },
+        error: null,
+        executionTimeMs: 1,
+      });
+    unifiedChat.mockImplementationOnce(async (_modelId, _messages, options) => {
+      await options.toolCallHandler('generate_image', { prompt: 'first image' });
+      await options.toolCallHandler('generate_image', { prompt: 'second image' });
+      return {
+        content: 'Both images are generating.',
+        usage: {
+          input_tokens: 12,
+          output_tokens: 6,
+        },
+        toolsCalled: [
+          { name: 'generate_image', success: true },
+          { name: 'generate_image', success: true },
+        ],
+      };
+    });
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      messages: [
+        {
+          role: 'user',
+          content: 'Generate two images.',
+        },
+      ],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'generate_image',
+            description: 'Generate an image.',
+            parameters: {
+              type: 'object',
+              properties: {
+                prompt: { type: 'string' },
+              },
+              required: ['prompt'],
+            },
+          },
+        },
+      ],
+    }, { Authorization: 'Bearer session-token' }));
+
+    const streamText = await response.text();
+    expect(response.status, streamText).toBe(200);
+    const events = parseSseEvents(streamText);
+    const imageEvents = events.filter(
+      (event): event is { type: string; jobId: string; prompt: string; streamToken: string } =>
+        typeof event === 'object' &&
+        event !== null &&
+        (event as { type?: unknown }).type === 'image_generation_started',
+    );
+
+    expect(imageEvents).toHaveLength(2);
+    expect(imageEvents).toEqual([
+      expect.objectContaining({ jobId: 'img-job-1', prompt: 'first image', streamToken: expect.any(String) }),
+      expect.objectContaining({ jobId: 'img-job-2', prompt: 'second image', streamToken: expect.any(String) }),
+    ]);
+    expect(executePortalChatTool).toHaveBeenCalledTimes(2);
   });
 });

@@ -956,8 +956,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
     // Tool-call aware chat completion (provider-aware)
     let lastDeepResearchQuery: string | null = null;
-    let lastImageJobId: string | null = null;
-    let lastImagePrompt: string | null = null;
+    const imageStreamJobs: Array<{ jobId: string; prompt: string | null }> = [];
     const toolCallHandler = async (toolName: string, args: Record<string, unknown>) => {
       // Use conversationId if available, else empty string
       const convId = conversationId || '';
@@ -1039,9 +1038,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         if (toolName === 'generate_image' && result.data && typeof result.data === 'object') {
           const imgResult = result.data as { status?: unknown; jobId?: unknown };
           if (imgResult.status === 'image_generation_started' && typeof imgResult.jobId === 'string') {
-            lastImageJobId = imgResult.jobId;
-            lastImagePrompt = typeof args.prompt === 'string' ? args.prompt : null;
-            console.log('[API] Captured image generation job id from tool result:', lastImageJobId);
+            imageStreamJobs.push({
+              jobId: imgResult.jobId,
+              prompt: typeof args.prompt === 'string' ? args.prompt : null,
+            });
+            console.log('[API] Captured image generation job id from tool result:', imgResult.jobId);
           }
         }
       } catch (capErr) {
@@ -1975,15 +1976,17 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             // the client forward its session token in the SSE URL (#72 MINOR).
             // generate_image only runs for a verified user (route gate), so userId
             // is the authenticated owner.
-            if (lastImageJobId && userId) {
-              const streamToken = signImageStreamToken({ jobId: lastImageJobId, userId });
-              const imageStartData = `data: ${JSON.stringify({
-                type: 'image_generation_started',
-                jobId: lastImageJobId,
-                prompt: lastImagePrompt || null,
-                streamToken,
-              })}\n\n`;
-              controller.enqueue(encoder.encode(imageStartData));
+            if (imageStreamJobs.length > 0 && userId) {
+              for (const imageJob of imageStreamJobs) {
+                const streamToken = signImageStreamToken({ jobId: imageJob.jobId, userId });
+                const imageStartData = `data: ${JSON.stringify({
+                  type: 'image_generation_started',
+                  jobId: imageJob.jobId,
+                  prompt: imageJob.prompt,
+                  streamToken,
+                })}\n\n`;
+                controller.enqueue(encoder.encode(imageStartData));
+              }
             }
 
             // Fake stream the complete response in larger chunks for performance
