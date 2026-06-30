@@ -190,19 +190,22 @@ function createExtractionTimeoutError() {
   return new ChatAttachmentError('Attachment text extraction timed out', 422);
 }
 
-async function withExtractionTimeout<T>(operation: () => Promise<T>): Promise<T> {
+async function withExtractionTimeout<T>(operation: (throwIfTimedOut: () => void) => Promise<T>): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const startedAt = Date.now();
+  const throwIfTimedOut = () => {
+    if (Date.now() - startedAt >= CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS) {
+      throw createExtractionTimeoutError();
+    }
+  };
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
       reject(createExtractionTimeoutError());
     }, CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS);
   });
   const operationPromise = (async () => {
-    const result = await operation();
-    if (Date.now() - startedAt >= CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS) {
-      throw createExtractionTimeoutError();
-    }
+    const result = await operation(throwIfTimedOut);
+    throwIfTimedOut();
     return result;
   })();
 
@@ -315,8 +318,12 @@ async function extractAttachmentText(file: File, fileType: DocumentFileType) {
   }
 
   try {
-    const archiveMetadata = fileType === 'docx' ? await inspectDocxArchive(buffer) : null;
-    const parsed = await withExtractionTimeout(() => parserFactory.parse(buffer, fileType));
+    const { archiveMetadata, parsed } = await withExtractionTimeout(async (throwIfTimedOut) => {
+      const archiveMetadata = fileType === 'docx' ? await inspectDocxArchive(buffer) : null;
+      throwIfTimedOut();
+      const parsed = await parserFactory.parse(buffer, fileType);
+      return { archiveMetadata, parsed };
+    });
     const fullText = parsed.text || '';
     const extractedText = fullText.slice(0, CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE);
     return {

@@ -508,6 +508,38 @@ describe('POST /api/chat/attachments', () => {
     expect(supabase.upload).not.toHaveBeenCalled();
   });
 
+  it('times out docx archive inspection before parser work receives a fresh budget', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+    const zip = await makeZipWithEntryContent(Buffer.from('<document />'));
+    const nowSpy = vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(0)
+      .mockReturnValue(15_000);
+
+    try {
+      const { POST } = await import('../route');
+      const response = await POST(makeRequest(makeAttachmentForm(
+        new File(
+          [zip],
+          'slow-inspection.docx',
+          { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+        ),
+      ), {
+        authorization: 'Bearer session-token',
+      }));
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: 'Attachment text extraction timed out',
+      });
+      expect(parseAttachment).not.toHaveBeenCalled();
+      expect(supabase.upload).not.toHaveBeenCalled();
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it('times out slow text extraction before upload', async () => {
     vi.useFakeTimers();
     try {
