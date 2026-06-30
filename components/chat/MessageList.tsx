@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { MessageContent } from './MessageContent';
+import { SnippetRevisionDialog } from './SnippetRevisionDialog';
 import { SearchResultCard } from '@/components/search/SearchResultCard';
 import { AttachmentChips } from './AttachmentChips';
 import { GraphRAGIndicator } from '../graphrag/GraphRAGIndicator';
@@ -24,6 +25,7 @@ import {
   Mail,
   Download,
   RefreshCw,
+  PencilLine,
   Wrench
 } from 'lucide-react';
 import type { Message } from './types';
@@ -47,6 +49,17 @@ export interface MessageListProps {
   onDownloadResearch: (content: string) => void;
   isDeepResearchResult: (content: string) => boolean;
   onRegenerate?: (messageId: string) => void;
+  onApplySnippetRevision?: (messageId: string, updatedText: string) => void | Promise<void>;
+  snippetRevisionModelId?: string | null;
+  snippetRevisionAuthToken?: string | null;
+}
+
+const TRUNCATED_MESSAGE_MARKER = '... [Message truncated due to size. Original length:';
+
+function canReviseMessage(message: Message): boolean {
+  return message.role === 'assistant' &&
+    message.content.trim().length > 0 &&
+    !message.content.includes(TRUNCATED_MESSAGE_MARKER);
 }
 
 function formatToolName(name: string): string {
@@ -126,8 +139,13 @@ export function MessageList({
   onEmailResearch,
   onDownloadResearch,
   isDeepResearchResult,
-  onRegenerate
+  onRegenerate,
+  onApplySnippetRevision,
+  snippetRevisionModelId,
+  snippetRevisionAuthToken
 }: MessageListProps) {
+  const [revisionMessage, setRevisionMessage] = useState<Message | null>(null);
+
   return (
     <>
       {messages.map((msg) => (
@@ -256,6 +274,19 @@ export function MessageList({
                       <RefreshCw className="w-4 h-4" />
                     </Button>
                   )}
+                  {onApplySnippetRevision && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRevisionMessage(msg)}
+                      className="h-7 w-7 p-0 hover:bg-muted"
+                      aria-label="Revise selected text"
+                      title={canReviseMessage(msg) ? "Revise selected text" : "Revision unavailable for truncated messages"}
+                      disabled={!canReviseMessage(msg)}
+                    >
+                      <PencilLine className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -337,6 +368,21 @@ export function MessageList({
           </div>
         </div>
       ))}
+      {revisionMessage && onApplySnippetRevision && (
+        <SnippetRevisionDialog
+          open={Boolean(revisionMessage)}
+          messageId={revisionMessage.id}
+          content={revisionMessage.content}
+          modelId={snippetRevisionModelId}
+          authToken={snippetRevisionAuthToken}
+          onOpenChange={(open) => {
+            if (!open) {
+              setRevisionMessage(null);
+            }
+          }}
+          onApply={onApplySnippetRevision}
+        />
+      )}
     </>
   );
 }

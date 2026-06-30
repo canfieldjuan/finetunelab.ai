@@ -1,0 +1,349 @@
+"use client";
+
+import React, { useMemo, useRef, useState } from 'react';
+import { AlertCircle, Check, Wand2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  requestSnippetRevision,
+  requestSnippetRewrite,
+  SnippetRevisionApiError,
+  type SnippetRewriteSelection,
+} from '@/lib/snippet-revision/client';
+import type { SnippetRevisionResult } from '@/lib/snippet-revision';
+
+interface SnippetRevisionDialogProps {
+  open: boolean;
+  messageId: string;
+  content: string;
+  modelId?: string | null;
+  authToken?: string | null;
+  onOpenChange: (open: boolean) => void;
+  onApply: (messageId: string, updatedText: string) => void | Promise<void>;
+}
+
+type RevisionStatus = 'idle' | 'generating' | 'applying';
+
+const TRUNCATED_MESSAGE_MARKER = '... [Message truncated due to size. Original length:';
+
+function isTruncatedMessageContent(content: string): boolean {
+  return content.includes(TRUNCATED_MESSAGE_MARKER);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof SnippetRevisionApiError) {
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Something went wrong while revising this text.';
+}
+
+export function SnippetRevisionDialog({
+  open,
+  messageId,
+  content,
+  modelId,
+  authToken,
+  onOpenChange,
+  onApply,
+}: SnippetRevisionDialogProps) {
+  const [instruction, setInstruction] = useState('');
+  const [selection, setSelection] = useState<SnippetRewriteSelection | null>(null);
+  const [replacement, setReplacement] = useState('');
+  const [previewResult, setPreviewResult] = useState<SnippetRevisionResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<RevisionStatus>('idle');
+  const lineNumberRef = useRef<HTMLDivElement | null>(null);
+  const sourceRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const isTruncated = isTruncatedMessageContent(content);
+  const lineNumbers = useMemo(() => {
+    const count = Math.max(1, content.split('\n').length);
+    return Array.from({ length: count }, (_, index) => index + 1);
+  }, [content]);
+
+  const canGenerate = Boolean(
+    !isTruncated &&
+    selection &&
+    instruction.trim().length > 0 &&
+    status === 'idle',
+  );
+  const canApply = Boolean(
+    previewResult?.ok &&
+    previewResult.applied === false &&
+    status === 'idle',
+  );
+
+  const resetDraft = () => {
+    setInstruction('');
+    setSelection(null);
+    setReplacement('');
+    setPreviewResult(null);
+    setError(null);
+    setStatus('idle');
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      resetDraft();
+    }
+    onOpenChange(nextOpen);
+  };
+
+  const handleSourceSelect = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = event.currentTarget;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+
+    if (start === end) {
+      setSelection(null);
+      setPreviewResult(null);
+      setReplacement('');
+      return;
+    }
+
+    setSelection({
+      start,
+      end,
+      expectedText: content.slice(start, end),
+    });
+    setPreviewResult(null);
+    setReplacement('');
+    setError(null);
+  };
+
+  const handleSourceScroll = (event: React.UIEvent<HTMLTextAreaElement>) => {
+    if (lineNumberRef.current) {
+      lineNumberRef.current.scrollTop = event.currentTarget.scrollTop;
+    }
+  };
+
+  const handleGeneratePreview = async () => {
+    if (!selection || isTruncated) {
+      return;
+    }
+
+    setStatus('generating');
+    setError(null);
+    setPreviewResult(null);
+    setReplacement('');
+
+    try {
+      const rewrite = await requestSnippetRewrite({
+        sourceText: content,
+        selection,
+        instruction: instruction.trim(),
+        modelId,
+      }, {
+        authToken,
+      });
+
+      const revision = {
+        mode: 'replace_range' as const,
+        start: selection.start,
+        end: selection.end,
+        expectedText: selection.expectedText,
+        replace: rewrite.replacement,
+      };
+
+      const preview = await requestSnippetRevision({
+        action: 'preview',
+        sourceText: content,
+        revision,
+      });
+
+      setReplacement(rewrite.replacement);
+      setPreviewResult(preview);
+
+      if (!preview.ok) {
+        setError(preview.message);
+      }
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setStatus('idle');
+    }
+  };
+
+  const handleApply = async () => {
+    if (!selection || !replacement) {
+      return;
+    }
+
+    setStatus('applying');
+    setError(null);
+
+    try {
+      const result = await requestSnippetRevision({
+        action: 'apply',
+        sourceText: content,
+        revision: {
+          mode: 'replace_range',
+          start: selection.start,
+          end: selection.end,
+          expectedText: selection.expectedText,
+          replace: replacement,
+        },
+      });
+
+      if (!result.ok) {
+        setError(result.message);
+        setPreviewResult(result);
+        return;
+      }
+
+      await onApply(messageId, result.updatedText);
+      handleOpenChange(false);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setStatus('idle');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden p-0">
+        <div className="flex max-h-[90vh] flex-col">
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle>Revise Selected Text</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-6 py-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="snippet-revision-source">Source</Label>
+                {selection && (
+                  <span className="text-xs text-muted-foreground">
+                    {selection.start}-{selection.end}
+                  </span>
+                )}
+              </div>
+              <div className="grid h-[22rem] min-h-0 grid-cols-[3.5rem_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-muted/20">
+                <div
+                  ref={lineNumberRef}
+                  className="overflow-hidden border-r border-border bg-muted/60 py-2 text-right font-mono text-xs leading-6 text-muted-foreground"
+                  aria-hidden="true"
+                >
+                  {lineNumbers.map((lineNumber) => (
+                    <div key={lineNumber} className="px-2">
+                      {lineNumber}
+                    </div>
+                  ))}
+                </div>
+                <Textarea
+                  id="snippet-revision-source"
+                  ref={sourceRef}
+                  value={content}
+                  readOnly
+                  onSelect={handleSourceSelect}
+                  onScroll={handleSourceScroll}
+                  aria-label="Assistant response source"
+                  className="h-full resize-none rounded-none border-0 bg-transparent font-mono text-sm leading-6 shadow-none focus-visible:ring-0"
+                />
+              </div>
+            </div>
+
+            <div className="min-w-0 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="snippet-revision-instruction">Instruction</Label>
+                <Textarea
+                  id="snippet-revision-instruction"
+                  value={instruction}
+                  onChange={(event) => {
+                    setInstruction(event.target.value);
+                    setPreviewResult(null);
+                    setReplacement('');
+                    setError(null);
+                  }}
+                  aria-label="Revision instruction"
+                  placeholder="Rewrite this for clarity."
+                  className="min-h-24 resize-y"
+                  maxLength={2000}
+                  disabled={isTruncated}
+                />
+              </div>
+
+              {isTruncated && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    This saved message is truncated locally, so the full source must be loaded before editing.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {previewResult?.ok && (
+                <div className="space-y-3 rounded-md border border-border p-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300">
+                    <Check className="h-4 w-4" />
+                    Preview Ready
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Original</Label>
+                    <pre className="max-h-32 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
+                      {previewResult.change.original}
+                    </pre>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Replacement</Label>
+                    <pre className="max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
+                      {previewResult.change.replacement}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-border px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={status !== 'idle'}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGeneratePreview}
+              disabled={!canGenerate}
+            >
+              <Wand2 className="mr-2 h-4 w-4" />
+              {status === 'generating' ? 'Generating...' : 'Generate Preview'}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleApply}
+              disabled={!canApply}
+            >
+              {status === 'applying' ? 'Applying...' : 'Apply'}
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

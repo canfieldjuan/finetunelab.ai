@@ -3,11 +3,13 @@
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageList } from '../MessageList';
 import type { Message } from '../types';
 
 const getSession = vi.hoisted(() => vi.fn());
+const requestSnippetRewriteMock = vi.hoisted(() => vi.fn());
+const requestSnippetRevisionMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/supabaseClient', () => ({
   supabase: {
@@ -17,9 +19,17 @@ vi.mock('@/lib/supabaseClient', () => ({
   },
 }));
 
+vi.mock('@/lib/snippet-revision/client', () => ({
+  requestSnippetRewrite: requestSnippetRewriteMock,
+  requestSnippetRevision: requestSnippetRevisionMock,
+  SnippetRevisionApiError: class SnippetRevisionApiError extends Error {
+    code = 'test_error';
+  },
+}));
+
 const noop = vi.fn();
 
-function renderList(messages: Message[]) {
+function renderList(messages: Message[], overrides: Partial<React.ComponentProps<typeof MessageList>> = {}) {
   return render(
     <MessageList
       messages={messages}
@@ -38,13 +48,17 @@ function renderList(messages: Message[]) {
       onEmailResearch={noop}
       onDownloadResearch={noop}
       isDeepResearchResult={() => false}
+      {...overrides}
     />
   );
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.clearAllMocks();
 });
 
 describe('MessageList web search results', () => {
@@ -245,5 +259,153 @@ describe('MessageList web search results', () => {
     });
     expect(open).toHaveBeenCalledTimes(1);
     expect(popup.location.href).toBe('https://signed.example.com/brief.md?token=abc');
+  });
+});
+
+describe('MessageList snippet revision actions', () => {
+  it('exposes a revise action for assistant text messages', () => {
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Line one.\nLine two.',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeEnabled();
+  });
+
+  it('does not expose the revise action for user messages', () => {
+    renderList([
+      {
+        id: 'user-1',
+        role: 'user',
+        content: 'Please write a blog post.',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    expect(screen.queryByRole('button', { name: 'Revise selected text' })).not.toBeInTheDocument();
+  });
+
+  it('sends selected source offsets to rewrite, previews, and applies the guarded update', async () => {
+    const message = 'Opening.\nSoft middle.\nClosing.';
+    const start = message.indexOf('Soft middle.');
+    const end = start + 'Soft middle.'.length;
+    const onApply = vi.fn();
+
+    requestSnippetRewriteMock.mockResolvedValue({
+      replacement: 'Sharper middle.',
+      modelId: 'model-123',
+    });
+    requestSnippetRevisionMock.mockImplementation(async (request) => ({
+      ok: true,
+      applied: request.action === 'apply',
+      updatedText: 'Opening.\nSharper middle.\nClosing.',
+      unchanged: false,
+      change: {
+        mode: 'replace_range',
+        start,
+        end,
+        original: 'Soft middle.',
+        replacement: 'Sharper middle.',
+      },
+    }));
+
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: message,
+      },
+    ], {
+      onApplySnippetRevision: onApply,
+      snippetRevisionModelId: 'model-123',
+      snippetRevisionAuthToken: 'session-token',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revise selected text' }));
+
+    const source = await screen.findByLabelText('Assistant response source') as HTMLTextAreaElement;
+    source.setSelectionRange(start, end);
+    fireEvent.select(source);
+    fireEvent.change(screen.getByLabelText('Revision instruction'), {
+      target: {
+        value: 'Make it sharper.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+
+    await waitFor(() => {
+      expect(requestSnippetRewriteMock).toHaveBeenCalledWith({
+        sourceText: message,
+        selection: {
+          start,
+          end,
+          expectedText: 'Soft middle.',
+        },
+        instruction: 'Make it sharper.',
+        modelId: 'model-123',
+      }, {
+        authToken: 'session-token',
+      });
+    });
+    expect(requestSnippetRevisionMock).toHaveBeenCalledWith({
+      action: 'preview',
+      sourceText: message,
+      revision: {
+        mode: 'replace_range',
+        start,
+        end,
+        expectedText: 'Soft middle.',
+        replace: 'Sharper middle.',
+      },
+    });
+
+    await screen.findByText('Preview Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() => {
+      expect(onApply).toHaveBeenCalledWith(
+        'assistant-1',
+        'Opening.\nSharper middle.\nClosing.',
+      );
+    });
+  });
+
+  it('disables snippet revision for locally truncated assistant messages', () => {
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Partial response.\n\n... [Message truncated due to size. Original length: 60000 characters]',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+  });
+
+  it('keeps the full-message regenerate action intact', () => {
+    const onRegenerate = vi.fn();
+
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Full answer.',
+      },
+    ], {
+      onRegenerate,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate response' }));
+
+    expect(onRegenerate).toHaveBeenCalledWith('assistant-1');
   });
 });

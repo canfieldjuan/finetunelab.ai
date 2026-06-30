@@ -10,6 +10,19 @@
 
 ### In Progress
 
+**Portal Snippet Revision UI**
+- **Started:** 2026-06-30
+- **Model:** Codex
+- **Branch:** `codex/portal-snippet-revision-ui`
+- **Work:** Add a source-range assistant message revision flow so users can rewrite selected text without regenerating the full assistant output.
+- **Issue:** #91
+- **Endpoints:** `POST /api/snippet-revision/rewrite`, `POST /api/snippet-revision`
+- **Files:**
+  - API: `app/api/snippet-revision/rewrite/route.ts`
+  - Client: `lib/snippet-revision/client.ts`
+  - UI: `components/chat/SnippetRevisionDialog.tsx`, `components/chat/MessageList.tsx`, `components/Chat.tsx`
+  - Tests: `app/api/snippet-revision/rewrite/__tests__/route.test.ts`, `lib/snippet-revision/__tests__/client.test.ts`, `components/chat/__tests__/MessageList.test.tsx`
+
 **Snippet Revision Client Boundary Follow-up**
 - **Started:** 2026-06-30
 - **Model:** Codex
@@ -199,6 +212,41 @@
 - Keeps `chat_attachments.message_id` nullable because regular portal user messages are currently persisted by the client outside `/api/chat`.
 
 ### Snippet Revision APIs
+
+#### POST /api/snippet-revision/rewrite
+
+**Purpose:** Generate replacement text only for a selected assistant-message source range. This route does not apply the edit; callers must pass the replacement through `POST /api/snippet-revision` with `replace_range` before updating local or persisted message content.
+
+**Authentication:** Required Supabase bearer session. The selected model uses the authenticated user id for provider-secret lookup when `modelId` is supplied.
+
+**Request:**
+```typescript
+{
+  sourceText: string;       // full assistant message source, max 200,000 chars
+  selection: {
+    start: number;          // zero-based offset in sourceText
+    end: number;            // zero-based exclusive offset
+    expectedText: string;   // must equal sourceText.slice(start, end), max 20,000 chars
+  };
+  instruction: string;      // rewrite instruction, max 2,000 chars
+  modelId?: string | null;  // selected portal model id; "__default__" falls back to env LLM config
+}
+```
+
+**Response (200):**
+```typescript
+{
+  replacement: string;
+  modelId: string | null;
+}
+```
+
+**Behavior:**
+- Rejects stale selections before any model call when `expectedText` no longer matches the submitted range.
+- Uses bounded surrounding context rather than sending the entire source text to the model.
+- Prompts the model to return replacement text only, parses a `<replacement>...</replacement>` wrapper when present, and returns the fallback raw text trimmed when the wrapper is missing.
+- The portal UI applies successful replacements through `requestSnippetRevision({ action: "apply", revision: { mode: "replace_range", ... } })` before mutating message content.
+- Locally truncated messages from `useMessages` are not editable; callers must load full source before attempting a surgical edit.
 
 #### POST /api/snippet-revision
 

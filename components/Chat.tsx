@@ -949,6 +949,37 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     });
   }, [messages, handleSendMessage, setMessages]);
 
+  const handleApplySnippetRevision = useCallback(async (messageId: string, updatedText: string) => {
+    const shouldPersist = Boolean(
+      user &&
+      session?.access_token &&
+      activeId &&
+      !demoMode &&
+      !isWidgetMode &&
+      !messageId.startsWith('temp-')
+    );
+
+    if (shouldPersist) {
+      const { error: updateError } = await supabase
+        .from("messages")
+        .update({ content: updatedText })
+        .eq("id", messageId)
+        .eq("conversation_id", activeId)
+        .eq("role", "assistant");
+
+      if (updateError) {
+        log.error('Chat', 'Failed to save snippet revision', { error: updateError, messageId });
+        throw new Error(updateError.message || 'Failed to save revised message.');
+      }
+    }
+
+    setMessages(prev => prev.map(message => (
+      message.id === messageId
+        ? { ...message, content: updatedText }
+        : message
+    )));
+  }, [activeId, demoMode, isWidgetMode, session?.access_token, setMessages, user]);
+
   const handleArchiveConversation = async (conversationId: string) => {
     if ((!userId || !user) && !demoMode) {
       setError("You must be logged in to archive conversations");
@@ -1520,6 +1551,9 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
             onDownloadResearch={handleDownloadResearch}
             isDeepResearchResult={isDeepResearchResult}
             onRegenerate={handleRegenerate}
+            onApplySnippetRevision={session?.access_token ? handleApplySnippetRevision : undefined}
+            snippetRevisionModelId={selectedModelId}
+            snippetRevisionAuthToken={session?.access_token || null}
           />
 
           {/* Structured Research Viewer (v2 with SSE streaming) */}

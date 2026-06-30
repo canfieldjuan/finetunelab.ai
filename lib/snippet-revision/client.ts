@@ -19,6 +19,31 @@ export interface SnippetRevisionClientOptions {
   signal?: AbortSignal;
 }
 
+export interface SnippetRewriteSelection {
+  start: number;
+  end: number;
+  expectedText: string;
+}
+
+export interface SnippetRewriteApiRequest {
+  sourceText: string;
+  selection: SnippetRewriteSelection;
+  instruction: string;
+  modelId?: string | null;
+}
+
+export interface SnippetRewriteApiResponse {
+  replacement: string;
+  modelId: string | null;
+}
+
+export interface SnippetRewriteClientOptions {
+  endpoint?: string;
+  fetcher?: typeof fetch;
+  signal?: AbortSignal;
+  authToken?: string | null;
+}
+
 export class SnippetRevisionApiError extends Error {
   readonly status?: number;
   readonly code: string;
@@ -90,6 +115,75 @@ export async function requestSnippetRevision(
   }
 
   return payload.result;
+}
+
+export async function requestSnippetRewrite(
+  request: SnippetRewriteApiRequest,
+  options: SnippetRewriteClientOptions = {},
+): Promise<SnippetRewriteApiResponse> {
+  const fetcher = options.fetcher ?? globalThis.fetch;
+  if (!fetcher) {
+    throw new SnippetRevisionApiError('No fetch implementation is available.', {
+      code: 'fetch_unavailable',
+    });
+  }
+
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  };
+  if (options.authToken) {
+    headers.authorization = `Bearer ${options.authToken}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetcher(options.endpoint ?? '/api/snippet-revision/rewrite', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (isAbortError(error, options.signal)) {
+      throw new SnippetRevisionApiError('Snippet rewrite request was aborted.', {
+        code: 'request_aborted',
+        details: error,
+      });
+    }
+
+    throw new SnippetRevisionApiError('Snippet rewrite request failed.', {
+      code: 'request_failed',
+      details: error,
+    });
+  }
+
+  const payload = await readJsonResponse(response, options.signal);
+
+  if (!response.ok) {
+    const apiError = parseApiError(payload);
+    throw new SnippetRevisionApiError(apiError.message, {
+      code: apiError.code,
+      status: response.status,
+      details: payload,
+    });
+  }
+
+  if (
+    !isRecord(payload) ||
+    typeof payload.replacement !== 'string' ||
+    (payload.modelId !== null && typeof payload.modelId !== 'string')
+  ) {
+    throw new SnippetRevisionApiError('Snippet rewrite API returned an invalid response.', {
+      code: 'invalid_response',
+      status: response.status,
+      details: payload,
+    });
+  }
+
+  return {
+    replacement: payload.replacement,
+    modelId: payload.modelId,
+  };
 }
 
 async function readJsonResponse(response: Response, signal?: AbortSignal): Promise<unknown> {
