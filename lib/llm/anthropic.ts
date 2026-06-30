@@ -22,6 +22,18 @@ export interface ToolDefinition {
   };
 }
 
+type ToolSource = ToolDefinition[] | (() => ToolDefinition[] | undefined);
+
+interface AnthropicGenerationOptions {
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+}
+
+function resolveTools(tools?: ToolSource): ToolDefinition[] | undefined {
+  return typeof tools === 'function' ? tools() : tools;
+}
+
 function mapToAnthropicTools(tools?: ToolDefinition[]): ToolUnion[] | undefined {
   if (!tools || tools.length === 0) return undefined;
   // Map ToolDefinition to Anthropic ToolUnion (function tool)
@@ -76,9 +88,7 @@ export async function* streamAnthropicResponse(
   temperature: number = 0.7,
   maxTokens: number = 2000,
   tools?: ToolDefinition[],
-  generationOptions?: {
-    topP?: number;
-  }
+  generationOptions?: AnthropicGenerationOptions
 ): AsyncGenerator<string, void, unknown> {
   const anthropicMessages: MessageParam[] = messages
     .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
@@ -129,11 +139,9 @@ export async function runAnthropicWithToolCalls(
   model: string = 'claude-3-5-sonnet-20241022',
   temperature: number = 0.7,
   maxTokens: number = 2000,
-  tools: ToolDefinition[] = [],
+  tools: ToolSource = [],
   toolCallHandler?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>,
-  generationOptions?: {
-    topP?: number;
-  }
+  generationOptions?: AnthropicGenerationOptions
 ): Promise<LLMResponse> {
   let anthropicMessages: MessageParam[] = messages
     .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
@@ -141,10 +149,11 @@ export async function runAnthropicWithToolCalls(
       role: msg.role as 'user' | 'assistant',
       content: msg.content || '',
     }));
-  const mappedTools = mapToAnthropicTools(tools);
   // METRIC: Track tool calls
   const toolCallsTracking: ToolCallMetadata[] = [];
+  const mapCurrentTools = () => mapToAnthropicTools(resolveTools(tools));
 
+  const mappedTools = mapCurrentTools();
   let response = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
@@ -186,13 +195,14 @@ export async function runAnthropicWithToolCalls(
           content: [toolResultBlock],
         },
       ];
+      const followUpMappedTools = mapCurrentTools();
       response = await anthropic.messages.create({
         model,
         max_tokens: maxTokens,
         temperature,
         messages: anthropicMessages,
         ...(generationOptions?.topP !== undefined && generationOptions.topP < 1 ? { top_p: generationOptions.topP } : {}),
-        ...(mappedTools ? { tools: mappedTools } : {}),
+        ...(followUpMappedTools ? { tools: followUpMappedTools } : {}),
       });
     } catch (error) {
       // METRIC: Track tool call failure
