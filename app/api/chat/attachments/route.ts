@@ -4,6 +4,9 @@ import {
   CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES,
   ChatAttachmentError,
   createChatAttachmentFromFile,
+  deleteUploadedChatAttachments,
+  normalizeChatConversationId,
+  normalizeChatAttachmentIds,
 } from '@/lib/chat/attachments';
 
 export const runtime = 'nodejs';
@@ -81,7 +84,13 @@ export async function POST(request: NextRequest) {
     }
 
     const contentLength = parseContentLength(request.headers);
-    if (contentLength !== null && contentLength > CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES) {
+    if (contentLength === null) {
+      return NextResponse.json(
+        { success: false, error: 'Attachment upload requires a bounded Content-Length header' },
+        { status: 411 },
+      );
+    }
+    if (contentLength > CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES) {
       return NextResponse.json(
         { success: false, error: 'Attachment upload exceeds the request size limit' },
         { status: 413 },
@@ -95,14 +104,12 @@ export async function POST(request: NextRequest) {
     if (!isUploadFile(file)) {
       return NextResponse.json({ success: false, error: 'No file provided' }, { status: 400 });
     }
-    if (typeof conversationId !== 'string' || !conversationId.trim()) {
-      return NextResponse.json({ success: false, error: 'conversationId is required' }, { status: 400 });
-    }
+    const normalizedConversationId = normalizeChatConversationId(conversationId);
 
     const attachment = await createChatAttachmentFromFile({
       supabase: createAttachmentWriteClient(),
       userId: user.id,
-      conversationId: conversationId.trim(),
+      conversationId: normalizedConversationId,
       file,
     });
 
@@ -118,6 +125,51 @@ export async function POST(request: NextRequest) {
     console.error('[Chat Attachments API] Upload error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to upload chat attachment' },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabase = createAuthenticatedClient(authHeader);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const conversationId = normalizeChatConversationId(body?.conversationId);
+
+    const attachmentIds = normalizeChatAttachmentIds(body?.attachmentIds);
+    const result = await deleteUploadedChatAttachments({
+      supabase: createAttachmentWriteClient(),
+      userId: user.id,
+      conversationId,
+      attachmentIds,
+    });
+
+    return NextResponse.json({ success: true, deletedIds: result.deletedIds });
+  } catch (error) {
+    if (error instanceof ChatAttachmentError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.status },
+      );
+    }
+
+    console.error('[Chat Attachments API] Delete error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to delete chat attachment' },
       { status: 500 },
     );
   }

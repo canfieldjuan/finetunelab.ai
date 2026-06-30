@@ -46,7 +46,8 @@ document.
        `unknown`
      - `extracted_text text null`
      - `extracted_chars integer default 0`
-     - `status text not null` such as `uploaded`, `attached`, `deleted`
+     - `status text not null` such as `uploaded`, `attaching`, `attached`,
+       `deleted`
      - `metadata jsonb not null default '{}'::jsonb`
      - timestamps
    - Add indexes for `user_id`, `conversation_id`, `message_id`, and `created_at`.
@@ -60,8 +61,8 @@ document.
 2. Add `/api/chat/attachments`.
    - `POST` accepts `multipart/form-data` with `file` and `conversationId`.
    - Auth must be a verified Supabase session, matching `/api/graphrag/upload`.
-   - Reject known-over-limit multipart bodies by `Content-Length` before
-     calling `request.formData()`.
+   - Require a bounded `Content-Length` and reject known-over-limit multipart
+     bodies before calling `request.formData()`.
    - Verify the conversation belongs to the authenticated user before upload.
    - Validate size, extension, MIME, and count limits.
    - Accept the common `video/mp2t` MIME value for `.ts` uploads after the
@@ -71,22 +72,32 @@ document.
      text, then store a bounded `extracted_text` preview for chat injection.
    - Return a compact attachment DTO: id, filename, contentType, sizeBytes, kind,
      extractedChars, status.
+   - `DELETE` accepts UUID `conversationId` and `attachmentIds` JSON for
+     still-pending uploaded rows, marks them `deleted`, and removes private
+     storage objects best-effort so abandoned pre-send uploads do not block
+     future uploads.
 
 3. Extend `/api/chat` with attachment ids.
    - Request body gets `attachmentIds?: string[]` for the current user message.
    - Server loads those ids with service role only after verifying the session
      user and conversation ownership; the service-role query itself is scoped by
      `user_id` and `conversation_id`.
+   - Reject malformed non-UUID attachment and attachment-bearing conversation
+     ids before they reach the database UUID query path.
    - Reject attachments not owned by the user, not in the conversation, deleted,
      already attached, or over per-turn limits.
    - Inject bounded text into the prompt with clear source labels after GraphRAG
      enhancement so the attachment context is not overwritten.
-   - Emit `attachment_metadata` over SSE so regular portal client persistence
-     records `attachment_ids` and compact attachment DTOs on the assistant
-     message.
-   - Mark accepted attachment rows as `attached`. `message_id` remains nullable in
-     this slice because regular portal user messages are currently persisted by
-     the client outside `/api/chat`.
+   - Claim rows atomically with `status = uploaded -> attaching` before the model
+     turn, release the claim back to `uploaded` if the turn fails, and finalize
+     successful turns as `attached`.
+   - Reject turns whose prompt plus attachment context would exceed the selected
+     model's context window before calling the model.
+   - Emit `attachment_metadata` over SSE after successful attachment finalization
+     so regular portal client persistence records `attachment_ids` and compact
+     attachment DTOs only on successful assistant messages.
+   - `message_id` remains nullable in this slice because regular portal user
+     messages are currently persisted by the client outside `/api/chat`.
    - Persist compact attachment metadata on assistant messages for traceability.
 
 4. UI wiring follow-up.
@@ -133,16 +144,30 @@ document.
 - `/api/chat/attachments` route tests:
   - rejects missing/invalid auth
   - rejects a conversation owned by another user
-  - rejects known-over-limit multipart bodies before parsing form data
+  - rejects missing or known-over-limit `Content-Length` before parsing form data
+  - rejects malformed conversation ids before upload/delete UUID filters
   - rejects disallowed type and oversize files
   - accepts TypeScript uploads reported as `video/mp2t`
   - uploads and extracts a text/code file
+  - deletes abandoned still-uploaded attachments
+  - refuses to delete attachments that are already consumed
+  - rejects malformed attachment ids before delete queries
 - `/api/chat` route tests:
+  - rejects malformed attachment and attachment-bearing conversation ids before
+    attachment-store queries
   - rejects attachment ids from another user or conversation
   - rejects already-attached ids so rows are one-turn only
   - injects bounded attachment text into the model messages
   - emits attachment metadata over SSE for regular chat persistence
-  - marks accepted rows as `attached`
+  - claims accepted rows as `attaching`, finalizes successful turns as
+    `attached`, releases failed turns back to `uploaded`, and rejects a
+    simulated same-id claim race before calling the model
+  - rejects oversized attachment context for small selected model windows and
+    releases the claim
+  - withholds streaming attachment metadata until output succeeds and the claim
+    finalizes
+  - does not release a claimed streaming attachment after output has started if
+    finalization fails
   - does not load attachments for unsupported modes
 - Client tests:
   - deferred to UI slice

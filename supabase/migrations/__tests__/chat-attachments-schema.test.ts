@@ -6,6 +6,7 @@ const migrationPath = join(
   process.cwd(),
   'supabase/migrations/20260630000000_create_chat_attachments.sql',
 );
+const postgresImage = 'postgres:16-alpine';
 
 function commandExists(command: string): boolean {
   try {
@@ -16,9 +17,23 @@ function commandExists(command: string): boolean {
   }
 }
 
+function canStartDockerPostgres(): boolean {
+  if (!commandExists('docker')) return false;
+  try {
+    execFileSync('docker', ['info'], { stdio: 'ignore' });
+    execFileSync('docker', ['run', '--rm', postgresImage, 'postgres', '--version'], {
+      stdio: 'ignore',
+      timeout: 60_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const canRunSchemaTests =
   commandExists('psql') &&
-  (!!process.env.CHAT_ATTACHMENTS_SCHEMA_TEST_DATABASE_URL || commandExists('docker'));
+  (!!process.env.CHAT_ATTACHMENTS_SCHEMA_TEST_DATABASE_URL || canStartDockerPostgres());
 const describeSchema = canRunSchemaTests ? describe : describe.skip;
 
 function runPsql(databaseUrl: string, sqlArgs: string[]): string {
@@ -56,7 +71,7 @@ function startPostgresContainer(): { containerId: string; databaseUrl: string } 
       'POSTGRES_DB=postgres',
       '-p',
       '127.0.0.1::5432',
-      'postgres:16-alpine',
+      postgresImage,
     ],
     { encoding: 'utf8' },
   ).trim();
@@ -192,6 +207,17 @@ describeSchema('chat_attachments schema migration', () => {
 
     expect(constraints).toContain('chat_attachments_kind_check');
     expect(constraints).toContain('chat_attachments_status_check');
+
+    const statusConstraint = queryRows(
+      databaseUrl,
+      `
+      SELECT pg_get_constraintdef(oid)
+        FROM pg_constraint
+       WHERE conrelid = 'public.chat_attachments'::regclass
+         AND conname = 'chat_attachments_status_check';
+      `,
+    );
+    expect(statusConstraint[0]?.[0]).toContain("'attaching'");
   });
 
   it('installs owner indexes, RLS policies, and private storage bucket', () => {

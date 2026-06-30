@@ -71,16 +71,12 @@ BEGIN
       CHECK (kind IN ('text', 'document', 'code', 'image', 'unknown'));
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-      FROM pg_constraint
-     WHERE conname = 'chat_attachments_status_check'
-       AND conrelid = 'public.chat_attachments'::regclass
-  ) THEN
-    ALTER TABLE public.chat_attachments
-      ADD CONSTRAINT chat_attachments_status_check
-      CHECK (status IN ('uploaded', 'attached', 'deleted'));
-  END IF;
+  ALTER TABLE public.chat_attachments
+    DROP CONSTRAINT IF EXISTS chat_attachments_status_check;
+
+  ALTER TABLE public.chat_attachments
+    ADD CONSTRAINT chat_attachments_status_check
+    CHECK (status IN ('uploaded', 'attaching', 'attached', 'deleted'));
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_chat_attachments_user_id

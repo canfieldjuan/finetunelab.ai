@@ -25,7 +25,7 @@
 - **Branch:** `codex/chat-attachments-plan`
 - **Work:** Implemented authenticated per-chat attachment APIs for the chat portal; UI controls remain a follow-up.
 - **Plan:** `development/planning/2026-06-29_chat-attachments-plan.md`
-- **Endpoints:** `POST /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
+- **Endpoints:** `POST /api/chat/attachments`, `DELETE /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
 - **Files:**
   - API: `app/api/chat/attachments/route.ts`, `app/api/chat/route.ts`
   - Service/types: `lib/chat/attachments.ts`
@@ -58,7 +58,7 @@
 ```typescript
 {
   file: File;              // txt, md, pdf, docx, ts, tsx, js, jsx, py
-  conversationId: string;  // must belong to the authenticated user
+  conversationId: string;  // UUID, must belong to the authenticated user
 }
 ```
 
@@ -73,16 +73,40 @@
     sizeBytes: number;
     kind: "text" | "document" | "code" | "image" | "unknown";
     extractedChars: number;
-    status: "uploaded" | "attached" | "deleted";
+    status: "uploaded" | "attaching" | "attached" | "deleted";
   };
 }
 ```
 
-**Limits:** 10 MB per file, 11 MB multipart request pre-parse ceiling including envelope overhead, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file.
+**Limits:** 10 MB per file, 11 MB multipart request pre-parse ceiling including envelope overhead, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file. Upload requests must include a bounded `Content-Length`; unbounded/chunked multipart uploads are rejected before `request.formData()`.
 
 **MIME behavior:** Extension validation is authoritative for code/text attachments. TypeScript `.ts` files may arrive as `video/mp2t` from common upload environments and are accepted as code after extension validation.
 
 **Write ownership:** Attachment row and storage mutations are server-owned through the upload/chat routes. Authenticated clients may read their own rows/files but must not insert, update, or delete `chat_attachments` rows directly.
+
+#### DELETE /api/chat/attachments
+
+**Purpose:** Clear uploaded attachments that were selected but abandoned before a chat turn is sent, so pending rows do not permanently count against the per-turn upload capacity.
+
+**Authentication:** Required Supabase bearer session. Widget/API-key mode is not supported for attachments.
+
+**Request:**
+```typescript
+{
+  conversationId: string;  // UUID
+  attachmentIds: string[]; // max 5, must still be status "uploaded"
+}
+```
+
+**Response (200):**
+```typescript
+{
+  success: true;
+  deletedIds: string[];
+}
+```
+
+**Behavior:** The route verifies the authenticated user, marks only still-`uploaded` rows in that conversation as `deleted`, and removes the private storage objects best-effort after the database transition. Rows already `attaching`/`attached` are refused.
 
 #### POST /api/chat attachmentIds
 
@@ -91,17 +115,21 @@
 **Request addition:**
 ```typescript
 {
-  attachmentIds?: string[]; // max 5, same user and conversation as the request
+  attachmentIds?: string[]; // UUIDs, max 5, same user and conversation as the request
 }
 ```
 
 **Behavior:**
 - Only honored for verified, non-widget chat requests with a real `conversationId`.
+- Rejects malformed non-UUID attachment ids and attachment-bearing conversation ids as client 400s before querying UUID columns.
 - Loads with a service-role query scoped by `user_id`, `conversation_id`, and requested ids.
 - Rejects missing, deleted, already-attached, cross-user, or cross-conversation attachment ids before the model call.
 - Appends delimited attachment text to the latest user message after GraphRAG enhancement.
-- Emits an SSE `attachment_metadata` event with `attachment_ids` and compact attachment DTOs so the regular portal client can persist traceability metadata on the assistant message.
-- Caps total injected attachment text at 40,000 chars per turn and marks accepted rows `attached`.
+- Atomically claims rows with `status = "uploaded"` by moving them to `attaching` before model execution, so concurrent sends cannot reuse the same upload.
+- Releases claimed rows back to `uploaded` only if the model turn fails before output begins. After output has started, a finalize failure leaves the claim unreleased rather than making a consumed attachment reusable.
+- Rejects the turn before model execution when the selected model context window is too small for the prompt plus attachment context.
+- Emits an SSE `attachment_metadata` event with `attachment_ids` and compact attachment DTOs after successful streaming finalization so the regular portal client can persist traceability metadata only on successful assistant messages.
+- Caps total injected attachment text at 40,000 chars per turn and finalizes successful rows as `attached`.
 - Keeps `chat_attachments.message_id` nullable because regular portal user messages are currently persisted by the client outside `/api/chat`.
 
 ### Snippet Revision APIs

@@ -8,9 +8,10 @@ export const CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export const CHAT_ATTACHMENT_MAX_FILES_PER_TURN = 5;
 export const CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE = 20_000;
 export const CHAT_ATTACHMENT_MAX_INJECTED_CHARS_PER_TURN = 40_000;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type ChatAttachmentKind = 'text' | 'document' | 'code' | 'image' | 'unknown';
-export type ChatAttachmentStatus = 'uploaded' | 'attached' | 'deleted';
+export type ChatAttachmentStatus = 'uploaded' | 'attaching' | 'attached' | 'deleted';
 
 export interface ChatAttachmentDto {
   id: string;
@@ -49,6 +50,21 @@ export class ChatAttachmentError extends Error {
   }
 }
 
+export function isValidChatAttachmentUuid(value: string): boolean {
+  return UUID_PATTERN.test(value);
+}
+
+export function normalizeChatConversationId(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new ChatAttachmentError('conversationId is required');
+  }
+  const conversationId = value.trim();
+  if (!isValidChatAttachmentUuid(conversationId)) {
+    throw new ChatAttachmentError('conversationId must be a valid UUID');
+  }
+  return conversationId;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -70,6 +86,9 @@ export function normalizeChatAttachmentIds(value: unknown): string[] {
       throw new ChatAttachmentError('attachmentIds must contain non-empty string ids');
     }
     const id = item.trim();
+    if (!isValidChatAttachmentUuid(id)) {
+      throw new ChatAttachmentError('attachmentIds must contain valid UUIDs');
+    }
     if (!ids.includes(id)) ids.push(id);
   }
   return ids;
@@ -419,14 +438,141 @@ export async function markChatAttachmentsAttached(params: {
   };
   if (params.messageId) payload.message_id = params.messageId;
 
-  const { error } = await params.supabase
+  const { data, error } = await params.supabase
     .from('chat_attachments')
     .update(payload)
     .eq('user_id', params.userId)
     .eq('conversation_id', params.conversationId)
-    .in('id', params.attachmentIds);
+    .eq('status', 'attaching')
+    .in('id', params.attachmentIds)
+    .select('id');
 
   if (error) {
     throw new ChatAttachmentError(`Failed to mark attachments attached: ${error.message}`, 500);
   }
+  const changedIds = new Set(((data ?? []) as Array<{ id?: unknown }>).map((row) => row.id));
+  if (!params.attachmentIds.every((id) => changedIds.has(id))) {
+    throw new ChatAttachmentError('Attachment claim could not be finalized', 409);
+  }
+}
+
+export async function claimChatAttachmentsForTurn(params: {
+  supabase: SupabaseClient;
+  userId: string;
+  conversationId: string;
+  attachmentIds: string[];
+}): Promise<void> {
+  if (params.attachmentIds.length === 0) return;
+
+  const { data, error } = await params.supabase
+    .from('chat_attachments')
+    .update({
+      status: 'attaching',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', params.userId)
+    .eq('conversation_id', params.conversationId)
+    .eq('status', 'uploaded')
+    .in('id', params.attachmentIds)
+    .select('id');
+
+  if (error) {
+    throw new ChatAttachmentError(`Failed to claim chat attachments: ${error.message}`, 500);
+  }
+  const changedIds = new Set(((data ?? []) as Array<{ id?: unknown }>).map((row) => row.id));
+  if (!params.attachmentIds.every((id) => changedIds.has(id))) {
+    throw new ChatAttachmentError('Attachment has already been used in a chat turn', 409);
+  }
+}
+
+export async function releaseClaimedChatAttachments(params: {
+  supabase: SupabaseClient;
+  userId: string;
+  conversationId: string;
+  attachmentIds: string[];
+}): Promise<void> {
+  if (params.attachmentIds.length === 0) return;
+
+  const { error } = await params.supabase
+    .from('chat_attachments')
+    .update({
+      status: 'uploaded',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', params.userId)
+    .eq('conversation_id', params.conversationId)
+    .eq('status', 'attaching')
+    .in('id', params.attachmentIds);
+
+  if (error) {
+    throw new ChatAttachmentError(`Failed to release chat attachment claim: ${error.message}`, 500);
+  }
+}
+
+export async function deleteUploadedChatAttachments(params: {
+  supabase: SupabaseClient;
+  userId: string;
+  conversationId: string;
+  attachmentIds: string[];
+}): Promise<{ deletedIds: string[] }> {
+  if (params.attachmentIds.length === 0) return { deletedIds: [] };
+
+  const { data: rows, error: loadError } = await params.supabase
+    .from('chat_attachments')
+    .select('id, storage_bucket, storage_path')
+    .eq('user_id', params.userId)
+    .eq('conversation_id', params.conversationId)
+    .eq('status', 'uploaded')
+    .in('id', params.attachmentIds);
+
+  if (loadError) {
+    throw new ChatAttachmentError(`Failed to load chat attachments for deletion: ${loadError.message}`, 500);
+  }
+
+  const uploadedRows = ((rows ?? []) as Array<{ id?: unknown; storage_bucket?: unknown; storage_path?: unknown }>)
+    .filter((row): row is { id: string; storage_bucket: string; storage_path: string } =>
+      typeof row.id === 'string' &&
+      typeof row.storage_bucket === 'string' &&
+      typeof row.storage_path === 'string',
+    );
+  const uploadedIds = new Set(uploadedRows.map((row) => row.id));
+  if (!params.attachmentIds.every((id) => uploadedIds.has(id))) {
+    throw new ChatAttachmentError('Only uploaded attachments can be deleted before send', 409);
+  }
+
+  const { data: deletedRows, error: updateError } = await params.supabase
+    .from('chat_attachments')
+    .update({
+      status: 'deleted',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', params.userId)
+    .eq('conversation_id', params.conversationId)
+    .eq('status', 'uploaded')
+    .in('id', params.attachmentIds)
+    .select('id');
+
+  if (updateError) {
+    throw new ChatAttachmentError(`Failed to delete chat attachments: ${updateError.message}`, 500);
+  }
+
+  const deletedIds = ((deletedRows ?? []) as Array<{ id?: unknown }>)
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === 'string');
+  if (!params.attachmentIds.every((id) => deletedIds.includes(id))) {
+    throw new ChatAttachmentError('Only uploaded attachments can be deleted before send', 409);
+  }
+
+  const pathsByBucket = new Map<string, string[]>();
+  for (const row of uploadedRows) {
+    pathsByBucket.set(row.storage_bucket, [...(pathsByBucket.get(row.storage_bucket) ?? []), row.storage_path]);
+  }
+  for (const [bucket, paths] of pathsByBucket.entries()) {
+    const { error } = await params.supabase.storage.from(bucket).remove(paths);
+    if (error) {
+      console.warn('[Chat Attachments] Failed to remove deleted attachment storage objects:', error);
+    }
+  }
+
+  return { deletedIds };
 }
