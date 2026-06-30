@@ -109,6 +109,23 @@ describe('requestSnippetRevision', () => {
     });
   });
 
+  it('rejects successful responses with unknown engine failure codes', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: false,
+        applied: false,
+        code: 'stale_custom_endpoint_code',
+        message: 'Custom endpoint returned a code this client does not understand.',
+      },
+    }));
+
+    await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'invalid_response',
+      status: 200,
+    });
+  });
+
   it('normalizes API validation errors', async () => {
     const fetcher = vi.fn(async () => jsonResponse({
       error: {
@@ -157,6 +174,34 @@ describe('requestSnippetRevision', () => {
         unchanged: false,
         change: {
           mode: 'replace_text',
+        },
+      },
+    }));
+
+    await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'invalid_response',
+      status: 200,
+    });
+  });
+
+  it.each([
+    { label: 'negative start', start: -1, end: 31 },
+    { label: 'negative end', start: 16, end: -1 },
+    { label: 'end before start', start: 31, end: 16 },
+  ])('rejects malformed successful change payload offsets: $label', async ({ start, end }) => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: true,
+        applied: false,
+        updatedText: 'Keep the point. Lose the polish.',
+        unchanged: false,
+        change: {
+          mode: 'replace_text',
+          start,
+          end,
+          original: 'Cut the polish.',
+          replacement: 'Lose the polish.',
         },
       },
     }));

@@ -1,12 +1,15 @@
 export type SnippetRevisionMode = 'replace_text' | 'replace_range';
 
-export type SnippetRevisionErrorCode =
-  | 'empty_find'
-  | 'target_not_found'
-  | 'target_ambiguous'
-  | 'target_mismatch'
-  | 'range_invalid'
-  | 'range_out_of_bounds';
+export const SNIPPET_REVISION_ERROR_CODES = [
+  'empty_find',
+  'target_not_found',
+  'target_ambiguous',
+  'target_mismatch',
+  'range_invalid',
+  'range_out_of_bounds',
+] as const;
+
+export type SnippetRevisionErrorCode = (typeof SNIPPET_REVISION_ERROR_CODES)[number];
 
 export interface ReplaceTextRevision {
   mode: 'replace_text';

@@ -1,4 +1,8 @@
-import type { SnippetRevision, SnippetRevisionResult } from './index';
+import {
+  SNIPPET_REVISION_ERROR_CODES,
+  type SnippetRevision,
+  type SnippetRevisionResult,
+} from './index';
 
 export type SnippetRevisionAction = 'preview' | 'apply';
 
@@ -27,6 +31,8 @@ export class SnippetRevisionApiError extends Error {
     this.details = options.details;
   }
 }
+
+const SNIPPET_REVISION_ERROR_CODE_SET = new Set<string>(SNIPPET_REVISION_ERROR_CODES);
 
 export async function requestSnippetRevision(
   request: SnippetRevisionApiRequest,
@@ -116,7 +122,7 @@ function isSnippetRevisionResult(value: unknown): value is SnippetRevisionResult
 
   if (value.ok === false) {
     return value.applied === false &&
-      typeof value.code === 'string' &&
+      isSnippetRevisionErrorCode(value.code) &&
       typeof value.message === 'string';
   }
 
@@ -135,10 +141,16 @@ function isSnippetRevisionChange(value: unknown): boolean {
   return (value.mode === 'replace_text' || value.mode === 'replace_range') &&
     typeof value.start === 'number' &&
     Number.isInteger(value.start) &&
+    value.start >= 0 &&
     typeof value.end === 'number' &&
     Number.isInteger(value.end) &&
+    value.end >= value.start &&
     typeof value.original === 'string' &&
     typeof value.replacement === 'string';
+}
+
+function isSnippetRevisionErrorCode(value: unknown): boolean {
+  return typeof value === 'string' && SNIPPET_REVISION_ERROR_CODE_SET.has(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
