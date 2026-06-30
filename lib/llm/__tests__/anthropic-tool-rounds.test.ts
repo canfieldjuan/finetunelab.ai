@@ -91,4 +91,41 @@ describe('runAnthropicWithToolCalls', () => {
     expect(toolNames(0)).toEqual(['generate_image', 'calculator']);
     expect(toolNames(1)).toEqual(['calculator']);
   });
+
+  it('remaps follow-up tools from a live tool provider', async () => {
+    let activeTools: ToolDefinition[] = [
+      {
+        type: 'function',
+        function: {
+          name: 'generate_image',
+          description: 'Generate an image.',
+          parameters: { type: 'object', properties: { prompt: { type: 'string' } } },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'calculator',
+          description: 'Calculate arithmetic.',
+          parameters: { type: 'object', properties: { expression: { type: 'string' } } },
+        },
+      },
+    ];
+
+    const response = await runAnthropicWithToolCalls(
+      [{ role: 'user', content: 'Generate an image.' }],
+      'claude-3-5-haiku-latest',
+      0,
+      256,
+      () => activeTools,
+      async (toolName) => {
+        activeTools = activeTools.filter((tool) => tool.function.name !== toolName);
+        return { status: 'image_generation_started', jobId: 'img-job-1' };
+      },
+    );
+
+    expect(response.content).toBe('Image generation has started.');
+    expect(toolNames(0)).toEqual(['generate_image', 'calculator']);
+    expect(toolNames(1)).toEqual(['calculator']);
+  });
 });

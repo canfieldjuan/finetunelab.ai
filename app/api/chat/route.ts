@@ -303,8 +303,8 @@ export async function POST(req: NextRequest) {
     let activeTools = tools.length > 0 ? tools : undefined;
     const offeredToolNames = new Set(tools.map((tool) => tool.function.name));
 
-    // For traces, snapshot the tools offered at LLM-call start. The live `tools`
-    // array may be pruned between tool rounds for single-shot tools.
+    // For traces, snapshot the tools offered at LLM-call start. Later per-round
+    // pruning must not rewrite this: those tools were actually offered and called.
     let toolsForTrace = [...tools];
 
     const removeOfferedToolForRemainingRounds = (toolName: string) => {
@@ -463,6 +463,8 @@ export async function POST(req: NextRequest) {
     // mirroring the MCP gate below.
     if (!isAuthenticatedUser) {
       removeOfferedToolForRemainingRounds('generate_image');
+      // Auth pruning happens before the LLM call, so traces should reflect the
+      // post-auth tool list rather than tools withheld from the model.
       toolsForTrace = [...tools];
     }
 
@@ -1496,19 +1498,33 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             if (isWidgetMode) {
               console.log('[API] Widget mode: Falling back to legacy default model');
               // Fallback to legacy provider path using default configured model
-              llmResponse = await runLLMWithToolCalls(
-                enhancedMessages,
-                model,
-                effectiveTemperature,
-                safeMaxTokens,
-                tools,
-                toolCallHandler,
-                {
-                  topP: requestedTopP,
-                  frequencyPenalty: requestedFrequencyPenalty,
-                  presencePenalty: requestedPresencePenalty,
-                }
-              );
+              llmResponse = provider === 'anthropic'
+                ? await runAnthropicWithToolCalls(
+                    enhancedMessages,
+                    model,
+                    effectiveTemperature,
+                    safeMaxTokens,
+                    () => activeTools ?? [],
+                    toolCallHandler,
+                    {
+                      topP: requestedTopP,
+                      frequencyPenalty: requestedFrequencyPenalty,
+                      presencePenalty: requestedPresencePenalty,
+                    }
+                  )
+                : await runLLMWithToolCalls(
+                    enhancedMessages,
+                    model,
+                    effectiveTemperature,
+                    safeMaxTokens,
+                    tools,
+                    toolCallHandler,
+                    {
+                      topP: requestedTopP,
+                      frequencyPenalty: requestedFrequencyPenalty,
+                      presencePenalty: requestedPresencePenalty,
+                    }
+                  );
               // Load model config for metadata (legacy path)
               try {
                 actualModelConfig = await modelManager.getModelConfig(model, userId || undefined, supabaseAdmin || undefined);
@@ -1655,19 +1671,33 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           userId: userId || undefined,
         });
 
-        llmResponse = await runLLMWithToolCalls(
-          enhancedMessages,
-          model,
-          effectiveTemperature,
-          safeMaxTokens,
-          tools,
-          toolCallHandler,
-          {
-            topP: requestedTopP,
-            frequencyPenalty: requestedFrequencyPenalty,
-            presencePenalty: requestedPresencePenalty,
-          }
-        );
+        llmResponse = provider === 'anthropic'
+          ? await runAnthropicWithToolCalls(
+              enhancedMessages,
+              model,
+              effectiveTemperature,
+              safeMaxTokens,
+              () => activeTools ?? [],
+              toolCallHandler,
+              {
+                topP: requestedTopP,
+                frequencyPenalty: requestedFrequencyPenalty,
+                presencePenalty: requestedPresencePenalty,
+              }
+            )
+          : await runLLMWithToolCalls(
+              enhancedMessages,
+              model,
+              effectiveTemperature,
+              safeMaxTokens,
+              tools,
+              toolCallHandler,
+              {
+                topP: requestedTopP,
+                frequencyPenalty: requestedFrequencyPenalty,
+                presencePenalty: requestedPresencePenalty,
+              }
+            );
 
         // Create metadata object for persistence (legacy path)
         messageMetadata = {
