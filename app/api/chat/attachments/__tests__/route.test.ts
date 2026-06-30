@@ -249,4 +249,24 @@ describe('POST /api/chat/attachments', () => {
       }),
     );
   });
+
+  it('accepts TypeScript attachments reported with the common video/mp2t MIME type', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File(['const answer: number = 42;'], 'example.ts', { type: 'video/mp2t' }),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(201);
+    expect(parseAttachment).toHaveBeenCalledWith(expect.any(Buffer), 'ts');
+    expect(supabase.chatAttachmentsTable.insert).toHaveBeenCalledWith(expect.objectContaining({
+      filename: 'example.ts',
+      content_type: 'video/mp2t',
+      kind: 'code',
+    }));
+  });
 });

@@ -121,12 +121,19 @@ function isAllowedMimeType(fileType: DocumentFileType, contentType: string): boo
     return contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   }
   if (contentType.startsWith('text/')) return true;
-  return [
+  const codeMimeTypes = [
     'application/json',
     'application/javascript',
+    'application/typescript',
     'application/x-javascript',
     'application/x-python-code',
-  ].includes(contentType);
+    'application/x-typescript',
+    'video/mp2t',
+  ];
+  if (['ts', 'tsx', 'js', 'jsx', 'py'].includes(fileType)) {
+    return codeMimeTypes.includes(contentType);
+  }
+  return ['application/json'].includes(contentType);
 }
 
 function validateAttachmentFile(file: File): DocumentFileType {

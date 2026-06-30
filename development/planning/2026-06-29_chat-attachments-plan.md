@@ -64,6 +64,8 @@ document.
      calling `request.formData()`.
    - Verify the conversation belongs to the authenticated user before upload.
    - Validate size, extension, MIME, and count limits.
+   - Accept the common `video/mp2t` MIME value for `.ts` uploads after the
+     extension allowlist has classified the file as TypeScript code.
    - Upload to `chat-attachments/{userId}/{conversationId}/{attachmentId}/...`.
    - For text/code/docs, reuse existing GraphRAG parser primitives to extract
      text, then store a bounded `extracted_text` preview for chat injection.
@@ -79,6 +81,9 @@ document.
      already attached, or over per-turn limits.
    - Inject bounded text into the prompt with clear source labels after GraphRAG
      enhancement so the attachment context is not overwritten.
+   - Emit `attachment_metadata` over SSE so regular portal client persistence
+     records `attachment_ids` and compact attachment DTOs on the assistant
+     message.
    - Mark accepted attachment rows as `attached`. `message_id` remains nullable in
      this slice because regular portal user messages are currently persisted by
      the client outside `/api/chat`.
@@ -130,11 +135,13 @@ document.
   - rejects a conversation owned by another user
   - rejects known-over-limit multipart bodies before parsing form data
   - rejects disallowed type and oversize files
+  - accepts TypeScript uploads reported as `video/mp2t`
   - uploads and extracts a text/code file
 - `/api/chat` route tests:
   - rejects attachment ids from another user or conversation
   - rejects already-attached ids so rows are one-turn only
   - injects bounded attachment text into the model messages
+  - emits attachment metadata over SSE for regular chat persistence
   - marks accepted rows as `attached`
   - does not load attachments for unsupported modes
 - Client tests:

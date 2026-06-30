@@ -163,6 +163,20 @@ export async function POST(req: NextRequest) {
     };
   }
 
+  function emitAttachmentMetadata(
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    encoder: TextEncoder,
+    attachments: ResolvedChatAttachments | null,
+  ): void {
+    if (!attachments) return;
+    const attachmentData = `data: ${JSON.stringify({
+      type: 'attachment_metadata',
+      attachment_ids: attachments.ids,
+      attachments: attachments.attachments,
+    })}\n\n`;
+    controller.enqueue(encoder.encode(attachmentData));
+  }
+
   try {
     // Generate unique request ID for tracking
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -1974,6 +1988,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               controller.enqueue(encoder.encode(metaData));
             }
 
+            emitAttachmentMetadata(controller, encoder, resolvedChatAttachments);
+
             // METRIC: Send model attribution metadata
             // Use actual provider from model config if available, otherwise fall back to legacy provider
             const actualProvider = actualModelConfig?.provider || provider;
@@ -2259,6 +2275,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               })}\n\n`;
               controller.enqueue(encoder.encode(metaData));
             }
+
+            emitAttachmentMetadata(controller, encoder, resolvedChatAttachments);
 
             // METRIC: Send model attribution metadata
             // Use actual provider from model config if available, otherwise fall back to legacy provider

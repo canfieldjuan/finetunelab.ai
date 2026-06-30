@@ -80,6 +80,8 @@
 
 **Limits:** 10 MB per file, 11 MB multipart request pre-parse ceiling including envelope overhead, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file.
 
+**MIME behavior:** Extension validation is authoritative for code/text attachments. TypeScript `.ts` files may arrive as `video/mp2t` from common upload environments and are accepted as code after extension validation.
+
 **Write ownership:** Attachment row and storage mutations are server-owned through the upload/chat routes. Authenticated clients may read their own rows/files but must not insert, update, or delete `chat_attachments` rows directly.
 
 #### POST /api/chat attachmentIds
@@ -98,6 +100,7 @@
 - Loads with a service-role query scoped by `user_id`, `conversation_id`, and requested ids.
 - Rejects missing, deleted, already-attached, cross-user, or cross-conversation attachment ids before the model call.
 - Appends delimited attachment text to the latest user message after GraphRAG enhancement.
+- Emits an SSE `attachment_metadata` event with `attachment_ids` and compact attachment DTOs so the regular portal client can persist traceability metadata on the assistant message.
 - Caps total injected attachment text at 40,000 chars per turn and marks accepted rows `attached`.
 - Keeps `chat_attachments.message_id` nullable because regular portal user messages are currently persisted by the client outside `/api/chat`.
 

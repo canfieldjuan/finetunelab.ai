@@ -515,6 +515,18 @@ describe('POST /api/chat tool-use smoke', () => {
 
     const streamText = await response.text();
     expect(response.status, streamText).toBe(200);
+    const events = parseSseEvents(streamText);
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'attachment_metadata',
+      attachment_ids: ['attachment-1'],
+      attachments: [
+        expect.objectContaining({
+          id: 'attachment-1',
+          filename: 'notes.txt',
+          status: 'uploaded',
+        }),
+      ],
+    }));
     expect(modelMessages.length).toBeGreaterThan(0);
     const latestUserMessage = modelMessages.filter((message) => message.role === 'user').at(-1);
     expect(latestUserMessage?.content).toContain('Summarize this file.');
