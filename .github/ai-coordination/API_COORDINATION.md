@@ -80,8 +80,9 @@
 
 **Client contract:**
 - `requestSnippetRevision` returns valid engine failures (`result.ok === false`) instead of throwing.
-- `requestSnippetRevision` throws `SnippetRevisionApiError` with `code: "invalid_response"` for stale/custom endpoint success payloads that do not match the submitted action or source text.
-- `requestSnippetRevision` throws `SnippetRevisionApiError` with `code: "request_aborted"` for abort cancellation, distinct from `request_failed`.
+- `requestSnippetRevision` throws `SnippetRevisionApiError` with `code: "invalid_response"` for stale/custom endpoint success payloads that do not match the submitted action, source text, or revision fields.
+- Successful `replace_text` responses must match the submitted `find`/`replace` and the unique matching source span; successful `replace_range` responses must match the submitted `start`/`end`/`expectedText`/`replace`.
+- `requestSnippetRevision` throws `SnippetRevisionApiError` with `code: "request_aborted"` for abort cancellation, including custom `AbortSignal.reason` throws, distinct from `request_failed`.
 
 ### Training APIs
 

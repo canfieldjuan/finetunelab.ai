@@ -196,6 +196,24 @@ describe('requestSnippetRevision', () => {
     });
   });
 
+  it('surfaces custom signal abort reasons separately from network failures', async () => {
+    const controller = new AbortController();
+    const abortReason = new Error('caller cancelled preview');
+    controller.abort(abortReason);
+    const fetcher = vi.fn(async () => {
+      throw abortReason;
+    });
+
+    await expect(requestSnippetRevision(request, {
+      fetcher,
+      signal: controller.signal,
+    })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'request_aborted',
+      details: abortReason,
+    });
+  });
+
   it('surfaces response body aborts separately from JSON parse failures', async () => {
     const abortError = Object.assign(new Error('body aborted'), { name: 'AbortError' });
     const response = new Response('{}', { status: 200 });
@@ -318,6 +336,65 @@ describe('requestSnippetRevision', () => {
     }));
 
     await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'invalid_response',
+      status: 200,
+    });
+  });
+
+  it('rejects successful replace_text responses that do not match the submitted find/replace', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: true,
+        applied: false,
+        updatedText: 'Lose the polish. Cut the polish.',
+        unchanged: false,
+        change: {
+          mode: 'replace_text',
+          start: 0,
+          end: 15,
+          original: 'Keep the point.',
+          replacement: 'Lose the polish.',
+        },
+      },
+    }));
+
+    await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'invalid_response',
+      status: 200,
+    });
+  });
+
+  it('rejects successful replace_range responses that do not match the submitted range revision', async () => {
+    const rangeRequest: SnippetRevisionApiRequest = {
+      action: 'preview',
+      sourceText: 'Keep the point. Cut the polish.',
+      revision: {
+        mode: 'replace_range',
+        start: 5,
+        end: 14,
+        expectedText: 'the point',
+        replace: 'that idea',
+      },
+    };
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: true,
+        applied: false,
+        updatedText: 'Keep the point. Drop the polish.',
+        unchanged: false,
+        change: {
+          mode: 'replace_range',
+          start: 16,
+          end: 31,
+          original: 'Cut the polish.',
+          replacement: 'Drop the polish.',
+        },
+      },
+    }));
+
+    await expect(requestSnippetRevision(rangeRequest, { fetcher })).rejects.toMatchObject({
       name: 'SnippetRevisionApiError',
       code: 'invalid_response',
       status: 200,

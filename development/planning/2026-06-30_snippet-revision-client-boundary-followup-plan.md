@@ -10,10 +10,11 @@ Root cause: `requestSnippetRevision` treated a structurally valid `SnippetRevisi
 
 1. Reject successful response ranges whose `change.end` exceeds `request.sourceText.length`.
 2. Reject successful response payloads whose `applied` flag does not match `request.action`.
-3. Map fetch/body aborts to a distinct `request_aborted` client error code.
-4. Keep engine failures (`ok: false`) as return values when their code is valid.
-5. Add focused client tests through the real helper with only the fetch transport mocked.
-6. Update API coordination notes for the snippet revision client contract.
+3. Reject stale/custom endpoint success payloads whose returned span/original/replacement does not match the submitted `replace_text` or `replace_range` revision.
+4. Map fetch/body aborts, including custom `AbortSignal.reason` throws, to a distinct `request_aborted` client error code.
+5. Keep engine failures (`ok: false`) as return values when their code is valid.
+6. Add focused client tests through the real helper with only the fetch transport mocked.
+7. Update API coordination notes for the snippet revision client contract.
 
 ## Files touched
 
@@ -24,7 +25,7 @@ Root cause: `requestSnippetRevision` treated a structurally valid `SnippetRevisi
 
 ## Mechanism
 
-The client result guard will accept the original request as context. For successful results, it will verify that the returned `change` fits within `sourceText`, that `change.original` and `updatedText` are coherent with the submitted source and replacement, and that `applied` matches whether the request was `apply` or `preview`. Abort errors from either `fetch` or JSON body reading will surface as `SnippetRevisionApiError` with `code: 'request_aborted'`.
+The client result guard will accept the original request as context. For successful results, it will verify that the returned `change` fits within `sourceText`, that `change.original` and `updatedText` are coherent with the submitted source and replacement, that `applied` matches whether the request was `apply` or `preview`, and that the returned change matches the submitted revision: `replace_text` must match the submitted `find`/`replace` and unique source span, while `replace_range` must match the submitted `start`/`end`/`expectedText`/`replace`. Abort errors from either `fetch` or JSON body reading will surface as `SnippetRevisionApiError` with `code: 'request_aborted'`, including custom abort reasons thrown after the supplied signal has been aborted.
 
 ## Intentional
 
@@ -40,8 +41,8 @@ The client result guard will accept the original request as context. For success
 ## Verification
 
 - `npm ci` installed dependencies in the fresh worktree.
-- `npm run test:vitest -- lib/snippet-revision/__tests__/client.test.ts --run` passed: 19 tests.
-- `npm run test:vitest -- lib/snippet-revision/__tests__/snippet-revision.test.ts app/api/snippet-revision/__tests__/route.test.ts lib/snippet-revision/__tests__/client.test.ts --run` passed: 35 tests.
+- `npm run test:vitest -- lib/snippet-revision/__tests__/client.test.ts --run` passed: 22 tests.
+- `npm run test:vitest -- lib/snippet-revision/__tests__/snippet-revision.test.ts app/api/snippet-revision/__tests__/route.test.ts lib/snippet-revision/__tests__/client.test.ts --run` passed: 38 tests.
 - `npm run type-check` passed.
 - `npm run lint` passed with existing repo warnings and 0 errors.
 - `git diff --check` passed.
@@ -49,4 +50,4 @@ The client result guard will accept the original request as context. For success
 
 ## Estimated diff size
 
-Current diff: 4 files, about +300 / -9 before final commit metadata. The slice is above the initial estimate because the API coordination contract was updated alongside the code and the tests cover both positive and negative request-context cases.
+Current diff: 4 files, +397 / -11. The slice is near the 400 LOC target because the API coordination contract was updated alongside the code and the tests cover both positive and negative request-context cases, including stale custom-endpoint payloads and abort cancellation variants.
