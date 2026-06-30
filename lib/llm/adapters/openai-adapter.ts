@@ -127,7 +127,7 @@ export class OpenAIAdapter extends BaseProviderAdapter {
     if (options.tools && options.tools.length > 0 && config.supports_functions) {
       body.tools = options.tools;
 
-      if (config.provider === 'vllm' && vllmRuntime.enable_auto_tool_choice !== false) {
+      if (this.isVllmAutoToolChoiceTarget(config) && vllmRuntime.enable_auto_tool_choice !== false) {
         body.tool_choice = 'auto';
       }
     }
@@ -281,6 +281,14 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       toolCalls,
       requestMetadata,
     };
+  }
+
+  private isVllmAutoToolChoiceTarget(config: ModelConfig): boolean {
+    if (config.provider === 'vllm') {
+      return true;
+    }
+
+    return config.provider === 'runpod' && !config.base_url.includes('api.runpod.ai/v2');
   }
 
   private stripQwenXmlToolCalls(content: string): string {

@@ -59,6 +59,55 @@ describe('OpenAIAdapter', () => {
     expect(body.tool_choice).toBe('auto');
   });
 
+  it('sends explicit auto tool choice for RunPod vLLM pod tool requests', () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config: {
+        ...config,
+        provider: 'runpod',
+        base_url: 'https://abc123-8000.proxy.runpod.net/v1',
+        metadata: {
+          deployment_type: 'runpod_vllm',
+          vllm_runtime: {
+            enable_auto_tool_choice: true,
+            parse_qwen_xml_tool_calls: true,
+          },
+        },
+      },
+      messages: [{ role: 'user', content: 'search docs' }],
+      options: { stream: false, tools: [searchDocsTool] },
+    };
+
+    const { body } = adapter.formatRequest(request);
+
+    expect(body.tools).toEqual([searchDocsTool]);
+    expect(body.tool_choice).toBe('auto');
+  });
+
+  it('does not force auto tool choice for RunPod serverless URLs', () => {
+    const adapter = new OpenAIAdapter();
+    const request: AdapterRequest = {
+      config: {
+        ...config,
+        provider: 'runpod',
+        base_url: 'https://api.runpod.ai/v2/endpoint/runsync',
+        metadata: {
+          deployment_type: 'runpod_serverless',
+          vllm_runtime: {
+            enable_auto_tool_choice: true,
+          },
+        },
+      },
+      messages: [{ role: 'user', content: 'search docs' }],
+      options: { stream: false, tools: [searchDocsTool] },
+    };
+
+    const { body } = adapter.formatRequest(request);
+
+    expect(body.tools).toEqual([searchDocsTool]);
+    expect(body.tool_choice).toBeUndefined();
+  });
+
   it('does not force auto tool choice when vLLM runtime disables it', () => {
     const adapter = new OpenAIAdapter();
     const request: AdapterRequest = {
