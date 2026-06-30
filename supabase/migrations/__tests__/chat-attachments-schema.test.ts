@@ -6,6 +6,7 @@ const migrationPath = join(
   process.cwd(),
   'supabase/migrations/20260630000000_create_chat_attachments.sql',
 );
+const postgresImage = 'postgres:16-alpine';
 
 function commandExists(command: string): boolean {
   try {
@@ -16,9 +17,23 @@ function commandExists(command: string): boolean {
   }
 }
 
+function canStartDockerPostgres(): boolean {
+  if (!commandExists('docker')) return false;
+  try {
+    execFileSync('docker', ['info'], { stdio: 'ignore' });
+    execFileSync('docker', ['run', '--rm', postgresImage, 'postgres', '--version'], {
+      stdio: 'ignore',
+      timeout: 60_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const canRunSchemaTests =
   commandExists('psql') &&
-  (!!process.env.CHAT_ATTACHMENTS_SCHEMA_TEST_DATABASE_URL || commandExists('docker'));
+  (!!process.env.CHAT_ATTACHMENTS_SCHEMA_TEST_DATABASE_URL || canStartDockerPostgres());
 const describeSchema = canRunSchemaTests ? describe : describe.skip;
 
 function runPsql(databaseUrl: string, sqlArgs: string[]): string {
@@ -56,7 +71,7 @@ function startPostgresContainer(): { containerId: string; databaseUrl: string } 
       'POSTGRES_DB=postgres',
       '-p',
       '127.0.0.1::5432',
-      'postgres:16-alpine',
+      postgresImage,
     ],
     { encoding: 'utf8' },
   ).trim();
@@ -192,6 +207,17 @@ describeSchema('chat_attachments schema migration', () => {
 
     expect(constraints).toContain('chat_attachments_kind_check');
     expect(constraints).toContain('chat_attachments_status_check');
+
+    const statusConstraint = queryRows(
+      databaseUrl,
+      `
+      SELECT pg_get_constraintdef(oid)
+        FROM pg_constraint
+       WHERE conrelid = 'public.chat_attachments'::regclass
+         AND conname = 'chat_attachments_status_check';
+      `,
+    );
+    expect(statusConstraint[0]?.[0]).toContain("'attaching'");
   });
 
   it('installs owner indexes, RLS policies, and private storage bucket', () => {
@@ -258,5 +284,100 @@ describeSchema('chat_attachments schema migration', () => {
       'chat-attachments: users upload to own folder',
       'chat-attachments: users delete own files',
     ]));
+  });
+
+  it('installs an atomic capacity-checked attachment insert function', () => {
+    const definition = runPsql(
+      databaseUrl,
+      ['-c', `
+      SELECT pg_get_functiondef(
+        'public.create_chat_attachment_with_capacity(uuid,uuid,uuid,text,text,integer,text,text,text,text,integer,jsonb,integer)'::regprocedure
+      );
+      `],
+    );
+
+    expect(definition).toContain('pg_advisory_xact_lock');
+    expect(definition).toContain("chat_attachments.status = 'uploaded'");
+    expect(definition).toContain('p_max_uploaded');
+
+    runPsql(databaseUrl, [
+      '-c',
+      `
+      INSERT INTO auth.users (id)
+      VALUES ('11111111-1111-4111-8111-111111111111')
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO public.conversations (id, user_id)
+      VALUES ('22222222-2222-4222-8222-222222222222', '11111111-1111-4111-8111-111111111111')
+      ON CONFLICT DO NOTHING;
+
+      SELECT public.create_chat_attachment_with_capacity(
+        ('00000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222',
+        n::text || '.txt',
+        'text/plain',
+        1,
+        'chat-attachments',
+        n::text || '.txt',
+        'text',
+        n::text,
+        length(n::text),
+        '{}'::jsonb,
+        5
+      )
+      FROM generate_series(1, 5) AS seeded(n);
+      `,
+    ]);
+
+    const count = queryRows(
+      databaseUrl,
+      `
+      SELECT COUNT(*)::text
+        FROM public.chat_attachments
+       WHERE user_id = '11111111-1111-4111-8111-111111111111'
+         AND conversation_id = '22222222-2222-4222-8222-222222222222'
+         AND status = 'uploaded';
+      `,
+    );
+    expect(count).toEqual([['5']]);
+
+    runPsql(databaseUrl, [
+      '-c',
+      `
+      DO $$
+      DECLARE
+        blocked boolean := false;
+      BEGIN
+        BEGIN
+          PERFORM public.create_chat_attachment_with_capacity(
+            '00000000-0000-4000-8000-000000000006',
+            '11111111-1111-4111-8111-111111111111',
+            '22222222-2222-4222-8222-222222222222',
+            'six.txt',
+            'text/plain',
+            1,
+            'chat-attachments',
+            'six.txt',
+            'text',
+            'six',
+            3,
+            '{}'::jsonb,
+            5
+          );
+        EXCEPTION WHEN raise_exception THEN
+          IF SQLERRM LIKE 'A chat turn can include at most 5 attachments%' THEN
+            blocked := true;
+          ELSE
+            RAISE;
+          END IF;
+        END;
+
+        IF NOT blocked THEN
+          RAISE EXCEPTION 'capacity function allowed sixth upload';
+        END IF;
+      END $$;
+      `,
+    ]);
   });
 });

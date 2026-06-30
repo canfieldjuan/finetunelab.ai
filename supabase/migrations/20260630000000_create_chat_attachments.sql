@@ -71,16 +71,12 @@ BEGIN
       CHECK (kind IN ('text', 'document', 'code', 'image', 'unknown'));
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-      FROM pg_constraint
-     WHERE conname = 'chat_attachments_status_check'
-       AND conrelid = 'public.chat_attachments'::regclass
-  ) THEN
-    ALTER TABLE public.chat_attachments
-      ADD CONSTRAINT chat_attachments_status_check
-      CHECK (status IN ('uploaded', 'attached', 'deleted'));
-  END IF;
+  ALTER TABLE public.chat_attachments
+    DROP CONSTRAINT IF EXISTS chat_attachments_status_check;
+
+  ALTER TABLE public.chat_attachments
+    ADD CONSTRAINT chat_attachments_status_check
+    CHECK (status IN ('uploaded', 'attaching', 'attached', 'deleted'));
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_chat_attachments_user_id
@@ -93,6 +89,125 @@ CREATE INDEX IF NOT EXISTS idx_chat_attachments_status
   ON public.chat_attachments(status);
 CREATE INDEX IF NOT EXISTS idx_chat_attachments_created_at
   ON public.chat_attachments(created_at DESC);
+
+CREATE OR REPLACE FUNCTION public.create_chat_attachment_with_capacity(
+  p_id UUID,
+  p_user_id UUID,
+  p_conversation_id UUID,
+  p_filename TEXT,
+  p_content_type TEXT,
+  p_size_bytes INTEGER,
+  p_storage_bucket TEXT,
+  p_storage_path TEXT,
+  p_kind TEXT,
+  p_extracted_text TEXT,
+  p_extracted_chars INTEGER,
+  p_metadata JSONB,
+  p_max_uploaded INTEGER DEFAULT 5
+)
+RETURNS TABLE (
+  id UUID,
+  filename TEXT,
+  content_type TEXT,
+  size_bytes INTEGER,
+  kind TEXT,
+  extracted_chars INTEGER,
+  status TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, storage
+AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':' || p_conversation_id::text, 0));
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.conversations
+     WHERE conversations.id = p_conversation_id
+       AND conversations.user_id = p_user_id
+  ) THEN
+    RAISE EXCEPTION 'Conversation not found for authenticated user'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF (
+    SELECT COUNT(*)
+      FROM public.chat_attachments
+     WHERE chat_attachments.user_id = p_user_id
+       AND chat_attachments.conversation_id = p_conversation_id
+       AND chat_attachments.status = 'uploaded'
+  ) >= p_max_uploaded THEN
+    RAISE EXCEPTION 'A chat turn can include at most % attachments', p_max_uploaded
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN QUERY
+  INSERT INTO public.chat_attachments (
+    id,
+    user_id,
+    conversation_id,
+    filename,
+    content_type,
+    size_bytes,
+    storage_bucket,
+    storage_path,
+    kind,
+    extracted_text,
+    extracted_chars,
+    status,
+    metadata
+  )
+  VALUES (
+    p_id,
+    p_user_id,
+    p_conversation_id,
+    p_filename,
+    p_content_type,
+    p_size_bytes,
+    p_storage_bucket,
+    p_storage_path,
+    p_kind,
+    p_extracted_text,
+    p_extracted_chars,
+    'uploaded',
+    COALESCE(p_metadata, '{}'::jsonb)
+  )
+  RETURNING
+    chat_attachments.id,
+    chat_attachments.filename,
+    chat_attachments.content_type,
+    chat_attachments.size_bytes,
+    chat_attachments.kind,
+    chat_attachments.extracted_chars,
+    chat_attachments.status;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_chat_attachment_with_capacity(
+  UUID, UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER, JSONB, INTEGER
+) FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.create_chat_attachment_with_capacity(
+      UUID, UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER, JSONB, INTEGER
+    ) FROM anon';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.create_chat_attachment_with_capacity(
+      UUID, UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER, JSONB, INTEGER
+    ) FROM authenticated';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.create_chat_attachment_with_capacity(
+      UUID, UUID, UUID, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER, JSONB, INTEGER
+    ) TO service_role';
+  END IF;
+END $$;
 
 ALTER TABLE public.chat_attachments ENABLE ROW LEVEL SECURITY;
 

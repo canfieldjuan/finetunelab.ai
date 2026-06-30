@@ -34,8 +34,11 @@ import { resolveChatUser } from '@/lib/chat/resolve-chat-user';
 import {
   appendAttachmentContextToLatestUserMessage,
   ChatAttachmentError,
+  claimChatAttachmentsForTurn,
+  normalizeChatConversationId,
   markChatAttachmentsAttached,
   normalizeChatAttachmentIds,
+  releaseClaimedChatAttachments,
   resolveChatAttachmentsForTurn,
   type ChatAttachmentDto,
   type ResolvedChatAttachments,
@@ -129,6 +132,12 @@ export async function POST(req: NextRequest) {
   let supabaseAdmin: SupabaseClient | null = null;
   let selectedModelId: string | null = null;
   let provider: string | null = null;
+  let claimedChatAttachmentScope: {
+    supabase: SupabaseClient;
+    userId: string;
+    conversationId: string;
+    attachmentIds: string[];
+  } | null = null;
   // Track last web_search tool results for progressive doc summaries (SSE)
   let lastWebSearchDocs: WebSearchDocument[] | null = null;
   let lastWebSearchQuery: string | null = null;
@@ -175,6 +184,27 @@ export async function POST(req: NextRequest) {
       attachments: attachments.attachments,
     })}\n\n`;
     controller.enqueue(encoder.encode(attachmentData));
+  }
+
+  async function releaseChatAttachmentClaim(): Promise<void> {
+    if (!claimedChatAttachmentScope) return;
+    const scope = claimedChatAttachmentScope;
+    claimedChatAttachmentScope = null;
+    try {
+      await releaseClaimedChatAttachments(scope);
+    } catch (error) {
+      console.error('[API] Failed to release chat attachment claim:', error);
+    }
+  }
+
+  async function finalizeChatAttachmentClaim(messageId?: string | null): Promise<void> {
+    if (!claimedChatAttachmentScope) return;
+    const scope = claimedChatAttachmentScope;
+    await markChatAttachmentsAttached({
+      ...scope,
+      messageId,
+    });
+    claimedChatAttachmentScope = null;
   }
 
   try {
@@ -446,6 +476,7 @@ export async function POST(req: NextRequest) {
       }
 
       try {
+        conversationId = normalizeChatConversationId(conversationId);
         resolvedChatAttachments = await resolveChatAttachmentsForTurn({
           supabase: supabaseAdmin,
           userId,
@@ -855,14 +886,20 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     if (resolvedChatAttachments) {
       appendAttachmentContextToLatestUserMessage(enhancedMessages, resolvedChatAttachments.context);
       try {
-        await markChatAttachmentsAttached({
+        await claimChatAttachmentsForTurn({
           supabase: supabaseAdmin!,
           userId: userId!,
           conversationId: conversationId!,
           attachmentIds: resolvedChatAttachments.ids,
         });
+        claimedChatAttachmentScope = {
+          supabase: supabaseAdmin!,
+          userId: userId!,
+          conversationId: conversationId!,
+          attachmentIds: resolvedChatAttachments.ids,
+        };
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to mark chat attachments attached';
+        const message = error instanceof Error ? error.message : 'Failed to claim chat attachments';
         return new Response(JSON.stringify({ error: message }), {
           status: error instanceof ChatAttachmentError ? error.status : 500,
           headers: { 'Content-Type': 'application/json' }
@@ -871,6 +908,34 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       console.log('[API] Injected chat attachment context:', {
         attachmentCount: resolvedChatAttachments.attachments.length,
         injectedChars: resolvedChatAttachments.injectedChars,
+      });
+    }
+
+    async function rejectIfAttachmentContextExceedsWindow(
+      modelConfig: ModelConfig | null | undefined,
+    ): Promise<Response | null> {
+      if (!resolvedChatAttachments || !modelConfig?.context_length) return null;
+
+      const estimatedInputTokens = Math.ceil(
+        enhancedMessages.map((message) => message.content || '').join(' ').length / 4,
+      );
+      const minimumOutputTokens = 100;
+      if (estimatedInputTokens + minimumOutputTokens <= modelConfig.context_length) {
+        return null;
+      }
+
+      await releaseChatAttachmentClaim();
+      return new Response(JSON.stringify({
+        error: 'Attachment context is too large for the selected model context window',
+        details: {
+          estimatedInputTokens,
+          contextLength: modelConfig.context_length,
+          minimumOutputTokens,
+          attachmentCount: resolvedChatAttachments.attachments.length,
+        },
+      }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
@@ -1289,6 +1354,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4B] getModelConfig returned NULL for selectedModelId:`, selectedModelId);
         }
 
+        const attachmentWindowResponse = await rejectIfAttachmentContextExceedsWindow(actualModelConfig);
+        if (attachmentWindowResponse) return attachmentWindowResponse;
+
         // Create metadata object for persistence
         console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-5] Creating message metadata with selectedModelId:`, selectedModelId);
         console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-5] actualModelConfig for metadata:`, actualModelConfig ? { id: actualModelConfig.id, name: actualModelConfig.name, provider: actualModelConfig.provider } : 'null');
@@ -1459,6 +1527,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 });
               }
 
+              await releaseChatAttachmentClaim();
               return new Response(
                 JSON.stringify({
                   error: `Model not found. Please select a different model from the dropdown.`,
@@ -1487,6 +1556,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               });
             }
 
+            await releaseChatAttachmentClaim();
             return new Response(
               JSON.stringify({
                 error: `Authentication failed - API key missing or invalid`,
@@ -1516,6 +1586,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         } catch (_error) {
           console.log('[API] [LEGACY] Could not load model config, using model string:', model);
         }
+
+        const attachmentWindowResponse = await rejectIfAttachmentContextExceedsWindow(actualModelConfig);
+        if (attachmentWindowResponse) return attachmentWindowResponse;
 
         const effectiveTemperature = requestedTemperature ?? actualModelConfig?.default_temperature ?? temperature;
         const configuredOutputLimit = typeof actualModelConfig?.max_output_tokens === 'number' && actualModelConfig.max_output_tokens > 0
@@ -1962,6 +2035,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         });
       }
 
+      await finalizeChatAttachmentClaim();
+
       // Create stream that "fake streams" the complete response
       const stream = new ReadableStream({
         async start(controller) {
@@ -2178,6 +2253,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
       }
 
+      const attachmentWindowResponse = await rejectIfAttachmentContextExceedsWindow(actualModelConfig);
+      if (attachmentWindowResponse) return attachmentWindowResponse;
+
       const effectiveTemperature = requestedTemperature ?? actualModelConfig?.default_temperature ?? temperature;
       const configuredOutputLimit = typeof actualModelConfig?.max_output_tokens === 'number' && actualModelConfig.max_output_tokens > 0
         ? actualModelConfig.max_output_tokens
@@ -2252,6 +2330,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         async start(controller) {
           // Variable to capture request metadata from streaming client
           let capturedRequestMetadata: RequestMetadata | undefined;
+          let firstChunkReceived = false;
 
           try {
             // Send GraphRAG metadata if available
@@ -2276,8 +2355,6 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               controller.enqueue(encoder.encode(metaData));
             }
 
-            emitAttachmentMetadata(controller, encoder, resolvedChatAttachments);
-
             // METRIC: Send model attribution metadata
             // Use actual provider from model config if available, otherwise fall back to legacy provider
             const actualProvider = actualModelConfig?.provider || provider;
@@ -2299,7 +2376,6 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             let accumulatedResponse = '';
             const toolCallsTracking: Array<{name: string; success: boolean; error?: string}> = [];
             let ttftMs: number | undefined;
-            let firstChunkReceived = false;
 
             console.log('[STREAMING PATH DEBUG]', {
               toolsLength: tools.length,
@@ -2394,6 +2470,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     }
                     // After fallback streaming, continue to closing logic (no early return)
                   } else {
+                    await releaseChatAttachmentClaim();
                     const errorData = `data: ${JSON.stringify({
                       error: `Model not found. Please select a different model from the dropdown. The selected model no longer exists or you don't have access to it.`
                     })}\n\n`;
@@ -2615,6 +2692,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               });
             }
 
+            await finalizeChatAttachmentClaim();
+            emitAttachmentMetadata(controller, encoder, resolvedChatAttachments);
+
             // If nothing was accumulated (unexpected), send a short placeholder to avoid blank UI
             if (!accumulatedResponse || accumulatedResponse.trim().length === 0) {
               const placeholder = 'No content was generated by the model. This usually means the model only called tools without providing a response. Check the tool execution results above.';
@@ -2626,6 +2706,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             controller.close();
           } catch (error) {
             console.error('[API] Streaming error:', error);
+            if (!firstChunkReceived) {
+              await releaseChatAttachmentClaim();
+            }
 
             // End trace on streaming error
             if (traceContext) {
@@ -2658,6 +2741,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     }
   } catch (error) {
     console.error('Chat API error:', error);
+    await releaseChatAttachmentClaim();
 
     // Categorize error for trace analytics
     const errorMsg = error instanceof Error ? error.message : String(error);
