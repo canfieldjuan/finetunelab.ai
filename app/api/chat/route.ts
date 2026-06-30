@@ -958,6 +958,24 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     let lastDeepResearchQuery: string | null = null;
     const imageStreamJobs: Array<{ jobId: string; prompt: string | null }> = [];
     const toolCallHandler = async (toolName: string, args: Record<string, unknown>) => {
+      // Cap image generation to one job per chat turn. generate_image is async —
+      // it returns a "started" ack, not an image — so models (esp. Haiku) tend to
+      // re-call it, which would queue several real generations and hit the tool-
+      // round cap. Once a job is queued this turn, short-circuit further calls with
+      // a distinct status (NOT 'image_generation_started', so the capture block
+      // below doesn't enqueue a duplicate) and a firm stop instruction.
+      if (toolName === 'generate_image' && imageStreamJobs.length > 0) {
+        const existing = imageStreamJobs[0];
+        return {
+          status: 'image_generation_already_started',
+          message:
+            `An image is already being generated for this request (job ${existing.jobId}). ` +
+            `Do NOT call generate_image again — it will be delivered to the user automatically. ` +
+            `Reply to the user with one short sentence confirming their image is on the way.`,
+          jobId: existing.jobId,
+        };
+      }
+
       // Use conversationId if available, else empty string
       const convId = conversationId || '';
 

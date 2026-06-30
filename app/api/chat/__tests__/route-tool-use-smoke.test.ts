@@ -265,7 +265,7 @@ describe('POST /api/chat tool-use smoke', () => {
     ]);
   });
 
-  it('emits an image stream event for every generated image job', async () => {
+  it('caps image generation to one job per chat turn (re-calls are short-circuited)', async () => {
     createClient.mockReturnValueOnce({
       auth: {
         getUser: vi.fn(async () => ({
@@ -285,22 +285,17 @@ describe('POST /api/chat tool-use smoke', () => {
         },
       },
     });
-    executePortalChatTool
-      .mockResolvedValueOnce({
-        data: { status: 'image_generation_started', jobId: 'img-job-1' },
-        error: null,
-        executionTimeMs: 1,
-      })
-      .mockResolvedValueOnce({
-        data: { status: 'image_generation_started', jobId: 'img-job-2' },
-        error: null,
-        executionTimeMs: 1,
-      });
+    executePortalChatTool.mockResolvedValueOnce({
+      data: { status: 'image_generation_started', jobId: 'img-job-1' },
+      error: null,
+      executionTimeMs: 1,
+    });
+    let secondCallResult: unknown;
     unifiedChat.mockImplementationOnce(async (_modelId, _messages, options) => {
       await options.toolCallHandler('generate_image', { prompt: 'first image' });
-      await options.toolCallHandler('generate_image', { prompt: 'second image' });
+      secondCallResult = await options.toolCallHandler('generate_image', { prompt: 'second image' });
       return {
-        content: 'Both images are generating.',
+        content: 'Image is generating.',
         usage: {
           input_tokens: 12,
           output_tokens: 6,
@@ -352,11 +347,15 @@ describe('POST /api/chat tool-use smoke', () => {
         (event as { type?: unknown }).type === 'image_generation_started',
     );
 
-    expect(imageEvents).toHaveLength(2);
-    expect(imageEvents).toEqual([
+    // Only the first call queues a job + emits one event; the re-call is capped.
+    expect(imageEvents).toHaveLength(1);
+    expect(imageEvents[0]).toEqual(
       expect.objectContaining({ jobId: 'img-job-1', prompt: 'first image', streamToken: expect.any(String) }),
-      expect.objectContaining({ jobId: 'img-job-2', prompt: 'second image', streamToken: expect.any(String) }),
-    ]);
-    expect(executePortalChatTool).toHaveBeenCalledTimes(2);
+    );
+    expect(executePortalChatTool).toHaveBeenCalledTimes(1);
+    // The second generate_image call was short-circuited, not executed again.
+    expect(secondCallResult).toEqual(
+      expect.objectContaining({ status: 'image_generation_already_started', jobId: 'img-job-1' }),
+    );
   });
 });
