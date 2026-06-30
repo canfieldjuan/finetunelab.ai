@@ -45,4 +45,4 @@ The vLLM/MCP lane now has runtime controls, server controls, MCP tool injection,
 
 ## Estimated diff size
 
-Target: under 160 LOC.
+Current diff: 4 files, +281 / -5. This remains below the 400 LOC soft cap; the final size is larger than the initial target because the slice includes both adapter-level request/parse coverage and unified-client multi-round regression coverage.
