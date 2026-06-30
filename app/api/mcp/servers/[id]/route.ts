@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { McpServerConfigService, type UpdateHttpServerInput } from '@/lib/tools/mcp/server-config.service';
+import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
+import {
+  McpServerConfigService,
+  McpServerNotFoundError,
+  type UpdateHttpServerInput,
+} from '@/lib/tools/mcp/server-config.service';
 import { authenticateMcpRequest } from '../auth';
 
 export const runtime = 'nodejs';
@@ -30,6 +35,10 @@ function readOptionalString(body: Record<string, unknown>, field: string): strin
 
 function isMcpValidationError(error: unknown): boolean {
   return error instanceof Error && error.message.startsWith('[MCP]');
+}
+
+function isMcpNotFoundError(error: unknown): error is McpServerNotFoundError {
+  return error instanceof McpServerNotFoundError;
 }
 
 async function readJson(request: NextRequest): Promise<Record<string, unknown> | null> {
@@ -92,15 +101,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const service = new McpServerConfigService(auth.supabase);
     const server = await service.updateHttpServer(auth.user.id, id, patch);
+    if (patch.enabled === false) {
+      await getSharedMcpClientManager().disconnect(id);
+    }
     return NextResponse.json({ success: true, server });
   } catch (error) {
     console.error('[MCP Servers API] PATCH error:', error);
-    const status = isMcpValidationError(error) ? 400 : 500;
+    const status = isMcpNotFoundError(error) ? 404 : isMcpValidationError(error) ? 400 : 500;
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to update MCP server',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        error: isMcpNotFoundError(error) ? 'MCP server not found' : 'Failed to update MCP server',
+        ...(isMcpValidationError(error) && !isMcpNotFoundError(error) && error instanceof Error ? { details: error.message } : {}),
       },
       { status },
     );
@@ -117,16 +129,17 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const service = new McpServerConfigService(auth.supabase);
     await service.deleteServer(auth.user.id, id);
+    await getSharedMcpClientManager().disconnect(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[MCP Servers API] DELETE error:', error);
+    const status = isMcpNotFoundError(error) ? 404 : 500;
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to delete MCP server',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        error: isMcpNotFoundError(error) ? 'MCP server not found' : 'Failed to delete MCP server',
       },
-      { status: 500 },
+      { status },
     );
   }
 }

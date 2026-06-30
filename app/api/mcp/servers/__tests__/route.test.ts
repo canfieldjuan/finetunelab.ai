@@ -6,6 +6,7 @@ import { DELETE, PATCH } from '../[id]/route';
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   loadHostStdioServers: vi.fn(),
+  disconnectMcpServer: vi.fn(),
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -19,6 +20,12 @@ vi.mock('@/lib/models/encryption', () => ({
 
 vi.mock('@/lib/tools/mcp/host-config', () => ({
   loadHostStdioServers: mocks.loadHostStdioServers,
+}));
+
+vi.mock('@/lib/tools/mcp/client', () => ({
+  getSharedMcpClientManager: () => ({
+    disconnect: mocks.disconnectMcpServer,
+  }),
 }));
 
 interface QueryResult {
@@ -76,6 +83,11 @@ const httpRow = {
   url: 'https://api.example.com/mcp',
   auth_token_encrypted: 'ENC(secret-token)',
   enabled: true,
+};
+
+const noRowsError = {
+  code: 'PGRST116',
+  message: 'JSON object requested, multiple (or no) rows returned',
 };
 
 describe('/api/mcp/servers', () => {
@@ -180,6 +192,43 @@ describe('/api/mcp/servers', () => {
     });
   });
 
+  it('rejects route-level private create urls before touching the DB', async () => {
+    const { supabase, builder } = makeSupabase({ data: httpRow, error: null });
+    mocks.createClient.mockReturnValue(supabase);
+
+    const response = await POST(
+      jsonRequest('/api/mcp/servers', 'POST', {
+        name: 'metadata',
+        url: 'http://169.254.169.254/latest/meta-data',
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.details).toMatch(/not allowed/);
+    expect(builder.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects user server names reserved by enabled host stdio servers', async () => {
+    const { supabase, builder } = makeSupabase({ data: httpRow, error: null });
+    mocks.createClient.mockReturnValue(supabase);
+    mocks.loadHostStdioServers.mockReturnValue([
+      { id: 'host-stdio:docs', name: 'github docs', transport: 'stdio', command: 'npx', enabled: true },
+    ]);
+
+    const response = await POST(
+      jsonRequest('/api/mcp/servers', 'POST', {
+        name: 'github_docs',
+        url: 'https://api.example.com/mcp',
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.details).toMatch(/reserved by a host-managed MCP server/);
+    expect(builder.insert).not.toHaveBeenCalled();
+  });
+
   it('rejects stdio-shaped create payloads before touching the DB', async () => {
     const { supabase, builder } = makeSupabase({ data: httpRow, error: null });
     mocks.createClient.mockReturnValue(supabase);
@@ -221,6 +270,62 @@ describe('/api/mcp/servers', () => {
     expect(builder.eq).toHaveBeenCalledWith('id', 'srv-1');
     expect(builder.eq).toHaveBeenCalledWith('user_id', 'user-1');
     expect(body.server.hasAuthToken).toBe(false);
+    expect(mocks.disconnectMcpServer).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('rejects route-level private update urls before touching the DB', async () => {
+    const { supabase, builder } = makeSupabase({ data: httpRow, error: null });
+    mocks.createClient.mockReturnValue(supabase);
+
+    const response = await PATCH(
+      jsonRequest('/api/mcp/servers/srv-1', 'PATCH', {
+        url: 'http://localhost:8080/mcp',
+      }),
+      { params: Promise.resolve({ id: 'srv-1' }) },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.details).toMatch(/not allowed/);
+    expect(builder.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects renames that collide with enabled host stdio namespaces', async () => {
+    const { supabase, builder } = makeSupabase({ data: httpRow, error: null });
+    mocks.createClient.mockReturnValue(supabase);
+    mocks.loadHostStdioServers.mockReturnValue([
+      { id: 'host-stdio:docs', name: 'github docs', transport: 'stdio', command: 'npx', enabled: true },
+    ]);
+
+    const response = await PATCH(
+      jsonRequest('/api/mcp/servers/srv-1', 'PATCH', {
+        name: 'github_docs',
+      }),
+      { params: Promise.resolve({ id: 'srv-1' }) },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.details).toMatch(/reserved by a host-managed MCP server/);
+    expect(builder.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 without raw DB details when update finds no owned row', async () => {
+    const { supabase } = makeSupabase({ data: null, error: noRowsError });
+    mocks.createClient.mockReturnValue(supabase);
+
+    const response = await PATCH(
+      jsonRequest('/api/mcp/servers/srv-other-user', 'PATCH', {
+        enabled: false,
+      }),
+      { params: Promise.resolve({ id: 'srv-other-user' }) },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual({ success: false, error: 'MCP server not found' });
+    expect(JSON.stringify(body)).not.toContain(noRowsError.message);
+    expect(mocks.disconnectMcpServer).not.toHaveBeenCalled();
   });
 
   it('rejects stdio-shaped update payloads before touching the DB', async () => {
@@ -240,7 +345,7 @@ describe('/api/mcp/servers', () => {
   });
 
   it('deletes a server scoped by id and authenticated user', async () => {
-    const { supabase, builder } = makeSupabase({ data: null, error: null });
+    const { supabase, builder } = makeSupabase({ data: { id: 'srv-1' }, error: null });
     mocks.createClient.mockReturnValue(supabase);
 
     const response = await DELETE(request('/api/mcp/servers/srv-1', { method: 'DELETE' }), {
@@ -253,5 +358,23 @@ describe('/api/mcp/servers', () => {
     expect(builder.delete).toHaveBeenCalled();
     expect(builder.eq).toHaveBeenCalledWith('id', 'srv-1');
     expect(builder.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(builder.select).toHaveBeenCalledWith('id');
+    expect(mocks.disconnectMcpServer).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('returns 404 without raw DB details when delete finds no owned row', async () => {
+    const { supabase, builder } = makeSupabase({ data: null, error: noRowsError });
+    mocks.createClient.mockReturnValue(supabase);
+
+    const response = await DELETE(request('/api/mcp/servers/srv-other-user', { method: 'DELETE' }), {
+      params: Promise.resolve({ id: 'srv-other-user' }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual({ success: false, error: 'MCP server not found' });
+    expect(JSON.stringify(body)).not.toContain(noRowsError.message);
+    expect(builder.delete).toHaveBeenCalled();
+    expect(mocks.disconnectMcpServer).not.toHaveBeenCalled();
   });
 });

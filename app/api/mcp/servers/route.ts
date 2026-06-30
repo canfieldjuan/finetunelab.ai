@@ -90,7 +90,6 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: 'Failed to list MCP servers',
-        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 },
     );
@@ -145,7 +144,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: 'Failed to create MCP server',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        ...(isMcpValidationError(error) && error instanceof Error ? { details: error.message } : {}),
       },
       { status },
     );

@@ -23,6 +23,9 @@ marketing audit/resolution tools, which are explicitly deferred.
    exposing command, args, or env.
 4. Update the MCP/tool gap log with a provider-agnostic local portal inventory.
 5. Add focused API/component/page tests for the new controls.
+6. Address review feedback around route-level SSRF proof, host namespace
+   collisions, owner-scoped 404s, generic internal errors, and cached MCP
+   disconnects on disable/delete.
 
 ## Files touched
 
@@ -49,6 +52,13 @@ The UI fetches `/api/mcp/servers`, renders configured HTTP servers with edit,
 enable/disable, and delete controls, and renders host stdio servers in a read-only
 section. Stdio command details remain server-only.
 
+Review follow-up keeps the durable rules in `McpServerConfigService`: host stdio
+namespaces are reserved, HTTP URLs are capped and SSRF-guarded before DB writes,
+and owner-scoped update/delete misses become a typed not-found error. The by-id
+routes translate that error to 404, avoid returning raw internal error strings,
+and disconnect the shared MCP client manager after a successful disable or delete
+so stale sessions do not stay alive in memory.
+
 ## Intentional
 
 - No user-editable stdio controls. Stdio MCP servers execute host commands and
@@ -57,6 +67,9 @@ section. Stdio command details remain server-only.
   guarded client/discovery path and get its own focused testable slice.
 - No marketing audit/resolution tools. The gap log is limited to generic local
   chat portal capabilities.
+- Supabase placeholder auth constants remain unchanged in this review fix to
+  avoid changing dev/test auth behavior outside the reviewed route/service
+  boundary.
 
 ## Deferred
 
@@ -69,8 +82,8 @@ section. Stdio command details remain server-only.
 ## Verification
 
 - `npm ci` - passed. Existing peer/deprecation/audit warnings printed.
-- `npm run test:vitest -- app/api/mcp/servers/__tests__/route.test.ts components/settings/__tests__/McpServerManagement.test.tsx app/secrets/__tests__/page.test.tsx --run` - passed, 15 tests.
-- `npm run test:vitest -- lib/tools/mcp/__tests__/server-config.service.test.ts lib/tools/mcp/__tests__/url-guard.test.ts lib/tools/mcp/__tests__/user-toolset.test.ts app/api/mcp/servers/__tests__/route.test.ts --run` - passed, 32 tests.
+- `npm run test:vitest -- app/api/mcp/servers/__tests__/route.test.ts components/settings/__tests__/McpServerManagement.test.tsx app/secrets/__tests__/page.test.tsx --run` - passed, 21 tests.
+- `npm run test:vitest -- lib/tools/mcp/__tests__/server-config.service.test.ts lib/tools/mcp/__tests__/url-guard.test.ts lib/tools/mcp/__tests__/user-toolset.test.ts app/api/mcp/servers/__tests__/route.test.ts --run` - passed, 38 tests.
 - `npm run type-check` - passed.
 - `npm run lint` - passed with 0 errors and existing warnings.
 - `git diff --check` - passed.
