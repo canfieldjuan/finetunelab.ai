@@ -28,6 +28,7 @@ import type { TraceContext, RequestMetadata } from '@/lib/tracing/types';
 import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
 import { buildUserMcpToolset, type McpUserToolset } from '@/lib/tools/mcp/user-toolset';
+import { signImageStreamToken } from '@/lib/tools/image-gen/stream-token';
 import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
 import { resolveChatUser } from '@/lib/chat/resolve-chat-user';
 import { normalizeGenerationSettings, type RawGenerationSettings } from '@/lib/llm/generation-settings';
@@ -955,8 +956,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
     // Tool-call aware chat completion (provider-aware)
     let lastDeepResearchQuery: string | null = null;
-    let lastImageJobId: string | null = null;
-    let lastImagePrompt: string | null = null;
+    const imageStreamJobs: Array<{ jobId: string; prompt: string | null }> = [];
     const toolCallHandler = async (toolName: string, args: Record<string, unknown>) => {
       // Use conversationId if available, else empty string
       const convId = conversationId || '';
@@ -1054,9 +1054,11 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         if (toolName === 'generate_image' && result.data && typeof result.data === 'object') {
           const imgResult = result.data as { status?: unknown; jobId?: unknown };
           if (imgResult.status === 'image_generation_started' && typeof imgResult.jobId === 'string') {
-            lastImageJobId = imgResult.jobId;
-            lastImagePrompt = typeof args.prompt === 'string' ? args.prompt : null;
-            console.log('[API] Captured image generation job id from tool result:', lastImageJobId);
+            imageStreamJobs.push({
+              jobId: imgResult.jobId,
+              prompt: typeof args.prompt === 'string' ? args.prompt : null,
+            });
+            console.log('[API] Captured image generation job id from tool result:', imgResult.jobId);
           }
         }
       } catch (capErr) {
@@ -1986,13 +1988,21 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
             // Surface an image-generation job id so the client can subscribe to
             // its stream (does not rely on the model echoing the magic string).
-            if (lastImageJobId) {
-              const imageStartData = `data: ${JSON.stringify({
-                type: 'image_generation_started',
-                jobId: lastImageJobId,
-                prompt: lastImagePrompt || null,
-              })}\n\n`;
-              controller.enqueue(encoder.encode(imageStartData));
+            // Mint a short-lived, job-scoped stream token here rather than letting
+            // the client forward its session token in the SSE URL (#72 MINOR).
+            // generate_image only runs for a verified user (route gate), so userId
+            // is the authenticated owner.
+            if (imageStreamJobs.length > 0 && userId) {
+              for (const imageJob of imageStreamJobs) {
+                const streamToken = signImageStreamToken({ jobId: imageJob.jobId, userId });
+                const imageStartData = `data: ${JSON.stringify({
+                  type: 'image_generation_started',
+                  jobId: imageJob.jobId,
+                  prompt: imageJob.prompt,
+                  streamToken,
+                })}\n\n`;
+                controller.enqueue(encoder.encode(imageStartData));
+              }
             }
 
             // Fake stream the complete response in larger chunks for performance

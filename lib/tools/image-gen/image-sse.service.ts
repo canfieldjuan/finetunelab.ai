@@ -22,6 +22,14 @@ export interface ImageStreamEvent {
 }
 
 class ImageSseService extends EventEmitter {
+  constructor() {
+    super();
+    // One listener per live stream connection (each off()s on finish/abort/timeout),
+    // so listeners are bounded by concurrency. Raise the cap above Node's default 10
+    // so many concurrent image streams don't trip a spurious max-listeners warning.
+    this.setMaxListeners(1000);
+  }
+
   /** Emit an event for a specific job (jobId is merged into the payload). */
   sendEvent(jobId: string, data: Record<string, unknown>): void {
     this.emit('image_event', { jobId, ...data });

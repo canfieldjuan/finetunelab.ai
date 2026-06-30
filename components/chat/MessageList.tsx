@@ -181,7 +181,7 @@ export function MessageList({
                     graphragGrounded={msg.graphrag_grounded}
                     graphragMethod={msg.graphrag_method}
                   />
-                  <MessageJudgments messageId={msg.id} />
+                  {msg.skipJudgments !== true && <MessageJudgments messageId={msg.id} />}
                 </>
               )}
             </div>

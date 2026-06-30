@@ -139,4 +139,18 @@ describe('MessageList web search results', () => {
     expect(screen.queryByText(/mcp__/)).not.toBeInTheDocument();
     expect(screen.queryByText(/"name"/)).not.toBeInTheDocument();
   });
+
+  it('skips judgment fetch UI for delivered synthetic image messages', () => {
+    renderList([
+      {
+        id: 'img-job-1',
+        role: 'assistant',
+        content: '![generated image](https://cdn.example.com/image.png)',
+        skipJudgments: true,
+      },
+    ]);
+
+    expect(screen.getByRole('img', { name: 'generated image' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading validations...')).not.toBeInTheDocument();
+  });
 });
