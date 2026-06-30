@@ -4,29 +4,37 @@
  * Coverage: Authentication, ownership validation, update/delete operations
  */
 
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { PATCH, DELETE } from '@/app/api/benchmarks/[id]/route';
 
-// Mock Supabase
-const mockUpdate = jest.fn();
-const mockSingle = jest.fn();
-const mockEq = jest.fn();
+// Mock Supabase (hoisted so the vi.mock factory can reference these)
+const { mockUpdate, mockSingle, mockEq } = vi.hoisted(() => ({
+  mockUpdate: vi.fn(),
+  mockSingle: vi.fn(),
+  mockEq: vi.fn(),
+}));
 
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
     auth: {
-      getUser: jest.fn(),
+      getUser: vi.fn(),
     },
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
           single: mockSingle,
         })),
       })),
-      update: jest.fn(() => ({
-        eq: jest.fn(() => mockUpdate()),
+      update: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: mockUpdate,
+          })),
+        })),
       })),
-      delete: jest.fn(() => ({
+      delete: vi.fn(() => ({
         eq: mockEq,
       })),
     })),
@@ -50,42 +58,50 @@ describe('/api/benchmarks/[id]', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    
+    // resetAllMocks (not clearAllMocks) so any queued *Once values from a previous
+    // test are drained — clearAllMocks only resets call history, leaving the
+    // mockReturnValueOnce / mockResolvedValueOnce queues intact and causing
+    // off-by-one leakage between tests.
+    vi.resetAllMocks();
+
     // Default auth mock (authenticated user)
-    createClient.mockReturnValue({
+    vi.mocked(createClient).mockReturnValue({
       auth: {
-        getUser: jest.fn().mockResolvedValue({
+        getUser: vi.fn().mockResolvedValue({
           data: { user: mockUser },
           error: null,
         }),
       },
-      from: jest.fn(() => ({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
             single: mockSingle,
           })),
         })),
-        update: jest.fn(() => ({
-          eq: jest.fn(() => mockUpdate()),
+        update: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: mockUpdate,
+            })),
+          })),
         })),
-        delete: jest.fn(() => ({
+        delete: vi.fn(() => ({
           eq: mockEq,
         })),
       })),
-    });
+    } as unknown as ReturnType<typeof createClient>);
   });
 
   describe('PATCH - Update Benchmark', () => {
     it('should reject unauthenticated requests', async () => {
-      createClient.mockReturnValueOnce({
+      vi.mocked(createClient).mockReturnValueOnce({
         auth: {
-          getUser: jest.fn().mockResolvedValue({
+          getUser: vi.fn().mockResolvedValue({
             data: { user: null },
             error: new Error('Unauthorized'),
           }),
         },
-      });
+      } as unknown as ReturnType<typeof createClient>);
 
       const request = new NextRequest('http://localhost:3000/api/benchmarks/bench_123', {
         method: 'PATCH',
@@ -114,7 +130,7 @@ describe('/api/benchmarks/[id]', () => {
 
       const response = await PATCH(request, { params: Promise.resolve({ id: 'bench_999' }) });
       expect(response.status).toBe(404);
-      
+
       const data = await response.json();
       expect(data.error).toBe('Benchmark not found');
     });
@@ -136,9 +152,9 @@ describe('/api/benchmarks/[id]', () => {
 
       const response = await PATCH(request, { params: Promise.resolve({ id: 'bench_123' }) });
       expect(response.status).toBe(403);
-      
+
       const data = await response.json();
-      expect(data.error).toBe('You do not have permission to update this benchmark');
+      expect(data.error).toBe('Forbidden - you do not own this benchmark');
     });
 
     it('should successfully update benchmark name', async () => {
@@ -164,7 +180,7 @@ describe('/api/benchmarks/[id]', () => {
 
       const response = await PATCH(request, { params: Promise.resolve({ id: 'bench_123' }) });
       expect(response.status).toBe(200);
-      
+
       const data = await response.json();
       expect(data.success).toBe(true);
       expect(data.benchmark.name).toBe('Updated Benchmark');
@@ -203,7 +219,7 @@ describe('/api/benchmarks/[id]', () => {
 
       const response = await PATCH(request, { params: Promise.resolve({ id: 'bench_123' }) });
       expect(response.status).toBe(200);
-      
+
       const data = await response.json();
       expect(data.benchmark.pass_criteria.min_score).toBe(90);
       expect(data.benchmark.pass_criteria.required_validators).toHaveLength(2);
@@ -232,7 +248,7 @@ describe('/api/benchmarks/[id]', () => {
 
       const response = await PATCH(request, { params: Promise.resolve({ id: 'bench_123' }) });
       expect(response.status).toBe(200);
-      
+
       const data = await response.json();
       expect(data.benchmark.is_public).toBe(true);
     });
@@ -240,14 +256,14 @@ describe('/api/benchmarks/[id]', () => {
 
   describe('DELETE - Delete Benchmark', () => {
     it('should reject unauthenticated requests', async () => {
-      createClient.mockReturnValueOnce({
+      vi.mocked(createClient).mockReturnValueOnce({
         auth: {
-          getUser: jest.fn().mockResolvedValue({
+          getUser: vi.fn().mockResolvedValue({
             data: { user: null },
             error: new Error('Unauthorized'),
           }),
         },
-      });
+      } as unknown as ReturnType<typeof createClient>);
 
       const request = new NextRequest('http://localhost:3000/api/benchmarks/bench_123', {
         method: 'DELETE',
@@ -286,9 +302,9 @@ describe('/api/benchmarks/[id]', () => {
 
       const response = await DELETE(request, { params: Promise.resolve({ id: 'bench_123' }) });
       expect(response.status).toBe(403);
-      
+
       const data = await response.json();
-      expect(data.error).toBe('You do not have permission to delete this benchmark');
+      expect(data.error).toBe('Forbidden - you do not own this benchmark');
     });
 
     it('should successfully delete benchmark', async () => {
@@ -309,7 +325,7 @@ describe('/api/benchmarks/[id]', () => {
 
       const response = await DELETE(request, { params: Promise.resolve({ id: 'bench_123' }) });
       expect(response.status).toBe(200);
-      
+
       const data = await response.json();
       expect(data.success).toBe(true);
       expect(data.message).toContain('deleted');

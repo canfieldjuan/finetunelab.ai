@@ -27,9 +27,6 @@ export default defineConfig({
       // assertions/logic drifted from the implementation. Tracked as a rehab backlog;
       // these need per-test reconstruction (some require confirming intended behavior).
       // Re-enable each as it is repaired.
-      '**/__tests__/api/evaluation/judge.test.ts',
-      '**/__tests__/api/benchmarks/[id]/route.test.ts',
-      '**/__tests__/api/batch-testing/[id]/validators/route.test.ts',
       '**/lib/tools/analytics-export/__tests__/analytics-export.service.test.ts',
       '**/lib/tools/system-monitor/__tests__/validate_db_stats.test.ts',
       '**/lib/training/__tests__/approval-handler.test.ts',
