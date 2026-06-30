@@ -432,6 +432,32 @@ describe('POST /api/chat/attachments', () => {
     expect(supabase.upload).not.toHaveBeenCalled();
   });
 
+  it('rejects docx files that underreport their inflated archive size', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+    const zip = await makeZipWithEntryContent(Buffer.alloc(50 * 1024 * 1024 + 1));
+    const underreportedZip = rewriteZipUncompressedSizes(zip, 1);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File(
+        [underreportedZip],
+        'underreported.docx',
+        { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      ),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Attachment document expands beyond the safe extraction limit',
+    });
+    expect(parseAttachment).not.toHaveBeenCalled();
+    expect(supabase.upload).not.toHaveBeenCalled();
+  });
+
   it('times out slow text extraction before upload', async () => {
     vi.useFakeTimers();
     try {
@@ -455,6 +481,37 @@ describe('POST /api/chat/attachments', () => {
       expect(supabase.upload).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('times out parser work that spends the budget before yielding', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+    let now = 0;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    parseAttachment.mockImplementation(() => {
+      now = 15_000;
+      return Promise.resolve({
+        text: 'late parse',
+        metadata: { encoding: 'utf8' },
+        fileType: 'txt',
+      });
+    });
+
+    try {
+      const { POST } = await import('../route');
+      const response = await POST(makeRequest(makeAttachmentForm(), {
+        authorization: 'Bearer session-token',
+      }));
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: 'Attachment text extraction timed out',
+      });
+      expect(supabase.upload).not.toHaveBeenCalled();
+    } finally {
+      nowSpy.mockRestore();
     }
   });
 
