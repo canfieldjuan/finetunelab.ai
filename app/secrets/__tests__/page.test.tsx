@@ -42,6 +42,10 @@ vi.mock('@/components/settings/IntegrationsManagement', () => ({
   IntegrationsManagement: () => <div data-testid="integrations-management" />,
 }));
 
+vi.mock('@/components/settings/McpServerManagement', () => ({
+  McpServerManagement: () => <div data-testid="mcp-server-management" />,
+}));
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -126,6 +130,9 @@ describe('SecretsPage provider model import', () => {
     });
 
     render(<SecretsPage />);
+
+    expect(await screen.findByTestId('integrations-management')).toBeInTheDocument();
+    expect(screen.getByTestId('mcp-server-management')).toBeInTheDocument();
 
     await openProviderDialog('OpenAI');
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
