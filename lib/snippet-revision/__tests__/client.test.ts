@@ -67,6 +67,34 @@ describe('requestSnippetRevision', () => {
     });
   });
 
+  it('returns apply successes when the response matches the request action', async () => {
+    const applyRequest: SnippetRevisionApiRequest = {
+      ...request,
+      action: 'apply',
+    };
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: true,
+        applied: true,
+        updatedText: 'Keep the point. Lose the polish.',
+        unchanged: false,
+        change: {
+          mode: 'replace_text',
+          start: 16,
+          end: 31,
+          original: 'Cut the polish.',
+          replacement: 'Lose the polish.',
+        },
+      },
+    }));
+
+    await expect(requestSnippetRevision(applyRequest, { fetcher })).resolves.toMatchObject({
+      ok: true,
+      applied: true,
+      updatedText: 'Keep the point. Lose the polish.',
+    });
+  });
+
   it('supports custom endpoints and abort signals', async () => {
     const signal = new AbortController().signal;
     const fetcher = vi.fn(async () => jsonResponse({
@@ -155,6 +183,33 @@ describe('requestSnippetRevision', () => {
     });
   });
 
+  it('surfaces request aborts separately from network failures', async () => {
+    const abortError = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    const fetcher = vi.fn(async () => {
+      throw abortError;
+    });
+
+    await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'request_aborted',
+      details: abortError,
+    });
+  });
+
+  it('surfaces response body aborts separately from JSON parse failures', async () => {
+    const abortError = Object.assign(new Error('body aborted'), { name: 'AbortError' });
+    const response = new Response('{}', { status: 200 });
+    vi.spyOn(response, 'json').mockRejectedValue(abortError);
+    const fetcher = vi.fn(async () => response);
+
+    await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'request_aborted',
+      status: 200,
+      details: abortError,
+    });
+  });
+
   it('rejects malformed success payloads', async () => {
     const fetcher = vi.fn(async () => jsonResponse({ nope: true }));
 
@@ -189,6 +244,7 @@ describe('requestSnippetRevision', () => {
     { label: 'negative start', start: -1, end: 31 },
     { label: 'negative end', start: 16, end: -1 },
     { label: 'end before start', start: 31, end: 16 },
+    { label: 'end beyond source text', start: 16, end: 32 },
   ])('rejects malformed successful change payload offsets: $label', async ({ start, end }) => {
     const fetcher = vi.fn(async () => jsonResponse({
       result: {
@@ -201,6 +257,61 @@ describe('requestSnippetRevision', () => {
           start,
           end,
           original: 'Cut the polish.',
+          replacement: 'Lose the polish.',
+        },
+      },
+    }));
+
+    await expect(requestSnippetRevision(request, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'invalid_response',
+      status: 200,
+    });
+  });
+
+  it.each([
+    { label: 'preview response marked applied', clientRequest: request, applied: true },
+    {
+      label: 'apply response marked unapplied',
+      clientRequest: { ...request, action: 'apply' as const },
+      applied: false,
+    },
+  ])('rejects successful responses for the wrong action: $label', async ({ clientRequest, applied }) => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: true,
+        applied,
+        updatedText: 'Keep the point. Lose the polish.',
+        unchanged: false,
+        change: {
+          mode: 'replace_text',
+          start: 16,
+          end: 31,
+          original: 'Cut the polish.',
+          replacement: 'Lose the polish.',
+        },
+      },
+    }));
+
+    await expect(requestSnippetRevision(clientRequest, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'invalid_response',
+      status: 200,
+    });
+  });
+
+  it('rejects successful responses whose change does not match the request source', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      result: {
+        ok: true,
+        applied: false,
+        updatedText: 'Keep the point. Lose the polish.',
+        unchanged: false,
+        change: {
+          mode: 'replace_text',
+          start: 16,
+          end: 31,
+          original: 'Different source text.',
           replacement: 'Lose the polish.',
         },
       },
