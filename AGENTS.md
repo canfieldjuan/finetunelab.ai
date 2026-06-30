@@ -30,6 +30,15 @@ This repo is a large Next.js 15 / TypeScript application with Supabase, GraphRAG
 - Do not leave generated experiments, duplicate components, debug pages, or scratch scripts unless they are intentional deliverables and documented.
 - When touching shared contracts, update the relevant `.github/ai-coordination/*.md` file with the exact paths, types, endpoints, and decisions.
 
+## Root Cause, Not Symptoms
+
+Fix every defect, bug, or operator-reported issue **as far upstream as is correct** — never patch the symptom.
+
+- Before writing the fix, state the **root cause**: the underlying problem, not the surface symptom or the reviewer's exact wording. Confirm the change addresses the cause, not a downstream effect of it.
+- A change that fights another layer is a symptom patch — reject it and fix the cause. Examples: split-then-remerge, widen-then-filter, a harness wrapped around a still-broken step, or a soft instruction asking the model/user to behave instead of removing the broken affordance.
+- The "root" nearest the symptom is often itself downstream of a deeper defect. Trace the chain to its origin and fix at the **most-upstream point that is correct and in safe scope** — an upstream fix removes the defect for every downstream consumer, not just this one. If you can't reach the true root in safe scope, name it and the follow-up rather than ship the shallow patch.
+- A fix PR's plan and body must name the root cause and state whether the change fixes the root or treats a symptom. A symptom-only fix is rejected at the plan stage, before code.
+
 ## Verification Expectations
 
 Run the narrowest reliable checks for the files you changed, then broaden when behavior crosses boundaries.
@@ -70,19 +79,15 @@ During work:
 - Do not edit another active worktree unless the user asked you to.
 - Do not delete or reset user changes. If a worktree has unknown changes, stop and report them.
 
-After a PR merges or closes:
+When a PR merges (or is closed), **tear down its worktree and branch the same session** — do not let merged worktrees or branches linger; they drift and hide stale work. Do it **worktree first, then branch** (a branch checked out in a worktree cannot be deleted: `git branch -D` fails with `'<branch>' is already used by worktree at ...`). First confirm the worktree has no uncommitted local changes.
 ```bash
 git fetch --prune
-git worktree list
-git worktree prune --dry-run
-git branch --merged main
-```
-
-Clean only confirmed-safe branches/worktrees:
-```bash
-git worktree remove worktrees/<name>
-git branch -d <branch>
+git worktree list                    # find the merged PR's worktree
+git status --short                   # confirm no uncommitted changes in it
+git worktree remove worktrees/<name> # remove the worktree first
+git branch -d <branch>               # then the branch (merged, so -d is safe)
 git worktree prune
+git branch --merged main             # confirm nothing merged is left behind
 ```
 
 Use `git branch -D` or force removal only when the user explicitly approves and the PR is merged/closed or the work is intentionally abandoned.

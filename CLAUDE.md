@@ -45,6 +45,10 @@ npm run build
 
 For targeted work, run the closest Vitest/Jest/API/browser check first, then decide whether broader checks are needed.
 
+## Root Cause, Not Symptoms
+
+See `AGENTS.md` → "Root Cause, Not Symptoms". Fix issues **as far upstream as is correct** — no symptom patching. Name the root cause (the underlying problem, not the surface symptom or a reviewer's exact wording) before the fix, and make the change address it. A patch that fights another layer — or a soft instruction asking the model/user to behave instead of removing the broken affordance — is a symptom fix; find and fix the cause. The "root" nearest the symptom is often downstream of a deeper defect: trace to the origin and fix at the most-upstream point that is correct and in safe scope. If you can't reach the true root in safe scope, name it and the follow-up rather than ship the shallow patch.
+
 ## Drift Reduction
 
 - Search before adding a new component, API helper, model adapter, tool registry entry, or migration pattern.
@@ -54,9 +58,11 @@ For targeted work, run the closest Vitest/Jest/API/browser check first, then dec
 
 ## Worktree Cleanup
 
-When the user asks to merge/close/pick up the next slice:
+**Tear down a PR's worktree and branch the same session it merges or closes** — do not let merged worktrees or branches linger. Remove the **worktree first, then the branch** (a branch checked out in a worktree cannot be deleted).
+
+When merging/closing or picking up the next slice:
 1. Re-fetch live PR/check state.
-2. Confirm the current branch and worktree.
+2. Confirm the current branch and worktree, and that the worktree has no uncommitted local changes.
 3. Merge or close only the requested PR/lane.
-4. Remove only the matching worktree/branch after the PR is confirmed merged/closed and there are no local changes.
+4. Once the PR is confirmed merged/closed, remove its matching worktree (`git worktree remove worktrees/<name>`) then its branch (`git branch -d <branch>`); use `git worktree prune` after. Force/`-D` only with explicit user approval.
 5. Update the session drift note with final status and next lane.
