@@ -190,21 +190,46 @@ function createExtractionTimeoutError() {
   return new ChatAttachmentError('Attachment text extraction timed out', 422);
 }
 
-async function withExtractionTimeout<T>(operation: (throwIfTimedOut: () => void) => Promise<T>): Promise<T> {
+function getExtractionAbortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : createExtractionTimeoutError();
+}
+
+function throwIfExtractionAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw getExtractionAbortError(signal);
+  }
+}
+
+async function withExtractionTimeout<T>(
+  operation: (controls: { signal: AbortSignal; throwIfTimedOut: () => void }) => Promise<T>,
+): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const startedAt = Date.now();
+  const abortController = new AbortController();
+  let timeoutError: ChatAttachmentError | undefined;
+  const abortWithTimeout = () => {
+    timeoutError ??= createExtractionTimeoutError();
+    if (!abortController.signal.aborted) {
+      abortController.abort(timeoutError);
+    }
+    return timeoutError;
+  };
   const throwIfTimedOut = () => {
+    throwIfExtractionAborted(abortController.signal);
     if (Date.now() - startedAt >= CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS) {
-      throw createExtractionTimeoutError();
+      throw abortWithTimeout();
     }
   };
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
-      reject(createExtractionTimeoutError());
+      reject(abortWithTimeout());
     }, CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS);
   });
   const operationPromise = (async () => {
-    const result = await operation(throwIfTimedOut);
+    const result = await operation({
+      signal: abortController.signal,
+      throwIfTimedOut,
+    });
     throwIfTimedOut();
     return result;
   })();
@@ -219,9 +244,18 @@ async function withExtractionTimeout<T>(operation: (throwIfTimedOut: () => void)
   }
 }
 
-async function inspectDocxArchive(buffer: Buffer): Promise<{ entries: number; uncompressedBytes: number }> {
+async function inspectDocxArchive(
+  buffer: Buffer,
+  signal: AbortSignal,
+): Promise<{ entries: number; uncompressedBytes: number }> {
+  throwIfExtractionAborted(signal);
   return new Promise((resolve, reject) => {
     yauzl.fromBuffer(buffer, { lazyEntries: true, validateEntrySizes: false }, (openError, zipfile) => {
+      if (signal.aborted) {
+        zipfile?.close();
+        reject(getExtractionAbortError(signal));
+        return;
+      }
       if (openError || !zipfile) {
         reject(new ChatAttachmentError('Attachment is not a valid DOCX archive'));
         return;
@@ -233,9 +267,14 @@ async function inspectDocxArchive(buffer: Buffer): Promise<{ entries: number; un
       let uncompressedBytes = 0;
       let activeReadStream: Readable | null = null;
 
+      const cleanupAbortListener = () => {
+        signal.removeEventListener('abort', abortInspection);
+      };
+
       const finish = (result: { entries: number; uncompressedBytes: number }) => {
         if (settled) return;
         settled = true;
+        cleanupAbortListener();
         zipfile.close();
         resolve(result);
       };
@@ -243,12 +282,24 @@ async function inspectDocxArchive(buffer: Buffer): Promise<{ entries: number; un
       const fail = (error: Error) => {
         if (settled) return;
         settled = true;
-        activeReadStream?.destroy();
+        cleanupAbortListener();
+        activeReadStream?.destroy(error);
         zipfile.close();
         reject(error);
       };
 
+      function abortInspection() {
+        fail(getExtractionAbortError(signal));
+      }
+
+      signal.addEventListener('abort', abortInspection, { once: true });
+
       zipfile.on('entry', (entry: yauzl.Entry) => {
+        if (settled) return;
+        if (signal.aborted) {
+          fail(getExtractionAbortError(signal));
+          return;
+        }
         entries += 1;
         declaredUncompressedBytes += entry.uncompressedSize;
         if (declaredUncompressedBytes > CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES) {
@@ -269,10 +320,20 @@ async function inspectDocxArchive(buffer: Buffer): Promise<{ entries: number; un
             ));
             return;
           }
+          if (signal.aborted) {
+            readStream.destroy(getExtractionAbortError(signal));
+            fail(getExtractionAbortError(signal));
+            return;
+          }
 
           activeReadStream = readStream;
 
           readStream.on('data', (chunk: Buffer) => {
+            if (settled) return;
+            if (signal.aborted) {
+              fail(getExtractionAbortError(signal));
+              return;
+            }
             uncompressedBytes += chunk.length;
             if (uncompressedBytes > CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES) {
               fail(new ChatAttachmentError('Attachment document expands beyond the safe extraction limit', 413));
@@ -281,7 +342,7 @@ async function inspectDocxArchive(buffer: Buffer): Promise<{ entries: number; un
 
           readStream.on('end', () => {
             activeReadStream = null;
-            if (!settled) zipfile.readEntry();
+            if (!settled && !signal.aborted) zipfile.readEntry();
           });
 
           readStream.on('error', (error) => {
@@ -295,6 +356,7 @@ async function inspectDocxArchive(buffer: Buffer): Promise<{ entries: number; un
       });
 
       zipfile.on('end', () => {
+        if (settled) return;
         finish({ entries, uncompressedBytes });
       });
 
@@ -306,7 +368,11 @@ async function inspectDocxArchive(buffer: Buffer): Promise<{ entries: number; un
         ));
       });
 
-      zipfile.readEntry();
+      if (signal.aborted) {
+        fail(getExtractionAbortError(signal));
+      } else {
+        zipfile.readEntry();
+      }
     });
   });
 }
@@ -318,10 +384,10 @@ async function extractAttachmentText(file: File, fileType: DocumentFileType) {
   }
 
   try {
-    const { archiveMetadata, parsed } = await withExtractionTimeout(async (throwIfTimedOut) => {
-      const archiveMetadata = fileType === 'docx' ? await inspectDocxArchive(buffer) : null;
+    const { archiveMetadata, parsed } = await withExtractionTimeout(async ({ signal, throwIfTimedOut }) => {
+      const archiveMetadata = fileType === 'docx' ? await inspectDocxArchive(buffer, signal) : null;
       throwIfTimedOut();
-      const parsed = await parserFactory.parse(buffer, fileType);
+      const parsed = await parserFactory.parse(buffer, fileType, { signal });
       return { archiveMetadata, parsed };
     });
     const fullText = parsed.text || '';

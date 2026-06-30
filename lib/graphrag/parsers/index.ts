@@ -16,11 +16,24 @@ export interface ParseResult {
   codeResult?: CodeParseResult; // Optional: populated for code files with AST parsing
 }
 
+export interface ParseOptions {
+  // Third-party parsers used below do not all expose mid-call cancellation.
+  // This signal prevents starting after an upstream timeout and rejects late
+  // completions, while callers that own streams can still cancel those directly.
+  signal?: AbortSignal;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error ? signal.reason : new Error('Document parsing aborted');
+}
+
 export class ParserFactory {
   /**
    * Parse document based on file type
    */
-  async parse(file: File | Buffer, fileType: DocumentFileType): Promise<ParseResult> {
+  async parse(file: File | Buffer, fileType: DocumentFileType, options: ParseOptions = {}): Promise<ParseResult> {
+    throwIfAborted(options.signal);
     let buffer: Buffer;
     
     if (file instanceof Buffer) {
@@ -29,13 +42,17 @@ export class ParserFactory {
       // file is File type
       buffer = Buffer.from(await (file as File).arrayBuffer());
     }
+    throwIfAborted(options.signal);
 
+    let result: ParseResult;
     switch (fileType) {
       case 'pdf':
-        return this.parsePDF(buffer);
+        result = await this.parsePDF(buffer, options);
+        break;
       
       case 'docx':
-        return this.parseDOCX(buffer);
+        result = await this.parseDOCX(buffer, options);
+        break;
       
       case 'txt':
       case 'md':
@@ -44,18 +61,24 @@ export class ParserFactory {
       case 'js':
       case 'jsx':
       case 'py':
-        return this.parseText(buffer, fileType);
+        result = await this.parseText(buffer, fileType, options);
+        break;
       
       default:
         throw new Error(`Unsupported file type: ${fileType}`);
     }
+
+    throwIfAborted(options.signal);
+    return result;
   }
 
   /**
    * Parse PDF file
    */
-  private async parsePDF(buffer: Buffer): Promise<ParseResult> {
+  private async parsePDF(buffer: Buffer, options: ParseOptions): Promise<ParseResult> {
+    throwIfAborted(options.signal);
     const result: PDFParseResult = await pdfParser.parse(buffer);
+    throwIfAborted(options.signal);
     
     return {
       text: result.text,
@@ -74,8 +97,10 @@ export class ParserFactory {
   /**
    * Parse DOCX file
    */
-  private async parseDOCX(buffer: Buffer): Promise<ParseResult> {
+  private async parseDOCX(buffer: Buffer, options: ParseOptions): Promise<ParseResult> {
+    throwIfAborted(options.signal);
     const result: DOCXParseResult = await docxParser.parse(buffer);
+    throwIfAborted(options.signal);
     
     return {
       text: result.text,
@@ -89,8 +114,10 @@ export class ParserFactory {
   /**
    * Parse Text file (including code files)
    */
-  private async parseText(buffer: Buffer, fileType: DocumentFileType): Promise<ParseResult> {
+  private async parseText(buffer: Buffer, fileType: DocumentFileType, options: ParseOptions): Promise<ParseResult> {
+    throwIfAborted(options.signal);
     const result: TextParseResult = await textParser.parseWithAutoEncoding(buffer);
+    throwIfAborted(options.signal);
     const cleanedText = textParser.cleanText(result.text);
     
     return {

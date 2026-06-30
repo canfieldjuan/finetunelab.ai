@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
+import { EventEmitter } from 'events';
 import * as yazl from 'yazl';
 
 const createClient = vi.hoisted(() => vi.fn());
@@ -540,12 +541,91 @@ describe('POST /api/chat/attachments', () => {
     }
   });
 
+  it('closes docx archive inspection streams when the timeout wins', async () => {
+    vi.useFakeTimers();
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const readStreamDestroy = vi.fn();
+    const readStream = Object.assign(new EventEmitter(), {
+      destroy: readStreamDestroy,
+    });
+    const zipfileClose = vi.fn();
+    const zipfileOpenReadStream = vi.fn((
+      _entry: unknown,
+      callback: (error: Error | null, stream?: typeof readStream) => void,
+    ) => {
+      callback(null, readStream);
+    });
+    const zipfileReadEntry = vi.fn(function readEntry(this: EventEmitter) {
+      this.emit('entry', {
+        fileName: 'word/document.xml',
+        uncompressedSize: 1,
+      });
+    });
+    const zipfile = Object.assign(new EventEmitter(), {
+      close: zipfileClose,
+      openReadStream: zipfileOpenReadStream,
+      readEntry: zipfileReadEntry,
+    });
+    const fromBuffer = vi.fn((
+      _buffer: Buffer,
+      _options: unknown,
+      callback: (error: Error | null, openedZipfile?: unknown) => void,
+    ) => {
+      callback(null, zipfile);
+    });
+
+    vi.doMock('yauzl', () => ({ fromBuffer }));
+
+    try {
+      const { POST } = await import('../route');
+      const responsePromise = POST(makeRequest(makeAttachmentForm(
+        new File(
+          [Buffer.from('PK')],
+          'hanging-inspection.docx',
+          { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+        ),
+      ), {
+        authorization: 'Bearer session-token',
+      }));
+
+      await vi.waitFor(() => {
+        expect(zipfile.openReadStream).toHaveBeenCalled();
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+      const response = await responsePromise;
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        success: false,
+        error: 'Attachment text extraction timed out',
+      });
+      expect(fromBuffer).toHaveBeenCalled();
+      expect(readStreamDestroy).toHaveBeenCalledWith(expect.any(Error));
+      expect(zipfileClose).toHaveBeenCalled();
+      expect(parseAttachment).not.toHaveBeenCalled();
+      expect(supabase.upload).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock('yauzl');
+      vi.useRealTimers();
+    }
+  });
+
   it('times out slow text extraction before upload', async () => {
     vi.useFakeTimers();
     try {
       const supabase = makeUploadSupabase();
       createClient.mockReturnValue(supabase.client);
-      parseAttachment.mockImplementation(() => new Promise(() => undefined));
+      let parserSignal: AbortSignal | undefined;
+      let sawAbort = false;
+      parseAttachment.mockImplementation((_buffer: Buffer, _fileType: string, options?: { signal?: AbortSignal }) => {
+        parserSignal = options?.signal;
+        parserSignal?.addEventListener('abort', () => {
+          sawAbort = true;
+        });
+        return new Promise(() => undefined);
+      });
 
       const { POST } = await import('../route');
       const responsePromise = POST(makeRequest(makeAttachmentForm(), {
@@ -560,6 +640,9 @@ describe('POST /api/chat/attachments', () => {
         success: false,
         error: 'Attachment text extraction timed out',
       });
+      expect(parserSignal).toBeDefined();
+      expect(parserSignal?.aborted).toBe(true);
+      expect(sawAbort).toBe(true);
       expect(supabase.upload).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -620,7 +703,11 @@ describe('POST /api/chat/attachments', () => {
         status: 'uploaded',
       },
     });
-    expect(parseAttachment).toHaveBeenCalledWith(expect.any(Buffer), 'txt');
+    expect(parseAttachment).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'txt',
+      expect.objectContaining({ signal: expect.any(Object) }),
+    );
     expect(supabase.upload).toHaveBeenCalledWith(
       expect.stringMatching(/^user-1\/22222222-2222-4222-8222-222222222222\/[0-9a-f-]+\/notes\.txt$/),
       expect.any(File),
@@ -666,7 +753,11 @@ describe('POST /api/chat/attachments', () => {
     }));
 
     expect(response.status).toBe(201);
-    expect(parseAttachment).toHaveBeenCalledWith(expect.any(Buffer), 'ts');
+    expect(parseAttachment).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'ts',
+      expect.objectContaining({ signal: expect.any(Object) }),
+    );
     expect(supabase.attachmentRows[0]).toEqual(expect.objectContaining({
       filename: 'example.ts',
       content_type: 'video/mp2t',

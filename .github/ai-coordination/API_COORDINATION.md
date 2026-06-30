@@ -90,6 +90,8 @@
 
 **Limits:** 10 MB per file, 11 MB multipart request pre-parse ceiling including envelope overhead, valid bounded `Content-Length` required before `request.formData()`, 15s extraction timeout, 50 MB DOCX uncompressed-entry ceiling, 5 uploaded attachments per turn candidate, 20,000 extracted chars stored per file.
 
+**Extraction timeout behavior:** The 15s timeout starts before DOCX archive inspection and parser invocation. Timeout aborts the route operation, closes/destroys the owned DOCX ZIP/read streams, and passes an `AbortSignal` into the parser factory for cooperative pre/post checks. Current third-party parser libraries (`pdf-parse`, `mammoth`) do not expose mid-parse cancellation, so parser work that is already inside those libraries may finish before the cooperative post-call check rejects the result.
+
 **MIME behavior:** Extension validation is authoritative for code/text attachments. TypeScript `.ts` files may arrive as `video/mp2t` from common upload environments and are accepted as code after extension validation.
 
 **Write ownership:** Attachment row and storage mutations are server-owned through the upload/chat routes. Authenticated clients may read their own rows/files but must not insert, update, or delete `chat_attachments` rows directly. Upload row creation goes through `create_chat_attachment_with_capacity`, which serializes per-user/conversation inserts with an advisory transaction lock before enforcing the five-`uploaded` cap.
