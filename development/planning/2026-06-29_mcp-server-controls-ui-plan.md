@@ -91,7 +91,8 @@ so stale sessions do not stay alive in memory.
 
 ## Estimated diff size
 
-Expected: 11 files, roughly +750 / -5. Actual after implementation: 11 files,
-roughly +1,300 / -0, mostly because the component and API tests cover create,
-toggle, delete, token redaction, stdio rejection, and host stdio read-only
-display rather than only the happy path.
+Expected: 11 files, roughly +750 / -5. Actual after review fix and main merge:
+12 files, roughly +1,584 / -6, mostly because the component and API tests cover
+create, toggle, delete, token redaction, stdio rejection, route-level SSRF
+rejection, host namespace reservation, owner-scoped 404s, cached disconnects,
+and host stdio read-only display rather than only the happy path.
