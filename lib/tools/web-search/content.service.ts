@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 import * as cheerio from 'cheerio';
 
 const AXIOS_CONFIG = {
@@ -21,6 +21,27 @@ const AXIOS_CONFIG = {
 };
 
 const MAX_CONTENT_LENGTH = 15000; // Limit content to ~15k characters to avoid excessive token usage
+const PUBLIC_URL_MAX_BYTES = 1_000_000; // Bound model/user supplied URL reads before buffering/parsing.
+
+interface FetchHtmlOptions {
+  publicOnly?: boolean;
+  lookup?: AxiosRequestConfig['lookup'];
+}
+
+export interface CleanedContentResult {
+  content: string;
+  originalLength: number;
+  returnedLength: number;
+  truncated: boolean;
+}
+
+function assertSupportedContentType(contentType: string): void {
+  const mediaType = contentType.split(';')[0]?.trim().toLowerCase();
+  if (mediaType === 'text/html' || mediaType === 'application/xhtml+xml') {
+    return;
+  }
+  throw new Error(`Unsupported content type for public URL read: ${contentType || 'missing'}`);
+}
 
 export class ContentService {
   /**
@@ -28,16 +49,32 @@ export class ContentService {
    * @param url The URL to fetch.
    * @returns The HTML content as a string.
    */
-  private async fetchHtml(url: string, retries = 3): Promise<string> {
+  private async fetchHtml(url: string, retries = 3, options: FetchHtmlOptions = {}): Promise<string> {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         console.log(`[ContentService] Fetching URL: ${url} (Attempt ${attempt}/${retries})`);
-        const response = await axios.get(url, AXIOS_CONFIG);
+        const publicOnlyConfig: AxiosRequestConfig = options.publicOnly
+          ? {
+              maxRedirects: 0,
+              maxContentLength: PUBLIC_URL_MAX_BYTES,
+              maxBodyLength: PUBLIC_URL_MAX_BYTES,
+              ...(options.lookup ? { lookup: options.lookup } : {}),
+            }
+          : {};
+
+        const response = await axios.get(url, {
+          ...AXIOS_CONFIG,
+          ...publicOnlyConfig,
+        });
         
         if (response.status === 429) {
            throw new Error('Rate limited (429)');
+        }
+
+        if (response.status >= 300 && response.status < 400) {
+           throw new Error(`Redirect responses are not followed for public URL reads (${response.status})`);
         }
         
         if (response.status >= 400) {
@@ -51,6 +88,9 @@ export class ContentService {
         // Decode content
         const buffer = response.data;
         const contentType = response.headers['content-type'] || '';
+        if (options.publicOnly) {
+          assertSupportedContentType(contentType);
+        }
         let encoding = 'utf-8';
         
         // Simple charset detection
@@ -83,16 +123,16 @@ export class ContentService {
     
     const message = lastError instanceof Error ? lastError.message : 'Unknown error';
     console.error(`[ContentService] Error fetching ${url}: ${message}`);
-    throw new Error(`Failed to fetch content from ${url}.`);
+    throw new Error(`Failed to fetch content from ${url}: ${message}`);
   }
 
   /**
    * Parses HTML and extracts clean, readable text content.
    * It tries to find the main content of the page and removes irrelevant elements.
    * @param html The HTML string to parse.
-   * @returns The cleaned text content.
+   * @returns The cleaned text content plus service-level truncation metadata.
    */
-  private cleanHtml(html: string): string {
+  private cleanHtmlWithMetadata(html: string): CleanedContentResult {
     console.log('[ContentService] Cleaning HTML content...');
     const $ = cheerio.load(html);
 
@@ -119,10 +159,24 @@ export class ContentService {
     if (text.length > MAX_CONTENT_LENGTH) {
       const truncated = this.smartTruncate(text, MAX_CONTENT_LENGTH);
       console.log(`[ContentService] Content truncated from ${text.length} to ${truncated.length} characters (smart truncate).`);
-      return truncated;
+      return {
+        content: truncated,
+        originalLength: text.length,
+        returnedLength: truncated.length,
+        truncated: true,
+      };
     }
 
-    return text;
+    return {
+      content: text,
+      originalLength: text.length,
+      returnedLength: text.length,
+      truncated: false,
+    };
+  }
+
+  private cleanHtml(html: string): string {
+    return this.cleanHtmlWithMetadata(html).content;
   }
 
   /**
@@ -172,13 +226,25 @@ export class ContentService {
    */
   async fetchAndClean(url: string): Promise<string> {
     try {
-      const html = await this.fetchHtml(url);
-      const cleanedContent = this.cleanHtml(html);
-      return cleanedContent;
+      return await this.fetchAndCleanOrThrow(url);
     } catch (error) {
       console.error('[ContentService] fetchAndClean failed for:', url, error);
       return '';
     }
+  }
+
+  /**
+   * Fetch and clean content, preserving errors for callers that need to surface
+   * a precise failure reason instead of falling back to an empty string.
+   */
+  async fetchAndCleanOrThrow(url: string, options: FetchHtmlOptions = {}): Promise<string> {
+    const html = await this.fetchHtml(url, 3, options);
+    return this.cleanHtml(html);
+  }
+
+  async fetchAndCleanWithMetadataOrThrow(url: string, options: FetchHtmlOptions = {}): Promise<CleanedContentResult> {
+    const html = await this.fetchHtml(url, 3, options);
+    return this.cleanHtmlWithMetadata(html);
   }
 }
 

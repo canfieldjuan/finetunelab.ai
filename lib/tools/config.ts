@@ -64,6 +64,13 @@ export const webSearchConfig = {
 };
 
 /**
+ * URL Reader Tool Configuration
+ */
+export const urlReaderConfig = {
+  enabled: process.env.TOOL_URL_READER_ENABLED === 'true', // Default: false (fetches user/model supplied URLs)
+};
+
+/**
  * GraphRAG Query Tool Configuration
  */
 export const graphragQueryConfig = {
@@ -96,6 +103,7 @@ export const toolConfigs = {
   calculator: calculatorConfig,
   datetime: datetimeConfig,
   webSearch: webSearchConfig,
+  urlReader: urlReaderConfig,
   graphragQuery: graphragQueryConfig,
   imageGen: imageGenConfig,
   global: globalToolConfig,

@@ -31,6 +31,7 @@ describe('buildRegistryToolSeedRows', () => {
       tool('email_analysis'),
       tool('email_security'),
       tool('web_search', false, ['search']),
+      tool('read_url', false),
       tool('dataset_manager'),
       tool('prompt_tester'),
       tool('analytics_export'),
@@ -45,10 +46,12 @@ describe('buildRegistryToolSeedRows', () => {
       'intelligent_email',
       'prompt_tester',
       'query_knowledge_graph',
+      'read_url',
       'training_control',
       'web_search',
     ]);
     expect(rows.find((row) => row.name === 'web_search')?.is_enabled).toBe(false);
+    expect(rows.find((row) => row.name === 'read_url')?.is_enabled).toBe(false);
     expect(rows.find((row) => row.name === 'web_search')?.parameters.properties.operation.enum).toEqual(['search']);
   });
 

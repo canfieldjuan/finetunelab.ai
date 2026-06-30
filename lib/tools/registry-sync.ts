@@ -16,6 +16,7 @@ export const PORTAL_CHAT_TOOL_NAMES = new Set([
   'calculator',
   'datetime',
   'web_search',
+  'read_url',
   'query_knowledge_graph',
   'intelligent_email',
   'email_analysis',

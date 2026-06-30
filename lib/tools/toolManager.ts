@@ -105,6 +105,10 @@ export async function getEnabledTools(): Promise<{ data: Tool[]; error: string |
       console.warn('[ToolManager] Skipping DB-enabled tool missing from registry:', row.name);
       return [];
     }
+    if (!toolDef.config.enabled) {
+      console.warn('[ToolManager] Skipping DB-enabled tool disabled by config:', row.name);
+      return [];
+    }
     return [{
       ...row,
       description: toolDef.description,
