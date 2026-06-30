@@ -4,6 +4,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { MessageContent } from './MessageContent';
 import { SearchResultCard } from '@/components/search/SearchResultCard';
+import { AttachmentChips } from './AttachmentChips';
 import { GraphRAGIndicator } from '../graphrag/GraphRAGIndicator';
 import { MessageMetadata } from './MessageMetadata';
 import { MessageJudgments } from './MessageJudgments';
@@ -147,6 +148,9 @@ export function MessageList({
               }
             >
               <MessageContent content={msg.content} role={msg.role} />
+              {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                <AttachmentChips attachments={msg.attachments} className="mt-3" />
+              )}
               {msg.role === "assistant" && Array.isArray(msg.webSearchResults) && msg.webSearchResults.length > 0 && (
                 <div className="mt-4 grid grid-cols-1 gap-3">
                   {msg.webSearchResults.map((result, index) => (

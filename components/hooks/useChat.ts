@@ -1,11 +1,17 @@
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
 import type { GenerationSettings } from '../chat/types';
+import type { PendingChatAttachment } from '../chat/types';
 import type { Citation } from "@/lib/graphrag/service";
 import type { ChatAttachmentDto } from '@/lib/chat/attachments';
+import {
+  CHAT_ATTACHMENT_MAX_FILE_SIZE_LABEL,
+  CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  CHAT_ATTACHMENT_MAX_FILES_PER_TURN,
+} from '@/lib/chat/attachment-limits';
 import type { User } from '@supabase/supabase-js';
 import type { ContextTracker } from '../../lib/context/context-tracker';
 import type { ContextUsage } from '@/lib/context/types';
@@ -16,7 +22,7 @@ import {
   reduceWebSearchStreamEvent,
 } from './chatSearchStream';
 import { normalizeToolCalls } from './chatToolStream';
-import { buildAssistantMessageMetadata, normalizeGraphRAGCitations } from './chatMessageMetadata';
+import { buildAssistantMessageMetadata, buildAttachmentMessageMetadata, normalizeGraphRAGCitations } from './chatMessageMetadata';
 import { getSseDataLine, splitSseLines } from './sseStream';
 
 
@@ -31,6 +37,29 @@ interface Tool {
       required?: string[];
     };
   };
+}
+
+interface ChatAttachmentUploadResponse {
+  success?: boolean;
+  attachment?: ChatAttachmentDto;
+  error?: string;
+}
+
+interface UploadedChatAttachmentRow {
+  id: string;
+  conversation_id: string;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number | null;
+  kind: ChatAttachmentDto['kind'] | null;
+  extracted_chars: number | null;
+  status: ChatAttachmentDto['status'] | null;
+}
+
+interface SendMessageOptions {
+  includePendingAttachments?: boolean;
+  attachmentIds?: string[];
+  attachments?: ChatAttachmentDto[];
 }
 
 /**
@@ -84,16 +113,244 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingChatAttachment[]>([]);
   // jobIds we've already opened an image stream for (dedupe across stream chunks).
   const subscribedImageJobsRef = useRef<Set<string>>(new Set());
   // Latest active conversation, so an async image result isn't appended into a
   // different conversation the user switched to mid-generation.
   const activeIdRef = useRef(activeId);
+  const submittedAttachmentIdsRef = useRef<Set<string>>(new Set());
+  const locallyClearedAttachmentIdsRef = useRef<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const lastScrolledMessagesLength = useRef<number>(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+
+  const activePendingAttachments = useMemo(
+    () => pendingAttachments.filter((attachment) => attachment.conversationId === activeId),
+    [activeId, pendingAttachments],
+  );
+  const hasPendingAttachmentUploads = activePendingAttachments.some((attachment) => (
+    attachment.status === 'uploading' || attachment.status === 'deleting'
+  ));
+  const hasFailedPendingAttachments = activePendingAttachments.some((attachment) => attachment.status === 'error');
+
+  const uploadChatAttachment = useCallback(async (file: File, clientId: string, conversationId: string) => {
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session?.access_token) {
+        throw new Error('You must be logged in to upload attachments');
+      }
+
+      const formData = new FormData();
+      formData.append('conversationId', conversationId);
+      formData.append('file', file);
+
+      const response = await fetch('/api/chat/attachments', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
+      const payload = await response.json().catch(() => ({})) as ChatAttachmentUploadResponse;
+
+      if (!response.ok || !payload.success || !payload.attachment) {
+        throw new Error(payload.error || `Attachment upload failed: ${response.status}`);
+      }
+
+      setPendingAttachments((current) => current.map((attachment) => (
+        attachment.clientId === clientId
+          ? {
+              ...attachment,
+              filename: payload.attachment!.filename,
+              sizeBytes: payload.attachment!.sizeBytes,
+              status: 'uploaded',
+              attachment: payload.attachment,
+              error: undefined,
+            }
+          : attachment
+      )));
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : 'Attachment upload failed';
+      setPendingAttachments((current) => current.map((attachment) => (
+        attachment.clientId === clientId
+          ? { ...attachment, status: 'error', error: message }
+          : attachment
+      )));
+      setError(message);
+    }
+  }, []);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (allowAnonymous || !userId || !activeId) return;
+
+    let cancelled = false;
+
+    async function restoreUploadedAttachmentDrafts() {
+      if (hasPendingAttachmentUploads) return;
+
+      const { data, error: restoreError } = await supabase
+        .from('chat_attachments')
+        .select('id, conversation_id, filename, content_type, size_bytes, kind, extracted_chars, status')
+        .eq('user_id', userId)
+        .eq('conversation_id', activeId)
+        .eq('status', 'uploaded')
+        .order('created_at', { ascending: true })
+        .limit(CHAT_ATTACHMENT_MAX_FILES_PER_TURN);
+
+      if (cancelled) return;
+
+      if (restoreError) {
+        log.warn('useChat', 'Failed to restore uploaded attachment drafts', { error: restoreError });
+        return;
+      }
+
+      const restoredAttachments = ((data ?? []) as UploadedChatAttachmentRow[]).map((row) => {
+        const sizeBytes = typeof row.size_bytes === 'number' ? row.size_bytes : 0;
+        const extractedChars = typeof row.extracted_chars === 'number' ? row.extracted_chars : 0;
+        const attachment: ChatAttachmentDto = {
+          id: row.id,
+          filename: row.filename,
+          contentType: row.content_type,
+          sizeBytes,
+          kind: row.kind ?? 'unknown',
+          extractedChars,
+          status: 'uploaded',
+        };
+
+        return {
+          clientId: `restored-${row.id}`,
+          conversationId: row.conversation_id,
+          filename: row.filename,
+          sizeBytes,
+          status: 'uploaded' as const,
+          attachment,
+        };
+      });
+
+      if (restoredAttachments.length === 0) return;
+
+      setPendingAttachments((current) => {
+        const hasActiveLocalUpload = current.some((attachment) => (
+          attachment.conversationId === activeId &&
+          (attachment.status === 'uploading' || attachment.status === 'deleting')
+        ));
+        if (hasActiveLocalUpload) return current;
+
+        const existingAttachmentIds = new Set(
+          current.map((attachment) => attachment.attachment?.id).filter(Boolean),
+        );
+        const newRestoredAttachments = restoredAttachments.filter((attachment) => (
+          !existingAttachmentIds.has(attachment.attachment.id) &&
+          !submittedAttachmentIdsRef.current.has(attachment.attachment.id) &&
+          !locallyClearedAttachmentIdsRef.current.has(attachment.attachment.id)
+        ));
+        return newRestoredAttachments.length > 0
+          ? [...current, ...newRestoredAttachments]
+          : current;
+      });
+    }
+
+    void restoreUploadedAttachmentDrafts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, allowAnonymous, hasPendingAttachmentUploads, user?.id]);
+
+  const handleAddChatAttachments = useCallback((files: File[]) => {
+    if (files.length === 0) return;
+    if (allowAnonymous || !user) {
+      setError('Attachments require a logged-in chat session');
+      return;
+    }
+    if (!activeId) {
+      setError('Please create or select a conversation before attaching files');
+      return;
+    }
+
+    const activePendingCount = activePendingAttachments.filter((attachment) => attachment.status !== 'error').length;
+    const availableSlots = CHAT_ATTACHMENT_MAX_FILES_PER_TURN - activePendingCount;
+    if (availableSlots <= 0) {
+      setError(`A chat turn can include at most ${CHAT_ATTACHMENT_MAX_FILES_PER_TURN} attachments`);
+      return;
+    }
+
+    const accepted = files.slice(0, availableSlots);
+    const oversized = accepted.find((file) => file.size > CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES);
+    if (oversized) {
+      setError(`${oversized.name} exceeds the ${CHAT_ATTACHMENT_MAX_FILE_SIZE_LABEL} attachment limit`);
+      return;
+    }
+    if (files.length > accepted.length) {
+      setError(`Only ${CHAT_ATTACHMENT_MAX_FILES_PER_TURN} attachments can be selected for one turn`);
+    } else {
+      setError(null);
+    }
+
+    const queued = accepted.map((file) => ({
+      clientId: `${Date.now()}-${file.name}-${Math.random().toString(36).slice(2)}`,
+      conversationId: activeId,
+      filename: file.name,
+      sizeBytes: file.size,
+      status: 'uploading' as const,
+    }));
+    setPendingAttachments((current) => [...current, ...queued]);
+    queued.forEach((queuedAttachment, index) => {
+      void uploadChatAttachment(accepted[index], queuedAttachment.clientId, activeId);
+    });
+  }, [activeId, activePendingAttachments, allowAnonymous, uploadChatAttachment, user]);
+
+  const handleRemoveChatAttachment = useCallback(async (clientId: string) => {
+    if (loading) return;
+    const attachment = pendingAttachments.find((item) => item.clientId === clientId);
+    if (!attachment) return;
+    if (attachment.status === 'uploading') return;
+    if (attachment.attachment && submittedAttachmentIdsRef.current.has(attachment.attachment.id)) return;
+    if (!attachment.attachment) {
+      setPendingAttachments((current) => current.filter((item) => item.clientId !== clientId));
+      return;
+    }
+
+    setPendingAttachments((current) => current.map((item) => (
+      item.clientId === clientId ? { ...item, status: 'deleting' } : item
+    )));
+
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session?.access_token) {
+        throw new Error('You must be logged in to remove attachments');
+      }
+
+      const response = await fetch('/api/chat/attachments', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: attachment.conversationId,
+          attachmentIds: [attachment.attachment.id],
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as { success?: boolean; error?: string };
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || `Attachment removal failed: ${response.status}`);
+      }
+      locallyClearedAttachmentIdsRef.current.add(attachment.attachment.id);
+      setPendingAttachments((current) => current.filter((item) => item.clientId !== clientId));
+      setError(null);
+    } catch (removeError) {
+      const message = removeError instanceof Error ? removeError.message : 'Attachment removal failed';
+      setPendingAttachments((current) => current.map((item) => (
+        item.clientId === clientId ? { ...item, status: 'error', error: message } : item
+      )));
+      setError(message);
+    }
+  }, [loading, pendingAttachments]);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -264,6 +521,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           }
           try {
             const parsed = JSON.parse(data);
+            if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+              const streamError = new Error(
+                typeof parsed.error === 'string' ? parsed.error : 'Stream error',
+              );
+              streamError.name = 'ChatStreamError';
+              throw streamError;
+            }
             if (parsed.type === "graphrag_metadata") {
               graphragCitations = normalizeGraphRAGCitations(parsed.citations);
               graphragContextsUsed = parsed.contextsUsed;
@@ -471,6 +735,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               }
             }
           } catch (err) {
+            if (err instanceof Error && err.name === 'ChatStreamError') {
+              throw err;
+            }
             log.warn('useChat', 'Skipping invalid JSON chunk', { error: err });
           }
         }
@@ -593,7 +860,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
                       graphrag_grounded: graphragGrounded,
                       graphrag_method: graphragMethod,
                       tools_called: toolsCalled,
-                      webSearchResults
+                      webSearchResults,
+                      attachment_ids: attachmentIds,
+                      attachments,
                     }
                   : m
               )
@@ -604,12 +873,25 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     }
   };
 
-  const prepareAndSendMessage = async (input: string) => {
+  const prepareAndSendMessage = async (input: string, options: SendMessageOptions = {}) => {
     if (!user && !allowAnonymous) {
       throw new Error('User not authenticated');
     }
 
     const userMessage = input;
+    const includePendingAttachments = options.includePendingAttachments ?? true;
+    const uploadedAttachments = includePendingAttachments
+      ? activePendingAttachments
+          .map((attachment) => attachment.attachment)
+          .filter((attachment): attachment is ChatAttachmentDto => !!attachment)
+      : options.attachments ?? [];
+    const attachmentIds = includePendingAttachments
+      ? uploadedAttachments.map((attachment) => attachment.id)
+      : options.attachmentIds ?? uploadedAttachments.map((attachment) => attachment.id);
+    const attachmentMetadata = buildAttachmentMessageMetadata({
+      attachmentIds,
+      attachments: uploadedAttachments,
+    });
 
     // [UI_FREEZE_FIX] Create optimistic user message immediately (non-blocking)
     const tempUserMessageId = `temp-user-${Date.now()}`;
@@ -619,7 +901,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       user_id: user?.id || 'anonymous',
       role: "user" as const,
       content: userMessage,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      ...(attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
+      ...(uploadedAttachments.length > 0 ? { attachments: uploadedAttachments } : {}),
     } as Message;
 
     // Add optimistic message to UI immediately using functional setState
@@ -634,7 +918,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           conversation_id: activeId,
           user_id: user.id,
           role: "user",
-          content: userMessage
+          content: userMessage,
+          ...(attachmentMetadata ? { metadata: attachmentMetadata } : {}),
         })
         .select()
         .single()
@@ -644,7 +929,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           } else if (realMsgData) {
             // Replace temp message with real one from database
             setMessages((msgs) => msgs.map(m =>
-              m.id === tempUserMessageId ? realMsgData : m
+              m.id === tempUserMessageId
+                ? {
+                    ...realMsgData,
+                    ...(attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
+                    ...(uploadedAttachments.length > 0 ? { attachments: uploadedAttachments } : {}),
+                  }
+                : m
             ));
 
             // [UI_FREEZE_FIX] Update conversation title in background (non-blocking)
@@ -679,10 +970,16 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       return tool;
     });
 
-    return { conversationMessages, modifiedTools, userMessage };
+    return {
+      conversationMessages,
+      modifiedTools,
+      userMessage,
+      attachmentIds,
+      replayAttachmentIds: includePendingAttachments ? [] : attachmentIds,
+    };
   };
 
-  const handleSendMessage = async (input: string) => {
+  const handleSendMessage = async (input: string, options: SendMessageOptions = {}) => {
     log.debug('useChat', 'handleSendMessage called', {
       inputPreview: input.trim().substring(0, 20),
       hasUser: !!user,
@@ -691,6 +988,18 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
 
     if (!input.trim()) {
       setError("Please enter a message");
+      return;
+    }
+
+    const includePendingAttachments = options.includePendingAttachments ?? true;
+
+    if (includePendingAttachments && hasPendingAttachmentUploads) {
+      setError("Please wait for attachments to finish uploading");
+      return;
+    }
+
+    if (includePendingAttachments && hasFailedPendingAttachments) {
+      setError("Remove failed attachments before sending");
       return;
     }
 
@@ -710,12 +1019,20 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     isStreamingRef.current = true; // Mark as streaming to prevent effect loops
     const controller = new AbortController();
     setAbortController(controller);
+    const submittedAttachmentIds = includePendingAttachments
+      ? activePendingAttachments
+          .map((attachment) => attachment.attachment?.id)
+          .filter((attachmentId): attachmentId is string => !!attachmentId)
+      : [];
+    submittedAttachmentIds.forEach((attachmentId) => {
+      submittedAttachmentIdsRef.current.add(attachmentId);
+    });
 
     // [UI_FREEZE_FIX] Declare throttle variable before try block so it's accessible in catch
     const updateThrottle: NodeJS.Timeout | null = null;
 
     try {
-      const { conversationMessages, modifiedTools, userMessage } = await prepareAndSendMessage(input);
+      const { conversationMessages, modifiedTools, userMessage, attachmentIds, replayAttachmentIds } = await prepareAndSendMessage(input, options);
 
       log.debug('useChat', 'Calling OpenAI API', {
         messageCount: conversationMessages.length
@@ -768,6 +1085,8 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
           contextInjectionEnabled,
           enableThinking,
           ...(generationSettings ? { generationSettings } : {}),
+          ...(includePendingAttachments && attachmentIds.length > 0 ? { attachmentIds } : {}),
+          ...(replayAttachmentIds.length > 0 ? { replayAttachmentIds } : {}),
         }),
         signal: controller.signal,
       });
@@ -781,6 +1100,14 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       const tempMessageId = "temp-" + Date.now();
       setMessages(prev => [...prev, { id: tempMessageId, role: "assistant", content: "" }]);
       await streamAndProcessResponse(response, tempMessageId, userMessage, streamStartTime, updateThrottle);
+      if (includePendingAttachments && attachmentIds.length > 0) {
+        attachmentIds.forEach((attachmentId) => {
+          locallyClearedAttachmentIdsRef.current.add(attachmentId);
+        });
+        setPendingAttachments((current) => current.filter((attachment) => (
+          !attachment.attachment || !attachmentIds.includes(attachment.attachment.id)
+        )));
+      }
 
     } catch (err: unknown) {
       // [UI_FREEZE_FIX] Comprehensive error handling
@@ -805,6 +1132,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       // Scroll to show error state
       scrollToBottom();
     } finally {
+      submittedAttachmentIds.forEach((attachmentId) => {
+        submittedAttachmentIdsRef.current.delete(attachmentId);
+      });
       setLoading(false);
       setAbortController(null);
     }
@@ -830,6 +1160,11 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     setError,
     abortController,
     setAbortController,
+    pendingAttachments: activePendingAttachments,
+    hasPendingAttachmentUploads,
+    hasFailedPendingAttachments,
+    handleAddChatAttachments,
+    handleRemoveChatAttachment,
     messagesEndRef,
     messagesContainerRef,
     handleSendMessage,

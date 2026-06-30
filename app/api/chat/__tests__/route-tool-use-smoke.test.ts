@@ -646,6 +646,81 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(admin.attachmentUpdateQuery.in).toHaveBeenCalledWith('id', ['11111111-1111-4111-8111-111111111111']);
   });
 
+  it('replays already-attached chat attachment context without claiming it again', async () => {
+    const admin = makeChatAdminClient({
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+          message_id: '33333333-3333-4333-8333-333333333333',
+          filename: 'notes.txt',
+          content_type: 'text/plain',
+          size_bytes: 28,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/notes.txt',
+          kind: 'text',
+          extracted_text: 'historical attached note text',
+          extracted_chars: 29,
+          status: 'attached',
+          metadata: {},
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+
+    let modelMessages: Array<{ role: string; content: string }> = [];
+    unifiedChat.mockImplementationOnce(async (_modelId, messages) => {
+      modelMessages = messages as Array<{ role: string; content: string }>;
+      return {
+        content: 'Regenerated with the attachment.',
+        usage: {
+          input_tokens: 20,
+          output_tokens: 8,
+        },
+      };
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'Regenerate this file summary.',
+        },
+      ],
+      replayAttachmentIds: ['11111111-1111-4111-8111-111111111111'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    const streamText = await response.text();
+    expect(response.status, streamText).toBe(200);
+    const events = parseSseEvents(streamText);
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'attachment_metadata',
+      attachment_ids: ['11111111-1111-4111-8111-111111111111'],
+      attachments: [
+        expect.objectContaining({
+          id: '11111111-1111-4111-8111-111111111111',
+          filename: 'notes.txt',
+          status: 'attached',
+        }),
+      ],
+    }));
+    const latestUserMessage = modelMessages.filter((message) => message.role === 'user').at(-1);
+    expect(latestUserMessage?.content).toContain('Regenerate this file summary.');
+    expect(latestUserMessage?.content).toContain('historical attached note text');
+    expect(admin.chatAttachmentsTable.update).not.toHaveBeenCalled();
+    expect(admin.attachmentRows[0].status).toBe('attached');
+  });
+
   it('emits streaming attachment metadata only after successful output and finalization', async () => {
     const admin = makeChatAdminClient({
       attachments: [
@@ -708,7 +783,7 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(admin.attachmentRows[0].status).toBe('attached');
   });
 
-  it('does not release a streaming attachment claim after output starts and finalization fails', async () => {
+  it('releases a streaming attachment claim when finalization fails after output starts', async () => {
     const admin = makeChatAdminClient({
       finalizeUpdateError: { message: 'finalize failed' },
       attachments: [
@@ -759,11 +834,11 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(events).toContainEqual(expect.objectContaining({ content: 'Partial answer before finalize failure.' }));
     expect(events).toContainEqual(expect.objectContaining({ error: 'Stream error' }));
     expect(events).not.toContainEqual(expect.objectContaining({ type: 'attachment_metadata' }));
-    expect(admin.chatAttachmentsTable.update).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(admin.chatAttachmentsTable.update).toHaveBeenCalledWith(expect.objectContaining({
       status: 'uploaded',
       updated_at: expect.any(String),
     }));
-    expect(admin.attachmentRows[0].status).toBe('attaching');
+    expect(admin.attachmentRows[0].status).toBe('uploaded');
   });
 
   it('releases a streaming attachment claim when finalization fails after an empty model stream', async () => {

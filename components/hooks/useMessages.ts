@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
 import { normalizeToolCalls } from './chatToolStream';
-import { hydrateGraphRAGMessageFields } from './chatMessageMetadata';
+import { hydrateAttachmentMessageFields, hydrateGraphRAGMessageFields } from './chatMessageMetadata';
 import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 
 interface ConversationData {
@@ -35,6 +35,8 @@ export function buildValidationMessageProjection(messages: Message[]): Message[]
     content: msg.content,
     metadata: msg.metadata,
     content_json: msg.content_json,
+    attachment_ids: msg.attachment_ids,
+    attachments: msg.attachments,
     tools_called: msg.tools_called,
     webSearchResults: msg.webSearchResults,
     citations: msg.citations,
@@ -180,6 +182,8 @@ export function useMessages(
                 };
                 web_search_results?: unknown;
                 webSearchResults?: unknown;
+                attachment_ids?: unknown;
+                attachments?: unknown;
               };
               const webSearchResults = normalizeWebSearchResults(meta.web_search_results ?? meta.webSearchResults);
               if (webSearchResults) {
@@ -187,6 +191,7 @@ export function useMessages(
               }
 
               Object.assign(enrichedMsg, hydrateGraphRAGMessageFields(meta));
+              Object.assign(enrichedMsg, hydrateAttachmentMessageFields(meta));
 
               if (meta.model_name) {
                 enrichedMsg.model_name = meta.model_name;

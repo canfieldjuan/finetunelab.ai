@@ -63,6 +63,7 @@ import {
   Mic,
   MicOff,
   Send,
+  Paperclip,
   Plus,
   User,
   Brain
@@ -72,6 +73,7 @@ const EvaluationModal = dynamic(() => import("./evaluation/EvaluationModal").the
 });
 import { ModelSelector } from "./models/ModelSelector";
 import { MessageList } from "./chat/MessageList";
+import { AttachmentChips } from "./chat/AttachmentChips";
 import { ScrollToBottomButton } from "./chat/ScrollToBottomButton";
 import { ChatCommandPalette } from "./chat/ChatCommandPalette";
 import { ChatHeader } from "./chat/ChatHeader";
@@ -94,6 +96,7 @@ import { useConversationValidation } from "@/hooks/useConversationValidation";
 import type { ConversationData, ConversationValidationResult } from "@/lib/validation/conversation-validator";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import type { ChatProps, GenerationSettings } from "./chat/types";
+import type { ChatAttachmentDto } from "@/lib/chat/attachments";
 // New focused hooks for state management
 import {
   useModalState,
@@ -113,6 +116,7 @@ import {
 } from '@/components/hooks';
 import type { SelectedModelInfo } from '@/components/hooks/useModelSelection';
 import { useContextInjection } from '@/components/hooks/useContextInjection';
+import { CHAT_ATTACHMENT_FILE_INPUT_ACCEPT } from '@/lib/chat/attachment-limits';
 
 export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Render counter for debugging
@@ -266,6 +270,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
 
   // Ref to track if currently streaming (prevents effect loops)
   const isStreamingRef = useRef(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   // Thinking mode state - for Qwen3 and similar models with <think> tags
   const [enableThinking, setEnableThinking] = useState(false);
@@ -306,6 +311,11 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     setMessages,
     error,
     setError,
+    pendingAttachments,
+    hasPendingAttachmentUploads,
+    hasFailedPendingAttachments,
+    handleAddChatAttachments,
+    handleRemoveChatAttachment,
     messagesEndRef,
     messagesContainerRef,
     handleSendMessage,
@@ -903,24 +913,40 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     }
 
     // Find the user message that preceded this assistant message
-    let userMessageContent: string | null = null;
+    let userMessage: typeof messages[number] | null = null;
     for (let i = msgIndex - 1; i >= 0; i--) {
       if (messages[i].role === 'user') {
-        userMessageContent = messages[i].content;
+        userMessage = messages[i];
         break;
       }
     }
 
-    if (!userMessageContent) {
+    if (!userMessage) {
       log.warn('Chat', 'No user message found before assistant message', { messageId });
       return;
     }
 
+    const historicalAttachments = Array.isArray(userMessage.attachments)
+      ? userMessage.attachments.filter((attachment): attachment is ChatAttachmentDto => (
+          !!attachment && typeof attachment.id === 'string' && attachment.id.trim().length > 0
+        ))
+      : [];
+    const historicalAttachmentIds = Array.isArray(userMessage.attachment_ids)
+      ? userMessage.attachment_ids.filter((attachmentId): attachmentId is string => (
+          typeof attachmentId === 'string' && attachmentId.trim().length > 0
+        ))
+      : historicalAttachments.map((attachment) => attachment.id);
+
     // Remove the assistant message from the UI
     setMessages(prev => prev.filter(m => m.id !== messageId));
 
-    // Resend the user's message to regenerate
-    void handleSendMessage(userMessageContent);
+    // Regeneration replays the historical prompt; composer drafts belong to
+    // the next new send, not this historical turn.
+    void handleSendMessage(userMessage.content, {
+      includePendingAttachments: false,
+      attachmentIds: historicalAttachmentIds,
+      attachments: historicalAttachments,
+    });
   }, [messages, handleSendMessage, setMessages]);
 
   const handleArchiveConversation = async (conversationId: string) => {
@@ -1096,10 +1122,20 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
 
   // Wrapper for handleSendMessage to match the old handleSend API (no parameters)
   const handleSend = () => {
+    if (hasPendingAttachmentUploads || hasFailedPendingAttachments || !input.trim()) return;
     void handleSendMessage(input);
   };
 
   const hasActiveConversation = !!activeId;
+  const attachmentsEnabled = !isDemoOrWidget && !!user && !!activeId;
+  const sendBlocked = hasPendingAttachmentUploads || hasFailedPendingAttachments || !input.trim();
+  const openAttachmentPicker = () => {
+    attachmentInputRef.current?.click();
+  };
+  const handleAttachmentInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleAddChatAttachments(Array.from(event.currentTarget.files ?? []));
+    event.currentTarget.value = '';
+  };
 
   return (
     <div className={`flex ${demoMode ? 'h-full' : 'h-screen'} overflow-hidden bg-background`}>
@@ -1518,6 +1554,16 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
             </div>
           )}
 
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            multiple
+            accept={CHAT_ATTACHMENT_FILE_INPUT_ACCEPT}
+            className="sr-only"
+            onChange={handleAttachmentInputChange}
+            disabled={!attachmentsEnabled || loading}
+          />
+
           <div className="max-w-[52rem] mx-auto w-full">
             <div
               className={
@@ -1525,6 +1571,10 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                 (enableDeepResearch ? "gap-1 px-4 py-2.5" : "gap-2 px-3 py-2.5")
               }
             >
+              <AttachmentChips
+                attachments={pendingAttachments}
+                onRemove={loading ? undefined : handleRemoveChatAttachment}
+              />
               {enableDeepResearch ? (
                 <>
                   {/* Row 1: Input on top */}
@@ -1598,6 +1648,17 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                       >
                         <Plus className="w-4 h-4" />
                       </Button>
+                      <Button
+                        onClick={openAttachmentPicker}
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0 rounded-full text-gray-600 hover:text-gray-800 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-gray-800"
+                        title={attachmentsEnabled ? "Attach files" : "Attachments require a saved chat"}
+                        aria-label="Attach files"
+                        disabled={!attachmentsEnabled || loading}
+                      >
+                        <Paperclip className="w-4 h-4" />
+                      </Button>
                     </div>
                     <div className="flex items-center gap-2">
                       {sttSupported && userSettings?.sttEnabled && (
@@ -1620,7 +1681,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                       )}
                       <Button
                         onClick={loading ? handleStop : handleSend}
-                        disabled={!input.trim() && !loading}
+                        disabled={!loading && sendBlocked}
                         variant="ghost"
                         className="h-10 w-10 p-0 shrink-0 rounded-full bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:bg-gray-300 disabled:text-gray-500"
                         title={loading ? "Stop generating" : "Send message"}
@@ -1713,7 +1774,18 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                     title="Upload Documents"
                     aria-label="Upload Documents"
                   >
-                    <Plus className="w-4 h-4" />
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  <Button
+                    onClick={openAttachmentPicker}
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 shrink-0 rounded-full text-gray-600 hover:text-gray-800 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-gray-800"
+                    title={attachmentsEnabled ? "Attach files" : "Attachments require a saved chat"}
+                    aria-label="Attach files"
+                    disabled={!attachmentsEnabled || loading}
+                  >
+                    <Paperclip className="w-4 h-4" />
                   </Button>
                   {/* Middle: Input expands */}
                   <Input
@@ -1733,7 +1805,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                   {/* Right: Send */}
                   <Button
                     onClick={loading ? handleStop : handleSend}
-                    disabled={!input.trim() && !loading}
+                    disabled={!loading && sendBlocked}
                     variant="ghost"
                     className="h-10 w-10 p-0 shrink-0 rounded-full bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:bg-gray-300 disabled:text-gray-500"
                     title={loading ? "Stop generating" : "Send message"}

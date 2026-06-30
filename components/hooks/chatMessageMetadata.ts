@@ -25,6 +25,12 @@ export interface AssistantMessageMetadataInput {
   timestamp?: string;
 }
 
+export interface AttachmentMessageMetadataInput {
+  attachmentIds?: string[];
+  attachments?: ChatAttachmentDto[];
+  timestamp?: string;
+}
+
 interface PersistedGraphRAGMetadata {
   graph_used?: boolean;
   nodes_retrieved?: number;
@@ -49,6 +55,11 @@ export interface HydratedGraphRAGMessageFields {
   graphrag_method?: string;
 }
 
+export interface HydratedAttachmentMessageFields {
+  attachment_ids?: string[];
+  attachments?: ChatAttachmentDto[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -70,6 +81,31 @@ function normalizeCitation(value: unknown): Citation | null {
     source,
     content,
     confidence: Math.min(1, Math.max(0, confidence)),
+  };
+}
+
+function normalizeAttachment(value: unknown): ChatAttachmentDto | null {
+  if (!isRecord(value)) return null;
+
+  const id = typeof value.id === 'string' ? value.id.trim() : '';
+  const filename = typeof value.filename === 'string' ? value.filename.trim() : '';
+  const sizeBytes = finiteNumber(value.sizeBytes);
+  const extractedChars = finiteNumber(value.extractedChars) ?? 0;
+  const kind = typeof value.kind === 'string' ? value.kind : '';
+  const status = typeof value.status === 'string' ? value.status : '';
+
+  if (!id || !filename || sizeBytes === undefined) return null;
+  if (!['text', 'document', 'code', 'image', 'unknown'].includes(kind)) return null;
+  if (!['uploaded', 'attaching', 'attached', 'deleted'].includes(status)) return null;
+
+  return {
+    id,
+    filename,
+    contentType: typeof value.contentType === 'string' ? value.contentType : null,
+    sizeBytes,
+    kind: kind as ChatAttachmentDto['kind'],
+    extractedChars,
+    status: status as ChatAttachmentDto['status'],
   };
 }
 
@@ -118,6 +154,7 @@ function buildGraphRAGMetadata(graphRAG?: GraphRAGMessageMetadataInput): Persist
 
 export function buildAssistantMessageMetadata(input: AssistantMessageMetadataInput): Record<string, unknown> | undefined {
   const graphRAGMetadata = buildGraphRAGMetadata(input.graphRAG);
+  const attachmentMetadata = buildAttachmentMessageMetadata(input);
   const fields = {
     ...(input.modelId && input.modelName && input.provider ? {
       model_name: input.modelName,
@@ -127,12 +164,7 @@ export function buildAssistantMessageMetadata(input: AssistantMessageMetadataInp
     ...(input.webSearchResults && input.webSearchResults.length > 0 ? {
       web_search_results: input.webSearchResults,
     } : {}),
-    ...(input.attachmentIds && input.attachmentIds.length > 0 ? {
-      attachment_ids: input.attachmentIds,
-    } : {}),
-    ...(input.attachments && input.attachments.length > 0 ? {
-      attachments: input.attachments,
-    } : {}),
+    ...(attachmentMetadata ?? {}),
     ...(graphRAGMetadata ? {
       graphrag: graphRAGMetadata,
     } : {}),
@@ -145,6 +177,40 @@ export function buildAssistantMessageMetadata(input: AssistantMessageMetadataInp
   return {
     ...fields,
     timestamp: input.timestamp ?? new Date().toISOString(),
+  };
+}
+
+export function buildAttachmentMessageMetadata(input: AttachmentMessageMetadataInput): Record<string, unknown> | undefined {
+  const fields = {
+    ...(input.attachmentIds && input.attachmentIds.length > 0 ? {
+      attachment_ids: input.attachmentIds,
+    } : {}),
+    ...(input.attachments && input.attachments.length > 0 ? {
+      attachments: input.attachments,
+    } : {}),
+  };
+
+  if (Object.keys(fields).length === 0) return undefined;
+
+  return {
+    ...fields,
+    timestamp: input.timestamp ?? new Date().toISOString(),
+  };
+}
+
+export function hydrateAttachmentMessageFields(metadata: unknown): HydratedAttachmentMessageFields {
+  if (!isRecord(metadata)) return {};
+
+  const attachmentIds = Array.isArray(metadata.attachment_ids)
+    ? metadata.attachment_ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+    : undefined;
+  const attachments = Array.isArray(metadata.attachments)
+    ? metadata.attachments.map(normalizeAttachment).filter((attachment): attachment is ChatAttachmentDto => attachment !== null)
+    : undefined;
+
+  return {
+    ...(attachmentIds && attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
+    ...(attachments && attachments.length > 0 ? { attachments } : {}),
   };
 }
 

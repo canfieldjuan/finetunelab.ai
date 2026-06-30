@@ -12,9 +12,9 @@
 
 **Chat Attachment Types**
 - **Started:** 2026-06-30
-- **Branch:** `codex/chat-attachments-plan`
-- **Location:** `lib/chat/attachments.ts`
-- **Status:** Backend DTOs exported; UI consumption remains a follow-up slice.
+- **Branch:** `codex/chat-attachment-ui`
+- **Locations:** `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `components/chat/types.ts`
+- **Status:** Backend DTOs are consumed by the chat UI; pending upload state lives in `PendingChatAttachment`.
 
 ### Recently Completed
 
@@ -41,14 +41,34 @@ interface ChatAttachmentDto {
   sizeBytes: number;
   kind: "text" | "document" | "code" | "image" | "unknown";
   extractedChars: number;
-  status: "uploaded" | "attached" | "deleted";
+  status: "uploaded" | "attaching" | "attached" | "deleted";
 }
 ```
 
 **Usage:**
 - Backend: returned from `POST /api/chat/attachments`.
 - Chat route: persisted in assistant metadata when `attachmentIds` are accepted.
-- Future UI: use this DTO for upload chips and message attachment display.
+- UI: used for uploaded chips, sent-message chips, and persisted message attachment display.
+
+#### PendingChatAttachment
+
+**Location:** `components/chat/types.ts`
+
+```typescript
+interface PendingChatAttachment {
+  clientId: string;
+  conversationId: string;
+  filename: string;
+  sizeBytes: number;
+  status: "uploading" | "uploaded" | "deleting" | "error";
+  attachment?: ChatAttachmentDto;
+  error?: string;
+}
+```
+
+**Rules:** pending attachment state is scoped by `conversationId`; the client
+sends only uploaded `attachment.id` values, never file bytes, in the chat JSON
+request.
 
 #### Chat Request Attachment Field
 

@@ -39,6 +39,7 @@ import {
   markChatAttachmentsAttached,
   normalizeChatAttachmentIds,
   releaseClaimedChatAttachments,
+  resolveChatAttachmentsForReplay,
   resolveChatAttachmentsForTurn,
   type ChatAttachmentDto,
   type ResolvedChatAttachments,
@@ -228,6 +229,7 @@ export async function POST(req: NextRequest) {
     let enableThinking: boolean | undefined;
     let generationSettings: RawGenerationSettings | undefined;
     let rawAttachmentIds: unknown;
+    let rawReplayAttachmentIds: unknown;
     try {
       ({
         messages,
@@ -245,6 +247,7 @@ export async function POST(req: NextRequest) {
         enableThinking,
         generationSettings,
         attachmentIds: rawAttachmentIds,
+        replayAttachmentIds: rawReplayAttachmentIds,
       } = await req.json());
 
       // DEBUG: Log what we received from the request
@@ -449,8 +452,10 @@ export async function POST(req: NextRequest) {
     }
 
     let requestedAttachmentIds: string[] = [];
+    let replayAttachmentIds: string[] = [];
     try {
       requestedAttachmentIds = normalizeChatAttachmentIds(rawAttachmentIds);
+      replayAttachmentIds = normalizeChatAttachmentIds(rawReplayAttachmentIds);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid attachmentIds';
       return new Response(JSON.stringify({ error: message }), {
@@ -458,8 +463,15 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+    if (requestedAttachmentIds.length > 0 && replayAttachmentIds.length > 0) {
+      return new Response(JSON.stringify({ error: 'attachmentIds and replayAttachmentIds cannot be combined' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     let resolvedChatAttachments: ResolvedChatAttachments | null = null;
+    let replayedChatAttachments: ResolvedChatAttachments | null = null;
     if (requestedAttachmentIds.length > 0) {
       const latestUserMessage = messages[messages.length - 1];
       if (!isAuthenticatedUser || isWidgetMode || isBatchTestMode || !userId || !conversationId || !supabaseAdmin) {
@@ -491,6 +503,38 @@ export async function POST(req: NextRequest) {
         });
       }
     }
+    if (replayAttachmentIds.length > 0) {
+      const latestUserMessage = messages[messages.length - 1];
+      if (!isAuthenticatedUser || isWidgetMode || isBatchTestMode || !userId || !conversationId || !supabaseAdmin) {
+        return new Response(JSON.stringify({ error: 'Attachment replay requires an authenticated non-widget chat conversation' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (!latestUserMessage || latestUserMessage.role !== 'user' || typeof latestUserMessage.content !== 'string') {
+        return new Response(JSON.stringify({ error: 'Attachment replay must be sent with a user message' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      try {
+        conversationId = normalizeChatConversationId(conversationId);
+        replayedChatAttachments = await resolveChatAttachmentsForReplay({
+          supabase: supabaseAdmin,
+          userId,
+          conversationId,
+          attachmentIds: replayAttachmentIds,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load chat attachments';
+        return new Response(JSON.stringify({ error: message }), {
+          status: error instanceof ChatAttachmentError ? error.status : 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    const effectiveChatAttachments = resolvedChatAttachments ?? replayedChatAttachments;
 
     console.log('[API] Request with', messages.length, 'messages,', tools.length, 'tools');
     if (tools.length > 0) {
@@ -883,8 +927,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
     }
 
+    if (effectiveChatAttachments) {
+      appendAttachmentContextToLatestUserMessage(enhancedMessages, effectiveChatAttachments.context);
+    }
     if (resolvedChatAttachments) {
-      appendAttachmentContextToLatestUserMessage(enhancedMessages, resolvedChatAttachments.context);
       try {
         await claimChatAttachmentsForTurn({
           supabase: supabaseAdmin!,
@@ -914,7 +960,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     async function rejectIfAttachmentContextExceedsWindow(
       modelConfig: ModelConfig | null | undefined,
     ): Promise<Response | null> {
-      if (!resolvedChatAttachments || !modelConfig?.context_length) return null;
+      if (!effectiveChatAttachments || !modelConfig?.context_length) return null;
 
       const estimatedInputTokens = Math.ceil(
         enhancedMessages.map((message) => message.content || '').join(' ').length / 4,
@@ -931,7 +977,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           estimatedInputTokens,
           contextLength: modelConfig.context_length,
           minimumOutputTokens,
-          attachmentCount: resolvedChatAttachments.attachments.length,
+          attachmentCount: effectiveChatAttachments.attachments.length,
         },
       }), {
         status: 413,
@@ -1365,9 +1411,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           provider: actualModelConfig?.provider || provider,
           model_id: selectedModelId,
           timestamp: new Date().toISOString(),
-          ...(resolvedChatAttachments && {
-            attachment_ids: resolvedChatAttachments.ids,
-            attachments: resolvedChatAttachments.attachments,
+          ...(effectiveChatAttachments && {
+            attachment_ids: effectiveChatAttachments.ids,
+            attachments: effectiveChatAttachments.attachments,
           }),
           // Add GraphRAG metadata if available
           ...(graphRAGMetadata?.metadata && {
@@ -1491,9 +1537,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 provider: actualModelConfig?.provider || provider,
                 model_id: model,
                 timestamp: new Date().toISOString(),
-                ...(resolvedChatAttachments && {
-                  attachment_ids: resolvedChatAttachments.ids,
-                  attachments: resolvedChatAttachments.attachments,
+                ...(effectiveChatAttachments && {
+                  attachment_ids: effectiveChatAttachments.ids,
+                  attachments: effectiveChatAttachments.attachments,
                 }),
                 // Add GraphRAG metadata if available
                 ...(graphRAGMetadata?.metadata && {
@@ -1648,9 +1694,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           provider: actualModelConfig?.provider || provider,
           model_id: model,
           timestamp: new Date().toISOString(),
-          ...(resolvedChatAttachments && {
-            attachment_ids: resolvedChatAttachments.ids,
-            attachments: resolvedChatAttachments.attachments,
+          ...(effectiveChatAttachments && {
+            attachment_ids: effectiveChatAttachments.ids,
+            attachments: effectiveChatAttachments.attachments,
           }),
           // Add GraphRAG metadata if available
           ...(graphRAGMetadata?.metadata && {
@@ -2063,7 +2109,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               controller.enqueue(encoder.encode(metaData));
             }
 
-            emitAttachmentMetadata(controller, encoder, resolvedChatAttachments);
+            emitAttachmentMetadata(controller, encoder, effectiveChatAttachments);
 
             // METRIC: Send model attribution metadata
             // Use actual provider from model config if available, otherwise fall back to legacy provider
@@ -2289,9 +2335,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         provider: (actualModelConfig as unknown as { provider?: string })?.provider || provider || 'unknown',
         model_id: selectedModelId || model || 'unknown',
         timestamp: new Date().toISOString(),
-        ...(resolvedChatAttachments && {
-          attachment_ids: resolvedChatAttachments.ids,
-          attachments: resolvedChatAttachments.attachments,
+        ...(effectiveChatAttachments && {
+          attachment_ids: effectiveChatAttachments.ids,
+          attachments: effectiveChatAttachments.attachments,
         }),
         // Add GraphRAG metadata if available
         ...(graphRAGMetadata?.metadata && {
@@ -2693,7 +2739,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             }
 
             await finalizeChatAttachmentClaim();
-            emitAttachmentMetadata(controller, encoder, resolvedChatAttachments);
+            emitAttachmentMetadata(controller, encoder, effectiveChatAttachments);
 
             // If nothing was accumulated (unexpected), send a short placeholder to avoid blank UI
             if (!accumulatedResponse || accumulatedResponse.trim().length === 0) {
@@ -2706,9 +2752,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             controller.close();
           } catch (error) {
             console.error('[API] Streaming error:', error);
-            if (!firstChunkReceived) {
-              await releaseChatAttachmentClaim();
-            }
+            await releaseChatAttachmentClaim();
 
             // End trace on streaming error
             if (traceContext) {
@@ -2728,6 +2772,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
             controller.enqueue(encoder.encode(errorData));
             controller.close();
           }
+        },
+        async cancel() {
+          await releaseChatAttachmentClaim();
         },
       });
 
