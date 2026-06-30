@@ -604,6 +604,88 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(executePortalChatTool.mock.calls.map((call) => call[0])).toEqual(['generate_image', 'calculator']);
   });
 
+  it('keeps trace tool definitions aligned after unauthenticated generate_image pruning', async () => {
+    let offeredToolNames: string[] = [];
+    unifiedChat.mockImplementationOnce(async (_modelId, _messages, options) => {
+      offeredToolNames = (options.tools ?? []).map((tool: { function: { name: string } }) => tool.function.name);
+      await options.toolCallHandler('calculator', { expression: '2+2' });
+
+      return {
+        content: 'The answer is 4.',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 5,
+        },
+        toolsCalled: [{ name: 'calculator', success: true }],
+      };
+    });
+
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      messages: [
+        {
+          role: 'user',
+          content: 'Use a tool.',
+        },
+      ],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'generate_image',
+            description: 'Generate an image.',
+            parameters: {
+              type: 'object',
+              properties: {
+                prompt: { type: 'string' },
+              },
+              required: ['prompt'],
+            },
+          },
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'calculator',
+            description: 'Calculate arithmetic expressions.',
+            parameters: {
+              type: 'object',
+              properties: {
+                expression: { type: 'string' },
+              },
+              required: ['expression'],
+            },
+          },
+        },
+      ],
+    }));
+
+    const streamText = await response.text();
+    expect(response.status, streamText).toBe(200);
+    expect(offeredToolNames).toEqual(['calculator']);
+
+    const calculatorCall = executePortalChatTool.mock.calls.find((call) => call[0] === 'calculator');
+    const allowedToolNames = calculatorCall?.[7]?.allowedToolNames as Set<string> | undefined;
+    expect(allowedToolNames).toBeInstanceOf(Set);
+    expect([...(allowedToolNames ?? [])]).toEqual(['calculator']);
+
+    const traceEndCalls = traceServiceMocks.endTrace.mock.calls as unknown as Array<[
+      unknown,
+      { inputData?: { toolDefinitions?: Array<{ name: string }> } },
+    ]>;
+    const completedTrace = traceEndCalls.find(
+      (call) => call[1]?.inputData?.toolDefinitions,
+    );
+    expect(completedTrace?.[1]?.inputData?.toolDefinitions).toEqual([
+      expect.objectContaining({ name: 'calculator' }),
+    ]);
+    expect(executePortalChatTool.mock.calls.map((call) => call[0])).toEqual(['calculator']);
+  });
+
   it('keeps standard web_search available after a deep-research job starts', async () => {
     executePortalChatTool.mockImplementation(async (toolName: string, args: Record<string, unknown>) => {
       if (toolName === 'web_search' && args.research === true) {

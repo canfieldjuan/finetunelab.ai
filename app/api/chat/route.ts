@@ -463,6 +463,7 @@ export async function POST(req: NextRequest) {
     // mirroring the MCP gate below.
     if (!isAuthenticatedUser) {
       removeOfferedToolForRemainingRounds('generate_image');
+      toolsForTrace = [...tools];
     }
 
     if (!messages || !Array.isArray(messages)) {
