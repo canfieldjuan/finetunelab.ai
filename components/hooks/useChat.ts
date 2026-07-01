@@ -433,6 +433,45 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     // this chat response), so we subscribe to its owner-scoped SSE stream and, on
     // completion, append the image to the conversation as markdown (renders via
     // MessageContent's img path; data-URIs are already blocked there).
+    const persistGeneratedImageMessage = (
+      localMessageId: string,
+      content: string,
+      conversationId: string,
+    ) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: localMessageId, role: 'assistant', content, skipJudgments: true },
+      ]);
+
+      if (!user || allowAnonymous || !conversationId) return;
+
+      void supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          user_id: user.id,
+          role: 'assistant',
+          content,
+        })
+        .select()
+        .single()
+        .then(({ data: imageMsg, error: dbError }) => {
+          if (dbError) {
+            log.error('useChat', 'Failed to save generated image message', { error: dbError });
+            return;
+          }
+          if (!imageMsg || activeIdRef.current !== conversationId) return;
+
+          setMessages((msgs) =>
+            msgs.map((m) =>
+              m.id === localMessageId
+                ? { ...imageMsg, skipJudgments: true }
+                : m
+            )
+          );
+        });
+    };
+
     const subscribeToImageJob = (imgJobId: string, imgPrompt: string, streamToken: string) => {
       const originatingConversationId = activeId;
       // Escape the user-controlled prompt so it can't break out of the markdown
@@ -466,10 +505,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               if (attr && typeof attr === 'object' && typeof attr.authorName === 'string') {
                 content += `\n\n*Photo by [${attr.authorName}](${attr.authorUrl}) on [${attr.sourceName}](${attr.sourceUrl})*`;
               }
-              setMessages((prev) => [
-                ...prev,
-                { id: `img-${imgJobId}`, role: 'assistant', content, skipJudgments: true },
-              ]);
+              persistGeneratedImageMessage(`img-${imgJobId}`, content, originatingConversationId);
             } else if (evt.type === 'image_failed') {
               if (done) return;
               done = true;
