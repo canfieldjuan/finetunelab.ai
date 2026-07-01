@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { AlertCircle, FileText, Loader2, X } from 'lucide-react';
+import { AlertCircle, Download, FileText, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabaseClient';
 import type { ChatAttachmentDto } from '@/lib/chat/attachments';
 import type { PendingChatAttachment } from './types';
 
@@ -49,6 +50,43 @@ function statusLabel(status: string | undefined): string | null {
 }
 
 export function AttachmentChips({ attachments, className, onRemove }: AttachmentChipsProps) {
+  const [downloadingIds, setDownloadingIds] = React.useState<Set<string>>(() => new Set());
+
+  const handleDownload = React.useCallback(async (attachment: ChatAttachmentDto) => {
+    setDownloadingIds((current) => new Set(current).add(attachment.id));
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session?.access_token) {
+        throw new Error('You must be logged in to download attachments');
+      }
+
+      const response = await fetch(`/api/chat/attachments?attachmentId=${encodeURIComponent(attachment.id)}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        success?: boolean;
+        url?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success || !payload.url) {
+        throw new Error(payload.error || `Attachment download failed: ${response.status}`);
+      }
+
+      window.open(payload.url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('[AttachmentChips] Download failed:', error);
+    } finally {
+      setDownloadingIds((current) => {
+        const next = new Set(current);
+        next.delete(attachment.id);
+        return next;
+      });
+    }
+  }, []);
+
   if (attachments.length === 0) return null;
 
   return (
@@ -61,6 +99,8 @@ export function AttachmentChips({ attachments, className, onRemove }: Attachment
         const status = getStatus(attachment);
         const busy = status === 'uploading' || status === 'deleting';
         const failed = status === 'error';
+        const canDownload = !isPending && status !== 'deleted';
+        const downloading = !isPending && downloadingIds.has(attachment.id);
 
         return (
           <div
@@ -85,6 +125,24 @@ export function AttachmentChips({ attachments, className, onRemove }: Attachment
             <span className="shrink-0 text-muted-foreground">
               {statusLabel(status) ?? formatBytes(getSizeBytes(attachment))}
             </span>
+            {canDownload && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="ml-0.5 h-5 w-5 rounded-full p-0"
+                onClick={() => void handleDownload(attachment)}
+                disabled={downloading}
+                aria-label={`Download ${filename}`}
+                title={`Download ${filename}`}
+              >
+                {downloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            )}
             {pending && onRemove && status !== 'uploading' && (
               <Button
                 type="button"

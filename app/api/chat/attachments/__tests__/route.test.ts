@@ -44,6 +44,13 @@ function makeJsonRequest(body: unknown, headers?: Record<string, string>): NextR
   } as unknown as NextRequest;
 }
 
+function makeGetRequest(url: string, headers?: Record<string, string>): NextRequest {
+  return {
+    headers: new Headers(headers ?? {}),
+    nextUrl: new URL(url),
+  } as unknown as NextRequest;
+}
+
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   return buffer.buffer.slice(
     buffer.byteOffset,
@@ -151,6 +158,10 @@ function makeUploadSupabase(options?: {
   const attachmentRows = (options?.attachments ?? []).map((row) => ({ ...row }));
   const upload = vi.fn(async () => ({ error: null }));
   const remove = vi.fn(async () => ({ error: null }));
+  const createSignedUrl = vi.fn(async () => ({
+    data: { signedUrl: 'https://signed.example.com/notes.txt?token=abc' },
+    error: null,
+  }));
 
   const conversationsQuery = {
     select: vi.fn(() => conversationsQuery),
@@ -170,6 +181,13 @@ function makeUploadSupabase(options?: {
     eq: vi.fn((column: string, value: unknown) => {
       attachmentSelectFilters.push({ column, value });
       return attachmentSelectQuery;
+    }),
+    maybeSingle: vi.fn(async () => {
+      const matches = attachmentRows.filter((row) => matchesFilters(row, attachmentSelectFilters));
+      return {
+        data: matches[0] ?? null,
+        error: null,
+      };
     }),
     in: vi.fn(async (column: string, values: unknown[]) => ({
       data: attachmentRows.filter(
@@ -300,7 +318,7 @@ function makeUploadSupabase(options?: {
       },
       from,
       storage: {
-        from: vi.fn(() => ({ upload, remove })),
+        from: vi.fn(() => ({ upload, remove, createSignedUrl })),
       },
       rpc,
     },
@@ -308,6 +326,7 @@ function makeUploadSupabase(options?: {
     rpc,
     upload,
     remove,
+    createSignedUrl,
     chatAttachmentsTable,
     conversationsQuery,
     attachmentRows,
@@ -792,6 +811,104 @@ describe('POST /api/chat/attachments', () => {
       expect.stringMatching(/^user-1\/22222222-2222-4222-8222-222222222222\/[0-9a-f-]+\/notes\.txt$/),
     ]);
     expect(supabase.attachmentRows).toEqual([]);
+  });
+});
+
+describe('GET /api/chat/attachments', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+  });
+
+  it('returns a signed download URL for an owned chat attachment', async () => {
+    const supabase = makeUploadSupabase({
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          filename: 'notes.txt',
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/notes.txt',
+          status: 'attached',
+        },
+      ],
+    });
+    createClient.mockReturnValue(supabase.client);
+
+    const { GET } = await import('../route');
+    const response = await GET(makeGetRequest(
+      'https://app.example.com/api/chat/attachments?attachmentId=11111111-1111-4111-8111-111111111111',
+      { authorization: 'Bearer session-token' },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      success: true,
+      url: 'https://signed.example.com/notes.txt?token=abc',
+      expiresInSeconds: 60,
+      attachment: {
+        id: '11111111-1111-4111-8111-111111111111',
+        filename: 'notes.txt',
+      },
+    });
+    expect(supabase.attachmentSelectQuery.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(supabase.attachmentSelectQuery.eq).toHaveBeenCalledWith('id', '11111111-1111-4111-8111-111111111111');
+    expect(supabase.createSignedUrl).toHaveBeenCalledWith(
+      'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/notes.txt',
+      60,
+      { download: 'notes.txt' },
+    );
+  });
+
+  it('rejects deleted attachments without creating a signed URL', async () => {
+    const supabase = makeUploadSupabase({
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          filename: 'notes.txt',
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/file.txt',
+          status: 'deleted',
+        },
+      ],
+    });
+    createClient.mockReturnValue(supabase.client);
+
+    const { GET } = await import('../route');
+    const response = await GET(makeGetRequest(
+      'https://app.example.com/api/chat/attachments?attachmentId=11111111-1111-4111-8111-111111111111',
+      { authorization: 'Bearer session-token' },
+    ));
+
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Attachment is no longer available',
+    });
+    expect(supabase.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed attachment ids before querying the attachment table', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const { GET } = await import('../route');
+    const response = await GET(makeGetRequest(
+      'https://app.example.com/api/chat/attachments?attachmentId=not-a-uuid',
+      { authorization: 'Bearer session-token' },
+    ));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'attachmentId must be a valid UUID',
+    });
+    expect(supabase.chatAttachmentsTable.select).not.toHaveBeenCalled();
+    expect(supabase.createSignedUrl).not.toHaveBeenCalled();
   });
 });
 

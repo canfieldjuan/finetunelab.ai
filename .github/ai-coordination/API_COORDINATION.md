@@ -32,6 +32,19 @@
   - Shared limits/types: `lib/chat/attachment-limits.ts`, `components/chat/types.ts`
   - Tests: `components/hooks/__tests__/useChat.mcp-sse.test.tsx`, `components/chat/__tests__/MessageList.test.tsx`, `components/hooks/__tests__/chatMessageMetadata.test.ts`, `components/hooks/__tests__/useMessages.test.ts`
 
+**Chat Attachment Signed Downloads**
+- **Started:** 2026-06-30
+- **Model:** Codex
+- **Branch:** `codex/chat-attachment-download-links`
+- **Work:** Add a private signed-download action for persisted chat attachment chips without making storage objects public.
+- **Plan:** `development/planning/2026-06-30_chat-attachment-download-links-plan.md`
+- **Endpoints consumed:** `GET /api/chat/attachments?attachmentId=<uuid>`
+- **Files:**
+  - API: `app/api/chat/attachments/route.ts`
+  - Service: `lib/chat/attachments.ts`
+  - UI: `components/chat/AttachmentChips.tsx`
+  - Tests: `app/api/chat/attachments/__tests__/route.test.ts`, `components/chat/__tests__/MessageList.test.tsx`
+
 ### Recently Completed
 
 **Chat Attachments Backend Contract**
@@ -132,6 +145,34 @@
 ```
 
 **Behavior:** The route verifies the authenticated user, marks only still-`uploaded` rows in that conversation as `deleted`, and removes the private storage objects best-effort after the database transition. Rows already `attaching`/`attached` are refused.
+
+#### GET /api/chat/attachments
+
+**Purpose:** Create a short-lived signed download URL for a private chat attachment that is already visible on a persisted message chip.
+
+**Authentication:** Required Supabase bearer session. Widget/API-key mode is not supported for attachment downloads.
+
+**Request:** query string
+```typescript
+{
+  attachmentId: string; // UUID
+}
+```
+
+**Response (200):**
+```typescript
+{
+  success: true;
+  url: string;              // 60-second Supabase Storage signed URL
+  expiresInSeconds: 60;
+  attachment: {
+    id: string;
+    filename: string;
+  };
+}
+```
+
+**Behavior:** The route verifies the authenticated user, validates `attachmentId` before querying UUID columns, loads the row with a service-role query scoped by `user_id` and `id`, rejects missing or deleted rows, and calls Supabase Storage `createSignedUrl` with `download: filename`. The UI must fetch this endpoint with the current Supabase session token and open the returned URL; rendered chips must not expose public storage hrefs.
 
 #### POST /api/chat attachmentIds
 

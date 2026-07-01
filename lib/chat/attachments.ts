@@ -111,6 +111,17 @@ export function normalizeChatAttachmentIds(value: unknown): string[] {
   return ids;
 }
 
+export function normalizeChatAttachmentId(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new ChatAttachmentError('attachmentId is required');
+  }
+  const attachmentId = value.trim();
+  if (!isValidChatAttachmentUuid(attachmentId)) {
+    throw new ChatAttachmentError('attachmentId must be a valid UUID');
+  }
+  return attachmentId;
+}
+
 function detectFileType(filename: string): DocumentFileType | null {
   const extension = filename.split('.').pop()?.toLowerCase();
   switch (extension) {
@@ -819,4 +830,71 @@ export async function deleteUploadedChatAttachments(params: {
   }
 
   return { deletedIds };
+}
+
+export async function createSignedChatAttachmentDownloadUrl(params: {
+  supabase: SupabaseClient;
+  userId: string;
+  attachmentId: string;
+  expiresInSeconds?: number;
+}): Promise<{
+  id: string;
+  filename: string;
+  signedUrl: string;
+  expiresInSeconds: number;
+}> {
+  const { data, error } = await params.supabase
+    .from('chat_attachments')
+    .select('id, filename, storage_bucket, storage_path, status')
+    .eq('user_id', params.userId)
+    .eq('id', params.attachmentId)
+    .maybeSingle();
+
+  if (error) {
+    throw new ChatAttachmentError(`Failed to load chat attachment: ${error.message}`, 500);
+  }
+  if (!data || !isRecord(data)) {
+    throw new ChatAttachmentError('Attachment not found', 404);
+  }
+
+  const row = data as {
+    id?: unknown;
+    filename?: unknown;
+    storage_bucket?: unknown;
+    storage_path?: unknown;
+    status?: unknown;
+  };
+
+  if (row.status === 'deleted') {
+    throw new ChatAttachmentError('Attachment is no longer available', 410);
+  }
+  if (
+    typeof row.id !== 'string' ||
+    typeof row.filename !== 'string' ||
+    typeof row.storage_bucket !== 'string' ||
+    typeof row.storage_path !== 'string'
+  ) {
+    throw new ChatAttachmentError('Attachment download metadata is incomplete', 500);
+  }
+
+  const expiresInSeconds = params.expiresInSeconds ?? 60;
+  const { data: signed, error: signedError } = await params.supabase.storage
+    .from(row.storage_bucket)
+    .createSignedUrl(row.storage_path, expiresInSeconds, {
+      download: row.filename,
+    });
+
+  if (signedError || !signed?.signedUrl) {
+    throw new ChatAttachmentError(
+      `Failed to create attachment download link: ${signedError?.message ?? 'missing signed URL'}`,
+      500,
+    );
+  }
+
+  return {
+    id: row.id,
+    filename: row.filename,
+    signedUrl: signed.signedUrl,
+    expiresInSeconds,
+  };
 }
