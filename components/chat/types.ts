@@ -22,6 +22,8 @@ export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  contentTruncated?: boolean;
+  originalContentLength?: number;
   citations?: Citation[];
   contextsUsed?: number;
   // Model and performance metadata (populated for assistant messages)

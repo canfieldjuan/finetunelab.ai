@@ -54,12 +54,40 @@ export interface MessageListProps {
   snippetRevisionAuthToken?: string | null;
 }
 
-const TRUNCATED_MESSAGE_MARKER = '... [Message truncated due to size. Original length:';
+interface SnippetRevisionAvailability {
+  canRevise: boolean;
+  reason?: string;
+}
 
-function canReviseMessage(message: Message): boolean {
-  return message.role === 'assistant' &&
-    message.content.trim().length > 0 &&
-    !message.content.includes(TRUNCATED_MESSAGE_MARKER);
+function getSnippetRevisionAvailability(
+  message: Message,
+  options: { hasAuthToken: boolean; hasSelectedModel: boolean },
+): SnippetRevisionAvailability {
+  if (message.role !== 'assistant') {
+    return { canRevise: false, reason: 'Only assistant messages can be revised' };
+  }
+
+  if (message.id.startsWith('temp-')) {
+    return { canRevise: false, reason: 'Revision is available after this response is saved' };
+  }
+
+  if (message.contentTruncated) {
+    return { canRevise: false, reason: 'Load the full message before revising' };
+  }
+
+  if (!message.content.trim()) {
+    return { canRevise: false, reason: 'Revision unavailable for empty messages' };
+  }
+
+  if (!options.hasAuthToken) {
+    return { canRevise: false, reason: 'Sign in to revise assistant text' };
+  }
+
+  if (!options.hasSelectedModel) {
+    return { canRevise: false, reason: 'Select a model to revise text' };
+  }
+
+  return { canRevise: true };
 }
 
 function formatToolName(name: string): string {
@@ -145,19 +173,26 @@ export function MessageList({
   snippetRevisionAuthToken
 }: MessageListProps) {
   const [revisionMessage, setRevisionMessage] = useState<Message | null>(null);
+  const revisionOptions = {
+    hasAuthToken: Boolean(snippetRevisionAuthToken),
+    hasSelectedModel: Boolean(snippetRevisionModelId && snippetRevisionModelId !== '__default__'),
+  };
 
   return (
     <>
-      {messages.map((msg) => (
-        <div
-          key={msg.id + msg.role}
-          className={`group relative mb-6 ${
-            msg.role === "user"
-              ? "flex justify-end"
-              : "flex justify-start"
-          }`}
-        >
-          <div className={`flex flex-col ${msg.role === "user" ? "items-end max-w-[70%]" : "items-start max-w-[90%]"}`}>
+      {messages.map((msg) => {
+        const revisionAvailability = getSnippetRevisionAvailability(msg, revisionOptions);
+
+        return (
+          <div
+            key={msg.id + msg.role}
+            className={`group relative mb-6 ${
+              msg.role === "user"
+                ? "flex justify-end"
+                : "flex justify-start"
+            }`}
+          >
+            <div className={`flex flex-col ${msg.role === "user" ? "items-end max-w-[70%]" : "items-start max-w-[90%]"}`}>
             <div
               className={
                 msg.role === "user"
@@ -281,8 +316,8 @@ export function MessageList({
                       onClick={() => setRevisionMessage(msg)}
                       className="h-7 w-7 p-0 hover:bg-muted"
                       aria-label="Revise selected text"
-                      title={canReviseMessage(msg) ? "Revise selected text" : "Revision unavailable for truncated messages"}
-                      disabled={!canReviseMessage(msg)}
+                      title={revisionAvailability.canRevise ? "Revise selected text" : revisionAvailability.reason}
+                      disabled={!revisionAvailability.canRevise}
                     >
                       <PencilLine className="w-4 h-4" />
                     </Button>
@@ -366,13 +401,15 @@ export function MessageList({
               </div>
             )}
           </div>
-        </div>
-      ))}
+          </div>
+        );
+      })}
       {revisionMessage && onApplySnippetRevision && (
         <SnippetRevisionDialog
           open={Boolean(revisionMessage)}
           messageId={revisionMessage.id}
           content={revisionMessage.content}
+          contentTruncated={Boolean(revisionMessage.contentTruncated)}
           modelId={snippetRevisionModelId}
           authToken={snippetRevisionAuthToken}
           onOpenChange={(open) => {

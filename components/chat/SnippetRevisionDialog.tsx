@@ -25,6 +25,7 @@ interface SnippetRevisionDialogProps {
   open: boolean;
   messageId: string;
   content: string;
+  contentTruncated?: boolean;
   modelId?: string | null;
   authToken?: string | null;
   onOpenChange: (open: boolean) => void;
@@ -32,12 +33,6 @@ interface SnippetRevisionDialogProps {
 }
 
 type RevisionStatus = 'idle' | 'generating' | 'applying';
-
-const TRUNCATED_MESSAGE_MARKER = '... [Message truncated due to size. Original length:';
-
-function isTruncatedMessageContent(content: string): boolean {
-  return content.includes(TRUNCATED_MESSAGE_MARKER);
-}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof SnippetRevisionApiError) {
@@ -51,10 +46,36 @@ function getErrorMessage(error: unknown): string {
   return 'Something went wrong while revising this text.';
 }
 
+function normalizeLineEndings(value: string): string {
+  return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function mapNormalizedOffsetToSourceOffset(source: string, normalizedOffset: number): number {
+  let normalizedIndex = 0;
+
+  for (let sourceIndex = 0; sourceIndex < source.length; sourceIndex += 1) {
+    if (normalizedIndex >= normalizedOffset) {
+      return sourceIndex;
+    }
+
+    if (source[sourceIndex] === '\r') {
+      if (source[sourceIndex + 1] === '\n') {
+        sourceIndex += 1;
+      }
+      normalizedIndex += 1;
+    } else {
+      normalizedIndex += 1;
+    }
+  }
+
+  return source.length;
+}
+
 export function SnippetRevisionDialog({
   open,
   messageId,
   content,
+  contentTruncated = false,
   modelId,
   authToken,
   onOpenChange,
@@ -69,14 +90,19 @@ export function SnippetRevisionDialog({
   const lineNumberRef = useRef<HTMLDivElement | null>(null);
   const sourceRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const isTruncated = isTruncatedMessageContent(content);
+  const displayContent = useMemo(() => normalizeLineEndings(content), [content]);
+  const isTruncated = contentTruncated;
+  const hasRewriteAuth = Boolean(authToken);
+  const hasSelectedModel = Boolean(modelId && modelId !== '__default__');
   const lineNumbers = useMemo(() => {
-    const count = Math.max(1, content.split('\n').length);
+    const count = Math.max(1, displayContent.split('\n').length);
     return Array.from({ length: count }, (_, index) => index + 1);
-  }, [content]);
+  }, [displayContent]);
 
   const canGenerate = Boolean(
     !isTruncated &&
+    hasRewriteAuth &&
+    hasSelectedModel &&
     selection &&
     instruction.trim().length > 0 &&
     status === 'idle',
@@ -115,10 +141,13 @@ export function SnippetRevisionDialog({
       return;
     }
 
+    const sourceStart = mapNormalizedOffsetToSourceOffset(content, start);
+    const sourceEnd = mapNormalizedOffsetToSourceOffset(content, end);
+
     setSelection({
-      start,
-      end,
-      expectedText: content.slice(start, end),
+      start: sourceStart,
+      end: sourceEnd,
+      expectedText: content.slice(sourceStart, sourceEnd),
     });
     setPreviewResult(null);
     setReplacement('');
@@ -132,7 +161,7 @@ export function SnippetRevisionDialog({
   };
 
   const handleGeneratePreview = async () => {
-    if (!selection || isTruncated) {
+    if (!selection || isTruncated || !hasRewriteAuth || !hasSelectedModel) {
       return;
     }
 
@@ -146,7 +175,7 @@ export function SnippetRevisionDialog({
         sourceText: content,
         selection,
         instruction: instruction.trim(),
-        modelId,
+        modelId: modelId as string,
       }, {
         authToken,
       });
@@ -247,7 +276,7 @@ export function SnippetRevisionDialog({
                 <Textarea
                   id="snippet-revision-source"
                   ref={sourceRef}
-                  value={content}
+                  value={displayContent}
                   readOnly
                   onSelect={handleSourceSelect}
                   onScroll={handleSourceScroll}

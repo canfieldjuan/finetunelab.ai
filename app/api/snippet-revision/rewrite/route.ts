@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { loadLLMConfig } from '@/lib/config/llmConfig';
-import { runAnthropicWithToolCalls } from '@/lib/llm/anthropic';
-import { getOpenAIResponse, type ChatMessage } from '@/lib/llm/openai';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { ChatMessage } from '@/lib/llm/openai';
 import { unifiedLLMClient } from '@/lib/llm/unified-client';
 
 export const runtime = 'nodejs';
@@ -22,16 +20,30 @@ type ParseResult =
   | { ok: true; request: SnippetRewriteRequest }
   | { ok: false; code: string; message: string };
 
+type AuthResult =
+  | { ok: true; userId: string; supabase: SupabaseClient }
+  | { ok: false; code: string; message: string; status: number };
+
+type ModelAuthorizationResult =
+  | { ok: true; modelId: string; maxOutputTokens: number }
+  | { ok: false; code: string; message: string; status: number };
+
+type ReplacementParseResult =
+  | { ok: true; replacement: string }
+  | { ok: false; code: string; message: string };
+
 const MAX_SOURCE_TEXT_CHARS = 200_000;
-const MAX_SELECTED_TEXT_CHARS = 20_000;
+const MAX_SELECTED_TEXT_CHARS = 4_000;
 const MAX_INSTRUCTION_CHARS = 2_000;
 const CONTEXT_CHARS_PER_SIDE = 2_000;
-const DEFAULT_MAX_REWRITE_TOKENS = 1_000;
+const DEFAULT_MAX_REWRITE_TOKENS = 2_000;
+const MIN_REWRITE_TOKENS = 128;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
   if (!auth.ok) {
-    return validationError(auth.code, auth.message, 401);
+    return validationError(auth.code, auth.message, auth.status);
   }
 
   let body: unknown;
@@ -47,45 +59,60 @@ export async function POST(request: NextRequest) {
   }
 
   const { request: rewriteRequest } = parsed;
+  const modelAuthorization = await authorizeRewriteModel(auth.supabase, rewriteRequest.modelId);
+  if (!modelAuthorization.ok) {
+    return validationError(modelAuthorization.code, modelAuthorization.message, modelAuthorization.status);
+  }
+
   const messages = buildRewriteMessages(rewriteRequest);
 
   try {
     const rawReplacement = await generateReplacementText({
       messages,
-      modelId: rewriteRequest.modelId,
+      modelId: modelAuthorization.modelId,
       userId: auth.userId,
       selectedLength: rewriteRequest.selection.expectedText.length,
+      modelMaxOutputTokens: modelAuthorization.maxOutputTokens,
     });
     const replacement = extractReplacementText(rawReplacement);
 
-    if (!replacement) {
-      return validationError('empty_replacement', 'The model returned an empty replacement.', 502);
+    if (!replacement.ok) {
+      return validationError(replacement.code, replacement.message, 502);
     }
 
     return NextResponse.json({
-      replacement,
-      modelId: normalizeModelId(rewriteRequest.modelId),
+      replacement: replacement.replacement,
+      modelId: modelAuthorization.modelId,
     });
   } catch (error) {
     console.error('[SnippetRewrite] Failed to generate replacement:', error);
-    return validationError(
-      'rewrite_failed',
-      error instanceof Error ? error.message : 'Failed to generate replacement text.',
-      502,
-    );
+    return validationError('rewrite_failed', 'Failed to generate replacement text.', 502);
   }
 }
 
-async function authenticateRequest(
-  request: NextRequest,
-): Promise<{ ok: true; userId: string } | { ok: false; code: string; message: string }> {
+async function authenticateRequest(request: NextRequest): Promise<AuthResult> {
   const authHeader = request.headers.get('authorization');
   if (!authHeader) {
-    return { ok: false, code: 'unauthorized', message: 'Authorization header is required.' };
+    return {
+      ok: false,
+      code: 'unauthorized',
+      message: 'Authorization header is required.',
+      status: 401,
+    };
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxxxxxxxxxx.supabase.co';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('[SnippetRewrite] Missing Supabase public environment variables.');
+    return {
+      ok: false,
+      code: 'server_config_error',
+      message: 'Snippet rewrite is not configured.',
+      status: 500,
+    };
+  }
+
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: {
       headers: {
@@ -96,10 +123,15 @@ async function authenticateRequest(
 
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) {
-    return { ok: false, code: 'unauthorized', message: 'Invalid authorization token.' };
+    return {
+      ok: false,
+      code: 'unauthorized',
+      message: 'Invalid authorization token.',
+      status: 401,
+    };
   }
 
-  return { ok: true, userId: user.id };
+  return { ok: true, userId: user.id, supabase };
 }
 
 function parseSnippetRewriteRequest(body: unknown): ParseResult {
@@ -171,6 +203,71 @@ function parseSnippetRewriteRequest(body: unknown): ParseResult {
   };
 }
 
+async function authorizeRewriteModel(
+  supabase: SupabaseClient,
+  modelId?: string | null,
+): Promise<ModelAuthorizationResult> {
+  const normalizedModelId = normalizeModelId(modelId);
+  if (!normalizedModelId) {
+    return {
+      ok: false,
+      code: 'model_required',
+      message: 'Select a portal model before generating a snippet rewrite.',
+      status: 400,
+    };
+  }
+
+  if (!UUID_REGEX.test(normalizedModelId)) {
+    return {
+      ok: false,
+      code: 'invalid_model_id',
+      message: 'modelId must be an enabled portal model UUID.',
+      status: 400,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from('llm_models')
+    .select('id, max_output_tokens')
+    .eq('id', normalizedModelId)
+    .eq('enabled', true)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return {
+        ok: false,
+        code: 'model_forbidden',
+        message: 'Selected model is not available for this user.',
+        status: 403,
+      };
+    }
+
+    console.error('[SnippetRewrite] Failed to authorize model:', error);
+    return {
+      ok: false,
+      code: 'model_lookup_failed',
+      message: 'Failed to validate selected model.',
+      status: 500,
+    };
+  }
+
+  if (!data?.id) {
+    return {
+      ok: false,
+      code: 'model_forbidden',
+      message: 'Selected model is not available for this user.',
+      status: 403,
+    };
+  }
+
+  return {
+    ok: true,
+    modelId: data.id,
+    maxOutputTokens: normalizeMaxOutputTokens(data.max_output_tokens),
+  };
+}
+
 function buildRewriteMessages(request: SnippetRewriteRequest): ChatMessage[] {
   const { sourceText, selection, instruction } = request;
   const beforeStart = Math.max(0, selection.start - CONTEXT_CHARS_PER_SIDE);
@@ -189,6 +286,7 @@ function buildRewriteMessages(request: SnippetRewriteRequest): ChatMessage[] {
     {
       role: 'user',
       content: [
+        'Output contract:\nReturn exactly one <replacement>...</replacement> block. Do not include surrounding context, labels, commentary, or Markdown fences.',
         `Instruction:\n${instruction}`,
         `Context before selection:\n${before || '[start of message]'}`,
         `Selected text to rewrite:\n${selection.expectedText}`,
@@ -200,57 +298,54 @@ function buildRewriteMessages(request: SnippetRewriteRequest): ChatMessage[] {
 
 async function generateReplacementText(params: {
   messages: ChatMessage[];
-  modelId?: string | null;
+  modelId: string;
   userId: string;
   selectedLength: number;
+  modelMaxOutputTokens: number;
 }): Promise<string> {
-  const maxTokens = Math.max(
-    128,
-    Math.min(DEFAULT_MAX_REWRITE_TOKENS, Math.ceil(params.selectedLength / 3) + 256),
-  );
-  const normalizedModelId = normalizeModelId(params.modelId);
-
-  if (normalizedModelId) {
-    const response = await unifiedLLMClient.chat(normalizedModelId, params.messages, {
-      userId: params.userId,
-      temperature: 0.2,
-      maxTokens,
-      skipGuardrails: false,
-    });
-    return response.content;
-  }
-
-  const config = loadLLMConfig();
-  if (config.provider === 'anthropic') {
-    const response = await runAnthropicWithToolCalls(
-      params.messages,
-      config.anthropic?.model,
-      0.2,
-      maxTokens,
-      [],
-    );
-    return response.content;
-  }
-
-  if (config.provider === 'openai') {
-    return getOpenAIResponse(
-      params.messages,
-      config.openai?.model,
-      0.2,
-      maxTokens,
-    );
-  }
-
-  throw new Error(`Snippet rewrite does not support default provider: ${config.provider}`);
+  const response = await unifiedLLMClient.chat(params.modelId, params.messages, {
+    userId: params.userId,
+    temperature: 0.2,
+    maxTokens: getRewriteMaxTokens(params.selectedLength, params.modelMaxOutputTokens),
+    skipGuardrails: false,
+  });
+  return response.content;
 }
 
-function extractReplacementText(responseText: string): string {
+function extractReplacementText(responseText: string): ReplacementParseResult {
   const match = /<replacement>([\s\S]*?)<\/replacement>/i.exec(responseText);
-  if (match) {
-    return match[1].replace(/^\n/, '').replace(/\n$/, '');
+  if (!match) {
+    return {
+      ok: false,
+      code: 'replacement_tag_missing',
+      message: 'The model did not return a replacement block.',
+    };
   }
 
-  return responseText.trim();
+  const replacement = match[1].replace(/^\n/, '').replace(/\n$/, '');
+  if (!replacement) {
+    return {
+      ok: false,
+      code: 'empty_replacement',
+      message: 'The model returned an empty replacement.',
+    };
+  }
+
+  return { ok: true, replacement };
+}
+
+function getRewriteMaxTokens(selectedLength: number, modelMaxOutputTokens: number): number {
+  const desiredTokens = Math.ceil(selectedLength / 3) + 512;
+  const requestedTokens = Math.max(MIN_REWRITE_TOKENS, desiredTokens);
+  return Math.min(modelMaxOutputTokens, requestedTokens);
+}
+
+function normalizeMaxOutputTokens(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  return DEFAULT_MAX_REWRITE_TOKENS;
 }
 
 function normalizeModelId(modelId?: string | null): string | null {

@@ -950,35 +950,45 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   }, [messages, handleSendMessage, setMessages]);
 
   const handleApplySnippetRevision = useCallback(async (messageId: string, updatedText: string) => {
-    const shouldPersist = Boolean(
-      user &&
-      session?.access_token &&
-      activeId &&
-      !demoMode &&
-      !isWidgetMode &&
-      !messageId.startsWith('temp-')
-    );
+    const currentMessage = messages.find(message => message.id === messageId);
+    if (!currentMessage) {
+      throw new Error('Message no longer exists.');
+    }
 
-    if (shouldPersist) {
-      const { error: updateError } = await supabase
-        .from("messages")
-        .update({ content: updatedText })
-        .eq("id", messageId)
-        .eq("conversation_id", activeId)
-        .eq("role", "assistant");
+    if (currentMessage.role !== 'assistant') {
+      throw new Error('Only assistant messages can be revised.');
+    }
 
-      if (updateError) {
-        log.error('Chat', 'Failed to save snippet revision', { error: updateError, messageId });
-        throw new Error(updateError.message || 'Failed to save revised message.');
-      }
+    if (messageId.startsWith('temp-')) {
+      throw new Error('Wait for the response to finish saving before revising.');
+    }
+
+    if (currentMessage.contentTruncated) {
+      throw new Error('Load the full message before revising.');
+    }
+
+    if (!user || !session?.access_token || !activeId || demoMode || isWidgetMode) {
+      throw new Error('Sign in to revise saved assistant text.');
+    }
+
+    const { error: updateError } = await supabase
+      .from("messages")
+      .update({ content: updatedText })
+      .eq("id", messageId)
+      .eq("conversation_id", activeId)
+      .eq("role", "assistant");
+
+    if (updateError) {
+      log.error('Chat', 'Failed to save snippet revision', { error: updateError, messageId });
+      throw new Error(updateError.message || 'Failed to save revised message.');
     }
 
     setMessages(prev => prev.map(message => (
       message.id === messageId
-        ? { ...message, content: updatedText }
+        ? { ...message, content: updatedText, contentTruncated: false, originalContentLength: undefined }
         : message
     )));
-  }, [activeId, demoMode, isWidgetMode, session?.access_token, setMessages, user]);
+  }, [activeId, demoMode, isWidgetMode, messages, session?.access_token, setMessages, user]);
 
   const handleArchiveConversation = async (conversationId: string) => {
     if ((!userId || !user) && !demoMode) {

@@ -10,6 +10,7 @@ import type { Message } from '../types';
 const getSession = vi.hoisted(() => vi.fn());
 const requestSnippetRewriteMock = vi.hoisted(() => vi.fn());
 const requestSnippetRevisionMock = vi.hoisted(() => vi.fn());
+const MODEL_ID = '11111111-1111-1111-1111-111111111111';
 
 vi.mock('@/lib/supabaseClient', () => ({
   supabase: {
@@ -48,6 +49,8 @@ function renderList(messages: Message[], overrides: Partial<React.ComponentProps
       onEmailResearch={noop}
       onDownloadResearch={noop}
       isDeepResearchResult={() => false}
+      snippetRevisionModelId={MODEL_ID}
+      snippetRevisionAuthToken="session-token"
       {...overrides}
     />
   );
@@ -299,7 +302,7 @@ describe('MessageList snippet revision actions', () => {
 
     requestSnippetRewriteMock.mockResolvedValue({
       replacement: 'Sharper middle.',
-      modelId: 'model-123',
+      modelId: MODEL_ID,
     });
     requestSnippetRevisionMock.mockImplementation(async (request) => ({
       ok: true,
@@ -323,7 +326,7 @@ describe('MessageList snippet revision actions', () => {
       },
     ], {
       onApplySnippetRevision: onApply,
-      snippetRevisionModelId: 'model-123',
+      snippetRevisionModelId: MODEL_ID,
       snippetRevisionAuthToken: 'session-token',
     });
 
@@ -349,7 +352,7 @@ describe('MessageList snippet revision actions', () => {
           expectedText: 'Soft middle.',
         },
         instruction: 'Make it sharper.',
-        modelId: 'model-123',
+        modelId: MODEL_ID,
       }, {
         authToken: 'session-token',
       });
@@ -383,12 +386,156 @@ describe('MessageList snippet revision actions', () => {
         id: 'assistant-1',
         role: 'assistant',
         content: 'Partial response.\n\n... [Message truncated due to size. Original length: 60000 characters]',
+        contentTruncated: true,
+        originalContentLength: 60_000,
       },
     ], {
       onApplySnippetRevision: vi.fn(),
     });
 
     expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toHaveAttribute(
+      'title',
+      'Load the full message before revising',
+    );
+  });
+
+  it('disables snippet revision for unsaved temporary assistant messages', () => {
+    renderList([
+      {
+        id: 'temp-assistant-1',
+        role: 'assistant',
+        content: 'Response is still saving.',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toHaveAttribute(
+      'title',
+      'Revision is available after this response is saved',
+    );
+  });
+
+  it('explains auth and model blockers independently', () => {
+    const { rerender } = renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Saved response.',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+      snippetRevisionAuthToken: null,
+    });
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toHaveAttribute(
+      'title',
+      'Sign in to revise assistant text',
+    );
+
+    rerender(
+      <MessageList
+        messages={[{
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'Saved response.',
+        }]}
+        feedback={{}}
+        copiedMessageId={null}
+        speakingMessageId={null}
+        isSpeaking={false}
+        isPaused={false}
+        ttsSupported={false}
+        ttsEnabled={false}
+        onCopyMessage={noop}
+        onFeedback={noop}
+        onToggleTTS={noop}
+        onStopTTS={noop}
+        onEvaluate={noop}
+        onEmailResearch={noop}
+        onDownloadResearch={noop}
+        isDeepResearchResult={() => false}
+        onApplySnippetRevision={vi.fn()}
+        snippetRevisionAuthToken="session-token"
+        snippetRevisionModelId="__default__"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toHaveAttribute(
+      'title',
+      'Select a model to revise text',
+    );
+  });
+
+  it('maps normalized textarea selections back to CRLF source offsets', async () => {
+    const message = 'Opening.\r\nSoft middle.\r\nClosing.';
+    const displayMessage = 'Opening.\nSoft middle.\nClosing.';
+    const displayStart = displayMessage.indexOf('Soft middle.');
+    const displayEnd = displayStart + 'Soft middle.'.length;
+    const sourceStart = message.indexOf('Soft middle.');
+    const sourceEnd = sourceStart + 'Soft middle.'.length;
+    const onApply = vi.fn();
+
+    requestSnippetRewriteMock.mockResolvedValue({
+      replacement: 'Sharper middle.',
+      modelId: MODEL_ID,
+    });
+    requestSnippetRevisionMock.mockResolvedValue({
+      ok: true,
+      applied: false,
+      updatedText: 'Opening.\r\nSharper middle.\r\nClosing.',
+      unchanged: false,
+      change: {
+        mode: 'replace_range',
+        start: sourceStart,
+        end: sourceEnd,
+        original: 'Soft middle.',
+        replacement: 'Sharper middle.',
+      },
+    });
+
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: message,
+      },
+    ], {
+      onApplySnippetRevision: onApply,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revise selected text' }));
+
+    const source = await screen.findByLabelText('Assistant response source') as HTMLTextAreaElement;
+    expect(source.value).toBe(displayMessage);
+    source.setSelectionRange(displayStart, displayEnd);
+    fireEvent.select(source);
+    fireEvent.change(screen.getByLabelText('Revision instruction'), {
+      target: {
+        value: 'Make it sharper.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+
+    await waitFor(() => {
+      expect(requestSnippetRewriteMock).toHaveBeenCalledWith({
+        sourceText: message,
+        selection: {
+          start: sourceStart,
+          end: sourceEnd,
+          expectedText: 'Soft middle.',
+        },
+        instruction: 'Make it sharper.',
+        modelId: MODEL_ID,
+      }, {
+        authToken: 'session-token',
+      });
+    });
   });
 
   it('keeps the full-message regenerate action intact', () => {

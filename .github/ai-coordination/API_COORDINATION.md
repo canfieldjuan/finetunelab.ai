@@ -217,7 +217,7 @@
 
 **Purpose:** Generate replacement text only for a selected assistant-message source range. This route does not apply the edit; callers must pass the replacement through `POST /api/snippet-revision` with `replace_range` before updating local or persisted message content.
 
-**Authentication:** Required Supabase bearer session. The selected model uses the authenticated user id for provider-secret lookup when `modelId` is supplied.
+**Authentication:** Required Supabase bearer session. The route fails closed with `server_config_error` when the public Supabase URL/key env vars are missing. The selected model is checked through the authenticated Supabase client before generation so RLS limits rewrites to enabled global models visible to the user or the user's own enabled models.
 
 **Request:**
 ```typescript
@@ -226,10 +226,10 @@
   selection: {
     start: number;          // zero-based offset in sourceText
     end: number;            // zero-based exclusive offset
-    expectedText: string;   // must equal sourceText.slice(start, end), max 20,000 chars
+    expectedText: string;   // must equal sourceText.slice(start, end), max 4,000 chars
   };
   instruction: string;      // rewrite instruction, max 2,000 chars
-  modelId?: string | null;  // selected portal model id; "__default__" falls back to env LLM config
+  modelId: string;          // selected enabled portal model UUID; "__default__" is rejected
 }
 ```
 
@@ -237,16 +237,18 @@
 ```typescript
 {
   replacement: string;
-  modelId: string | null;
+  modelId: string;
 }
 ```
 
 **Behavior:**
 - Rejects stale selections before any model call when `expectedText` no longer matches the submitted range.
+- Rejects missing/default/non-UUID/inaccessible models before calling the LLM client.
 - Uses bounded surrounding context rather than sending the entire source text to the model.
-- Prompts the model to return replacement text only, parses a `<replacement>...</replacement>` wrapper when present, and returns the fallback raw text trimmed when the wrapper is missing.
+- Prompts the model to return replacement text only and requires exactly one `<replacement>...</replacement>` wrapper. Missing or empty wrappers are 502 errors; raw explanatory output is not accepted.
+- Returns stable generic `rewrite_failed` errors for provider/runtime failures while logging details server-side.
 - The portal UI applies successful replacements through `requestSnippetRevision({ action: "apply", revision: { mode: "replace_range", ... } })` before mutating message content.
-- Locally truncated messages from `useMessages` are not editable; callers must load full source before attempting a surgical edit.
+- Locally truncated messages from `useMessages` are marked with structured `contentTruncated` / `originalContentLength` fields and are not editable; callers must load full source before attempting a surgical edit.
 
 #### POST /api/snippet-revision
 

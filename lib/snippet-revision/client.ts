@@ -29,12 +29,12 @@ export interface SnippetRewriteApiRequest {
   sourceText: string;
   selection: SnippetRewriteSelection;
   instruction: string;
-  modelId?: string | null;
+  modelId: string;
 }
 
 export interface SnippetRewriteApiResponse {
   replacement: string;
-  modelId: string | null;
+  modelId: string;
 }
 
 export interface SnippetRewriteClientOptions {
@@ -171,7 +171,7 @@ export async function requestSnippetRewrite(
   if (
     !isRecord(payload) ||
     typeof payload.replacement !== 'string' ||
-    (payload.modelId !== null && typeof payload.modelId !== 'string')
+    typeof payload.modelId !== 'string'
   ) {
     throw new SnippetRevisionApiError('Snippet rewrite API returned an invalid response.', {
       code: 'invalid_response',
