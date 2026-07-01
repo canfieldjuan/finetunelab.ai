@@ -2,9 +2,23 @@
 // Handles Anthropic Claude API format
 // Date: 2025-10-14
 
-import type { ChatMessage, ToolDefinition } from '../openai';
+import {
+  getChatMessageTextContent,
+  type ChatMessage,
+  type ChatMessageContent,
+  type ToolDefinition,
+} from '../openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
 import { BaseProviderAdapter, type AdapterRequest, type AdapterResponse } from './base-adapter';
+
+function parseDataUrl(value: string): { mediaType: string; base64: string } | null {
+  const match = /^data:([^;,]+);base64,([a-zA-Z0-9+/=]+)$/u.exec(value);
+  if (!match) return null;
+  return {
+    mediaType: match[1],
+    base64: match[2],
+  };
+}
 
 // ============================================================================
 // Anthropic Adapter
@@ -51,7 +65,7 @@ export class AnthropicAdapter extends BaseProviderAdapter {
     const headers = this.buildAuthHeaders(config);
 
     // Filter system messages (Anthropic handles system differently)
-    const systemMessage = messages.find(m => m.role === 'system')?.content || undefined;
+    const systemMessage = getChatMessageTextContent(messages.find(m => m.role === 'system')?.content);
     const userAssistantMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant');
 
     // Build request body
@@ -124,9 +138,7 @@ export class AnthropicAdapter extends BaseProviderAdapter {
   }> {
     return messages
       .filter(msg => {
-        const hasContent = msg.content !== null &&
-                          msg.content !== undefined &&
-                          msg.content.trim().length > 0;
+        const hasContent = this.hasContent(msg.content);
         if (!hasContent) {
           console.warn('[AnthropicAdapter] Skipping message with empty content:', {
             role: msg.role,
@@ -137,8 +149,48 @@ export class AnthropicAdapter extends BaseProviderAdapter {
       })
       .map(msg => ({
         role: msg.role as 'user' | 'assistant',
-        content: msg.content as string,
+        content: this.formatContent(msg.content),
       }));
+  }
+
+  private hasContent(content: ChatMessageContent | null): boolean {
+    if (typeof content === 'string') return content.trim().length > 0;
+    if (!Array.isArray(content)) return false;
+    return content.some((part) => (
+      part.type === 'text'
+        ? part.text.trim().length > 0
+        : !!part.image_url.url
+    ));
+  }
+
+  private formatContent(content: ChatMessageContent | null): string | unknown[] {
+    if (!Array.isArray(content)) return content || '';
+
+    return content.flatMap((part): unknown[] => {
+      if (part.type === 'text') {
+        return part.text.trim().length > 0 ? [{ type: 'text', text: part.text }] : [];
+      }
+
+      const parsed = parseDataUrl(part.image_url.url);
+      if (parsed) {
+        return [{
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: parsed.mediaType,
+            data: parsed.base64,
+          },
+        }];
+      }
+
+      return [{
+        type: 'image',
+        source: {
+          type: 'url',
+          url: part.image_url.url,
+        },
+      }];
+    });
   }
 
   /**

@@ -33,8 +33,10 @@ import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
 import { resolveChatUser } from '@/lib/chat/resolve-chat-user';
 import {
   appendAttachmentContextToLatestUserMessage,
+  appendVisionPartsToLatestUserMessage,
   ChatAttachmentError,
   claimChatAttachmentsForTurn,
+  createChatAttachmentVisionParts,
   normalizeChatConversationId,
   markChatAttachmentsAttached,
   normalizeChatAttachmentIds,
@@ -44,6 +46,7 @@ import {
   type ChatAttachmentDto,
   type ResolvedChatAttachments,
 } from '@/lib/chat/attachments';
+import { getChatMessageTextContent } from '@/lib/llm/openai';
 import { normalizeGenerationSettings, type RawGenerationSettings } from '@/lib/llm/generation-settings';
 // DEPRECATED: import { recordUsageEvent } from '@/lib/usage/checker';
 import { generateSessionTag } from '@/lib/session-tagging/generator';
@@ -987,7 +990,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       if (!effectiveChatAttachments || !modelConfig?.context_length) return null;
 
       const estimatedInputTokens = Math.ceil(
-        enhancedMessages.map((message) => message.content || '').join(' ').length / 4,
+        enhancedMessages.map((message) => getChatMessageTextContent(message.content)).join(' ').length / 4,
       );
       const minimumOutputTokens = 100;
       if (estimatedInputTokens + minimumOutputTokens <= modelConfig.context_length) {
@@ -1007,6 +1010,26 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         status: 413,
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+
+    let visionMessagesCache: ChatMessage[] | null = null;
+
+    async function messagesForModel(
+      modelConfig: ModelConfig | null | undefined,
+    ): Promise<ChatMessage[]> {
+      if (!effectiveChatAttachments?.images.length || !modelConfig?.supports_vision) {
+        return enhancedMessages;
+      }
+      if (!supabaseAdmin) return enhancedMessages;
+      if (!visionMessagesCache) {
+        const imageParts = await createChatAttachmentVisionParts({
+          supabase: supabaseAdmin,
+          attachments: effectiveChatAttachments,
+        });
+        visionMessagesCache = enhancedMessages.map((message) => ({ ...message }));
+        appendVisionPartsToLatestUserMessage(visionMessagesCache, imageParts);
+      }
+      return visionMessagesCache;
     }
 
     // ========================================================================
@@ -1478,7 +1501,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           : requestedOrModelMaxTokens;
         if (actualModelConfig?.context_length) {
           // Estimate input tokens (rough: 1 token ≈ 4 chars)
-          const inputText = enhancedMessages.map(m => m.content).join(' ');
+          const inputText = enhancedMessages.map(m => getChatMessageTextContent(m.content)).join(' ');
           const estimatedInputTokens = Math.ceil(inputText.length / 4);
 
           // Calculate available space for output
@@ -1499,6 +1522,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
         effectiveTraceTemperature = effectiveTemperature;
         effectiveTraceMaxTokens = safeMaxTokens;
+        const modelMessages = await messagesForModel(actualModelConfig);
 
         // Start trace for LLM operation
         console.log(`[API] [${requestId}] [DEBUG-CHECKPOINT-4] About to start trace with selectedModelId:`, selectedModelId);
@@ -1517,7 +1541,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         try {
           llmResponse = await unifiedLLMClient.chat(
             selectedModelId,
-            enhancedMessages,
+            modelMessages,
             {
               tools: activeTools,
               temperature: effectiveTemperature,
@@ -1546,7 +1570,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               // Fallback to legacy provider path using default configured model
               llmResponse = provider === 'anthropic'
                 ? await runAnthropicWithToolCalls(
-                    enhancedMessages,
+                    await messagesForModel(actualModelConfig),
                     model,
                     effectiveTemperature,
                     safeMaxTokens,
@@ -1559,7 +1583,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     }
                   )
                 : await runLLMWithToolCalls(
-                    enhancedMessages,
+                    await messagesForModel(actualModelConfig),
                     model,
                     effectiveTemperature,
                     safeMaxTokens,
@@ -1689,7 +1713,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           : requestedOrModelMaxTokens;
 
         if (actualModelConfig?.context_length) {
-          const inputText = enhancedMessages.map(m => m.content).join(' ');
+          const inputText = enhancedMessages.map(m => getChatMessageTextContent(m.content)).join(' ');
           const estimatedInputTokens = Math.ceil(inputText.length / 4);
           const availableTokens = actualModelConfig.context_length - estimatedInputTokens;
           const safetyMargin = 100;
@@ -1705,6 +1729,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         }
         effectiveTraceTemperature = effectiveTemperature;
         effectiveTraceMaxTokens = safeMaxTokens;
+        const modelMessages = await messagesForModel(actualModelConfig);
 
         // Start trace for legacy LLM operation
         traceContext = await traceService.startTrace({
@@ -1719,7 +1744,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
         llmResponse = provider === 'anthropic'
           ? await runAnthropicWithToolCalls(
-              enhancedMessages,
+              modelMessages,
               model,
               effectiveTemperature,
               safeMaxTokens,
@@ -1732,7 +1757,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               }
             )
           : await runLLMWithToolCalls(
-              enhancedMessages,
+              modelMessages,
               model,
               effectiveTemperature,
               safeMaxTokens,
@@ -2369,7 +2394,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       if (actualModelConfig?.context_length) {
-        const inputText = enhancedMessages.map(m => m.content).join(' ');
+        const inputText = enhancedMessages.map(m => getChatMessageTextContent(m.content)).join(' ');
         const estimatedInputTokens = Math.ceil(inputText.length / 4);
         const availableTokens = actualModelConfig.context_length - estimatedInputTokens;
         const safetyMargin = 100;
@@ -2385,6 +2410,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
       effectiveTraceTemperature = effectiveTemperature;
       effectiveTraceMaxTokens = effectiveMaxTokens;
+      const modelMessages = await messagesForModel(actualModelConfig);
 
       // Create metadata object for persistence (streaming path)
       const messageMetadata: AssistantMessageMetadata = {
@@ -2495,7 +2521,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               try {
                 for await (const chunk of unifiedLLMClient.stream(
                   selectedModelId,
-                  enhancedMessages,
+                  modelMessages,
                   {
                     temperature: effectiveTemperature,
                     maxTokens: effectiveMaxTokens,
@@ -2551,7 +2577,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     }
 
                     for await (const chunk of streamLLMResponse(
-                      enhancedMessages,
+                      modelMessages,
                       model,
                       effectiveTemperature,
                       effectiveMaxTokens,
@@ -2612,7 +2638,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               }
 
               for await (const chunk of streamLLMResponse(
-                  enhancedMessages,
+                  modelMessages,
                   model,
                   effectiveTemperature,
                   effectiveMaxTokens,

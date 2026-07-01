@@ -45,6 +45,34 @@ const lookupCaseTool = {
 };
 
 describe('OpenAIAdapter', () => {
+  it('preserves multimodal user message parts for OpenAI-compatible vision requests', () => {
+    const adapter = new OpenAIAdapter();
+    const imageUrl = 'data:image/png;base64,aW1hZ2U=';
+    const request: AdapterRequest = {
+      config: { ...config, supports_vision: true },
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this image.' },
+          { type: 'image_url', image_url: { url: imageUrl, detail: 'auto' } },
+        ],
+      }],
+      options: { stream: false },
+    };
+
+    const { body } = adapter.formatRequest(request);
+
+    expect(body.messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this image.' },
+          { type: 'image_url', image_url: { url: imageUrl, detail: 'auto' } },
+        ],
+      },
+    ]);
+  });
+
   it('sends explicit auto tool choice for vLLM tool requests', () => {
     const adapter = new OpenAIAdapter();
     const request: AdapterRequest = {

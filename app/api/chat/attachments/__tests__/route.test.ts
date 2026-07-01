@@ -384,7 +384,7 @@ describe('POST /api/chat/attachments', () => {
 
     const { POST } = await import('../route');
     const response = await POST(makeRequest(makeAttachmentForm(
-      new File(['not an image path'], 'image.png', { type: 'image/png' }),
+      new File(['binary'], 'archive.exe', { type: 'application/octet-stream' }),
     ), {
       authorization: 'Bearer session-token',
     }));
@@ -395,6 +395,52 @@ describe('POST /api/chat/attachments', () => {
       error: 'Unsupported attachment file type',
     });
     expect(supabase.upload).not.toHaveBeenCalled();
+  });
+
+  it('uploads image attachments without running text extraction', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File([new Uint8Array([137, 80, 78, 71])], 'diagram.png', { type: 'image/png' }),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      success: true,
+      attachment: {
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        filename: 'diagram.png',
+        contentType: 'image/png',
+        sizeBytes: 4,
+        kind: 'image',
+        extractedChars: 0,
+        status: 'uploaded',
+      },
+    });
+    expect(parseAttachment).not.toHaveBeenCalled();
+    expect(validateFileType).not.toHaveBeenCalled();
+    expect(supabase.upload).toHaveBeenCalledWith(
+      expect.stringMatching(/^user-1\/22222222-2222-4222-8222-222222222222\/[0-9a-f-]+\/diagram\.png$/),
+      expect.any(File),
+      expect.objectContaining({ contentType: 'image/png', upsert: false }),
+    );
+    expect(supabase.attachmentRows).toEqual([
+      expect.objectContaining({
+        filename: 'diagram.png',
+        content_type: 'image/png',
+        kind: 'image',
+        extracted_text: '',
+        extracted_chars: 0,
+        metadata: expect.objectContaining({
+          fileType: 'png',
+          visionInput: true,
+        }),
+      }),
+    ]);
   });
 
   it('rejects oversized attachments before extraction or upload', async () => {

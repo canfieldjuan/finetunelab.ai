@@ -71,6 +71,8 @@ function makeChatAdminClient(options?: {
   attachmentUpdateError?: { message: string } | null;
   finalizeUpdateError?: { message: string } | null;
   claimUpdatedIds?: string[];
+  imageDownloadBody?: string;
+  imageDownloadError?: { message: string } | null;
 }) {
   type QueryFilter = { column: string; value: unknown };
   const attachmentRows = (options?.attachments ?? []).map((row) => ({
@@ -172,10 +174,20 @@ function makeChatAdminClient(options?: {
       update: vi.fn(),
     };
   });
+  const download = vi.fn(async () => ({
+    data: options?.imageDownloadBody === undefined
+      ? new Blob(['image-bytes'], { type: 'image/png' })
+      : new Blob([options.imageDownloadBody], { type: 'image/png' }),
+    error: options?.imageDownloadError ?? null,
+  }));
+  const storageFrom = vi.fn(() => ({ download }));
 
   return {
     client: {
       from,
+      storage: {
+        from: storageFrom,
+      },
       auth: {
         admin: {
           getUserById: vi.fn(),
@@ -188,6 +200,8 @@ function makeChatAdminClient(options?: {
     attachmentUpdateQuery,
     releaseUpdateQuery,
     attachmentRows,
+    storageFrom,
+    download,
   };
 }
 
@@ -218,7 +232,8 @@ vi.mock('@/lib/supabaseClient', () => ({
   },
 }));
 
-vi.mock('@/lib/llm/openai', () => ({
+vi.mock('@/lib/llm/openai', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/llm/openai')>()),
   streamOpenAIResponse: vi.fn(),
   runOpenAIWithToolCalls: vi.fn(),
 }));
@@ -907,6 +922,145 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(admin.attachmentUpdateQuery.eq).toHaveBeenCalledWith('status', 'uploaded');
     expect(admin.attachmentUpdateQuery.eq).toHaveBeenCalledWith('status', 'attaching');
     expect(admin.attachmentUpdateQuery.in).toHaveBeenCalledWith('id', ['11111111-1111-4111-8111-111111111111']);
+  });
+
+  it('ignores image payloads for non-vision models while still completing the turn', async () => {
+    const admin = makeChatAdminClient({
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+          message_id: null,
+          filename: 'diagram.png',
+          content_type: 'image/png',
+          size_bytes: 4,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/diagram.png',
+          kind: 'image',
+          extracted_text: '',
+          extracted_chars: 0,
+          status: 'uploaded',
+          metadata: { visionInput: true },
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+
+    let modelMessages: Array<{ role: string; content: unknown }> = [];
+    unifiedChat.mockImplementationOnce(async (_modelId, messages) => {
+      modelMessages = messages as Array<{ role: string; content: unknown }>;
+      return {
+        content: 'I can answer without processing the image.',
+        usage: {
+          input_tokens: 12,
+          output_tokens: 8,
+        },
+      };
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'What can you do with this prompt?',
+        },
+      ],
+      attachmentIds: ['11111111-1111-4111-8111-111111111111'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    const streamText = await response.text();
+    expect(response.status, streamText).toBe(200);
+    const latestUserMessage = modelMessages.filter((message) => message.role === 'user').at(-1);
+    expect(latestUserMessage?.content).toBe('What can you do with this prompt?');
+    expect(admin.download).not.toHaveBeenCalled();
+    expect(admin.attachmentRows[0].status).toBe('attached');
+  });
+
+  it('adds image attachment data parts for vision-capable models', async () => {
+    const admin = makeChatAdminClient({
+      imageDownloadBody: 'image-bytes',
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+          message_id: null,
+          filename: 'diagram.png',
+          content_type: 'image/png',
+          size_bytes: 4,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/diagram.png',
+          kind: 'image',
+          extracted_text: '',
+          extracted_chars: 0,
+          status: 'uploaded',
+          metadata: { visionInput: true },
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    getModelConfig.mockResolvedValueOnce({
+      ...vllmModelConfig,
+      supports_vision: true,
+    });
+
+    let modelMessages: Array<{ role: string; content: unknown }> = [];
+    unifiedChat.mockImplementationOnce(async (_modelId, messages) => {
+      modelMessages = messages as Array<{ role: string; content: unknown }>;
+      return {
+        content: 'I can see the image.',
+        usage: {
+          input_tokens: 12,
+          output_tokens: 8,
+        },
+      };
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'Describe this image.',
+        },
+      ],
+      attachmentIds: ['11111111-1111-4111-8111-111111111111'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    const streamText = await response.text();
+    expect(response.status, streamText).toBe(200);
+    const latestUserMessage = modelMessages.filter((message) => message.role === 'user').at(-1);
+    expect(latestUserMessage?.content).toEqual([
+      { type: 'text', text: 'Describe this image.' },
+      {
+        type: 'image_url',
+        image_url: {
+          url: `data:image/png;base64,${Buffer.from('image-bytes').toString('base64')}`,
+          detail: 'auto',
+        },
+      },
+    ]);
+    expect(admin.storageFrom).toHaveBeenCalledWith('chat-attachments');
+    expect(admin.download).toHaveBeenCalledWith('user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/diagram.png');
+    expect(admin.attachmentRows[0].status).toBe('attached');
   });
 
   it('replays already-attached chat attachment context without claiming it again', async () => {

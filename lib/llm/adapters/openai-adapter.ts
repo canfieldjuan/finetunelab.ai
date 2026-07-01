@@ -2,7 +2,7 @@
 // Also supports vLLM, Azure OpenAI, and other OpenAI-compatible APIs
 // Date: 2025-10-14
 
-import type { ChatMessage } from '../openai';
+import type { ChatMessage, ChatMessageContentPart } from '../openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
 import { getVllmRuntimeMetadata } from '@/lib/models/vllm-runtime';
 import { BaseProviderAdapter, type AdapterRequest, type AdapterResponse } from './base-adapter';
@@ -154,7 +154,7 @@ export class OpenAIAdapter extends BaseProviderAdapter {
    */
   private formatMessages(messages: ChatMessage[]): Array<{
     role: string;
-    content: string | null;
+    content: string | ChatMessageContentPart[] | null;
     tool_calls?: unknown;
     tool_call_id?: string;
     name?: string;

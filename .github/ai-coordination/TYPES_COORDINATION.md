@@ -22,6 +22,12 @@
 - **Locations:** `lib/chat/attachments.ts`, `components/chat/AttachmentChips.tsx`
 - **Status:** Persisted chips request a short-lived signed URL through `GET /api/chat/attachments?attachmentId=<uuid>`; no signed URL is stored in `ChatAttachmentDto`.
 
+**Chat Vision Attachment Message Parts**
+- **Started:** 2026-06-30
+- **Branch:** `codex/chat-vision-attachments`
+- **Locations:** `lib/llm/openai.ts`, `lib/chat/attachments.ts`, `app/api/chat/route.ts`
+- **Status:** Private image attachments remain metadata-only in DTOs; the chat route creates transient multimodal model message parts only for vision-capable model configs.
+
 ### Recently Completed
 
 **Training Stats Types**
@@ -55,7 +61,7 @@ interface ChatAttachmentDto {
 - Backend: returned from `POST /api/chat/attachments`.
 - Chat route: persisted in assistant metadata when `attachmentIds` are accepted.
 - UI: used for uploaded chips, sent-message chips, and persisted message attachment display.
-- Downloads: the DTO carries only identity/display metadata. Persisted chips fetch a fresh signed URL on click instead of storing or rendering an href.
+- Downloads and vision input: the DTO carries only identity/display metadata. Persisted chips fetch a fresh signed URL on click instead of storing or rendering an href. Vision model calls download private image bytes server-side and do not add data URLs to `ChatAttachmentDto` or message metadata.
 
 #### PendingChatAttachment
 
@@ -86,6 +92,36 @@ interface ChatRequestAttachmentFields {
 ```
 
 **Rules:** max 5 ids, authenticated non-widget chat only, same `user_id` and `conversation_id`.
+Image ids may be included in the same field. Non-vision models ignore image
+payloads for model input; vision-capable models receive transient image message
+parts generated server-side from private storage.
+
+#### ChatMessageContent / ChatMessageContentPart
+
+**Location:** `lib/llm/openai.ts`
+
+```typescript
+type ChatMessageTextPart = {
+  type: "text";
+  text: string;
+};
+
+type ChatMessageImagePart = {
+  type: "image_url";
+  image_url: {
+    url: string; // server-side data URL for private attachment model input
+    detail?: "auto" | "low" | "high";
+  };
+};
+
+type ChatMessageContentPart = ChatMessageTextPart | ChatMessageImagePart;
+type ChatMessageContent = string | ChatMessageContentPart[];
+```
+
+**Rules:** regular chat messages can stay string-only. The chat route appends
+image parts only after loading a selected model config with `supports_vision`.
+Use `getChatMessageTextContent()` for guardrails, token estimates, prompts, and
+adapters that need a text-only view.
 
 #### Chat Attachment Download Response
 

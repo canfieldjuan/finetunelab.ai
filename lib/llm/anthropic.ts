@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam, ToolUseBlock, TextBlock, ToolUnion, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages/index';
+import type { ChatMessageContent } from './openai';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -10,7 +11,7 @@ const anthropic = new Anthropic({
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string | null;
+  content: ChatMessageContent | null;
 }
 
 export interface ToolDefinition {
@@ -81,6 +82,42 @@ function isTextBlock(block: unknown): block is TextBlock {
   );
 }
 
+function parseDataUrl(value: string): { mediaType: string; base64: string } | null {
+  const match = /^data:([^;,]+);base64,([a-zA-Z0-9+/=]+)$/u.exec(value);
+  if (!match) return null;
+  return { mediaType: match[1], base64: match[2] };
+}
+
+function formatAnthropicContent(content: ChatMessageContent | null): MessageParam['content'] {
+  if (!Array.isArray(content)) return content || '';
+
+  return content.flatMap((part): Array<Record<string, unknown>> => {
+    if (part.type === 'text') {
+      return part.text.trim().length > 0 ? [{ type: 'text', text: part.text }] : [];
+    }
+
+    const parsed = parseDataUrl(part.image_url.url);
+    if (parsed) {
+      return [{
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: parsed.mediaType,
+          data: parsed.base64,
+        },
+      }];
+    }
+
+    return [{
+      type: 'image',
+      source: {
+        type: 'url',
+        url: part.image_url.url,
+      },
+    }];
+  }) as unknown as MessageParam['content'];
+}
+
 // Streaming response from Anthropic Claude
 export async function* streamAnthropicResponse(
   messages: ChatMessage[],
@@ -94,7 +131,7 @@ export async function* streamAnthropicResponse(
     .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
     .map((msg) => ({
       role: msg.role as 'user' | 'assistant',
-      content: msg.content || '',
+      content: formatAnthropicContent(msg.content),
     }));
   const mappedTools = mapToAnthropicTools(tools);
   const stream = anthropic.messages.stream({
@@ -147,7 +184,7 @@ export async function runAnthropicWithToolCalls(
     .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
     .map((msg) => ({
       role: msg.role as 'user' | 'assistant',
-      content: msg.content || '',
+      content: formatAnthropicContent(msg.content),
     }));
   // METRIC: Track tool calls
   const toolCallsTracking: ToolCallMetadata[] = [];

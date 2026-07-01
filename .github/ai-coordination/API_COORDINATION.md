@@ -19,6 +19,18 @@
   - Client: `lib/snippet-revision/client.ts`
   - Tests: `lib/snippet-revision/__tests__/client.test.ts`
 
+**Chat Vision Attachments**
+- **Started:** 2026-06-30
+- **Model:** Codex
+- **Branch:** `codex/chat-vision-attachments`
+- **Work:** Accept image uploads as private chat attachments and add model input image parts only when the selected model config advertises `supports_vision`; non-vision models ignore image payloads and continue with text.
+- **Plan:** `development/planning/2026-06-30_chat-vision-attachments-plan.md`
+- **Endpoints affected:** `POST /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
+- **Files:**
+  - API: `app/api/chat/attachments/route.ts`, `app/api/chat/route.ts`
+  - Service/adapters: `lib/chat/attachments.ts`, `lib/llm/openai.ts`, `lib/llm/adapters/openai-adapter.ts`, `lib/llm/adapters/anthropic-adapter.ts`, `lib/llm/adapters/ollama-adapter.ts`
+  - Tests: `app/api/chat/attachments/__tests__/route.test.ts`, `app/api/chat/__tests__/route-tool-use-smoke.test.ts`, `lib/llm/adapters/__tests__/openai-adapter.test.ts`, `lib/llm/adapters/__tests__/ollama-adapter.test.ts`
+
 **Chat Attachment UI Wiring**
 - **Started:** 2026-06-30
 - **Model:** Codex
@@ -93,7 +105,7 @@
 **Request:** `multipart/form-data`
 ```typescript
 {
-  file: File;              // txt, md, pdf, docx, ts, tsx, js, jsx, py
+  file: File;              // txt, md, pdf, docx, ts, tsx, js, jsx, py, png, jpg/jpeg, webp, gif
   conversationId: string;  // UUID, must belong to the authenticated user
 }
 ```
@@ -118,7 +130,7 @@
 
 **Extraction timeout behavior:** The 15s timeout starts before DOCX archive inspection and parser invocation. Timeout aborts the route operation, closes/destroys the owned DOCX ZIP/read streams, and passes an `AbortSignal` into the parser factory for cooperative pre/post checks. Current third-party parser libraries (`pdf-parse`, `mammoth`) do not expose mid-parse cancellation, so parser work that is already inside those libraries may finish before the cooperative post-call check rejects the result.
 
-**MIME behavior:** Extension validation is authoritative for code/text attachments. TypeScript `.ts` files may arrive as `video/mp2t` from common upload environments and are accepted as code after extension validation.
+**MIME behavior:** Extension validation is authoritative for code/text attachments. TypeScript `.ts` files may arrive as `video/mp2t` from common upload environments and are accepted as code after extension validation. Image uploads accept `image/png`, `image/jpeg`, `image/webp`, and `image/gif`; image rows store empty extracted text and are not passed through document parsers.
 
 **Write ownership:** Attachment row and storage mutations are server-owned through the upload/chat routes. Authenticated clients may read their own rows/files but must not insert, update, or delete `chat_attachments` rows directly. Upload row creation goes through `create_chat_attachment_with_capacity`, which serializes per-user/conversation inserts with an advisory transaction lock before enforcing the five-`uploaded` cap.
 
@@ -191,6 +203,8 @@
 - Loads with a service-role query scoped by `user_id`, `conversation_id`, and requested ids.
 - Rejects missing, deleted, already-attached, cross-user, or cross-conversation attachment ids before the model call.
 - Appends delimited attachment text to the latest user message after GraphRAG enhancement.
+- Image attachments are not injected as text. When the selected model config has `supports_vision: true`, the route downloads the private storage object server-side and appends image parts to the latest user message for the model call. When the model is not vision-capable or the capability is unknown, image payloads are ignored for model input and the text turn still proceeds.
+- OpenAI-compatible providers receive multimodal `content` parts, Anthropic receives image blocks converted from data URLs, and Ollama receives native base64 `images` arrays.
 - Atomically claims rows with `status = "uploaded"` by moving them to `attaching` before model execution, so concurrent sends cannot reuse the same upload.
 - Releases claimed rows back to `uploaded` only if the model turn fails before output begins. After output has started, a finalize failure leaves the claim unreleased rather than making a consumed attachment reusable.
 - Rejects the turn before model execution when the selected model context window is too small for the prompt plus attachment context.

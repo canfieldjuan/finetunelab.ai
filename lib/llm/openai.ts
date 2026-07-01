@@ -23,7 +23,7 @@ const DEFAULT_MAX_TOKENS = parseInt(process.env.OPENAI_MAX_TOKENS || '2000', 10)
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string | null;
+  content: ChatMessageContent | null;
   tool_calls?: Array<{
     id: string;
     type: 'function';
@@ -34,6 +34,31 @@ export interface ChatMessage {
   }>;
   tool_call_id?: string;
   name?: string;
+}
+
+export type ChatMessageTextPart = {
+  type: 'text';
+  text: string;
+};
+
+export type ChatMessageImagePart = {
+  type: 'image_url';
+  image_url: {
+    url: string;
+    detail?: 'auto' | 'low' | 'high';
+  };
+};
+
+export type ChatMessageContentPart = ChatMessageTextPart | ChatMessageImagePart;
+export type ChatMessageContent = string | ChatMessageContentPart[];
+
+export function getChatMessageTextContent(content: ChatMessageContent | null | undefined): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((part): part is ChatMessageTextPart => part.type === 'text')
+    .map((part) => part.text)
+    .join('\n');
 }
 
 export interface ToolDefinition {

@@ -2,7 +2,7 @@
 // Handles Ollama local model API format
 // Date: 2025-10-14
 
-import type { ChatMessage } from '../openai';
+import { getChatMessageTextContent, type ChatMessage, type ChatMessageContent } from '../openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
 import { resolveOllamaRequestModel, toOllamaNativeBaseUrl } from '../ollama-utils';
 import { BaseProviderAdapter, type AdapterRequest, type AdapterResponse } from './base-adapter';
@@ -77,11 +77,26 @@ export class OllamaAdapter extends BaseProviderAdapter {
   private formatMessages(messages: ChatMessage[]): Array<{
     role: string;
     content: string;
+    images?: string[];
   }> {
-    return messages.map(msg => ({
-      role: msg.role === 'tool' ? 'assistant' : msg.role, // Map tool to assistant
-      content: msg.content || '',
-    }));
+    return messages.map(msg => {
+      const images = this.extractImages(msg.content);
+      return {
+        role: msg.role === 'tool' ? 'assistant' : msg.role, // Map tool to assistant
+        content: getChatMessageTextContent(msg.content),
+        ...(images.length > 0 ? { images } : {}),
+      };
+    });
+  }
+
+  private extractImages(content: ChatMessageContent | null): string[] {
+    if (!Array.isArray(content)) return [];
+
+    return content.flatMap((part) => {
+      if (part.type !== 'image_url') return [];
+      const match = /^data:[^;,]+;base64,([a-zA-Z0-9+/=]+)$/u.exec(part.image_url.url);
+      return match ? [match[1]] : [];
+    });
   }
 
   /**
