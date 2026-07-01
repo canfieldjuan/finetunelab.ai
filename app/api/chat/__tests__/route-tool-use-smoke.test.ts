@@ -448,6 +448,37 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(unifiedChat).not.toHaveBeenCalled();
   });
 
+  it('rejects raw image message parts before model execution', async () => {
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Describe this image.' },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/png;base64,${Buffer.from(PNG_BYTES).toString('base64')}`,
+              },
+            },
+          ],
+        },
+      ],
+      tools: [],
+    }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Image message parts must be sent as chat attachments' });
+    expect(getModelConfig).not.toHaveBeenCalled();
+    expect(unifiedChat).not.toHaveBeenCalled();
+    expect(unifiedStream).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed chat attachment conversation ids before querying the attachment store', async () => {
     const admin = makeChatAdminClient();
     createClient
@@ -1064,6 +1095,91 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(admin.attachmentRows[0].status).toBe('attached');
   });
 
+  it('emits image-aware token usage for streaming vision turns', async () => {
+    const admin = makeChatAdminClient({
+      imageDownloadBody: PNG_BYTES,
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+          message_id: null,
+          filename: 'diagram.png',
+          content_type: 'image/png',
+          size_bytes: 4,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/diagram.png',
+          kind: 'image',
+          extracted_text: '',
+          extracted_chars: 0,
+          status: 'uploaded',
+          metadata: { visionInput: true, imageMediaType: 'image/png' },
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    getModelConfig.mockResolvedValueOnce({
+      ...vllmModelConfig,
+      supports_vision: true,
+    });
+    let modelMessages: Array<{ role: string; content: unknown }> = [];
+    unifiedStream.mockImplementationOnce(async function* (_modelId, messages) {
+      modelMessages = messages as Array<{ role: string; content: unknown }>;
+      yield 'Vision answer.';
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'Describe this image.',
+        },
+      ],
+      attachmentIds: ['11111111-1111-4111-8111-111111111111'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    const streamText = await response.text();
+    expect(response.status, streamText).toBe(200);
+    const events = parseSseEvents(streamText);
+    const tokenUsage = events.find(
+      (event) => typeof event === 'object' && event !== null && (event as { type?: unknown }).type === 'token_usage',
+    ) as { input_tokens: number; output_tokens: number; estimated_vision_tokens: number; image_bytes: number } | undefined;
+
+    expect(tokenUsage).toEqual(expect.objectContaining({
+      output_tokens: Math.ceil('Vision answer.'.length / 4),
+      estimated_vision_tokens: 512,
+      image_bytes: 4,
+    }));
+    expect(tokenUsage?.input_tokens).toBeGreaterThan(512);
+    const latestUserMessage = modelMessages.filter((message) => message.role === 'user').at(-1);
+    expect(latestUserMessage?.content).toEqual([
+      { type: 'text', text: 'Describe this image.' },
+      {
+        type: 'image_url',
+        image_url: {
+          url: `data:image/png;base64,${Buffer.from(PNG_BYTES).toString('base64')}`,
+          detail: 'auto',
+        },
+      },
+    ]);
+    expect(traceServiceMocks.endTrace).toHaveBeenCalledWith(
+      expect.objectContaining({ traceId: 'trace-1' }),
+      expect.objectContaining({
+        inputTokens: tokenUsage?.input_tokens,
+        outputTokens: tokenUsage?.output_tokens,
+      }),
+    );
+    expect(admin.attachmentRows[0].status).toBe('attached');
+  });
+
   it('rejects vision requests whose image token estimate exceeds the model context window', async () => {
     const admin = makeChatAdminClient({
       attachments: [
@@ -1309,6 +1425,59 @@ describe('POST /api/chat tool-use smoke', () => {
     expect(latestUserMessage?.content).toContain('historical attached note text');
     expect(admin.chatAttachmentsTable.update).not.toHaveBeenCalled();
     expect(admin.attachmentRows[0].status).toBe('attached');
+  });
+
+  it('rejects replay of uploaded image rows before vision download', async () => {
+    const admin = makeChatAdminClient({
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+          message_id: null,
+          filename: 'draft-image.png',
+          content_type: 'image/png',
+          size_bytes: 28,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/draft-image.png',
+          kind: 'image',
+          extracted_text: '',
+          extracted_chars: 0,
+          status: 'uploaded',
+          metadata: { visionInput: true, imageMediaType: 'image/png' },
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    getModelConfig.mockResolvedValueOnce({
+      ...vllmModelConfig,
+      supports_vision: true,
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      userId: 'user-1',
+      messages: [
+        {
+          role: 'user',
+          content: 'Regenerate this image answer.',
+        },
+      ],
+      replayAttachmentIds: ['11111111-1111-4111-8111-111111111111'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Attachment is not available for replay' });
+    expect(admin.chatAttachmentsTable.update).not.toHaveBeenCalled();
+    expect(admin.download).not.toHaveBeenCalled();
+    expect(unifiedChat).not.toHaveBeenCalled();
   });
 
   it('emits streaming attachment metadata only after successful output and finalization', async () => {

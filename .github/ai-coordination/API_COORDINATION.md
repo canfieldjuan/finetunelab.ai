@@ -23,9 +23,9 @@
 - **Started:** 2026-06-30
 - **Model:** Codex
 - **Branch:** `codex/chat-vision-attachments`
-- **Work:** Accept byte-validated image uploads as private chat attachments and add model input image parts only when the selected model config advertises `supports_vision`; non-vision models ignore image payloads and continue with text. Vision requests now have image-specific byte caps and image-aware context preflight.
+- **Work:** Accept byte-validated image uploads as private chat attachments and add model input image parts only when the selected model config advertises `supports_vision`; non-vision models ignore image payloads and continue with text. Vision requests now have image-specific byte caps, image-aware context preflight, server-only image message parts, attached-only replay, and image-aware streaming token usage.
 - **Plan:** `development/planning/2026-06-30_chat-vision-attachments-plan.md`
-- **Endpoints affected:** `POST /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
+- **Endpoints affected:** `POST /api/chat/attachments`, `POST /api/chat` with `attachmentIds` / `replayAttachmentIds`
 - **Files:**
   - API: `app/api/chat/attachments/route.ts`, `app/api/chat/route.ts`
   - Service/adapters: `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `lib/llm/openai.ts`, `lib/llm/adapters/openai-adapter.ts`, `lib/llm/adapters/anthropic-adapter.ts`, `lib/llm/adapters/ollama-adapter.ts`, `lib/llm/adapters/runpod-adapter.ts`, `lib/llm/adapters/huggingface-adapter.ts`
@@ -194,14 +194,17 @@
 ```typescript
 {
   attachmentIds?: string[]; // UUIDs, max 5, same user and conversation as the request
+  replayAttachmentIds?: string[]; // UUIDs, max 5, same user/conversation and status "attached"
 }
 ```
 
 **Behavior:**
 - Only honored for verified, non-widget chat requests with a real `conversationId`.
+- Rejects raw inbound `messages[].content[].image_url` parts. Image data can only enter `/api/chat` through server-resolved `attachmentIds` or finalized `replayAttachmentIds`.
 - Rejects malformed non-UUID attachment ids and attachment-bearing conversation ids as client 400s before querying UUID columns.
 - Loads with a service-role query scoped by `user_id`, `conversation_id`, and requested ids.
 - Rejects missing, deleted, already-attached, cross-user, or cross-conversation attachment ids before the model call.
+- Replayed attachment ids must already have `status = "attached"`; still-uploaded image rows cannot skip the same-turn claim path through replay.
 - Appends delimited attachment text to the latest user message after GraphRAG enhancement.
 - Image attachments are not injected as text. When the selected model config has `supports_vision: true`, the route counts image payloads in the context-length guard using `max(512, ceil(bytes / 1024))` per image, enforces the 4 MB per-image and 12 MB per-turn image byte budgets before private download/model execution, then downloads the private storage object server-side and appends image parts to the latest user message for the model call. When the model is not vision-capable or the capability is unknown, image payloads are ignored for model input and the text turn still proceeds.
 - Image download or byte-validation failures during model part construction are best-effort skipped after preflight, so transient storage failures do not fail the entire text turn.
@@ -210,6 +213,7 @@
 - Releases claimed rows back to `uploaded` only if the model turn fails before output begins. After output has started, a finalize failure leaves the claim unreleased rather than making a consumed attachment reusable.
 - Rejects the turn before model execution when the selected model context window is too small for the prompt plus attachment context.
 - Emits an SSE `attachment_metadata` event with `attachment_ids` and compact attachment DTOs after successful streaming finalization so the regular portal client can persist traceability metadata only on successful assistant messages.
+- Streaming completions emit SSE `token_usage` and use the image-aware estimate for trace completion, persisted `input_tokens` / `output_tokens`, and assistant metadata. Provider-reported usage is still preferred on non-streaming paths.
 - Caps total injected attachment text at 40,000 chars per turn and finalizes successful rows as `attached`.
 - Keeps `chat_attachments.message_id` nullable because regular portal user messages are currently persisted by the client outside `/api/chat`.
 

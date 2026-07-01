@@ -81,7 +81,36 @@ type AssistantMessageMetadata = {
   web_search_results?: WebSearchDocument[];
   attachment_ids?: string[];
   attachments?: ChatAttachmentDto[];
+  token_usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    source: 'provider' | 'route_estimate';
+    estimated_text_tokens?: number;
+    estimated_vision_tokens?: number;
+    image_bytes?: number;
+  };
 };
+
+type ModelInputTokenEstimate = {
+  textTokens: number;
+  visionTokens: number;
+  visionBytes: number;
+  totalTokens: number;
+};
+
+function containsInboundImagePart(messages: unknown[]): boolean {
+  return messages.some((message) => {
+    if (!message || typeof message !== 'object') return false;
+    const content = (message as { content?: unknown }).content;
+    if (!Array.isArray(content)) return false;
+
+    return content.some((part) => (
+      !!part &&
+      typeof part === 'object' &&
+      (part as { type?: unknown }).type === 'image_url'
+    ));
+  });
+}
 
 function isWebSearchDocument(value: unknown): value is RawWebSearchDocument {
   return typeof value === 'object' && value !== null;
@@ -479,6 +508,14 @@ export async function POST(req: NextRequest) {
 
     if (!messages || !Array.isArray(messages)) {
       return new Response('Invalid messages format', { status: 400 });
+    }
+    if (containsInboundImagePart(messages)) {
+      return new Response(JSON.stringify({
+        error: 'Image message parts must be sent as chat attachments',
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     let requestedAttachmentIds: string[] = [];
@@ -1039,12 +1076,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       });
     }
 
-    function estimateModelInputTokens(modelConfig: ModelConfig | null | undefined): {
-      textTokens: number;
-      visionTokens: number;
-      visionBytes: number;
-      totalTokens: number;
-    } {
+    function estimateModelInputTokens(modelConfig: ModelConfig | null | undefined): ModelInputTokenEstimate {
       const inputText = enhancedMessages.map((message) => getChatMessageTextContent(message.content)).join(' ');
       const textTokens = Math.ceil(inputText.length / 4);
       const visionTokens = modelConfig?.supports_vision
@@ -1058,6 +1090,29 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         visionTokens,
         visionBytes,
         totalTokens: textTokens + visionTokens,
+      };
+    }
+
+    function estimateStreamingTokenUsage(
+      finalResponse: string,
+      inputEstimate: ModelInputTokenEstimate,
+    ): { input_tokens: number; output_tokens: number } {
+      return {
+        input_tokens: inputEstimate.totalTokens,
+        output_tokens: Math.ceil(finalResponse.length / 4),
+      };
+    }
+
+    function createRouteEstimateTokenMetadata(
+      tokenUsage: { input_tokens: number; output_tokens: number },
+      inputEstimate: ModelInputTokenEstimate,
+    ): NonNullable<AssistantMessageMetadata['token_usage']> {
+      return {
+        ...tokenUsage,
+        source: 'route_estimate',
+        estimated_text_tokens: inputEstimate.textTokens,
+        estimated_vision_tokens: inputEstimate.visionTokens,
+        image_bytes: inputEstimate.visionBytes,
       };
     }
 
@@ -2438,6 +2493,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       const attachmentWindowResponse = await rejectIfAttachmentContextExceedsWindow(actualModelConfig);
       if (attachmentWindowResponse) return attachmentWindowResponse;
 
+      const streamingInputTokenEstimate = estimateModelInputTokens(actualModelConfig);
       const effectiveTemperature = requestedTemperature ?? actualModelConfig?.default_temperature ?? temperature;
       const configuredOutputLimit = typeof actualModelConfig?.max_output_tokens === 'number' && actualModelConfig.max_output_tokens > 0
         ? actualModelConfig.max_output_tokens
@@ -2448,7 +2504,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       if (actualModelConfig?.context_length) {
-        const tokenEstimate = estimateModelInputTokens(actualModelConfig);
+        const tokenEstimate = streamingInputTokenEstimate;
         const estimatedInputTokens = tokenEstimate.totalTokens;
         const availableTokens = actualModelConfig.context_length - estimatedInputTokens;
         const safetyMargin = 100;
@@ -2720,6 +2776,14 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
             console.log('[API] [DEBUG] Streaming complete. Total accumulated response length:', accumulatedResponse.length);
             console.log('[API] [DEBUG] Response preview:', accumulatedResponse.substring(0, 200));
+            const streamingTokenUsage = estimateStreamingTokenUsage(
+              accumulatedResponse,
+              streamingInputTokenEstimate,
+            );
+            const streamingTokenMetadata = createRouteEstimateTokenMetadata(
+              streamingTokenUsage,
+              streamingInputTokenEstimate,
+            );
 
             // ========================================================================
             // WIDGET MODE / BATCH TEST MODE: Save messages to database after streaming
@@ -2730,14 +2794,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 const streamLatencyMs = Date.now() - streamStartTime;
                 console.log('[API] [LATENCY] Streaming completed in', streamLatencyMs, 'ms');
                 
-                // Estimate token usage (rough approximation: ~4 chars per token)
-                const estimatedOutputTokens = Math.ceil(accumulatedResponse.length / 4);
                 const userMessageContent = messages[messages.length - 1]?.content;
-                const estimatedInputTokens = typeof userMessageContent === 'string' 
-                  ? Math.ceil(userMessageContent.length / 4)
-                  : 0;
                 
-                console.log('[API] Estimated tokens:', estimatedInputTokens, 'in,', estimatedOutputTokens, 'out');
+                console.log('[API] Estimated tokens:', streamingTokenUsage.input_tokens, 'in,', streamingTokenUsage.output_tokens, 'out');
                 
                 // Save user message
                 if (userMessageContent && typeof userMessageContent === 'string') {
@@ -2772,7 +2831,10 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                 }
 
                 // Save assistant message with latency and token estimates
-                const assistantMessageMetadata = withWebSearchMetadata(messageMetadata);
+                const assistantMessageMetadata = withWebSearchMetadata({
+                  ...messageMetadata,
+                  token_usage: streamingTokenMetadata,
+                });
                 const { data: streamMsgData } = await supabaseAdmin!
                   .from('messages')
                   .insert({
@@ -2781,8 +2843,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     role: 'assistant',
                     content: accumulatedResponse,
                     latency_ms: streamLatencyMs,
-                    input_tokens: estimatedInputTokens,
-                    output_tokens: estimatedOutputTokens,
+                    input_tokens: streamingTokenUsage.input_tokens,
+                    output_tokens: streamingTokenUsage.output_tokens,
                     ...(selectedModelId && { model_id: selectedModelId }),
                     ...(provider && { provider: provider }),
                     ...(assistantMessageMetadata && { metadata: assistantMessageMetadata }),
@@ -2798,10 +2860,7 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
                     finalResponse: accumulatedResponse,
                     enhancedMessages,
                     messageId: streamMsgData.id,
-                    tokenUsage: estimatedInputTokens && estimatedOutputTokens ? {
-                      input_tokens: estimatedInputTokens,
-                      output_tokens: estimatedOutputTokens,
-                    } : undefined,
+                    tokenUsage: streamingTokenUsage,
                     selectedModelId: selectedModelId ?? undefined,
                     temperature: effectiveTraceTemperature,
                     maxTokens: effectiveTraceMaxTokens,
@@ -2838,20 +2897,12 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
 
               // Calculate latency and estimate tokens (same as widget mode)
               const streamLatencyMs = Date.now() - streamStartTime;
-              const estimatedOutputTokens = Math.ceil(accumulatedResponse.length / 4);
-              const userMessageContent = messages[messages.length - 1]?.content;
-              const estimatedInputTokens = typeof userMessageContent === 'string'
-                ? Math.ceil(userMessageContent.length / 4)
-                : 0;
 
               await completeTraceWithFullData({
                 traceContext,
                 finalResponse: accumulatedResponse,
                 enhancedMessages,
-                tokenUsage: estimatedInputTokens && estimatedOutputTokens ? {
-                  input_tokens: estimatedInputTokens,
-                  output_tokens: estimatedOutputTokens,
-                } : undefined,
+                tokenUsage: streamingTokenUsage,
                 selectedModelId: selectedModelId ?? undefined,
                 temperature: effectiveTraceTemperature,
                 maxTokens: effectiveTraceMaxTokens,
@@ -2887,6 +2938,15 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
               const data = `data: ${JSON.stringify({ content: placeholder })}\n\n`;
               controller.enqueue(encoder.encode(data));
             }
+            const tokenData = `data: ${JSON.stringify({
+              type: 'token_usage',
+              input_tokens: streamingTokenUsage.input_tokens,
+              output_tokens: streamingTokenUsage.output_tokens,
+              estimated_text_tokens: streamingInputTokenEstimate.textTokens,
+              estimated_vision_tokens: streamingInputTokenEstimate.visionTokens,
+              image_bytes: streamingInputTokenEstimate.visionBytes,
+            })}\n\n`;
+            controller.enqueue(encoder.encode(tokenData));
             console.log('[API] [DEBUG] Sending [DONE] marker');
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();

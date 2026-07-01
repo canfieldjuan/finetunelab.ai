@@ -26,7 +26,7 @@
 - **Started:** 2026-06-30
 - **Branch:** `codex/chat-vision-attachments`
 - **Locations:** `lib/llm/openai.ts`, `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `lib/llm/adapters/huggingface-adapter.ts`, `app/api/chat/route.ts`
-- **Status:** Private image attachments remain metadata-only in DTOs; the chat route creates transient multimodal model message parts only for vision-capable model configs after image byte validation, image byte-budget checks, and image-aware context estimation.
+- **Status:** Private image attachments remain metadata-only in DTOs; the chat route creates transient multimodal model message parts only for vision-capable model configs after image byte validation, image byte-budget checks, image-aware context estimation, and attached-only replay validation. Raw inbound `image_url` parts are rejected.
 
 ### Recently Completed
 
@@ -88,6 +88,7 @@ request.
 ```typescript
 interface ChatRequestAttachmentFields {
   attachmentIds?: string[];
+  replayAttachmentIds?: string[];
 }
 ```
 
@@ -96,7 +97,9 @@ Image ids may be included in the same field. Non-vision models ignore image
 payloads for model input; vision-capable models receive transient image message
 parts generated server-side from private storage after enforcing the 4 MB
 per-image cap, 12 MB per-turn image cap, and image token estimate
-`max(512, ceil(bytes / 1024))`.
+`max(512, ceil(bytes / 1024))`. `attachmentIds` must name still-uploaded rows
+that the route can atomically claim for the current turn; `replayAttachmentIds`
+must name finalized rows whose status is already `attached`.
 
 #### ChatMessageContent / ChatMessageContentPart
 
@@ -120,10 +123,12 @@ type ChatMessageContentPart = ChatMessageTextPart | ChatMessageImagePart;
 type ChatMessageContent = string | ChatMessageContentPart[];
 ```
 
-**Rules:** regular chat messages can stay string-only. The chat route appends
-image parts only after loading a selected model config with `supports_vision`.
-Use `getChatMessageTextContent()` for guardrails, token estimates, prompts, and
-adapters that need a text-only view, but model context preflight must add
+**Rules:** regular inbound chat request messages must stay string-only or
+text-only; `/api/chat` rejects client-supplied `image_url` parts. The chat route
+appends image parts only after loading a selected model config with
+`supports_vision` and resolving server-owned attachments. Use
+`getChatMessageTextContent()` for guardrails, prompts, and adapters that need a
+text-only view, but model context preflight and streaming usage must add
 vision-token estimates separately so image-only turns do not count as zero
 input. OpenAI-compatible and RunPod payloads preserve image parts, Anthropic
 maps data URLs to base64 source blocks, and Ollama maps them to its native

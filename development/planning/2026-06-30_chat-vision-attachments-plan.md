@@ -16,6 +16,13 @@ model-capable vision projection only for models whose config has
 `supports_vision`, plus image byte validation and image-aware preflight before
 the model call.
 
+Review follow-up root cause: the new server-owned vision projection was guarded,
+but the request boundary still accepted raw client-supplied multimodal message
+parts and replay accepted non-finalized rows. This update fixes the root by
+making `attachmentIds`/`replayAttachmentIds` the only image ingress path,
+requiring replay rows to be `attached`, and carrying the same vision estimate
+into streaming token metrics.
+
 ## Scope
 
 - Ownership lane: chat portal attachments
@@ -37,6 +44,12 @@ the model call.
    image-only Anthropic path.
 8. Redact transient image data URLs from provider request-body logs without
    mutating the request body sent to the provider.
+9. Reject inbound `messages[].content[].image_url` parts so callers cannot
+   bypass attachment upload validation, ownership, byte caps, or vision gating.
+10. Require `attached` status for replayed attachments so still-uploaded rows
+    cannot skip the same-turn claim path.
+11. Reuse the image-aware streaming input estimate for persisted token columns,
+    trace completion, and the streaming `token_usage` event.
 
 ### Files touched
 
@@ -89,6 +102,14 @@ skips that image and still sends the text turn. If `supports_vision` is false
 or unknown, image parts are not added; the model receives the normal text prompt
 and any non-image attachment context.
 
+The chat route rejects raw inbound `image_url` content parts. Multimodal parts
+are a server-side model payload shape only: clients upload images first, then
+send returned attachment ids. Replayed attachments must already be finalized as
+`attached`; uploaded rows continue through the same-turn claim path only.
+Streaming completions use the image-aware input estimate for max-token sizing,
+trace token usage, persisted token columns, assistant metadata, and the client
+`token_usage` event.
+
 ## Intentional
 
 - Non-vision models do not error when image attachments are present. They ignore
@@ -103,6 +124,9 @@ and any non-image attachment context.
 - Data URLs are generated only server-side for model input. The public
   persisted chip/download flow still uses short-lived signed URLs and does not
   store image data URLs in message metadata.
+- Raw client-supplied `image_url` message parts are rejected instead of
+  sanitized. Accepting and rewriting them would create a second, weaker image
+  ingress path next to the owned attachment flow.
 
 ## Deferred
 
@@ -120,14 +144,16 @@ and any non-image attachment context.
 - `npm run test:vitest -- lib/llm/adapters/__tests__/huggingface-adapter.test.ts lib/llm/adapters/__tests__/generation-options.test.ts lib/llm/adapters/__tests__/anthropic-adapter.test.ts lib/llm/adapters/__tests__/runpod-adapter.test.ts --run` — 8 tests passed.
 - `npm run test:vitest -- app/api/chat/attachments/__tests__/route.test.ts app/api/chat/__tests__/route-tool-use-smoke.test.ts lib/llm/adapters/__tests__/openai-adapter.test.ts lib/llm/adapters/__tests__/ollama-adapter.test.ts lib/llm/adapters/__tests__/anthropic-adapter.test.ts lib/llm/adapters/__tests__/runpod-adapter.test.ts lib/llm/__tests__/unified-client.test.ts --run` — 70 tests passed.
 - `npm run test:vitest -- app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts app/api/chat/__tests__/route-mcp-live-stdio-sse.test.ts --run` — 4 tests passed.
+- `npm run test:vitest -- app/api/chat/__tests__/route-tool-use-smoke.test.ts --run` — 26 tests passed after the raw-image/replay/streaming-usage review follow-up.
 - `npm test` — 97 files / 847 tests passed.
+- `npm test` — 97 files / 850 tests passed after the raw-image/replay/streaming-usage review follow-up.
 - `npm run lint` — passed with existing warning debt.
 - `git diff --check` — passed.
 - `npm run build` — passed.
 
 ## Estimated diff size
 
-- Current: 25 files, +1562/-76 LOC relative to `origin/main`.
+- Current: 25 files, +1849/-98 LOC relative to the merge-base with `origin/main`.
 - This is over the preferred slice size because the root fix changes the shared
   chat message content contract and every provider adapter that formats
   messages must either preserve multimodal parts or safely extract text.

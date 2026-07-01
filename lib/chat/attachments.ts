@@ -746,6 +746,9 @@ export async function resolveChatAttachmentsForReplay(params: {
     if (row.status === 'deleted') {
       throw new ChatAttachmentError('Attachment is no longer available', 410);
     }
+    if (row.status !== 'attached') {
+      throw new ChatAttachmentError('Attachment is not available for replay', 409);
+    }
   }
 
   const context = buildAttachmentContext(orderedRows as ChatAttachmentRow[]);
