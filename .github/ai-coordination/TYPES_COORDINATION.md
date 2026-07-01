@@ -16,6 +16,12 @@
 - **Locations:** `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `components/chat/types.ts`
 - **Status:** Backend DTOs are consumed by the chat UI; pending upload state lives in `PendingChatAttachment`.
 
+**Chat Attachment Signed Download Response**
+- **Started:** 2026-06-30
+- **Branch:** `codex/chat-attachment-download-links`
+- **Locations:** `lib/chat/attachments.ts`, `components/chat/AttachmentChips.tsx`
+- **Status:** Persisted chips request a short-lived signed URL through `GET /api/chat/attachments?attachmentId=<uuid>`; no signed URL is stored in `ChatAttachmentDto`.
+
 ### Recently Completed
 
 **Training Stats Types**
@@ -49,6 +55,7 @@ interface ChatAttachmentDto {
 - Backend: returned from `POST /api/chat/attachments`.
 - Chat route: persisted in assistant metadata when `attachmentIds` are accepted.
 - UI: used for uploaded chips, sent-message chips, and persisted message attachment display.
+- Downloads: the DTO carries only identity/display metadata. Persisted chips fetch a fresh signed URL on click instead of storing or rendering an href.
 
 #### PendingChatAttachment
 
@@ -79,6 +86,26 @@ interface ChatRequestAttachmentFields {
 ```
 
 **Rules:** max 5 ids, authenticated non-widget chat only, same `user_id` and `conversation_id`.
+
+#### Chat Attachment Download Response
+
+**Location:** `app/api/chat/attachments/route.ts`
+
+```typescript
+interface ChatAttachmentDownloadResponse {
+  success: true;
+  url: string;
+  expiresInSeconds: number;
+  attachment: {
+    id: string;
+    filename: string;
+  };
+}
+```
+
+**Rules:** `url` is a short-lived Supabase Storage signed URL generated per
+request for the authenticated user. Do not persist it into message metadata or
+`ChatAttachmentDto`.
 
 ### Training Types
 

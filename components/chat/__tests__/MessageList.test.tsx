@@ -2,10 +2,20 @@
 
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MessageList } from '../MessageList';
 import type { Message } from '../types';
+
+const getSession = vi.hoisted(() => vi.fn());
+
+vi.mock('@/lib/supabaseClient', () => ({
+  supabase: {
+    auth: {
+      getSession,
+    },
+  },
+}));
 
 const noop = vi.fn();
 
@@ -31,6 +41,11 @@ function renderList(messages: Message[]) {
     />
   );
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
 
 describe('MessageList web search results', () => {
   it('renders structured web search results with SearchResultCard', () => {
@@ -177,5 +192,58 @@ describe('MessageList web search results', () => {
     expect(screen.getByText('Use this file.')).toBeInTheDocument();
     expect(screen.getByText('brief.md')).toBeInTheDocument();
     expect(screen.getByText('2.0 KB')).toBeInTheDocument();
+  });
+
+  it('opens attached files through an authenticated signed-download request', async () => {
+    getSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: 'about:blank' },
+      opener: {} as unknown,
+    };
+    const open = vi.fn(() => popup);
+    vi.stubGlobal('open', open);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      url: 'https://signed.example.com/brief.md?token=abc',
+    }), { status: 200, headers: { 'content-type': 'application/json' } })));
+
+    renderList([
+      {
+        id: 'user-with-attachment',
+        role: 'user',
+        content: 'Use this file.',
+        attachments: [
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            filename: 'brief.md',
+            contentType: 'text/markdown',
+            sizeBytes: 2048,
+            kind: 'text',
+            extractedChars: 120,
+            status: 'attached',
+          },
+        ],
+      },
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download brief.md' }));
+
+    expect(open).toHaveBeenCalledWith('about:blank', '_blank');
+    expect(popup.opener).toBeNull();
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/chat/attachments?attachmentId=11111111-1111-4111-8111-111111111111',
+        {
+          headers: {
+            Authorization: 'Bearer session-token',
+          },
+        },
+      );
+    });
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(popup.location.href).toBe('https://signed.example.com/brief.md?token=abc');
   });
 });

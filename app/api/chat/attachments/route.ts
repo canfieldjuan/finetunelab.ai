@@ -3,8 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 import {
   CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES,
   ChatAttachmentError,
+  createSignedChatAttachmentDownloadUrl,
   createChatAttachmentFromFile,
   deleteUploadedChatAttachments,
+  normalizeChatAttachmentId,
   normalizeChatConversationId,
   normalizeChatAttachmentIds,
 } from '@/lib/chat/attachments';
@@ -122,6 +124,55 @@ export async function POST(request: NextRequest) {
     console.error('[Chat Attachments API] Upload error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to upload chat attachment' },
+      { status: 500 },
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabase = createAuthenticatedClient(authHeader);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const attachmentId = normalizeChatAttachmentId(request.nextUrl.searchParams.get('attachmentId'));
+    const download = await createSignedChatAttachmentDownloadUrl({
+      supabase: createAttachmentWriteClient(),
+      userId: user.id,
+      attachmentId,
+    });
+
+    return NextResponse.json({
+      success: true,
+      url: download.signedUrl,
+      expiresInSeconds: download.expiresInSeconds,
+      attachment: {
+        id: download.id,
+        filename: download.filename,
+      },
+    });
+  } catch (error) {
+    if (error instanceof ChatAttachmentError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.status },
+      );
+    }
+
+    console.error('[Chat Attachments API] Download link error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to create chat attachment download link' },
       { status: 500 },
     );
   }
