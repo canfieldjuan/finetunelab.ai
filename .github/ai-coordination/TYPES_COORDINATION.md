@@ -13,8 +13,8 @@
 **Portal Chat Tool Binding Types**
 - **Started:** 2026-07-01
 - **Branch:** `codex/chat-tool-binding-controls`
-- **Locations:** `components/chat/types.ts`, `components/Chat.tsx`, `components/hooks/useChat.ts`, `components/chat/ToolBindingControls.tsx`
-- **Status:** `PortalChatTool` is the shared built-in portal tool definition shape passed from loaded DB tools, through the binding controls, into the `/api/chat` request body.
+- **Locations:** `components/chat/types.ts`, `components/chat/toolBindingState.ts`, `components/Chat.tsx`, `components/hooks/useChat.ts`, `components/chat/ToolBindingControls.tsx`
+- **Status:** `PortalChatTool` is the shared built-in portal tool definition shape passed from loaded DB tools, through the binding controls, into the `/api/chat` request body. Session-local disabled-tool state uses the shared `ToolBindingState` helper so draft selections migrate to the created conversation id and do not leak into the next draft.
 
 **Chat Attachment Types**
 - **Started:** 2026-06-30

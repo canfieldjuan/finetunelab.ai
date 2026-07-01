@@ -18,9 +18,9 @@
 - **Issue:** #79
 - **Endpoints affected:** `POST /api/chat` with filtered `tools`
 - **Files:**
-  - UI: `components/Chat.tsx`, `components/chat/ChatHeader.tsx`, `components/chat/ToolBindingControls.tsx`
-  - Hook/types: `components/hooks/useChat.ts`, `components/chat/types.ts`
-  - Tests: `components/chat/__tests__/ToolBindingControls.test.tsx`, `components/hooks/__tests__/useChat.mcp-sse.test.tsx`
+  - UI: `components/Chat.tsx`, `components/chat/ChatHeader.tsx`, `components/chat/ToolBindingControls.tsx`, `components/chat/toolBindingState.ts`
+  - Hook/types: `components/hooks/useChat.ts`, `components/hooks/useConversationActions.ts`, `components/chat/types.ts`
+  - Tests: `components/chat/__tests__/ToolBindingControls.test.tsx`, `components/chat/__tests__/toolBindingState.test.ts`, `components/hooks/__tests__/useChat.mcp-sse.test.tsx`
 
 **Snippet Revision Newline Preservation**
 - **Started:** 2026-07-01

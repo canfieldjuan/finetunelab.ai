@@ -25,16 +25,21 @@ existing server allowlist remains authoritative for execution.
    the authoritative allowlist from the offered tool definitions and
    `executePortalChatTool` blocks unoffered built-in tool calls.
 4. Add focused UI/hook coverage for filtered tool request bodies.
+5. Preserve draft tool selections when a new chat is persisted and receives
+   its real conversation id.
 
 ### Files touched
 
 - `components/Chat.tsx`
 - `components/chat/ChatHeader.tsx`
 - `components/chat/ToolBindingControls.tsx`
+- `components/chat/toolBindingState.ts`
 - `components/chat/types.ts`
+- `components/hooks/useConversationActions.ts`
 - `components/hooks/useChat.ts`
 - `components/hooks/__tests__/useChat.mcp-sse.test.tsx`
 - `components/chat/__tests__/ToolBindingControls.test.tsx`
+- `components/chat/__tests__/toolBindingState.test.ts`
 - `.github/ai-coordination/API_COORDINATION.md`
 - `.github/ai-coordination/TYPES_COORDINATION.md`
 - `development/planning/2026-07-01_chat-tool-binding-controls-plan.md`
@@ -46,6 +51,10 @@ per-chat set of disabled tool names in local React state. The derived enabled
 tool list is passed into `useChat`, so request construction and the existing
 route allowlist see the same selected tools. `ToolBindingControls` renders a
 header popover with checkboxes, count state, and enable-all/disable-all actions.
+When a blank draft chat is persisted as a real conversation, the draft disabled
+tool set is migrated to the created conversation id and the shared `draft` entry
+is removed so the second turn keeps the same bindings and the next draft does
+not inherit stale choices.
 
 ## Intentional
 
@@ -66,15 +75,16 @@ header popover with checkboxes, count state, and enable-all/disable-all actions.
 
 ## Verification
 
-- `npm run test:vitest -- components/chat/__tests__/ToolBindingControls.test.tsx components/hooks/__tests__/useChat.mcp-sse.test.tsx --run` - 2 files, 15 tests passed.
+- `npm run test:vitest -- components/chat/__tests__/ToolBindingControls.test.tsx components/chat/__tests__/toolBindingState.test.ts components/hooks/__tests__/useChat.mcp-sse.test.tsx --run` - 3 files, 19 tests passed.
 - `npm run type-check` - passed.
 - `git diff --check` - passed.
-- `npm run lint` - passed with existing warning debt (0 errors, 245 warnings).
-- `npm test` - passed: 102 files, 907 tests. Local Postgres restart/NOTICE output was emitted, but Vitest exited 0.
+- `npm run lint` - passed with existing warning debt (0 errors, 244 warnings).
+- `npm test` - passed: 103 files, 911 tests. Local Postgres restart/NOTICE output was emitted, but Vitest exited 0.
 - `npm run build` - passed. Build emitted existing missing-env/static-generation logs and stale browser-data notices, but exited 0.
 
 ## Estimated diff size
 
-Actual: 10 committed files, approximately +470 / -41. This is over the first
-target because the vertical slice needs a reusable control, one component test,
-one hook request-body regression, and the required plan/coordination docs.
+Actual: 13 committed files, approximately +586 / -47. This is over the first
+target because the vertical slice needs a reusable control, focused component
+and state tests, one hook request-body regression, and the required
+plan/coordination docs.

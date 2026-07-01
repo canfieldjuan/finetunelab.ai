@@ -80,6 +80,11 @@ import { ChatCommandPalette } from "./chat/ChatCommandPalette";
 import { ChatHeader } from "./chat/ChatHeader";
 import { GenerationControls } from "./chat/GenerationControls";
 import { ToolBindingControls } from "./chat/ToolBindingControls";
+import {
+  getToolBindingChatKey,
+  migrateDraftToolBindingsToConversation,
+  type ToolBindingState,
+} from "./chat/toolBindingState";
 const ContextInspectorPanel = dynamic(() => import("./debug/ContextInspectorPanel").then(mod => ({ default: mod.ContextInspectorPanel })), {
   loading: () => null
 });
@@ -155,7 +160,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   const [connectionError, setConnectionError] = useState<boolean>(false);
 
   const [tools, setTools] = useState<PortalChatTool[]>([]);
-  const [disabledToolNamesByChat, setDisabledToolNamesByChat] = useState<Record<string, string[]>>({});
+  const [disabledToolNamesByChat, setDisabledToolNamesByChat] = useState<ToolBindingState>({});
   
   // Feedback state management - using useFeedbackState hook
   const {
@@ -262,7 +267,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Ref to track if currently streaming (prevents effect loops)
   const isStreamingRef = useRef(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const toolBindingChatKey = activeId || 'draft';
+  const toolBindingChatKey = getToolBindingChatKey(activeId);
   const disabledToolNames = useMemo(() => (
     new Set(disabledToolNamesByChat[toolBindingChatKey] ?? [])
   ), [disabledToolNamesByChat, toolBindingChatKey]);
@@ -303,6 +308,12 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
       [toolBindingChatKey]: tools.map((tool) => tool.function.name),
     }));
   }, [toolBindingChatKey, tools]);
+
+  const migrateDraftToolBindings = useCallback((conversationId: string) => {
+    setDisabledToolNamesByChat((current) => (
+      migrateDraftToolBindingsToConversation(current, conversationId)
+    ));
+  }, []);
 
   // Thinking mode state - for Qwen3 and similar models with <think> tags
   const [enableThinking, setEnableThinking] = useState(false);
@@ -690,15 +701,25 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     }
 
     // Call hook handler (handles DB operations and fetching)
-    await handleNewConversationHook();
+    const newConversationId = await handleNewConversationHook();
+    if (newConversationId) {
+      migrateDraftToolBindings(newConversationId);
+      setActiveId(newConversationId);
+    }
 
     // Additional UI state updates after conversation is created
     // fetchConversations (called by hook) will set the new conversation as active
     setMessages([]);
     setConversationError(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, handleNewConversationHook, setMessages, setConversationError]);
+  }, [
+    userId,
+    demoMode,
+    handleNewConversationHook,
+    migrateDraftToolBindings,
+    setActiveId,
+    setMessages,
+    setConversationError,
+  ]);
 
   useEffect(() => {
     log.trace('Chat', 'Initial conversation effect triggered', { 
