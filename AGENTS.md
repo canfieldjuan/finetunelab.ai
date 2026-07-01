@@ -30,6 +30,17 @@ This repo is a large Next.js 15 / TypeScript application with Supabase, GraphRAG
 - Do not leave generated experiments, duplicate components, debug pages, or scratch scripts unless they are intentional deliverables and documented.
 - When touching shared contracts, update the relevant `.github/ai-coordination/*.md` file with the exact paths, types, endpoints, and decisions.
 
+## Vertical Slice Delivery
+
+Ship vertical slices that deliver observable user value, then harden and polish in tracked follow-up work. Do not let non-blocking cleanup, edge-case expansion, or nice-to-have hardening drag a slice out of scope.
+
+- Keep each PR focused on one vertical slice unless the user explicitly broadens the lane.
+- Defer hardening, polish, and cleanup only when they do not block the current slice.
+- Pull an item forward instead of deferring it when it is a blocker: security or cross-user access risk, likely data loss/corruption, a correctness bug on the primary happy path, failing tests/CI/build, or an unresolved review thread required for merge.
+- If a deferred item is later recognized as primary-path correctness, reclassify it and make it the current or next slice rather than leaving it under deferred hardening.
+- Track deferred work in a GitHub issue or session drift note with exact paths, rationale, and the condition that would make it a blocker.
+- PR plans and bodies for vertical slices should name intentional deferrals and link the tracking issue when one exists.
+
 ## Root Cause, Not Symptoms
 
 Fix every defect, bug, or operator-reported issue **as far upstream as is correct** — never patch the symptom.
