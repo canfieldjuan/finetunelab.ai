@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { validateConversations } from '@/lib/validation/conversation-validator';
-import { buildValidationMessageProjection } from '../useMessages';
+import {
+  MESSAGE_CONTENT_TRUNCATION_LIMIT,
+  buildValidationMessageProjection,
+  truncateMessageContentForDisplay,
+} from '../useMessages';
 import type { Message } from '@/components/chat/types';
 
 describe('useMessages validation projection', () => {
@@ -95,6 +99,24 @@ describe('useMessages validation projection', () => {
           status: 'attached',
         },
       ],
+    });
+  });
+
+  it('preserves structured local truncation fields through the validation path', () => {
+    const originalContent = 'x'.repeat(MESSAGE_CONTENT_TRUNCATION_LIMIT + 5);
+    const truncated = truncateMessageContentForDisplay({
+      id: 'msg-1',
+      role: 'assistant',
+      content: originalContent,
+    });
+    const [projected] = buildValidationMessageProjection([truncated]);
+
+    expect(truncated.content).toContain('Message truncated due to size');
+    expect(truncated.contentTruncated).toBe(true);
+    expect(truncated.originalContentLength).toBe(originalContent.length);
+    expect(projected).toMatchObject({
+      contentTruncated: true,
+      originalContentLength: originalContent.length,
     });
   });
 });

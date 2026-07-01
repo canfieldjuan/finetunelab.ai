@@ -74,6 +74,7 @@ const EvaluationModal = dynamic(() => import("./evaluation/EvaluationModal").the
 import { ModelSelector } from "./models/ModelSelector";
 import { MessageList } from "./chat/MessageList";
 import { AttachmentChips } from "./chat/AttachmentChips";
+import { persistAssistantSnippetRevision } from "./chat/snippetRevisionPersistence";
 import { ScrollToBottomButton } from "./chat/ScrollToBottomButton";
 import { ChatCommandPalette } from "./chat/ChatCommandPalette";
 import { ChatHeader } from "./chat/ChatHeader";
@@ -117,6 +118,7 @@ import {
 import type { SelectedModelInfo } from '@/components/hooks/useModelSelection';
 import { useContextInjection } from '@/components/hooks/useContextInjection';
 import { CHAT_ATTACHMENT_FILE_INPUT_ACCEPT } from '@/lib/chat/attachment-limits';
+import type { ReplaceRangeRevision } from "@/lib/snippet-revision";
 
 export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Render counter for debugging
@@ -300,6 +302,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Determine widget/demo mode early so it's available to hooks below
   const isWidgetMode = !!widgetConfig;
   const isDemoOrWidget = demoMode || isWidgetMode;
+  const canUseSnippetRevision = Boolean(session?.access_token && !isDemoOrWidget);
 
   // Chat messaging state and actions - using useChat hook
   const {
@@ -949,6 +952,48 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     });
   }, [messages, handleSendMessage, setMessages]);
 
+  const handleApplySnippetRevision = useCallback(async (messageId: string, revision: ReplaceRangeRevision) => {
+    const currentMessage = messages.find(message => message.id === messageId);
+    if (!currentMessage) {
+      throw new Error('Message no longer exists.');
+    }
+
+    if (currentMessage.role !== 'assistant') {
+      throw new Error('Only assistant messages can be revised.');
+    }
+
+    if (messageId.startsWith('temp-')) {
+      throw new Error('Wait for the response to finish saving before revising.');
+    }
+
+    if (currentMessage.contentTruncated) {
+      throw new Error('Load the full message before revising.');
+    }
+
+    if (!user || !session?.access_token || !activeId || demoMode || isWidgetMode) {
+      throw new Error('Sign in to revise saved assistant text.');
+    }
+
+    try {
+      const persisted = await persistAssistantSnippetRevision({
+        messageId,
+        conversationId: activeId,
+        expectedContent: currentMessage.content,
+        revision,
+        authToken: session.access_token,
+      });
+
+      setMessages(prev => prev.map(message => (
+        message.id === messageId
+          ? { ...message, content: persisted.updatedText, contentTruncated: false, originalContentLength: undefined }
+          : message
+      )));
+    } catch (error) {
+      log.error('Chat', 'Failed to save snippet revision', { error, messageId });
+      throw error;
+    }
+  }, [activeId, demoMode, isWidgetMode, messages, session, setMessages, user]);
+
   const handleArchiveConversation = async (conversationId: string) => {
     if ((!userId || !user) && !demoMode) {
       setError("You must be logged in to archive conversations");
@@ -1520,6 +1565,9 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
             onDownloadResearch={handleDownloadResearch}
             isDeepResearchResult={isDeepResearchResult}
             onRegenerate={handleRegenerate}
+            onApplySnippetRevision={canUseSnippetRevision ? handleApplySnippetRevision : undefined}
+            snippetRevisionModelId={canUseSnippetRevision ? selectedModelId : null}
+            snippetRevisionAuthToken={canUseSnippetRevision ? session?.access_token ?? null : null}
           />
 
           {/* Structured Research Viewer (v2 with SSE streaming) */}

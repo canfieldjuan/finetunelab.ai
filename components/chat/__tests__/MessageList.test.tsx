@@ -3,11 +3,14 @@
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageList } from '../MessageList';
 import type { Message } from '../types';
 
 const getSession = vi.hoisted(() => vi.fn());
+const requestSnippetRewriteMock = vi.hoisted(() => vi.fn());
+const requestSnippetRevisionMock = vi.hoisted(() => vi.fn());
+const MODEL_ID = '11111111-1111-1111-1111-111111111111';
 
 vi.mock('@/lib/supabaseClient', () => ({
   supabase: {
@@ -17,9 +20,17 @@ vi.mock('@/lib/supabaseClient', () => ({
   },
 }));
 
+vi.mock('@/lib/snippet-revision/client', () => ({
+  requestSnippetRewrite: requestSnippetRewriteMock,
+  requestSnippetRevision: requestSnippetRevisionMock,
+  SnippetRevisionApiError: class SnippetRevisionApiError extends Error {
+    code = 'test_error';
+  },
+}));
+
 const noop = vi.fn();
 
-function renderList(messages: Message[]) {
+function renderList(messages: Message[], overrides: Partial<React.ComponentProps<typeof MessageList>> = {}) {
   return render(
     <MessageList
       messages={messages}
@@ -38,13 +49,19 @@ function renderList(messages: Message[]) {
       onEmailResearch={noop}
       onDownloadResearch={noop}
       isDeepResearchResult={() => false}
+      snippetRevisionModelId={MODEL_ID}
+      snippetRevisionAuthToken="session-token"
+      {...overrides}
     />
   );
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.clearAllMocks();
 });
 
 describe('MessageList web search results', () => {
@@ -245,5 +262,439 @@ describe('MessageList web search results', () => {
     });
     expect(open).toHaveBeenCalledTimes(1);
     expect(popup.location.href).toBe('https://signed.example.com/brief.md?token=abc');
+  });
+});
+
+describe('MessageList snippet revision actions', () => {
+  it('exposes a revise action for assistant text messages', () => {
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Line one.\nLine two.',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeEnabled();
+  });
+
+  it('does not expose the revise action for user messages', () => {
+    renderList([
+      {
+        id: 'user-1',
+        role: 'user',
+        content: 'Please write a blog post.',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    expect(screen.queryByRole('button', { name: 'Revise selected text' })).not.toBeInTheDocument();
+  });
+
+  it('sends selected source offsets to rewrite, previews, and applies the guarded update', async () => {
+    const message = 'Opening.\nSoft middle.\nClosing.';
+    const start = message.indexOf('Soft middle.');
+    const end = start + 'Soft middle.'.length;
+    const onApply = vi.fn();
+
+    requestSnippetRewriteMock.mockResolvedValue({
+      replacement: 'Sharper middle.',
+      modelId: MODEL_ID,
+    });
+    requestSnippetRevisionMock.mockImplementation(async (request) => ({
+      ok: true,
+      applied: request.action === 'apply',
+      updatedText: 'Opening.\nSharper middle.\nClosing.',
+      unchanged: false,
+      change: {
+        mode: 'replace_range',
+        start,
+        end,
+        original: 'Soft middle.',
+        replacement: 'Sharper middle.',
+      },
+    }));
+
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: message,
+      },
+    ], {
+      onApplySnippetRevision: onApply,
+      snippetRevisionModelId: MODEL_ID,
+      snippetRevisionAuthToken: 'session-token',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revise selected text' }));
+
+    const source = await screen.findByLabelText('Assistant response source') as HTMLTextAreaElement;
+    source.setSelectionRange(start, end);
+    fireEvent.select(source);
+    fireEvent.change(screen.getByLabelText('Revision instruction'), {
+      target: {
+        value: 'Make it sharper.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+
+    await waitFor(() => {
+      expect(requestSnippetRewriteMock).toHaveBeenCalledWith({
+        sourceText: message,
+        selection: {
+          start,
+          end,
+          expectedText: 'Soft middle.',
+        },
+        instruction: 'Make it sharper.',
+        modelId: MODEL_ID,
+      }, {
+        authToken: 'session-token',
+      });
+    });
+    expect(requestSnippetRevisionMock).toHaveBeenCalledWith({
+      action: 'preview',
+      sourceText: message,
+      revision: {
+        mode: 'replace_range',
+        start,
+        end,
+        expectedText: 'Soft middle.',
+        replace: 'Sharper middle.',
+      },
+    });
+
+    await screen.findByText('Preview Ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() => {
+      expect(onApply).toHaveBeenCalledWith(
+        'assistant-1',
+        {
+          mode: 'replace_range',
+          start,
+          end,
+          expectedText: 'Soft middle.',
+          replace: 'Sharper middle.',
+        },
+      );
+    });
+  });
+
+  it('ignores stale preview results after the source selection changes', async () => {
+    const message = 'Opening.\nSoft middle.\nClosing.';
+    const firstStart = message.indexOf('Soft middle.');
+    const firstEnd = firstStart + 'Soft middle.'.length;
+    const secondStart = message.indexOf('Closing.');
+    const secondEnd = secondStart + 'Closing.'.length;
+    let resolveRewrite: ((value: { replacement: string; modelId: string }) => void) | undefined;
+
+    requestSnippetRewriteMock.mockImplementation(async () => new Promise((resolve) => {
+      resolveRewrite = resolve;
+    }));
+
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: message,
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revise selected text' }));
+
+    const source = await screen.findByLabelText('Assistant response source') as HTMLTextAreaElement;
+    source.setSelectionRange(firstStart, firstEnd);
+    fireEvent.select(source);
+    fireEvent.change(screen.getByLabelText('Revision instruction'), {
+      target: {
+        value: 'Make it sharper.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+    await waitFor(() => expect(requestSnippetRewriteMock).toHaveBeenCalled());
+
+    source.setSelectionRange(secondStart, secondEnd);
+    fireEvent.select(source);
+    resolveRewrite?.({
+      replacement: 'Sharper middle.',
+      modelId: MODEL_ID,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Generate Preview' })).toBeEnabled();
+    });
+    expect(requestSnippetRevisionMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('Preview Ready')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  });
+
+  it('applies an empty replacement preview for deletion edits', async () => {
+    const message = 'Opening.\nDelete me.\nClosing.';
+    const start = message.indexOf('Delete me.');
+    const end = start + 'Delete me.'.length;
+    const updatedText = 'Opening.\n\nClosing.';
+    const onApply = vi.fn();
+
+    requestSnippetRewriteMock.mockResolvedValue({
+      replacement: '',
+      modelId: MODEL_ID,
+    });
+    requestSnippetRevisionMock.mockImplementation(async (request) => ({
+      ok: true,
+      applied: request.action === 'apply',
+      updatedText,
+      unchanged: false,
+      change: {
+        mode: 'replace_range',
+        start,
+        end,
+        original: 'Delete me.',
+        replacement: '',
+      },
+    }));
+
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: message,
+      },
+    ], {
+      onApplySnippetRevision: onApply,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revise selected text' }));
+
+    const source = await screen.findByLabelText('Assistant response source') as HTMLTextAreaElement;
+    source.setSelectionRange(start, end);
+    fireEvent.select(source);
+    fireEvent.change(screen.getByLabelText('Revision instruction'), {
+      target: {
+        value: 'Delete this sentence.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+
+    await screen.findByText('Preview Ready');
+    expect(requestSnippetRevisionMock).toHaveBeenCalledWith({
+      action: 'preview',
+      sourceText: message,
+      revision: {
+        mode: 'replace_range',
+        start,
+        end,
+        expectedText: 'Delete me.',
+        replace: '',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() => {
+      expect(requestSnippetRevisionMock).toHaveBeenLastCalledWith({
+        action: 'apply',
+        sourceText: message,
+        revision: {
+          mode: 'replace_range',
+          start,
+          end,
+          expectedText: 'Delete me.',
+          replace: '',
+        },
+      });
+      expect(onApply).toHaveBeenCalledWith('assistant-1', {
+        mode: 'replace_range',
+        start,
+        end,
+        expectedText: 'Delete me.',
+        replace: '',
+      });
+    });
+  });
+
+  it('disables snippet revision for locally truncated assistant messages', () => {
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Partial response.\n\n... [Message truncated due to size. Original length: 60000 characters]',
+        contentTruncated: true,
+        originalContentLength: 60_000,
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toHaveAttribute(
+      'title',
+      'Load the full message before revising',
+    );
+  });
+
+  it('disables snippet revision for unsaved temporary assistant messages', () => {
+    renderList([
+      {
+        id: 'temp-assistant-1',
+        role: 'assistant',
+        content: 'Response is still saving.',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+    });
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toHaveAttribute(
+      'title',
+      'Revision is available after this response is saved',
+    );
+  });
+
+  it('explains auth and model blockers independently', () => {
+    const { rerender } = renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Saved response.',
+      },
+    ], {
+      onApplySnippetRevision: vi.fn(),
+      snippetRevisionAuthToken: null,
+    });
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toHaveAttribute(
+      'title',
+      'Sign in to revise assistant text',
+    );
+
+    rerender(
+      <MessageList
+        messages={[{
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'Saved response.',
+        }]}
+        feedback={{}}
+        copiedMessageId={null}
+        speakingMessageId={null}
+        isSpeaking={false}
+        isPaused={false}
+        ttsSupported={false}
+        ttsEnabled={false}
+        onCopyMessage={noop}
+        onFeedback={noop}
+        onToggleTTS={noop}
+        onStopTTS={noop}
+        onEvaluate={noop}
+        onEmailResearch={noop}
+        onDownloadResearch={noop}
+        isDeepResearchResult={() => false}
+        onApplySnippetRevision={vi.fn()}
+        snippetRevisionAuthToken="session-token"
+        snippetRevisionModelId="__default__"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revise selected text' })).toHaveAttribute(
+      'title',
+      'Select a model to revise text',
+    );
+  });
+
+  it('maps normalized textarea selections back to CRLF source offsets', async () => {
+    const message = 'Opening.\r\nSoft middle.\r\nClosing.';
+    const displayMessage = 'Opening.\nSoft middle.\nClosing.';
+    const displayStart = displayMessage.indexOf('Soft middle.');
+    const displayEnd = displayStart + 'Soft middle.'.length;
+    const sourceStart = message.indexOf('Soft middle.');
+    const sourceEnd = sourceStart + 'Soft middle.'.length;
+    const onApply = vi.fn();
+
+    requestSnippetRewriteMock.mockResolvedValue({
+      replacement: 'Sharper middle.',
+      modelId: MODEL_ID,
+    });
+    requestSnippetRevisionMock.mockResolvedValue({
+      ok: true,
+      applied: false,
+      updatedText: 'Opening.\r\nSharper middle.\r\nClosing.',
+      unchanged: false,
+      change: {
+        mode: 'replace_range',
+        start: sourceStart,
+        end: sourceEnd,
+        original: 'Soft middle.',
+        replacement: 'Sharper middle.',
+      },
+    });
+
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: message,
+      },
+    ], {
+      onApplySnippetRevision: onApply,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revise selected text' }));
+
+    const source = await screen.findByLabelText('Assistant response source') as HTMLTextAreaElement;
+    expect(source.value).toBe(displayMessage);
+    source.setSelectionRange(displayStart, displayEnd);
+    fireEvent.select(source);
+    fireEvent.change(screen.getByLabelText('Revision instruction'), {
+      target: {
+        value: 'Make it sharper.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Preview' }));
+
+    await waitFor(() => {
+      expect(requestSnippetRewriteMock).toHaveBeenCalledWith({
+        sourceText: message,
+        selection: {
+          start: sourceStart,
+          end: sourceEnd,
+          expectedText: 'Soft middle.',
+        },
+        instruction: 'Make it sharper.',
+        modelId: MODEL_ID,
+      }, {
+        authToken: 'session-token',
+      });
+    });
+  });
+
+  it('keeps the full-message regenerate action intact', () => {
+    const onRegenerate = vi.fn();
+
+    renderList([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Full answer.',
+      },
+    ], {
+      onRegenerate,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate response' }));
+
+    expect(onRegenerate).toHaveBeenCalledWith('assistant-1');
   });
 });

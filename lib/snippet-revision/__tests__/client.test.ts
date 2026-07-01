@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   requestSnippetRevision,
+  requestSnippetRewrite,
   SnippetRevisionApiError,
   type SnippetRevisionApiRequest,
 } from '../client';
@@ -413,6 +414,73 @@ describe('requestSnippetRevision', () => {
       message: 'Bad request',
       code: 'bad_request',
       status: 400,
+    });
+  });
+});
+
+describe('requestSnippetRewrite', () => {
+  const rewriteRequest = {
+    sourceText: 'Opening. Soft middle. Closing.',
+    selection: {
+      start: 9,
+      end: 21,
+      expectedText: 'Soft middle.',
+    },
+    instruction: 'Make it sharper.',
+    modelId: 'model-123',
+  };
+
+  it('posts a rewrite request with auth and returns replacement text', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      replacement: 'Sharper middle.',
+      modelId: 'model-123',
+    }));
+
+    await expect(requestSnippetRewrite(rewriteRequest, {
+      fetcher,
+      authToken: 'session-token',
+    })).resolves.toEqual({
+      replacement: 'Sharper middle.',
+      modelId: 'model-123',
+    });
+
+    expect(fetcher).toHaveBeenCalledWith('/api/snippet-revision/rewrite', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer session-token',
+      },
+      body: JSON.stringify(rewriteRequest),
+      signal: undefined,
+    });
+  });
+
+  it('normalizes rewrite API validation errors', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      error: {
+        code: 'target_mismatch',
+        message: 'Selection text no longer matches the source text.',
+      },
+    }, { status: 400 }));
+
+    await expect(requestSnippetRewrite(rewriteRequest, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'target_mismatch',
+      status: 400,
+      message: 'Selection text no longer matches the source text.',
+    });
+  });
+
+  it('rejects malformed rewrite success payloads', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      replacement: 42,
+      modelId: 'model-123',
+    }));
+
+    await expect(requestSnippetRewrite(rewriteRequest, { fetcher })).rejects.toMatchObject({
+      name: 'SnippetRevisionApiError',
+      code: 'invalid_response',
+      status: 200,
     });
   });
 });

@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { MessageContent } from './MessageContent';
+import { SnippetRevisionDialog } from './SnippetRevisionDialog';
 import { SearchResultCard } from '@/components/search/SearchResultCard';
 import { AttachmentChips } from './AttachmentChips';
 import { GraphRAGIndicator } from '../graphrag/GraphRAGIndicator';
@@ -24,9 +25,11 @@ import {
   Mail,
   Download,
   RefreshCw,
+  PencilLine,
   Wrench
 } from 'lucide-react';
 import type { Message } from './types';
+import type { ReplaceRangeRevision } from '@/lib/snippet-revision';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 export interface MessageListProps {
@@ -47,6 +50,45 @@ export interface MessageListProps {
   onDownloadResearch: (content: string) => void;
   isDeepResearchResult: (content: string) => boolean;
   onRegenerate?: (messageId: string) => void;
+  onApplySnippetRevision?: (messageId: string, revision: ReplaceRangeRevision) => void | Promise<void>;
+  snippetRevisionModelId?: string | null;
+  snippetRevisionAuthToken?: string | null;
+}
+
+interface SnippetRevisionAvailability {
+  canRevise: boolean;
+  reason?: string;
+}
+
+function getSnippetRevisionAvailability(
+  message: Message,
+  options: { hasAuthToken: boolean; hasSelectedModel: boolean },
+): SnippetRevisionAvailability {
+  if (message.role !== 'assistant') {
+    return { canRevise: false, reason: 'Only assistant messages can be revised' };
+  }
+
+  if (message.id.startsWith('temp-')) {
+    return { canRevise: false, reason: 'Revision is available after this response is saved' };
+  }
+
+  if (message.contentTruncated) {
+    return { canRevise: false, reason: 'Load the full message before revising' };
+  }
+
+  if (!message.content.trim()) {
+    return { canRevise: false, reason: 'Revision unavailable for empty messages' };
+  }
+
+  if (!options.hasAuthToken) {
+    return { canRevise: false, reason: 'Sign in to revise assistant text' };
+  }
+
+  if (!options.hasSelectedModel) {
+    return { canRevise: false, reason: 'Select a model to revise text' };
+  }
+
+  return { canRevise: true };
 }
 
 function formatToolName(name: string): string {
@@ -126,20 +168,32 @@ export function MessageList({
   onEmailResearch,
   onDownloadResearch,
   isDeepResearchResult,
-  onRegenerate
+  onRegenerate,
+  onApplySnippetRevision,
+  snippetRevisionModelId,
+  snippetRevisionAuthToken
 }: MessageListProps) {
+  const [revisionMessage, setRevisionMessage] = useState<Message | null>(null);
+  const revisionOptions = {
+    hasAuthToken: Boolean(snippetRevisionAuthToken),
+    hasSelectedModel: Boolean(snippetRevisionModelId && snippetRevisionModelId !== '__default__'),
+  };
+
   return (
     <>
-      {messages.map((msg) => (
-        <div
-          key={msg.id + msg.role}
-          className={`group relative mb-6 ${
-            msg.role === "user"
-              ? "flex justify-end"
-              : "flex justify-start"
-          }`}
-        >
-          <div className={`flex flex-col ${msg.role === "user" ? "items-end max-w-[70%]" : "items-start max-w-[90%]"}`}>
+      {messages.map((msg) => {
+        const revisionAvailability = getSnippetRevisionAvailability(msg, revisionOptions);
+
+        return (
+          <div
+            key={msg.id + msg.role}
+            className={`group relative mb-6 ${
+              msg.role === "user"
+                ? "flex justify-end"
+                : "flex justify-start"
+            }`}
+          >
+            <div className={`flex flex-col ${msg.role === "user" ? "items-end max-w-[70%]" : "items-start max-w-[90%]"}`}>
             <div
               className={
                 msg.role === "user"
@@ -256,6 +310,19 @@ export function MessageList({
                       <RefreshCw className="w-4 h-4" />
                     </Button>
                   )}
+                  {onApplySnippetRevision && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRevisionMessage(msg)}
+                      className="h-7 w-7 p-0 hover:bg-muted"
+                      aria-label="Revise selected text"
+                      title={revisionAvailability.canRevise ? "Revise selected text" : revisionAvailability.reason}
+                      disabled={!revisionAvailability.canRevise}
+                    >
+                      <PencilLine className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -335,8 +402,25 @@ export function MessageList({
               </div>
             )}
           </div>
-        </div>
-      ))}
+          </div>
+        );
+      })}
+      {revisionMessage && onApplySnippetRevision && (
+        <SnippetRevisionDialog
+          open={Boolean(revisionMessage)}
+          messageId={revisionMessage.id}
+          content={revisionMessage.content}
+          contentTruncated={Boolean(revisionMessage.contentTruncated)}
+          modelId={snippetRevisionModelId}
+          authToken={snippetRevisionAuthToken}
+          onOpenChange={(open) => {
+            if (!open) {
+              setRevisionMessage(null);
+            }
+          }}
+          onApply={onApplySnippetRevision}
+        />
+      )}
     </>
   );
 }

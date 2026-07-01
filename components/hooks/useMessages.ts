@@ -28,11 +28,28 @@ interface ValidationResult {
   valid: ConversationData[];
 }
 
+export const MESSAGE_CONTENT_TRUNCATION_LIMIT = 50_000;
+
+export function truncateMessageContentForDisplay(message: Message): Message {
+  if (!message.content || message.content.length <= MESSAGE_CONTENT_TRUNCATION_LIMIT) {
+    return message;
+  }
+
+  return {
+    ...message,
+    content: `${message.content.substring(0, MESSAGE_CONTENT_TRUNCATION_LIMIT)}\n\n... [Message truncated due to size. Original length: ${message.content.length} characters]`,
+    contentTruncated: true,
+    originalContentLength: message.content.length,
+  };
+}
+
 export function buildValidationMessageProjection(messages: Message[]): Message[] {
   return messages.map((msg: Message) => ({
     id: msg.id,
     role: msg.role,
     content: msg.content,
+    contentTruncated: msg.contentTruncated,
+    originalContentLength: msg.originalContentLength,
     metadata: msg.metadata,
     content_json: msg.content_json,
     attachment_ids: msg.attachment_ids,
@@ -201,12 +218,7 @@ export function useMessages(
                   enrichedMsg.provider = meta.provider;
                 }
 
-                // Apply content truncation if needed
-                if (msg.content && msg.content.length > 50000) {
-                  enrichedMsg.content = msg.content.substring(0, 50000) + '\n\n... [Message truncated due to size. Original length: ' + msg.content.length + ' characters]';
-                }
-
-                return enrichedMsg;
+                return truncateMessageContentForDisplay(enrichedMsg);
               }
             }
 
@@ -223,11 +235,7 @@ export function useMessages(
               fallbackCount++;
             }
 
-            if (msg.content && msg.content.length > 50000) {
-              enrichedMsg.content = msg.content.substring(0, 50000) + '\n\n... [Message truncated due to size. Original length: ' + msg.content.length + ' characters]';
-            }
-
-            return enrichedMsg;
+            return truncateMessageContentForDisplay(enrichedMsg);
           });
 
           // Log enrichment summary once (not per message to avoid loop detection)
