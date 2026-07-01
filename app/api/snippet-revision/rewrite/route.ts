@@ -323,14 +323,6 @@ function extractReplacementText(responseText: string): ReplacementParseResult {
   }
 
   const replacement = match[1].replace(/^\n/, '').replace(/\n$/, '');
-  if (!replacement) {
-    return {
-      ok: false,
-      code: 'empty_replacement',
-      message: 'The model returned an empty replacement.',
-    };
-  }
-
   return { ok: true, replacement };
 }
 

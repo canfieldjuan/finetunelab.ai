@@ -245,7 +245,7 @@
 - Rejects stale selections before any model call when `expectedText` no longer matches the submitted range.
 - Rejects missing/default/non-UUID/inaccessible models before calling the LLM client.
 - Uses bounded surrounding context rather than sending the entire source text to the model.
-- Prompts the model to return replacement text only and requires exactly one `<replacement>...</replacement>` wrapper. Missing or empty wrappers are 502 errors; raw explanatory output is not accepted.
+- Prompts the model to return replacement text only and requires exactly one `<replacement>...</replacement>` wrapper. Missing wrappers are 502 errors; empty wrappers are valid deletion edits; raw explanatory output is not accepted.
 - Returns stable generic `rewrite_failed` errors for provider/runtime failures while logging details server-side.
 - The portal UI applies successful replacements through `requestSnippetRevision({ action: "apply", revision: { mode: "replace_range", ... } })` before mutating message content.
 - Locally truncated messages from `useMessages` are marked with structured `contentTruncated` / `originalContentLength` fields and are not editable; callers must load full source before attempting a surgical edit.

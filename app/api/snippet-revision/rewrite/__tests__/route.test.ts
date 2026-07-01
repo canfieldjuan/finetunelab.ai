@@ -255,6 +255,27 @@ describe('POST /api/snippet-revision/rewrite', () => {
     });
   });
 
+  it('allows an empty replacement block for deletion edits', async () => {
+    unifiedChat.mockResolvedValue({
+      content: '<replacement></replacement>',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 1,
+      },
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody({
+      instruction: 'Delete the selected text.',
+    })));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      replacement: '',
+      modelId: MODEL_ID,
+    });
+  });
+
   it('caps selected text length before generation can truncate the replacement', async () => {
     const selected = 'a'.repeat(4_001);
     const { POST } = await import('../route');

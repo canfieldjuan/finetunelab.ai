@@ -74,6 +74,7 @@ const EvaluationModal = dynamic(() => import("./evaluation/EvaluationModal").the
 import { ModelSelector } from "./models/ModelSelector";
 import { MessageList } from "./chat/MessageList";
 import { AttachmentChips } from "./chat/AttachmentChips";
+import { persistAssistantSnippetRevision } from "./chat/snippetRevisionPersistence";
 import { ScrollToBottomButton } from "./chat/ScrollToBottomButton";
 import { ChatCommandPalette } from "./chat/ChatCommandPalette";
 import { ChatHeader } from "./chat/ChatHeader";
@@ -971,16 +972,17 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
       throw new Error('Sign in to revise saved assistant text.');
     }
 
-    const { error: updateError } = await supabase
-      .from("messages")
-      .update({ content: updatedText })
-      .eq("id", messageId)
-      .eq("conversation_id", activeId)
-      .eq("role", "assistant");
-
-    if (updateError) {
-      log.error('Chat', 'Failed to save snippet revision', { error: updateError, messageId });
-      throw new Error(updateError.message || 'Failed to save revised message.');
+    try {
+      await persistAssistantSnippetRevision({
+        client: supabase,
+        messageId,
+        conversationId: activeId,
+        expectedContent: currentMessage.content,
+        updatedText,
+      });
+    } catch (error) {
+      log.error('Chat', 'Failed to save snippet revision', { error, messageId });
+      throw error;
     }
 
     setMessages(prev => prev.map(message => (

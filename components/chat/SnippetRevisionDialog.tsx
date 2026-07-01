@@ -71,6 +71,18 @@ function mapNormalizedOffsetToSourceOffset(source: string, normalizedOffset: num
   return source.length;
 }
 
+function isSameSelection(
+  left: SnippetRewriteSelection | null,
+  right: SnippetRewriteSelection,
+): boolean {
+  return Boolean(
+    left &&
+    left.start === right.start &&
+    left.end === right.end &&
+    left.expectedText === right.expectedText,
+  );
+}
+
 export function SnippetRevisionDialog({
   open,
   messageId,
@@ -83,12 +95,16 @@ export function SnippetRevisionDialog({
 }: SnippetRevisionDialogProps) {
   const [instruction, setInstruction] = useState('');
   const [selection, setSelection] = useState<SnippetRewriteSelection | null>(null);
-  const [replacement, setReplacement] = useState('');
   const [previewResult, setPreviewResult] = useState<SnippetRevisionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<RevisionStatus>('idle');
   const lineNumberRef = useRef<HTMLDivElement | null>(null);
   const sourceRef = useRef<HTMLTextAreaElement | null>(null);
+  const latestSelectionRef = useRef<SnippetRewriteSelection | null>(null);
+  const latestInstructionRef = useRef('');
+
+  latestSelectionRef.current = selection;
+  latestInstructionRef.current = instruction;
 
   const displayContent = useMemo(() => normalizeLineEndings(content), [content]);
   const isTruncated = contentTruncated;
@@ -116,7 +132,6 @@ export function SnippetRevisionDialog({
   const resetDraft = () => {
     setInstruction('');
     setSelection(null);
-    setReplacement('');
     setPreviewResult(null);
     setError(null);
     setStatus('idle');
@@ -137,7 +152,6 @@ export function SnippetRevisionDialog({
     if (start === end) {
       setSelection(null);
       setPreviewResult(null);
-      setReplacement('');
       return;
     }
 
@@ -150,7 +164,6 @@ export function SnippetRevisionDialog({
       expectedText: content.slice(sourceStart, sourceEnd),
     });
     setPreviewResult(null);
-    setReplacement('');
     setError(null);
   };
 
@@ -168,23 +181,33 @@ export function SnippetRevisionDialog({
     setStatus('generating');
     setError(null);
     setPreviewResult(null);
-    setReplacement('');
+
+    const previewSelection = selection;
+    const previewInstruction = instruction.trim();
+    const isCurrentPreviewRequest = () => (
+      isSameSelection(latestSelectionRef.current, previewSelection) &&
+      latestInstructionRef.current.trim() === previewInstruction
+    );
 
     try {
       const rewrite = await requestSnippetRewrite({
         sourceText: content,
-        selection,
-        instruction: instruction.trim(),
+        selection: previewSelection,
+        instruction: previewInstruction,
         modelId: modelId as string,
       }, {
         authToken,
       });
 
+      if (!isCurrentPreviewRequest()) {
+        return;
+      }
+
       const revision = {
         mode: 'replace_range' as const,
-        start: selection.start,
-        end: selection.end,
-        expectedText: selection.expectedText,
+        start: previewSelection.start,
+        end: previewSelection.end,
+        expectedText: previewSelection.expectedText,
         replace: rewrite.replacement,
       };
 
@@ -194,7 +217,10 @@ export function SnippetRevisionDialog({
         revision,
       });
 
-      setReplacement(rewrite.replacement);
+      if (!isCurrentPreviewRequest()) {
+        return;
+      }
+
       setPreviewResult(preview);
 
       if (!preview.ok) {
@@ -208,12 +234,13 @@ export function SnippetRevisionDialog({
   };
 
   const handleApply = async () => {
-    if (!selection || !replacement) {
+    if (!previewResult?.ok || previewResult.applied !== false) {
       return;
     }
 
     setStatus('applying');
     setError(null);
+    const { change } = previewResult;
 
     try {
       const result = await requestSnippetRevision({
@@ -221,10 +248,10 @@ export function SnippetRevisionDialog({
         sourceText: content,
         revision: {
           mode: 'replace_range',
-          start: selection.start,
-          end: selection.end,
-          expectedText: selection.expectedText,
-          replace: replacement,
+          start: change.start,
+          end: change.end,
+          expectedText: change.original,
+          replace: change.replacement,
         },
       });
 
@@ -295,7 +322,6 @@ export function SnippetRevisionDialog({
                   onChange={(event) => {
                     setInstruction(event.target.value);
                     setPreviewResult(null);
-                    setReplacement('');
                     setError(null);
                   }}
                   aria-label="Revision instruction"
