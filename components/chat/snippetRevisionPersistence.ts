@@ -1,24 +1,30 @@
+import type { ReplaceRangeRevision } from '@/lib/snippet-revision';
+
 export interface PersistAssistantSnippetRevisionParams {
   messageId: string;
   conversationId: string;
   expectedContent: string;
-  updatedText: string;
+  revision: ReplaceRangeRevision;
   authToken: string;
   endpoint?: string;
   fetcher?: typeof fetch;
   signal?: AbortSignal;
 }
 
+export interface PersistAssistantSnippetRevisionResult {
+  updatedText: string;
+}
+
 export async function persistAssistantSnippetRevision({
   messageId,
   conversationId,
   expectedContent,
-  updatedText,
+  revision,
   authToken,
   endpoint = '/api/snippet-revision/persist',
   fetcher = globalThis.fetch,
   signal,
-}: PersistAssistantSnippetRevisionParams): Promise<void> {
+}: PersistAssistantSnippetRevisionParams): Promise<PersistAssistantSnippetRevisionResult> {
   if (!fetcher) {
     throw new Error('No fetch implementation is available.');
   }
@@ -35,7 +41,7 @@ export async function persistAssistantSnippetRevision({
         messageId,
         conversationId,
         expectedContent,
-        updatedText,
+        revision,
       }),
       signal,
     });
@@ -56,9 +62,18 @@ export async function persistAssistantSnippetRevision({
     throw new Error(parseApiError(payload));
   }
 
-  if (!isRecord(payload) || payload.ok !== true || payload.messageId !== messageId) {
+  if (
+    !isRecord(payload) ||
+    payload.ok !== true ||
+    payload.messageId !== messageId ||
+    typeof payload.updatedText !== 'string'
+  ) {
     throw new Error('Snippet revision save returned an invalid response.');
   }
+
+  return {
+    updatedText: payload.updatedText,
+  };
 }
 
 function parseApiError(payload: unknown): string {

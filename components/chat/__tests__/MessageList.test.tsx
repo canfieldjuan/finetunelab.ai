@@ -375,7 +375,13 @@ describe('MessageList snippet revision actions', () => {
     await waitFor(() => {
       expect(onApply).toHaveBeenCalledWith(
         'assistant-1',
-        'Opening.\nSharper middle.\nClosing.',
+        {
+          mode: 'replace_range',
+          start,
+          end,
+          expectedText: 'Soft middle.',
+          replace: 'Sharper middle.',
+        },
       );
     });
   });
@@ -506,7 +512,13 @@ describe('MessageList snippet revision actions', () => {
           replace: '',
         },
       });
-      expect(onApply).toHaveBeenCalledWith('assistant-1', updatedText);
+      expect(onApply).toHaveBeenCalledWith('assistant-1', {
+        mode: 'replace_range',
+        start,
+        end,
+        expectedText: 'Delete me.',
+        replace: '',
+      });
     });
   });
 

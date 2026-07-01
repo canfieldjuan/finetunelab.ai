@@ -14,6 +14,11 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  IF length(p_expected_content) > 200000 OR length(p_updated_content) > 200000 THEN
+    RAISE EXCEPTION 'Message content must be 200000 characters or fewer.'
+      USING ERRCODE = '22001';
+  END IF;
+
   RETURN QUERY
   UPDATE public.messages AS messages
   SET content = p_updated_content

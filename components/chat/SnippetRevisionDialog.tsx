@@ -19,7 +19,7 @@ import {
   SnippetRevisionApiError,
   type SnippetRewriteSelection,
 } from '@/lib/snippet-revision/client';
-import type { SnippetRevisionResult } from '@/lib/snippet-revision';
+import type { ReplaceRangeRevision, SnippetRevisionResult } from '@/lib/snippet-revision';
 
 interface SnippetRevisionDialogProps {
   open: boolean;
@@ -29,7 +29,7 @@ interface SnippetRevisionDialogProps {
   modelId?: string | null;
   authToken?: string | null;
   onOpenChange: (open: boolean) => void;
-  onApply: (messageId: string, updatedText: string) => void | Promise<void>;
+  onApply: (messageId: string, revision: ReplaceRangeRevision) => void | Promise<void>;
 }
 
 type RevisionStatus = 'idle' | 'generating' | 'applying';
@@ -241,18 +241,19 @@ export function SnippetRevisionDialog({
     setStatus('applying');
     setError(null);
     const { change } = previewResult;
+    const revision: ReplaceRangeRevision = {
+      mode: 'replace_range',
+      start: change.start,
+      end: change.end,
+      expectedText: change.original,
+      replace: change.replacement,
+    };
 
     try {
       const result = await requestSnippetRevision({
         action: 'apply',
         sourceText: content,
-        revision: {
-          mode: 'replace_range',
-          start: change.start,
-          end: change.end,
-          expectedText: change.original,
-          replace: change.replacement,
-        },
+        revision,
       });
 
       if (!result.ok) {
@@ -261,7 +262,7 @@ export function SnippetRevisionDialog({
         return;
       }
 
-      await onApply(messageId, result.updatedText);
+      await onApply(messageId, revision);
       handleOpenChange(false);
     } catch (err) {
       setError(getErrorMessage(err));

@@ -118,6 +118,7 @@ import {
 import type { SelectedModelInfo } from '@/components/hooks/useModelSelection';
 import { useContextInjection } from '@/components/hooks/useContextInjection';
 import { CHAT_ATTACHMENT_FILE_INPUT_ACCEPT } from '@/lib/chat/attachment-limits';
+import type { ReplaceRangeRevision } from "@/lib/snippet-revision";
 
 export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Render counter for debugging
@@ -951,7 +952,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     });
   }, [messages, handleSendMessage, setMessages]);
 
-  const handleApplySnippetRevision = useCallback(async (messageId: string, updatedText: string) => {
+  const handleApplySnippetRevision = useCallback(async (messageId: string, revision: ReplaceRangeRevision) => {
     const currentMessage = messages.find(message => message.id === messageId);
     if (!currentMessage) {
       throw new Error('Message no longer exists.');
@@ -974,23 +975,23 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
     }
 
     try {
-      await persistAssistantSnippetRevision({
+      const persisted = await persistAssistantSnippetRevision({
         messageId,
         conversationId: activeId,
         expectedContent: currentMessage.content,
-        updatedText,
+        revision,
         authToken: session.access_token,
       });
+
+      setMessages(prev => prev.map(message => (
+        message.id === messageId
+          ? { ...message, content: persisted.updatedText, contentTruncated: false, originalContentLength: undefined }
+          : message
+      )));
     } catch (error) {
       log.error('Chat', 'Failed to save snippet revision', { error, messageId });
       throw error;
     }
-
-    setMessages(prev => prev.map(message => (
-      message.id === messageId
-        ? { ...message, content: updatedText, contentTruncated: false, originalContentLength: undefined }
-        : message
-    )));
   }, [activeId, demoMode, isWidgetMode, messages, session, setMessages, user]);
 
   const handleArchiveConversation = async (conversationId: string) => {

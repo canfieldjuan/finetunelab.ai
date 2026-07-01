@@ -267,7 +267,13 @@
   messageId: string;        // saved assistant message UUID, not temp-*
   conversationId: string;   // conversation UUID
   expectedContent: string;  // full pre-edit assistant content, max 200,000 chars
-  updatedText: string;      // full post-edit assistant content, max 200,000 chars
+  revision: {
+    mode: "replace_range";
+    start: number;
+    end: number;
+    expectedText: string;   // must match expectedContent.slice(start, end), max 20,000 chars
+    replace: string;        // max 50,000 chars
+  };
 }
 ```
 
@@ -276,13 +282,17 @@
 {
   ok: true;
   messageId: string;
+  updatedText: string;      // server-computed post-edit assistant content
 }
 ```
 
 **Behavior:**
-- Calls `public.update_assistant_message_content_if_current(...)` through the authenticated Supabase client.
+- Recomputes `applySnippetRevision(expectedContent, revision)` server-side and only persists the computed `updatedText`; arbitrary final-content blobs are rejected.
+- Rejects the save before the RPC when the computed post-edit content exceeds 200,000 chars.
+- Calls `public.update_assistant_message_content_if_current(...)` through the authenticated Supabase client with the server-computed content.
 - The RPC binds the update to `auth.uid()`, `messageId`, `conversationId`, `role = 'assistant'`, and the expected current content in one atomic SQL update.
-- The expected full message content is sent in the RPC POST body rather than a PostgREST query-string filter, avoiding request-URI limits and access-log exposure.
+- The RPC also enforces the 200,000 char expected/updated content ceiling internally so direct authenticated `rpc()` calls cannot bypass route limits.
+- The expected full message content and range revision are sent in the POST body rather than a PostgREST query-string filter, avoiding request-URI limits and access-log exposure.
 - Returns `message_changed` with HTTP 409 when the message is missing, not owned by the caller, no longer assistant-role, or its content changed before save.
 
 #### POST /api/snippet-revision

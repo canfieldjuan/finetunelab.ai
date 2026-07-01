@@ -29,6 +29,7 @@ import {
   Wrench
 } from 'lucide-react';
 import type { Message } from './types';
+import type { ReplaceRangeRevision } from '@/lib/snippet-revision';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 export interface MessageListProps {
@@ -49,7 +50,7 @@ export interface MessageListProps {
   onDownloadResearch: (content: string) => void;
   isDeepResearchResult: (content: string) => boolean;
   onRegenerate?: (messageId: string) => void;
-  onApplySnippetRevision?: (messageId: string, updatedText: string) => void | Promise<void>;
+  onApplySnippetRevision?: (messageId: string, revision: ReplaceRangeRevision) => void | Promise<void>;
   snippetRevisionModelId?: string | null;
   snippetRevisionAuthToken?: string | null;
 }

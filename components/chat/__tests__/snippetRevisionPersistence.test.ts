@@ -6,18 +6,27 @@ describe('persistAssistantSnippetRevision', () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       ok: true,
       messageId: '11111111-1111-1111-1111-111111111111',
+      updatedText: 'Revised answer.',
     }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }));
 
-    await persistAssistantSnippetRevision({
+    await expect(persistAssistantSnippetRevision({
       messageId: '11111111-1111-1111-1111-111111111111',
       conversationId: '22222222-2222-2222-2222-222222222222',
       expectedContent: 'Original answer.',
-      updatedText: 'Revised answer.',
+      revision: {
+        mode: 'replace_range',
+        start: 0,
+        end: 'Original'.length,
+        expectedText: 'Original',
+        replace: 'Revised',
+      },
       authToken: 'session-token',
       fetcher,
+    })).resolves.toEqual({
+      updatedText: 'Revised answer.',
     });
 
     expect(fetcher).toHaveBeenCalledWith('/api/snippet-revision/persist', {
@@ -30,7 +39,13 @@ describe('persistAssistantSnippetRevision', () => {
         messageId: '11111111-1111-1111-1111-111111111111',
         conversationId: '22222222-2222-2222-2222-222222222222',
         expectedContent: 'Original answer.',
-        updatedText: 'Revised answer.',
+        revision: {
+          mode: 'replace_range',
+          start: 0,
+          end: 'Original'.length,
+          expectedText: 'Original',
+          replace: 'Revised',
+        },
       }),
       signal: undefined,
     });
@@ -51,7 +66,13 @@ describe('persistAssistantSnippetRevision', () => {
       messageId: '11111111-1111-1111-1111-111111111111',
       conversationId: '22222222-2222-2222-2222-222222222222',
       expectedContent: 'Original answer.',
-      updatedText: 'Revised answer.',
+      revision: {
+        mode: 'replace_range',
+        start: 0,
+        end: 'Original'.length,
+        expectedText: 'Original',
+        replace: 'Revised',
+      },
       authToken: 'session-token',
       fetcher,
     })).rejects.toThrow('Message changed before the revision could be saved. Reload and try again.');
@@ -61,6 +82,7 @@ describe('persistAssistantSnippetRevision', () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       ok: true,
       messageId: '33333333-3333-3333-3333-333333333333',
+      updatedText: 'Revised answer.',
     }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -70,7 +92,13 @@ describe('persistAssistantSnippetRevision', () => {
       messageId: '11111111-1111-1111-1111-111111111111',
       conversationId: '22222222-2222-2222-2222-222222222222',
       expectedContent: 'Original answer.',
-      updatedText: 'Revised answer.',
+      revision: {
+        mode: 'replace_range',
+        start: 0,
+        end: 'Original'.length,
+        expectedText: 'Original',
+        replace: 'Revised',
+      },
       authToken: 'session-token',
       fetcher,
     })).rejects.toThrow('Snippet revision save returned an invalid response.');

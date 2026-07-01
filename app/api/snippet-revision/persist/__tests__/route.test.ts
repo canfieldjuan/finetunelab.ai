@@ -28,7 +28,13 @@ function validBody(overrides: Record<string, unknown> = {}) {
     messageId: MESSAGE_ID,
     conversationId: CONVERSATION_ID,
     expectedContent: 'Original answer.',
-    updatedText: 'Revised answer.',
+    revision: {
+      mode: 'replace_range',
+      start: 0,
+      end: 'Original'.length,
+      expectedText: 'Original',
+      replace: 'Revised',
+    },
     ...overrides,
   };
 }
@@ -59,7 +65,7 @@ describe('POST /api/snippet-revision/persist', () => {
     });
   });
 
-  it('saves through the atomic RPC with expected content in the request body', async () => {
+  it('recomputes the range edit and saves through the atomic RPC', async () => {
     const { POST } = await import('../route');
 
     const response = await POST(makeRequest(validBody()));
@@ -68,6 +74,7 @@ describe('POST /api/snippet-revision/persist', () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       messageId: MESSAGE_ID,
+      updatedText: 'Revised answer.',
     });
     expect(rpcMock).toHaveBeenCalledWith('update_assistant_message_content_if_current', {
       p_message_id: MESSAGE_ID,
@@ -75,6 +82,74 @@ describe('POST /api/snippet-revision/persist', () => {
       p_expected_content: 'Original answer.',
       p_updated_content: 'Revised answer.',
     });
+  });
+
+  it('rejects legacy arbitrary updatedText payloads before hitting the RPC', async () => {
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest({
+      messageId: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      expectedContent: 'Original answer.',
+      updatedText: 'Full overwrite.',
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'invalid_revision',
+        message: 'revision must be a replace_range object.',
+      },
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale range edits before hitting the RPC', async () => {
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody({
+      revision: {
+        mode: 'replace_range',
+        start: 0,
+        end: 'Original'.length,
+        expectedText: 'Different',
+        replace: 'Revised',
+      },
+    })));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'target_mismatch',
+        message: 'Range text no longer matches the originally selected text.',
+      },
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects computed message content that exceeds the persistence limit', async () => {
+    const maxContent = 'a'.repeat(200_000);
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody({
+      expectedContent: maxContent,
+      revision: {
+        mode: 'replace_range',
+        start: 0,
+        end: 0,
+        expectedText: '',
+        replace: 'b',
+      },
+    })));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'message_content_too_large',
+        message: 'Message content must be 200000 characters or fewer.',
+      },
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it('requires authentication before attempting persistence', async () => {
