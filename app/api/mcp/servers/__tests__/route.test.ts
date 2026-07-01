@@ -265,6 +265,8 @@ describe('/api/mcp/servers', () => {
     expect(body.result.createdCount).toBe(1);
     expect(body.result.updatedCount).toBe(1);
     expect(JSON.stringify(body)).not.toContain('new-token');
+    expect(mocks.disconnectMcpServer).toHaveBeenCalledWith('srv-1');
+    expect(mocks.disconnectMcpServer).toHaveBeenCalledWith('srv-2');
   });
 
   it('rejects executable stdio-shaped imports before touching server rows', async () => {
@@ -291,6 +293,7 @@ describe('/api/mcp/servers', () => {
     expect(response.status).toBe(400);
     expect(body.details).toMatch(/HTTP servers|host-config-only/);
     expect(supabase.from).not.toHaveBeenCalled();
+    expect(mocks.disconnectMcpServer).not.toHaveBeenCalled();
   });
 
   it('lists a safe HTTP MCP catalog without executable config fields', async () => {

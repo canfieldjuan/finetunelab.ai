@@ -60,3 +60,11 @@ any database write.
 - `git diff --check` - passed.
 - `npm run build` - passed. Existing browser data staleness and static-generation logs printed; build exited 0 and listed `/api/mcp/servers/catalog`, `/api/mcp/servers/export`, and `/api/mcp/servers/import`.
 - `npm test` - passed, 103 files / 921 tests. Existing transient Postgres restart/NOTICE noise printed; Vitest exited 0.
+- Review follow-up: `POST /api/mcp/servers/import` now disconnects imported
+  server ids from the shared MCP client manager after successful DB writes so
+  disables, URL changes, and token rotations take effect without process restart.
+  Verified with:
+  - `npm run test:vitest -- app/api/mcp/servers/__tests__/route.test.ts lib/tools/mcp/__tests__/server-config.service.test.ts components/settings/__tests__/McpServerManagement.test.tsx --run` - passed, 3 files / 32 tests.
+  - `npm run type-check` - passed.
+  - `npm run lint` - passed with 0 errors and the existing 244-warning backlog.
+  - `git diff --check` - passed.

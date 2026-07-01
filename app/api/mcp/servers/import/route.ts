@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSharedMcpClientManager } from '@/lib/tools/mcp/client';
 import { McpServerConfigService } from '@/lib/tools/mcp/server-config.service';
 import { authenticateMcpRequest } from '../auth';
 
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest) {
 
     const service = new McpServerConfigService(auth.supabase);
     const result = await service.importHttpServerManifest(auth.user.id, extractManifest(body));
+    const manager = getSharedMcpClientManager();
+    await Promise.all(
+      [...result.updated, ...result.created].map((server) => manager.disconnect(server.id)),
+    );
     return NextResponse.json({ success: true, result }, { status: 200 });
   } catch (error) {
     console.error('[MCP Servers Import API] POST error:', error);
