@@ -35,6 +35,8 @@ the model call.
 7. Add route/adapter tests for vision inclusion, non-vision ignore behavior,
    Anthropic base64 image blocks, RunPod pass-through, and the unified client's
    image-only Anthropic path.
+8. Redact transient image data URLs from provider request-body logs without
+   mutating the request body sent to the provider.
 
 ### Files touched
 
@@ -46,12 +48,14 @@ the model call.
 - `lib/llm/adapters/ollama-adapter.ts`
 - `lib/llm/adapters/base-adapter.ts`
 - `lib/llm/adapters/runpod-adapter.ts`
+- `lib/llm/adapters/huggingface-adapter.ts`
 - `lib/llm/anthropic.ts`
 - `lib/llm/unified-client.ts`
 - `lib/llm/adapters/__tests__/openai-adapter.test.ts`
 - `lib/llm/adapters/__tests__/ollama-adapter.test.ts`
 - `lib/llm/adapters/__tests__/anthropic-adapter.test.ts`
 - `lib/llm/adapters/__tests__/runpod-adapter.test.ts`
+- `lib/llm/adapters/__tests__/huggingface-adapter.test.ts`
 - `lib/llm/__tests__/unified-client.test.ts`
 - `app/api/chat/route.ts`
 - `app/api/chat/__tests__/route-tool-use-smoke.test.ts`
@@ -78,10 +82,12 @@ from the stored image bytes and converts the latest user message into multimodal
 content parts. OpenAI-compatible adapters preserve those parts, Anthropic
 converts data URLs into base64 image blocks, RunPod preserves the array content
 for its OpenAI-compatible payload, and Ollama maps data URLs to its native
-`images` array. If a stored image cannot be downloaded or no longer validates,
-the route skips that image and still sends the text turn. If `supports_vision`
-is false or unknown, image parts are not added; the model receives the normal
-text prompt and any non-image attachment context.
+`images` array. HuggingFace request-body debug logging redacts image data URLs
+before printing so transient private attachment bytes do not land in server
+logs. If a stored image cannot be downloaded or no longer validates, the route
+skips that image and still sends the text turn. If `supports_vision` is false
+or unknown, image parts are not added; the model receives the normal text prompt
+and any non-image attachment context.
 
 ## Intentional
 
@@ -111,16 +117,17 @@ text prompt and any non-image attachment context.
 ## Verification
 
 - `npm run type-check` — passed.
+- `npm run test:vitest -- lib/llm/adapters/__tests__/huggingface-adapter.test.ts lib/llm/adapters/__tests__/generation-options.test.ts lib/llm/adapters/__tests__/anthropic-adapter.test.ts lib/llm/adapters/__tests__/runpod-adapter.test.ts --run` — 8 tests passed.
 - `npm run test:vitest -- app/api/chat/attachments/__tests__/route.test.ts app/api/chat/__tests__/route-tool-use-smoke.test.ts lib/llm/adapters/__tests__/openai-adapter.test.ts lib/llm/adapters/__tests__/ollama-adapter.test.ts lib/llm/adapters/__tests__/anthropic-adapter.test.ts lib/llm/adapters/__tests__/runpod-adapter.test.ts lib/llm/__tests__/unified-client.test.ts --run` — 70 tests passed.
 - `npm run test:vitest -- app/api/chat/__tests__/route-mcp-tool-use-smoke.test.ts app/api/chat/__tests__/route-mcp-live-stdio-sse.test.ts --run` — 4 tests passed.
-- `npm test` — 96 files / 846 tests passed.
+- `npm test` — 97 files / 847 tests passed.
 - `npm run lint` — passed with existing warning debt.
 - `git diff --check` — passed.
 - `npm run build` — passed.
 
 ## Estimated diff size
 
-- Current: 23 files, about +1472/-75 LOC relative to `origin/main`.
+- Current: 25 files, +1562/-76 LOC relative to `origin/main`.
 - This is over the preferred slice size because the root fix changes the shared
   chat message content contract and every provider adapter that formats
   messages must either preserve multimodal parts or safely extract text.

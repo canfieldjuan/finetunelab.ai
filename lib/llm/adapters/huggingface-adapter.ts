@@ -7,6 +7,28 @@ import type { ChatMessage, ToolDefinition } from '../openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
 import { BaseProviderAdapter, type AdapterRequest, type AdapterResponse } from './base-adapter';
 
+function redactVisionDataForLogging(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const dataUrlMatch = /^data:([^;,]+);base64,/u.exec(value);
+    if (dataUrlMatch?.[1]?.startsWith('image/')) {
+      return `data:${dataUrlMatch[1]};base64,[REDACTED]`;
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactVisionDataForLogging(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, redactVisionDataForLogging(entry)]),
+    );
+  }
+
+  return value;
+}
+
 // ============================================================================
 // HuggingFace Adapter
 // Handles HuggingFace Inference API (different format from OpenAI)
@@ -126,7 +148,7 @@ export class HuggingFaceAdapter extends BaseProviderAdapter {
     console.log('[HuggingFaceAdapter] Full URL:', url);
     console.log('[HuggingFaceAdapter] Use Chat Format:', useChatFormat);
     console.log('[HuggingFaceAdapter] Headers:', sanitizedHeaders);
-    console.log('[HuggingFaceAdapter] Request body:', JSON.stringify(body, null, 2));
+    console.log('[HuggingFaceAdapter] Request body:', JSON.stringify(redactVisionDataForLogging(body), null, 2));
     console.log('[HuggingFaceAdapter] Message count:', messages.length);
     console.log('[HuggingFaceAdapter] Stream mode:', body.stream);
     console.log('[HuggingFaceAdapter] Temperature:', body.temperature);

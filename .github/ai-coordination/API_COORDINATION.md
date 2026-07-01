@@ -28,8 +28,8 @@
 - **Endpoints affected:** `POST /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
 - **Files:**
   - API: `app/api/chat/attachments/route.ts`, `app/api/chat/route.ts`
-  - Service/adapters: `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `lib/llm/openai.ts`, `lib/llm/adapters/openai-adapter.ts`, `lib/llm/adapters/anthropic-adapter.ts`, `lib/llm/adapters/ollama-adapter.ts`, `lib/llm/adapters/runpod-adapter.ts`
-  - Tests: `app/api/chat/attachments/__tests__/route.test.ts`, `app/api/chat/__tests__/route-tool-use-smoke.test.ts`, `lib/llm/adapters/__tests__/openai-adapter.test.ts`, `lib/llm/adapters/__tests__/ollama-adapter.test.ts`, `lib/llm/adapters/__tests__/anthropic-adapter.test.ts`, `lib/llm/adapters/__tests__/runpod-adapter.test.ts`, `lib/llm/__tests__/unified-client.test.ts`
+  - Service/adapters: `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `lib/llm/openai.ts`, `lib/llm/adapters/openai-adapter.ts`, `lib/llm/adapters/anthropic-adapter.ts`, `lib/llm/adapters/ollama-adapter.ts`, `lib/llm/adapters/runpod-adapter.ts`, `lib/llm/adapters/huggingface-adapter.ts`
+  - Tests: `app/api/chat/attachments/__tests__/route.test.ts`, `app/api/chat/__tests__/route-tool-use-smoke.test.ts`, `lib/llm/adapters/__tests__/openai-adapter.test.ts`, `lib/llm/adapters/__tests__/ollama-adapter.test.ts`, `lib/llm/adapters/__tests__/anthropic-adapter.test.ts`, `lib/llm/adapters/__tests__/runpod-adapter.test.ts`, `lib/llm/adapters/__tests__/huggingface-adapter.test.ts`, `lib/llm/__tests__/unified-client.test.ts`
 
 **Chat Attachment UI Wiring**
 - **Started:** 2026-06-30
@@ -205,7 +205,7 @@
 - Appends delimited attachment text to the latest user message after GraphRAG enhancement.
 - Image attachments are not injected as text. When the selected model config has `supports_vision: true`, the route counts image payloads in the context-length guard using `max(512, ceil(bytes / 1024))` per image, enforces the 4 MB per-image and 12 MB per-turn image byte budgets before private download/model execution, then downloads the private storage object server-side and appends image parts to the latest user message for the model call. When the model is not vision-capable or the capability is unknown, image payloads are ignored for model input and the text turn still proceeds.
 - Image download or byte-validation failures during model part construction are best-effort skipped after preflight, so transient storage failures do not fail the entire text turn.
-- OpenAI-compatible providers receive multimodal `content` parts, Anthropic receives image blocks converted from data URLs, RunPod preserves multimodal array content in its OpenAI-compatible request, and Ollama receives native base64 `images` arrays.
+- OpenAI-compatible providers receive multimodal `content` parts, Anthropic receives image blocks converted from data URLs, RunPod preserves multimodal array content in its OpenAI-compatible request, and Ollama receives native base64 `images` arrays. Provider request-body logging must redact transient image data URLs before printing.
 - Atomically claims rows with `status = "uploaded"` by moving them to `attaching` before model execution, so concurrent sends cannot reuse the same upload.
 - Releases claimed rows back to `uploaded` only if the model turn fails before output begins. After output has started, a finalize failure leaves the claim unreleased rather than making a consumed attachment reusable.
 - Rejects the turn before model execution when the selected model context window is too small for the prompt plus attachment context.

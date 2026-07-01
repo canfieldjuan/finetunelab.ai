@@ -25,7 +25,7 @@
 **Chat Vision Attachment Message Parts**
 - **Started:** 2026-06-30
 - **Branch:** `codex/chat-vision-attachments`
-- **Locations:** `lib/llm/openai.ts`, `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `app/api/chat/route.ts`
+- **Locations:** `lib/llm/openai.ts`, `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `lib/llm/adapters/huggingface-adapter.ts`, `app/api/chat/route.ts`
 - **Status:** Private image attachments remain metadata-only in DTOs; the chat route creates transient multimodal model message parts only for vision-capable model configs after image byte validation, image byte-budget checks, and image-aware context estimation.
 
 ### Recently Completed
@@ -127,7 +127,8 @@ adapters that need a text-only view, but model context preflight must add
 vision-token estimates separately so image-only turns do not count as zero
 input. OpenAI-compatible and RunPod payloads preserve image parts, Anthropic
 maps data URLs to base64 source blocks, and Ollama maps them to its native
-`images` field.
+`images` field. Provider request-body logs must redact image data URLs before
+printing; logging redaction must not mutate the provider payload.
 
 #### Chat Attachment Download Response
 
