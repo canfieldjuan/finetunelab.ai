@@ -10,6 +10,18 @@
 
 ### In Progress
 
+**Chat Tool Binding Controls**
+- **Started:** 2026-07-01
+- **Model:** Codex
+- **Branch:** `codex/chat-tool-binding-controls`
+- **Work:** Add session-local chat-header controls for built-in portal tools so the client sends only the selected tool definitions to `POST /api/chat`.
+- **Issue:** #79
+- **Endpoints affected:** `POST /api/chat` with filtered `tools`
+- **Files:**
+  - UI: `components/Chat.tsx`, `components/chat/ChatHeader.tsx`, `components/chat/ToolBindingControls.tsx`, `components/chat/toolBindingState.ts`
+  - Hook/types: `components/hooks/useChat.ts`, `components/hooks/useConversationActions.ts`, `components/chat/types.ts`
+  - Tests: `components/chat/__tests__/ToolBindingControls.test.tsx`, `components/chat/__tests__/toolBindingState.test.ts`, `components/hooks/__tests__/useChat.mcp-sse.test.tsx`
+
 **Snippet Revision Newline Preservation**
 - **Started:** 2026-07-01
 - **Model:** Codex
@@ -241,6 +253,30 @@
 - Streaming completions emit SSE `token_usage` and use the image-aware estimate for trace completion, persisted `input_tokens` / `output_tokens`, and assistant metadata. Provider-reported usage is still preferred on non-streaming paths.
 - Caps total injected attachment text at 40,000 chars per turn and finalizes successful rows as `attached`.
 - Keeps `chat_attachments.message_id` nullable because regular portal user messages are currently persisted by the client outside `/api/chat`.
+
+#### POST /api/chat tool selection
+
+**Purpose:** Let the live chat UI offer only the built-in portal tools selected
+for the current chat session.
+
+**Request field:**
+```typescript
+{
+  tools: PortalChatTool[]; // OpenAI-style function definitions selected by the client
+}
+```
+
+**Behavior:**
+- `components/Chat.tsx` loads globally enabled built-in portal tools, applies
+  the current chat's disabled-name set, and sends only the enabled definitions
+  through `components/hooks/useChat.ts`.
+- `/api/chat` treats the submitted definitions as the request-local built-in
+  portal tool offer set. `executePortalChatTool` still derives its
+  authoritative allowlist from those offered definitions, so unoffered built-in
+  tool calls are rejected at execution.
+- User-scoped MCP tools are not controlled by this field. They are discovered
+  server-side for the authenticated user and routed through the MCP toolset
+  path.
 
 ### Snippet Revision APIs
 
@@ -690,4 +726,4 @@ short-lived signed URL as durable message content.
 
 ---
 
-**Last Updated:** 2025-12-19
+**Last Updated:** 2026-07-01

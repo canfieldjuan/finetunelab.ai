@@ -23,9 +23,9 @@ export function useConversationActions(
   workspaceId?: string | null
 ) {
 
-  const handleNewConversation = useCallback(async () => {
+  const handleNewConversation = useCallback(async (): Promise<string | null> => {
     if (!userId) {
-      return;
+      return null;
     }
 
     try {
@@ -52,11 +52,14 @@ export function useConversationActions(
       if (data) {
         await logSessionEvent(userId, "conversation_created", data.id);
         await fetchConversations();
+        return data.id;
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       log.error('useConversationActions', 'Error creating conversation', { error: errorMessage });
     }
+
+    return null;
   }, [userId, fetchConversations, workspaceId]);
 
   const handlePromoteConversation = async (conversationId: string) => {
