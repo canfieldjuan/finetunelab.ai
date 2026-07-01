@@ -13,6 +13,7 @@ const traceServiceMocks = vi.hoisted(() => ({
   endTrace: vi.fn(async () => undefined),
   captureError: vi.fn(async () => undefined),
 }));
+const PNG_BYTES = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
 const vllmModelConfig: ModelConfig = {
   id: 'model-vllm-qwen',
@@ -71,7 +72,7 @@ function makeChatAdminClient(options?: {
   attachmentUpdateError?: { message: string } | null;
   finalizeUpdateError?: { message: string } | null;
   claimUpdatedIds?: string[];
-  imageDownloadBody?: string;
+  imageDownloadBody?: BlobPart;
   imageDownloadError?: { message: string } | null;
 }) {
   type QueryFilter = { column: string; value: unknown };
@@ -176,7 +177,7 @@ function makeChatAdminClient(options?: {
   });
   const download = vi.fn(async () => ({
     data: options?.imageDownloadBody === undefined
-      ? new Blob(['image-bytes'], { type: 'image/png' })
+      ? new Blob([PNG_BYTES], { type: 'image/png' })
       : new Blob([options.imageDownloadBody], { type: 'image/png' }),
     error: options?.imageDownloadError ?? null,
   }));
@@ -988,7 +989,7 @@ describe('POST /api/chat tool-use smoke', () => {
 
   it('adds image attachment data parts for vision-capable models', async () => {
     const admin = makeChatAdminClient({
-      imageDownloadBody: 'image-bytes',
+      imageDownloadBody: PNG_BYTES,
       attachments: [
         {
           id: '11111111-1111-4111-8111-111111111111',
@@ -1053,13 +1054,185 @@ describe('POST /api/chat tool-use smoke', () => {
       {
         type: 'image_url',
         image_url: {
-          url: `data:image/png;base64,${Buffer.from('image-bytes').toString('base64')}`,
+          url: `data:image/png;base64,${Buffer.from(PNG_BYTES).toString('base64')}`,
           detail: 'auto',
         },
       },
     ]);
     expect(admin.storageFrom).toHaveBeenCalledWith('chat-attachments');
     expect(admin.download).toHaveBeenCalledWith('user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/diagram.png');
+    expect(admin.attachmentRows[0].status).toBe('attached');
+  });
+
+  it('rejects vision requests whose image token estimate exceeds the model context window', async () => {
+    const admin = makeChatAdminClient({
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+          message_id: null,
+          filename: 'diagram.png',
+          content_type: 'image/png',
+          size_bytes: 1024 * 1024,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/diagram.png',
+          kind: 'image',
+          extracted_text: '',
+          extracted_chars: 0,
+          status: 'uploaded',
+          metadata: { visionInput: true, imageMediaType: 'image/png' },
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    getModelConfig.mockResolvedValueOnce({
+      ...vllmModelConfig,
+      supports_vision: true,
+      context_length: 900,
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      userId: 'user-1',
+      messages: [{ role: 'user', content: 'Describe this image.' }],
+      attachmentIds: ['11111111-1111-4111-8111-111111111111'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual(expect.objectContaining({
+      error: 'Attachment context is too large for the selected model context window',
+      details: expect.objectContaining({
+        estimatedVisionTokens: 1024,
+        imageBytes: 1024 * 1024,
+        contextLength: 900,
+      }),
+    }));
+    expect(admin.download).not.toHaveBeenCalled();
+    expect(admin.attachmentRows[0].status).toBe('uploaded');
+  });
+
+  it('rejects vision requests above the per-turn image byte cap before download', async () => {
+    const attachmentIds = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      '33333333-3333-4333-8333-333333333333',
+      '44444444-4444-4444-8444-444444444444',
+    ];
+    const admin = makeChatAdminClient({
+      attachments: attachmentIds.map((id, index) => ({
+        id,
+        user_id: 'user-1',
+        conversation_id: '55555555-5555-4555-8555-555555555555',
+        message_id: null,
+        filename: `diagram-${index}.png`,
+        content_type: 'image/png',
+        size_bytes: 4 * 1024 * 1024,
+        storage_bucket: 'chat-attachments',
+        storage_path: `user-1/55555555-5555-4555-8555-555555555555/${id}/diagram-${index}.png`,
+        kind: 'image',
+        extracted_text: '',
+        extracted_chars: 0,
+        status: 'uploaded',
+        metadata: { visionInput: true, imageMediaType: 'image/png' },
+      })),
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    getModelConfig.mockResolvedValueOnce({
+      ...vllmModelConfig,
+      supports_vision: true,
+      context_length: 32768,
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: '55555555-5555-4555-8555-555555555555',
+      userId: 'user-1',
+      messages: [{ role: 'user', content: 'Compare these images.' }],
+      attachmentIds,
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual(expect.objectContaining({
+      error: 'Image attachments exceed the 12 MB per-turn vision input limit',
+      details: expect.objectContaining({
+        imageCount: 4,
+        imageBytes: 16 * 1024 * 1024,
+      }),
+    }));
+    expect(admin.download).not.toHaveBeenCalled();
+    expect(admin.attachmentRows.every((row) => row.status === 'uploaded')).toBe(true);
+  });
+
+  it('skips unavailable image bytes for vision models and still completes the text turn', async () => {
+    const admin = makeChatAdminClient({
+      imageDownloadError: { message: 'object temporarily unavailable' },
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-1',
+          conversation_id: '22222222-2222-4222-8222-222222222222',
+          message_id: null,
+          filename: 'diagram.png',
+          content_type: 'image/png',
+          size_bytes: 8,
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-1/22222222-2222-4222-8222-222222222222/11111111-1111-4111-8111-111111111111/diagram.png',
+          kind: 'image',
+          extracted_text: '',
+          extracted_chars: 0,
+          status: 'uploaded',
+          metadata: { visionInput: true, imageMediaType: 'image/png' },
+        },
+      ],
+    });
+    createClient
+      .mockReturnValueOnce(makeAuthenticatedSessionClient('user-1'))
+      .mockReturnValueOnce(admin.client);
+    getModelConfig.mockResolvedValueOnce({
+      ...vllmModelConfig,
+      supports_vision: true,
+    });
+
+    let modelMessages: Array<{ role: string; content: unknown }> = [];
+    unifiedChat.mockImplementationOnce(async (_modelId, messages) => {
+      modelMessages = messages as Array<{ role: string; content: unknown }>;
+      return {
+        content: 'I can answer from the text.',
+        usage: { input_tokens: 10, output_tokens: 7 },
+      };
+    });
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest({
+      modelId: 'model-vllm-qwen',
+      contextInjectionEnabled: false,
+      forceNonStreaming: true,
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      userId: 'user-1',
+      messages: [{ role: 'user', content: 'Try this prompt even if the image is unavailable.' }],
+      attachmentIds: ['11111111-1111-4111-8111-111111111111'],
+      tools: [],
+    }, { Authorization: 'Bearer session-token' }));
+
+    const streamText = await response.text();
+    expect(response.status, streamText).toBe(200);
+    expect(admin.download).toHaveBeenCalled();
+    const latestUserMessage = modelMessages.filter((message) => message.role === 'user').at(-1);
+    expect(latestUserMessage?.content).toBe('Try this prompt even if the image is unavailable.');
     expect(admin.attachmentRows[0].status).toBe('attached');
   });
 

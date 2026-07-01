@@ -6,6 +6,7 @@ import * as yazl from 'yazl';
 const createClient = vi.hoisted(() => vi.fn());
 const parseAttachment = vi.hoisted(() => vi.fn());
 const validateFileType = vi.hoisted(() => vi.fn());
+const PNG_BYTES = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient,
@@ -403,7 +404,7 @@ describe('POST /api/chat/attachments', () => {
 
     const { POST } = await import('../route');
     const response = await POST(makeRequest(makeAttachmentForm(
-      new File([new Uint8Array([137, 80, 78, 71])], 'diagram.png', { type: 'image/png' }),
+      new File([PNG_BYTES], 'diagram.png', { type: 'image/png' }),
     ), {
       authorization: 'Bearer session-token',
     }));
@@ -415,7 +416,7 @@ describe('POST /api/chat/attachments', () => {
         id: expect.stringMatching(/^[0-9a-f-]{36}$/),
         filename: 'diagram.png',
         contentType: 'image/png',
-        sizeBytes: 4,
+        sizeBytes: 8,
         kind: 'image',
         extractedChars: 0,
         status: 'uploaded',
@@ -437,10 +438,84 @@ describe('POST /api/chat/attachments', () => {
         extracted_chars: 0,
         metadata: expect.objectContaining({
           fileType: 'png',
+          imageMediaType: 'image/png',
+          imageBytes: 8,
           visionInput: true,
         }),
       }),
     ]);
+  });
+
+  it('derives image content type for octet-stream uploads after byte validation', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File([PNG_BYTES], 'diagram.png', { type: 'application/octet-stream' }),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      success: true,
+      attachment: expect.objectContaining({
+        filename: 'diagram.png',
+        contentType: 'image/png',
+        kind: 'image',
+      }),
+    });
+    expect(supabase.upload).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(File),
+      expect.objectContaining({ contentType: 'image/png', upsert: false }),
+    );
+    expect(supabase.attachmentRows[0]).toEqual(expect.objectContaining({
+      content_type: 'image/png',
+      metadata: expect.objectContaining({ imageMediaType: 'image/png' }),
+    }));
+  });
+
+  it('rejects image attachments whose bytes do not match the extension', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File(['not actually a png'], 'diagram.png', { type: 'image/png' }),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Attachment is not a valid image file',
+    });
+    expect(parseAttachment).not.toHaveBeenCalled();
+    expect(validateFileType).not.toHaveBeenCalled();
+    expect(supabase.upload).not.toHaveBeenCalled();
+  });
+
+  it('rejects image attachments above the vision input byte cap', async () => {
+    const supabase = makeUploadSupabase();
+    createClient.mockReturnValue(supabase.client);
+
+    const { POST } = await import('../route');
+    const response = await POST(makeRequest(makeAttachmentForm(
+      new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' }),
+    ), {
+      authorization: 'Bearer session-token',
+    }));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Image attachment exceeds the 4 MB vision input limit',
+    });
+    expect(parseAttachment).not.toHaveBeenCalled();
+    expect(supabase.upload).not.toHaveBeenCalled();
   });
 
   it('rejects oversized attachments before extraction or upload', async () => {

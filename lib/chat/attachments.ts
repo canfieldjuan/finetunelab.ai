@@ -9,6 +9,10 @@ import {
   CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE,
   CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES,
   CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  CHAT_ATTACHMENT_MAX_IMAGE_BYTES_PER_TURN,
+  CHAT_ATTACHMENT_MAX_IMAGE_FILE_SIZE_BYTES,
+  CHAT_ATTACHMENT_IMAGE_ESTIMATED_BYTES_PER_TOKEN,
+  CHAT_ATTACHMENT_IMAGE_MIN_ESTIMATED_TOKENS,
   CHAT_ATTACHMENT_MAX_FILES_PER_TURN,
   CHAT_ATTACHMENT_MAX_INJECTED_CHARS_PER_TURN,
   CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES,
@@ -23,7 +27,11 @@ export {
   CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE,
   CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES,
   CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  CHAT_ATTACHMENT_MAX_IMAGE_BYTES_PER_TURN,
+  CHAT_ATTACHMENT_MAX_IMAGE_FILE_SIZE_BYTES,
   CHAT_ATTACHMENT_MAX_FILES_PER_TURN,
+  CHAT_ATTACHMENT_IMAGE_ESTIMATED_BYTES_PER_TOKEN,
+  CHAT_ATTACHMENT_IMAGE_MIN_ESTIMATED_TOKENS,
   CHAT_ATTACHMENT_MAX_INJECTED_CHARS_PER_TURN,
   CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES,
 };
@@ -45,6 +53,7 @@ export interface ResolvedChatAttachmentImage {
   id: string;
   filename: string;
   contentType: string | null;
+  sizeBytes: number;
   storageBucket: string;
   storagePath: string;
 }
@@ -138,6 +147,28 @@ function isImageAttachmentFileType(fileType: AttachmentFileType): fileType is Im
   return ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fileType);
 }
 
+function imageMediaTypeForFileType(fileType: AttachmentFileType | null): string | null {
+  if (!fileType || !isImageAttachmentFileType(fileType)) return null;
+  if (fileType === 'jpg' || fileType === 'jpeg') return 'image/jpeg';
+  return `image/${fileType}`;
+}
+
+function isAllowedImageMediaType(value: unknown): value is string {
+  return typeof value === 'string' && [
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'image/gif',
+  ].includes(value);
+}
+
+export function estimateChatAttachmentImageTokens(sizeBytes: number): number {
+  return Math.max(
+    CHAT_ATTACHMENT_IMAGE_MIN_ESTIMATED_TOKENS,
+    Math.ceil(Math.max(0, sizeBytes) / CHAT_ATTACHMENT_IMAGE_ESTIMATED_BYTES_PER_TOKEN),
+  );
+}
+
 function detectFileType(filename: string): AttachmentFileType | null {
   const extension = filename.split('.').pop()?.toLowerCase();
   switch (extension) {
@@ -227,6 +258,9 @@ function validateAttachmentFile(file: File): AttachmentFileType {
   }
   if (!isAllowedMimeType(fileType, file.type || '')) {
     throw new ChatAttachmentError('Attachment MIME type does not match an allowed file type');
+  }
+  if (isImageAttachmentFileType(fileType) && file.size > CHAT_ATTACHMENT_MAX_IMAGE_FILE_SIZE_BYTES) {
+    throw new ChatAttachmentError('Image attachment exceeds the 4 MB vision input limit', 413);
   }
   return fileType;
 }
@@ -427,13 +461,63 @@ async function inspectDocxArchive(
   });
 }
 
-async function extractAttachmentText(file: File, fileType: AttachmentFileType) {
+function inspectImageBytes(buffer: Buffer, fileType: ImageAttachmentFileType): { mediaType: string } {
+  const expectedMediaType = imageMediaTypeForFileType(fileType);
+  if (!expectedMediaType) {
+    throw new ChatAttachmentError('Unsupported attachment file type');
+  }
+
+  const isPng = buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a;
+  const isJpeg = buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff;
+  const isWebp = buffer.length >= 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP';
+  const isGif = buffer.length >= 6 &&
+    (buffer.toString('ascii', 0, 6) === 'GIF87a' || buffer.toString('ascii', 0, 6) === 'GIF89a');
+
+  const matchesType =
+    (fileType === 'png' && isPng) ||
+    ((fileType === 'jpg' || fileType === 'jpeg') && isJpeg) ||
+    (fileType === 'webp' && isWebp) ||
+    (fileType === 'gif' && isGif);
+
+  if (!matchesType) {
+    throw new ChatAttachmentError('Attachment is not a valid image file');
+  }
+
+  return { mediaType: expectedMediaType };
+}
+
+async function extractAttachmentText(file: File, fileType: AttachmentFileType): Promise<{
+  extractedText: string;
+  extractedChars: number;
+  contentType?: string | null;
+  metadata: Record<string, unknown>;
+}> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+
   if (isImageAttachmentFileType(fileType)) {
+    const image = inspectImageBytes(buffer, fileType);
     return {
       extractedText: '',
       extractedChars: 0,
+      contentType: image.mediaType,
       metadata: {
         fileType,
+        imageMediaType: image.mediaType,
+        imageBytes: buffer.length,
+        imageEstimatedTokens: estimateChatAttachmentImageTokens(buffer.length),
         originalExtractedChars: 0,
         extractionTruncated: false,
         visionInput: true,
@@ -441,7 +525,6 @@ async function extractAttachmentText(file: File, fileType: AttachmentFileType) {
     };
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
   if ((fileType === 'pdf' || fileType === 'docx') && !parserFactory.validateFileType(buffer, fileType)) {
     throw new ChatAttachmentError(`Attachment is not a valid ${fileType.toUpperCase()} file`);
   }
@@ -519,12 +602,13 @@ export async function createChatAttachmentFromFile(params: {
   const fileType = validateAttachmentFile(params.file);
   await assertConversationOwner(params.supabase, params.userId, params.conversationId);
 
-  const { extractedText, extractedChars, metadata } = await extractAttachmentText(params.file, fileType);
+  const { extractedText, extractedChars, metadata, contentType: extractedContentType } =
+    await extractAttachmentText(params.file, fileType);
   const id = randomUUID();
   const filename = sanitizeFilename(params.file.name);
   const storagePath = `${params.userId}/${params.conversationId}/${id}/${filename}`;
   const kind = kindForFileType(fileType);
-  const contentType = params.file.type || null;
+  const contentType = extractedContentType ?? (params.file.type || null);
 
   const { error: uploadError } = await params.supabase.storage
     .from(CHAT_ATTACHMENTS_BUCKET)
@@ -680,10 +764,46 @@ function getResolvedAttachmentImages(rows: ChatAttachmentRow[]): ResolvedChatAtt
     .map((row) => ({
       id: row.id,
       filename: row.filename,
-      contentType: row.content_type,
+      contentType: resolveImageMediaType(row),
+      sizeBytes: row.size_bytes,
       storageBucket: row.storage_bucket,
       storagePath: row.storage_path,
     }));
+}
+
+function resolveImageMediaType(row: ChatAttachmentRow): string | null {
+  if (isAllowedImageMediaType(row.metadata?.imageMediaType)) {
+    return row.metadata.imageMediaType;
+  }
+  if (isAllowedImageMediaType(row.content_type)) {
+    return row.content_type;
+  }
+  return imageMediaTypeForFileType(detectFileType(row.filename));
+}
+
+export function getChatAttachmentVisionBytes(attachments: ResolvedChatAttachments | null | undefined): number {
+  return (attachments?.images ?? []).reduce((total, image) => total + Math.max(0, image.sizeBytes), 0);
+}
+
+export function estimateChatAttachmentVisionTokens(attachments: ResolvedChatAttachments | null | undefined): number {
+  return (attachments?.images ?? []).reduce(
+    (total, image) => total + estimateChatAttachmentImageTokens(image.sizeBytes),
+    0,
+  );
+}
+
+export function assertChatAttachmentVisionBudget(attachments: ResolvedChatAttachments | null | undefined): void {
+  if (!attachments?.images.length) return;
+
+  const oversizedImage = attachments.images.find((image) => image.sizeBytes > CHAT_ATTACHMENT_MAX_IMAGE_FILE_SIZE_BYTES);
+  if (oversizedImage) {
+    throw new ChatAttachmentError('Image attachment exceeds the 4 MB vision input limit', 413);
+  }
+
+  const totalBytes = getChatAttachmentVisionBytes(attachments);
+  if (totalBytes > CHAT_ATTACHMENT_MAX_IMAGE_BYTES_PER_TURN) {
+    throw new ChatAttachmentError('Image attachments exceed the 12 MB per-turn vision input limit', 413);
+  }
 }
 
 function buildAttachmentContext(rows: ChatAttachmentRow[]): string {
@@ -751,21 +871,60 @@ export async function createChatAttachmentVisionParts(params: {
       .download(image.storagePath);
 
     if (error || !data) {
-      throw new ChatAttachmentError(
-        `Failed to load image attachment for vision input: ${error?.message ?? 'missing storage object'}`,
-        500,
-      );
+      console.warn('[ChatAttachments] Skipping unavailable image attachment for vision input:', {
+        id: image.id,
+        filename: image.filename,
+        error: error?.message ?? 'missing storage object',
+      });
+      continue;
     }
 
     const buffer = Buffer.from(await data.arrayBuffer());
-    const mediaType = image.contentType || 'application/octet-stream';
-    parts.push({
-      type: 'image_url',
-      image_url: {
-        url: `data:${mediaType};base64,${buffer.toString('base64')}`,
-        detail: 'auto',
-      },
-    });
+    const fileType = detectFileType(image.filename);
+    if (!fileType || !isImageAttachmentFileType(fileType)) {
+      console.warn('[ChatAttachments] Skipping image attachment with unsupported filename:', {
+        id: image.id,
+        filename: image.filename,
+      });
+      continue;
+    }
+
+    try {
+      const inspected = inspectImageBytes(buffer, fileType);
+      const mediaType = isAllowedImageMediaType(image.contentType)
+        ? image.contentType
+        : inspected.mediaType;
+      if (mediaType !== inspected.mediaType) {
+        console.warn('[ChatAttachments] Skipping image attachment with mismatched media type:', {
+          id: image.id,
+          filename: image.filename,
+          expected: inspected.mediaType,
+          actual: mediaType,
+        });
+        continue;
+      }
+      if (buffer.length > CHAT_ATTACHMENT_MAX_IMAGE_FILE_SIZE_BYTES) {
+        console.warn('[ChatAttachments] Skipping oversized image attachment for vision input:', {
+          id: image.id,
+          filename: image.filename,
+          bytes: buffer.length,
+        });
+        continue;
+      }
+      parts.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${mediaType};base64,${buffer.toString('base64')}`,
+          detail: 'auto',
+        },
+      });
+    } catch (inspectionError) {
+      console.warn('[ChatAttachments] Skipping invalid image attachment for vision input:', {
+        id: image.id,
+        filename: image.filename,
+        error: inspectionError instanceof Error ? inspectionError.message : 'invalid image',
+      });
+    }
   }
   return parts;
 }

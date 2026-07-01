@@ -34,9 +34,12 @@ import { resolveChatUser } from '@/lib/chat/resolve-chat-user';
 import {
   appendAttachmentContextToLatestUserMessage,
   appendVisionPartsToLatestUserMessage,
+  assertChatAttachmentVisionBudget,
   ChatAttachmentError,
   claimChatAttachmentsForTurn,
   createChatAttachmentVisionParts,
+  estimateChatAttachmentVisionTokens,
+  getChatAttachmentVisionBytes,
   normalizeChatConversationId,
   markChatAttachmentsAttached,
   normalizeChatAttachmentIds,
@@ -987,11 +990,32 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
     async function rejectIfAttachmentContextExceedsWindow(
       modelConfig: ModelConfig | null | undefined,
     ): Promise<Response | null> {
-      if (!effectiveChatAttachments || !modelConfig?.context_length) return null;
+      if (!effectiveChatAttachments) return null;
 
-      const estimatedInputTokens = Math.ceil(
-        enhancedMessages.map((message) => getChatMessageTextContent(message.content)).join(' ').length / 4,
-      );
+      if (modelConfig?.supports_vision) {
+        try {
+          assertChatAttachmentVisionBudget(effectiveChatAttachments);
+        } catch (error) {
+          await releaseChatAttachmentClaim();
+          const message = error instanceof Error ? error.message : 'Image attachments exceed the vision input limit';
+          return new Response(JSON.stringify({
+            error: message,
+            details: {
+              imageCount: effectiveChatAttachments.images.length,
+              imageBytes: getChatAttachmentVisionBytes(effectiveChatAttachments),
+            },
+          }), {
+            status: error instanceof ChatAttachmentError ? error.status : 413,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      if (!modelConfig?.context_length) return null;
+
+      const tokenEstimate = estimateModelInputTokens(modelConfig);
+      const estimatedInputTokens = tokenEstimate.totalTokens;
+
       const minimumOutputTokens = 100;
       if (estimatedInputTokens + minimumOutputTokens <= modelConfig.context_length) {
         return null;
@@ -1002,6 +1026,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         error: 'Attachment context is too large for the selected model context window',
         details: {
           estimatedInputTokens,
+          estimatedTextTokens: tokenEstimate.textTokens,
+          estimatedVisionTokens: tokenEstimate.visionTokens,
+          imageBytes: tokenEstimate.visionBytes,
           contextLength: modelConfig.context_length,
           minimumOutputTokens,
           attachmentCount: effectiveChatAttachments.attachments.length,
@@ -1010,6 +1037,28 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         status: 413,
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+
+    function estimateModelInputTokens(modelConfig: ModelConfig | null | undefined): {
+      textTokens: number;
+      visionTokens: number;
+      visionBytes: number;
+      totalTokens: number;
+    } {
+      const inputText = enhancedMessages.map((message) => getChatMessageTextContent(message.content)).join(' ');
+      const textTokens = Math.ceil(inputText.length / 4);
+      const visionTokens = modelConfig?.supports_vision
+        ? estimateChatAttachmentVisionTokens(effectiveChatAttachments)
+        : 0;
+      const visionBytes = modelConfig?.supports_vision
+        ? getChatAttachmentVisionBytes(effectiveChatAttachments)
+        : 0;
+      return {
+        textTokens,
+        visionTokens,
+        visionBytes,
+        totalTokens: textTokens + visionTokens,
+      };
     }
 
     let visionMessagesCache: ChatMessage[] | null = null;
@@ -1500,9 +1549,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           ? Math.min(requestedOrModelMaxTokens, configuredOutputLimit)
           : requestedOrModelMaxTokens;
         if (actualModelConfig?.context_length) {
-          // Estimate input tokens (rough: 1 token ≈ 4 chars)
-          const inputText = enhancedMessages.map(m => getChatMessageTextContent(m.content)).join(' ');
-          const estimatedInputTokens = Math.ceil(inputText.length / 4);
+          const tokenEstimate = estimateModelInputTokens(actualModelConfig);
+          const estimatedInputTokens = tokenEstimate.totalTokens;
 
           // Calculate available space for output
           const availableTokens = actualModelConfig.context_length - estimatedInputTokens;
@@ -1514,6 +1562,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           console.log('[API] Context calculation:', {
             modelContextLength: actualModelConfig.context_length,
             estimatedInputTokens,
+            estimatedTextTokens: tokenEstimate.textTokens,
+            estimatedVisionTokens: tokenEstimate.visionTokens,
+            imageBytes: tokenEstimate.visionBytes,
             availableTokens,
             requestedMaxTokens: requestedOrModelMaxTokens,
             configuredOutputLimit,
@@ -1713,8 +1764,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           : requestedOrModelMaxTokens;
 
         if (actualModelConfig?.context_length) {
-          const inputText = enhancedMessages.map(m => getChatMessageTextContent(m.content)).join(' ');
-          const estimatedInputTokens = Math.ceil(inputText.length / 4);
+          const tokenEstimate = estimateModelInputTokens(actualModelConfig);
+          const estimatedInputTokens = tokenEstimate.totalTokens;
           const availableTokens = actualModelConfig.context_length - estimatedInputTokens;
           const safetyMargin = 100;
           safeMaxTokens = Math.min(safeMaxTokens, Math.max(100, availableTokens - safetyMargin));
@@ -1722,6 +1773,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
           console.log('[API] Legacy context calculation:', {
             modelContextLength: actualModelConfig.context_length,
             estimatedInputTokens,
+            estimatedTextTokens: tokenEstimate.textTokens,
+            estimatedVisionTokens: tokenEstimate.visionTokens,
+            imageBytes: tokenEstimate.visionBytes,
             availableTokens,
             configuredOutputLimit,
             adjustedMaxTokens: safeMaxTokens
@@ -2394,8 +2448,8 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
       }
 
       if (actualModelConfig?.context_length) {
-        const inputText = enhancedMessages.map(m => getChatMessageTextContent(m.content)).join(' ');
-        const estimatedInputTokens = Math.ceil(inputText.length / 4);
+        const tokenEstimate = estimateModelInputTokens(actualModelConfig);
+        const estimatedInputTokens = tokenEstimate.totalTokens;
         const availableTokens = actualModelConfig.context_length - estimatedInputTokens;
         const safetyMargin = 100;
         effectiveMaxTokens = Math.min(effectiveMaxTokens, Math.max(100, availableTokens - safetyMargin));
@@ -2403,6 +2457,9 @@ Conversation Context: ${JSON.stringify(memory.conversationMemories, null, 2)}`;
         console.log('[API] Streaming context calculation:', {
           modelContextLength: actualModelConfig.context_length,
           estimatedInputTokens,
+          estimatedTextTokens: tokenEstimate.textTokens,
+          estimatedVisionTokens: tokenEstimate.visionTokens,
+          imageBytes: tokenEstimate.visionBytes,
           availableTokens,
           configuredOutputLimit,
           adjustedMaxTokens: effectiveMaxTokens
