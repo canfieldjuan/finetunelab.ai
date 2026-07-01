@@ -153,4 +153,29 @@ describe('MessageList web search results', () => {
     expect(screen.getByRole('img', { name: 'generated image' })).toBeInTheDocument();
     expect(screen.queryByText('Loading validations...')).not.toBeInTheDocument();
   });
+
+  it('renders compact attachment chips on user messages', () => {
+    renderList([
+      {
+        id: 'user-with-attachment',
+        role: 'user',
+        content: 'Use this file.',
+        attachments: [
+          {
+            id: 'attachment-1',
+            filename: 'brief.md',
+            contentType: 'text/markdown',
+            sizeBytes: 2048,
+            kind: 'text',
+            extractedChars: 120,
+            status: 'attached',
+          },
+        ],
+      },
+    ]);
+
+    expect(screen.getByText('Use this file.')).toBeInTheDocument();
+    expect(screen.getByText('brief.md')).toBeInTheDocument();
+    expect(screen.getByText('2.0 KB')).toBeInTheDocument();
+  });
 });

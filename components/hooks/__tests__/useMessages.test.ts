@@ -11,11 +11,35 @@ describe('useMessages validation projection', () => {
         role: 'assistant',
         content: 'Answer from docs',
         metadata: {
+          attachment_ids: ['attachment-1'],
+          attachments: [
+            {
+              id: 'attachment-1',
+              filename: 'brief.md',
+              contentType: 'text/markdown',
+              sizeBytes: 2048,
+              kind: 'text',
+              extractedChars: 120,
+              status: 'attached',
+            },
+          ],
           graphrag: {
             graph_used: true,
             context_chunks_used: 7,
           },
         },
+        attachment_ids: ['attachment-1'],
+        attachments: [
+          {
+            id: 'attachment-1',
+            filename: 'brief.md',
+            contentType: 'text/markdown',
+            sizeBytes: 2048,
+            kind: 'text',
+            extractedChars: 120,
+            status: 'attached',
+          },
+        ],
         citations: [
           {
             source: 'handbook.md',
@@ -59,6 +83,18 @@ describe('useMessages validation projection', () => {
       graphrag_relevance: 0.92,
       graphrag_grounded: true,
       graphrag_method: 'hybrid',
+      attachment_ids: ['attachment-1'],
+      attachments: [
+        {
+          id: 'attachment-1',
+          filename: 'brief.md',
+          contentType: 'text/markdown',
+          sizeBytes: 2048,
+          kind: 'text',
+          extractedChars: 120,
+          status: 'attached',
+        },
+      ],
     });
   });
 });

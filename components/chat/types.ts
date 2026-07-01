@@ -6,6 +6,7 @@
  */
 
 import type { Citation } from "@/lib/graphrag/service";
+import type { ChatAttachmentDto } from "@/lib/chat/attachments";
 import type { WebSearchDocument } from "@/lib/tools/web-search/types";
 
 export interface ChatToolCall {
@@ -35,6 +36,8 @@ export interface Message {
   metadata?: unknown;
   content_json?: unknown;
   tools_called?: unknown;
+  attachment_ids?: string[];
+  attachments?: ChatAttachmentDto[];
   webSearchResults?: WebSearchDocument[];
   // Model name for display (persisted in metadata, computed for old messages via useMessages)
   model_name?: string;
@@ -86,6 +89,18 @@ export interface GenerationSettings {
   topP: number;
   frequencyPenalty: number;
   presencePenalty: number;
+}
+
+export type PendingChatAttachmentStatus = 'uploading' | 'uploaded' | 'deleting' | 'error';
+
+export interface PendingChatAttachment {
+  clientId: string;
+  conversationId: string;
+  filename: string;
+  sizeBytes: number;
+  status: PendingChatAttachmentStatus;
+  attachment?: ChatAttachmentDto;
+  error?: string;
 }
 
 /**

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAssistantMessageMetadata,
+  buildAttachmentMessageMetadata,
+  hydrateAttachmentMessageFields,
   hydrateGraphRAGMessageFields,
 } from '../chatMessageMetadata';
 
@@ -141,6 +143,54 @@ describe('chat message metadata helpers', () => {
       ],
       contextsUsed: 3,
       graphrag_used: true,
+    });
+  });
+
+  it('persists and hydrates compact attachment metadata for user messages', () => {
+    const metadata = buildAttachmentMessageMetadata({
+      timestamp: '2026-06-30T18:45:00.000Z',
+      attachmentIds: ['attachment-1'],
+      attachments: [
+        {
+          id: 'attachment-1',
+          filename: 'brief.md',
+          contentType: 'text/markdown',
+          sizeBytes: 2048,
+          kind: 'text',
+          extractedChars: 120,
+          status: 'attached',
+        },
+      ],
+    });
+
+    expect(metadata).toEqual({
+      timestamp: '2026-06-30T18:45:00.000Z',
+      attachment_ids: ['attachment-1'],
+      attachments: [
+        {
+          id: 'attachment-1',
+          filename: 'brief.md',
+          contentType: 'text/markdown',
+          sizeBytes: 2048,
+          kind: 'text',
+          extractedChars: 120,
+          status: 'attached',
+        },
+      ],
+    });
+    expect(hydrateAttachmentMessageFields(metadata)).toEqual({
+      attachment_ids: ['attachment-1'],
+      attachments: [
+        {
+          id: 'attachment-1',
+          filename: 'brief.md',
+          contentType: 'text/markdown',
+          sizeBytes: 2048,
+          kind: 'text',
+          extractedChars: 120,
+          status: 'attached',
+        },
+      ],
     });
   });
 });

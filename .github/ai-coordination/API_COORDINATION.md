@@ -19,11 +19,26 @@
   - Client: `lib/snippet-revision/client.ts`
   - Tests: `lib/snippet-revision/__tests__/client.test.ts`
 
+**Chat Attachment UI Wiring**
+- **Started:** 2026-06-30
+- **Model:** Codex
+- **Branch:** `codex/chat-attachment-ui`
+- **Work:** Wire the live chat composer to upload selected files through `POST /api/chat/attachments`, send only returned `attachmentIds` to `/api/chat`, block send while uploads are pending/failed, and render compact attachment chips from optimistic and persisted metadata.
+- **Plan:** `development/planning/2026-06-30_chat-attachment-ui-plan.md`
+- **Endpoints consumed:** `POST /api/chat/attachments`, `DELETE /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
+- **Files:**
+  - UI: `components/Chat.tsx`, `components/chat/AttachmentChips.tsx`, `components/chat/ChatInput.tsx`, `components/chat/MessageList.tsx`
+  - Hook/metadata: `components/hooks/useChat.ts`, `components/hooks/useMessages.ts`, `components/hooks/chatMessageMetadata.ts`
+  - Shared limits/types: `lib/chat/attachment-limits.ts`, `components/chat/types.ts`
+  - Tests: `components/hooks/__tests__/useChat.mcp-sse.test.tsx`, `components/chat/__tests__/MessageList.test.tsx`, `components/hooks/__tests__/chatMessageMetadata.test.ts`, `components/hooks/__tests__/useMessages.test.ts`
+
+### Recently Completed
+
 **Chat Attachments Backend Contract**
-- **Started:** 2026-06-29
+- **Completed:** 2026-06-30
 - **Model:** Codex
 - **Branch:** `codex/chat-attachments-plan`
-- **Work:** Implemented authenticated per-chat attachment APIs for the chat portal; UI controls remain a follow-up.
+- **Work:** Implemented authenticated per-chat attachment APIs for the chat portal.
 - **Plan:** `development/planning/2026-06-29_chat-attachments-plan.md`
 - **Endpoints:** `POST /api/chat/attachments`, `DELETE /api/chat/attachments`, `POST /api/chat` with `attachmentIds`
 - **Files:**
@@ -33,7 +48,7 @@
   - Tests: `app/api/chat/attachments/__tests__/route.test.ts`, `app/api/chat/__tests__/route-tool-use-smoke.test.ts`, `supabase/migrations/__tests__/chat-attachments-schema.test.ts`
 
 **Chat Attachment Upload Hardening**
-- **Started:** 2026-06-30
+- **Completed:** 2026-06-30
 - **Model:** Codex
 - **Branch:** `codex/chat-attachment-hardening`
 - **Work:** Stacked follow-up on PR #85 that requires bounded upload bodies before multipart parsing and bounds attachment text extraction before UI drives regular uploads.
@@ -41,8 +56,6 @@
   - API: `app/api/chat/attachments/route.ts`
   - Service: `lib/chat/attachments.ts`
   - Tests: `app/api/chat/attachments/__tests__/route.test.ts`
-
-### Recently Completed
 
 **Training Statistics API**
 - **Completed:** 2025-12-19

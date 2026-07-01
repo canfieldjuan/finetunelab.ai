@@ -4,16 +4,28 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import * as yauzl from 'yauzl';
 import { parserFactory } from '@/lib/graphrag/parsers';
 import type { DocumentFileType } from '@/lib/graphrag/types';
+import {
+  CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS,
+  CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE,
+  CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES,
+  CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  CHAT_ATTACHMENT_MAX_FILES_PER_TURN,
+  CHAT_ATTACHMENT_MAX_INJECTED_CHARS_PER_TURN,
+  CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES,
+} from '@/lib/chat/attachment-limits';
 
 export const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
-export const CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-export const CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES = CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES + 1024 * 1024;
-export const CHAT_ATTACHMENT_MAX_FILES_PER_TURN = 5;
-export const CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE = 20_000;
-export const CHAT_ATTACHMENT_MAX_INJECTED_CHARS_PER_TURN = 40_000;
-export const CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS = 15_000;
-export const CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export {
+  CHAT_ATTACHMENT_EXTRACTION_TIMEOUT_MS,
+  CHAT_ATTACHMENT_MAX_EXTRACTED_CHARS_PER_FILE,
+  CHAT_ATTACHMENT_MAX_DOCX_UNCOMPRESSED_BYTES,
+  CHAT_ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  CHAT_ATTACHMENT_MAX_FILES_PER_TURN,
+  CHAT_ATTACHMENT_MAX_INJECTED_CHARS_PER_TURN,
+  CHAT_ATTACHMENT_MAX_MULTIPART_BODY_BYTES,
+};
 
 export type ChatAttachmentKind = 'text' | 'document' | 'code' | 'image' | 'unknown';
 export type ChatAttachmentStatus = 'uploaded' | 'attaching' | 'attached' | 'deleted';
@@ -551,6 +563,51 @@ export async function resolveChatAttachmentsForTurn(params: {
     }
     if (row.status !== 'uploaded') {
       throw new ChatAttachmentError('Attachment has already been used in a chat turn', 409);
+    }
+  }
+
+  const context = buildAttachmentContext(orderedRows as ChatAttachmentRow[]);
+  return {
+    ids: params.attachmentIds,
+    attachments: (orderedRows as ChatAttachmentRow[]).map(toDto),
+    context,
+    injectedChars: context.length,
+  };
+}
+
+export async function resolveChatAttachmentsForReplay(params: {
+  supabase: SupabaseClient;
+  userId: string;
+  conversationId: string;
+  attachmentIds: string[];
+}): Promise<ResolvedChatAttachments | null> {
+  if (params.attachmentIds.length === 0) return null;
+
+  const { data, error } = await params.supabase
+    .from('chat_attachments')
+    .select('id, user_id, conversation_id, message_id, filename, content_type, size_bytes, storage_bucket, storage_path, kind, extracted_text, extracted_chars, status, metadata')
+    .eq('user_id', params.userId)
+    .eq('conversation_id', params.conversationId)
+    .in('id', params.attachmentIds);
+
+  if (error) {
+    throw new ChatAttachmentError(`Failed to load chat attachments: ${error.message}`, 500);
+  }
+
+  const rows = ((data ?? []) as ChatAttachmentRow[]).filter(isRecord) as ChatAttachmentRow[];
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const orderedRows = params.attachmentIds.map((id) => rowsById.get(id));
+
+  if (orderedRows.some((row) => !row)) {
+    throw new ChatAttachmentError('Attachment does not belong to this conversation', 403);
+  }
+
+  for (const row of orderedRows as ChatAttachmentRow[]) {
+    if (row.user_id !== params.userId || row.conversation_id !== params.conversationId) {
+      throw new ChatAttachmentError('Attachment does not belong to this conversation', 403);
+    }
+    if (row.status === 'deleted') {
+      throw new ChatAttachmentError('Attachment is no longer available', 410);
     }
   }
 
