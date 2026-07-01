@@ -2,7 +2,7 @@
 // Transforms between our standard format and RunPod worker-vllm format
 // Date: 2025-12-03
 
-import type { ChatMessage } from '../openai';
+import { getChatMessageTextContent, type ChatMessage, type ChatMessageContentPart } from '../openai';
 import { BaseProviderAdapter, type AdapterRequest, type AdapterResponse } from './base-adapter';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
 
@@ -181,11 +181,11 @@ export class RunPodAdapter extends BaseProviderAdapter {
    */
   private formatMessages(messages: ChatMessage[]): Array<{
     role: string;
-    content: string | null;
+    content: string | ChatMessageContentPart[] | null;
   }> {
     return messages.map(msg => ({
       role: msg.role,
-      content: msg.content,
+      content: Array.isArray(msg.content) ? msg.content : getChatMessageTextContent(msg.content) || null,
     }));
   }
 

@@ -21,6 +21,30 @@ const config: ModelConfig = {
 };
 
 describe('OllamaAdapter', () => {
+  it('maps multimodal data-url image parts to Ollama images', () => {
+    const adapter = new OllamaAdapter();
+
+    const request = adapter.formatRequest({
+      config: { ...config, supports_vision: true },
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this image.' },
+          { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=', detail: 'auto' } },
+        ],
+      }],
+      options: { stream: false },
+    });
+
+    expect(request.body).toEqual(expect.objectContaining({
+      messages: [{
+        role: 'user',
+        content: 'Describe this image.',
+        images: ['aW1hZ2U='],
+      }],
+    }));
+  });
+
   it('uses served_model_name and native Ollama chat endpoint', () => {
     const adapter = new OllamaAdapter();
 

@@ -2,7 +2,7 @@
 // Defines the contract all provider adapters must implement
 // Date: 2025-10-14
 
-import type { ChatMessage, ToolDefinition } from '../openai';
+import { getChatMessageTextContent, type ChatMessage, type ToolDefinition } from '../openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
 import type { RequestMetadata } from '@/lib/tracing/types';
 
@@ -140,11 +140,11 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
     let prompt = '';
     for (const msg of messages) {
       if (msg.role === 'system') {
-        prompt += `${msg.content}\n\n`;
+        prompt += `${getChatMessageTextContent(msg.content)}\n\n`;
       } else if (msg.role === 'user') {
-        prompt += `User: ${msg.content}\n`;
+        prompt += `User: ${getChatMessageTextContent(msg.content)}\n`;
       } else if (msg.role === 'assistant') {
-        prompt += `Assistant: ${msg.content}\n`;
+        prompt += `Assistant: ${getChatMessageTextContent(msg.content)}\n`;
       }
     }
     // Add final prompt for assistant to continue

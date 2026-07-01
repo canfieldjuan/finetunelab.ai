@@ -2,7 +2,14 @@
 // Single interface for all LLM providers
 // Date: 2025-10-14
 
-import type { ChatMessage, ToolDefinition, LLMResponse, LLMUsage, ToolCallMetadata } from './openai';
+import {
+  getChatMessageTextContent,
+  type ChatMessage,
+  type ToolDefinition,
+  type LLMResponse,
+  type LLMUsage,
+  type ToolCallMetadata,
+} from './openai';
 import type { ModelConfig } from '@/lib/models/llm-model.types';
 import type { RequestMetadata } from '@/lib/tracing/types';
 import { modelManager } from '@/lib/models/model-manager.service';
@@ -92,8 +99,9 @@ export class UnifiedLLMClient {
     // Guardrails: Check input before processing
     if (!options?.skipGuardrails && guardrailsService.isEnabled()) {
       const lastUserMessage = messages.filter(m => m.role === 'user').pop();
-      if (lastUserMessage?.content) {
-        const inputCheck = await guardrailsService.checkInput(lastUserMessage.content, {
+      const lastUserText = getChatMessageTextContent(lastUserMessage?.content);
+      if (lastUserText) {
+        const inputCheck = await guardrailsService.checkInput(lastUserText, {
           userId: options?.userId,
         });
 
@@ -280,9 +288,8 @@ export class UnifiedLLMClient {
   ): Promise<LLMResponse> {
     // Filter out messages with empty/null content (Anthropic requirement)
     let currentMessages = messages.filter(msg => {
-      const hasContent = msg.content !== null &&
-                        msg.content !== undefined &&
-                        msg.content.trim().length > 0;
+      const hasContent = getChatMessageTextContent(msg.content).trim().length > 0 ||
+        (Array.isArray(msg.content) && msg.content.some((part) => part.type === 'image_url' && !!part.image_url.url));
       if (!hasContent) {
         console.log('[UnifiedLLMClient] Filtering out empty message:', {
           role: msg.role,
@@ -593,8 +600,9 @@ export class UnifiedLLMClient {
     // Guardrails: Check input before processing
     if (!options?.skipGuardrails && guardrailsService.isEnabled()) {
       const lastUserMessage = messages.filter(m => m.role === 'user').pop();
-      if (lastUserMessage?.content) {
-        const inputCheck = await guardrailsService.checkInput(lastUserMessage.content, {
+      const lastUserText = getChatMessageTextContent(lastUserMessage?.content);
+      if (lastUserText) {
+        const inputCheck = await guardrailsService.checkInput(lastUserText, {
           userId: options?.userId,
         });
 

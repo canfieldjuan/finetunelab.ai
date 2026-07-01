@@ -41,6 +41,25 @@ const vllmConfig: ModelConfig = {
   },
 };
 
+const anthropicVisionConfig: ModelConfig = {
+  id: 'model-anthropic-vision',
+  name: 'Claude Vision',
+  provider: 'anthropic',
+  base_url: 'https://api.anthropic.com/v1',
+  model_id: 'claude-3-5-sonnet',
+  served_model_name: null,
+  auth_type: 'api_key',
+  api_key: 'test-key',
+  auth_headers: {},
+  supports_streaming: true,
+  supports_functions: false,
+  supports_vision: true,
+  context_length: 200000,
+  max_output_tokens: 2000,
+  default_temperature: 0.7,
+  default_top_p: 1,
+};
+
 const tools: ToolDefinition[] = [
   {
     type: 'function',
@@ -258,6 +277,52 @@ describe('UnifiedLLMClient tool continuations', () => {
         content: JSON.stringify({ result: 'beta' }),
         tool_call_id: 'qwen-xml-tool-1',
         name: 'search_docs',
+      },
+    ]);
+  });
+
+  it('passes multimodal content through the real Anthropic adapter without filtering image-only parts', async () => {
+    getModelConfig.mockResolvedValueOnce(anthropicVisionConfig);
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      content: [{ type: 'text', text: 'The image shows a diagram.' }],
+      usage: {
+        input_tokens: 20,
+        output_tokens: 7,
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { UnifiedLLMClient } = await import('../unified-client');
+    const client = new UnifiedLLMClient();
+    const response = await client.chat(
+      'model-anthropic-vision',
+      [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=', detail: 'auto' } },
+          ],
+        },
+      ],
+      { skipGuardrails: true },
+    );
+
+    expect(response.content).toBe('The image shows a diagram.');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(requestBody.messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/png',
+              data: 'aW1hZ2U=',
+            },
+          },
+        ],
       },
     ]);
   });

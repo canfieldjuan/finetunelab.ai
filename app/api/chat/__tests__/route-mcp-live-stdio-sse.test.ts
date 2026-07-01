@@ -48,7 +48,8 @@ vi.mock('@/lib/supabaseClient', () => ({
   supabase: makeSupabaseClient(),
 }));
 
-vi.mock('@/lib/llm/openai', () => ({
+vi.mock('@/lib/llm/openai', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/llm/openai')>()),
   streamOpenAIResponse: vi.fn(),
   runOpenAIWithToolCalls: vi.fn(),
 }));
