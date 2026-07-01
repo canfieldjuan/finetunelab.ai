@@ -892,6 +892,37 @@ describe('GET /api/chat/attachments', () => {
     expect(supabase.createSignedUrl).not.toHaveBeenCalled();
   });
 
+  it('rejects cross-user attachment ids without creating a signed URL', async () => {
+    const supabase = makeUploadSupabase({
+      attachments: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: 'user-2',
+          filename: 'notes.txt',
+          storage_bucket: 'chat-attachments',
+          storage_path: 'user-2/file.txt',
+          status: 'attached',
+        },
+      ],
+    });
+    createClient.mockReturnValue(supabase.client);
+
+    const { GET } = await import('../route');
+    const response = await GET(makeGetRequest(
+      'https://app.example.com/api/chat/attachments?attachmentId=11111111-1111-4111-8111-111111111111',
+      { authorization: 'Bearer session-token' },
+    ));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Attachment not found',
+    });
+    expect(supabase.attachmentSelectQuery.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(supabase.attachmentSelectQuery.eq).toHaveBeenCalledWith('id', '11111111-1111-4111-8111-111111111111');
+    expect(supabase.createSignedUrl).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed attachment ids before querying the attachment table', async () => {
     const supabase = makeUploadSupabase();
     createClient.mockReturnValue(supabase.client);

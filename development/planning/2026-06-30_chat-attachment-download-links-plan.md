@@ -58,7 +58,7 @@ that route, then opens the returned URL.
 
 ## Verification
 
-- `npm run test:vitest -- app/api/chat/attachments/__tests__/route.test.ts components/chat/__tests__/MessageList.test.tsx --run` - passed, 31 tests.
+- `npm run test:vitest -- app/api/chat/attachments/__tests__/route.test.ts components/chat/__tests__/MessageList.test.tsx --run` - passed, 32 tests after review fixes.
 - `npm run type-check` - passed.
 - `git diff --check` - passed.
 - `npm run lint` - passed with existing repo warnings.

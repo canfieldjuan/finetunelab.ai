@@ -53,6 +53,11 @@ export function AttachmentChips({ attachments, className, onRemove }: Attachment
   const [downloadingIds, setDownloadingIds] = React.useState<Set<string>>(() => new Set());
 
   const handleDownload = React.useCallback(async (attachment: ChatAttachmentDto) => {
+    const downloadWindow = window.open('about:blank', '_blank');
+    if (downloadWindow) {
+      downloadWindow.opener = null;
+    }
+
     setDownloadingIds((current) => new Set(current).add(attachment.id));
     try {
       const session = (await supabase.auth.getSession()).data.session;
@@ -75,8 +80,15 @@ export function AttachmentChips({ attachments, className, onRemove }: Attachment
         throw new Error(payload.error || `Attachment download failed: ${response.status}`);
       }
 
-      window.open(payload.url, '_blank', 'noopener,noreferrer');
+      if (downloadWindow) {
+        downloadWindow.location.href = payload.url;
+      } else {
+        window.open(payload.url, '_blank', 'noopener,noreferrer');
+      }
     } catch (error) {
+      if (downloadWindow && !downloadWindow.closed) {
+        downloadWindow.close();
+      }
       console.error('[AttachmentChips] Download failed:', error);
     } finally {
       setDownloadingIds((current) => {

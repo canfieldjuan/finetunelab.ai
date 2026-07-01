@@ -196,7 +196,13 @@ describe('MessageList web search results', () => {
 
   it('opens attached files through an authenticated signed-download request', async () => {
     getSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
-    const open = vi.fn();
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: 'about:blank' },
+      opener: {} as unknown,
+    };
+    const open = vi.fn(() => popup);
     vi.stubGlobal('open', open);
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       success: true,
@@ -224,6 +230,9 @@ describe('MessageList web search results', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Download brief.md' }));
 
+    expect(open).toHaveBeenCalledWith('about:blank', '_blank');
+    expect(popup.opener).toBeNull();
+
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
         '/api/chat/attachments?attachmentId=11111111-1111-4111-8111-111111111111',
@@ -234,10 +243,7 @@ describe('MessageList web search results', () => {
         },
       );
     });
-    expect(open).toHaveBeenCalledWith(
-      'https://signed.example.com/brief.md?token=abc',
-      '_blank',
-      'noopener,noreferrer',
-    );
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(popup.location.href).toBe('https://signed.example.com/brief.md?token=abc');
   });
 });
