@@ -3,13 +3,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,
+  Download,
+  ExternalLink,
   Check,
   KeyRound,
+  Library,
   Pencil,
   Plus,
   ServerCog,
   ShieldCheck,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 
 interface McpServerManagementProps {
   sessionToken: string;
@@ -40,6 +45,31 @@ interface HostMcpServer {
   managedBy: 'host';
 }
 
+interface McpServerManifestEntry {
+  name: string;
+  transport: 'http';
+  url: string;
+  enabled: boolean;
+  hasAuthToken?: boolean;
+  authToken?: string;
+}
+
+interface McpServerManifest {
+  kind: 'finetunelab.mcp_servers';
+  schemaVersion: 1;
+  exportedAt?: string;
+  servers: McpServerManifestEntry[];
+}
+
+interface McpServerCatalogEntry {
+  id: string;
+  name: string;
+  description: string;
+  sourceUrl: string;
+  requiresAuthToken: boolean;
+  manifest: McpServerManifest;
+}
+
 interface FormState {
   name: string;
   url: string;
@@ -57,9 +87,37 @@ const EMPTY_FORM: FormState = {
 };
 
 const NAME_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+const EMPTY_MANIFEST_TEXT = JSON.stringify(
+  {
+    kind: 'finetunelab.mcp_servers',
+    schemaVersion: 1,
+    servers: [
+      {
+        name: 'docs_server',
+        transport: 'http',
+        url: 'https://example.com/mcp',
+        enabled: true,
+      },
+    ],
+  },
+  null,
+  2,
+);
 
 function emptyForm(): FormState {
   return { ...EMPTY_FORM };
+}
+
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 async function readApiError(response: Response, fallback: string): Promise<string> {
@@ -75,10 +133,17 @@ export function McpServerManagement({ sessionToken }: McpServerManagementProps) 
   const [servers, setServers] = useState<HttpMcpServer[]>([]);
   const [hostServers, setHostServers] = useState<HostMcpServer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [catalogImportingId, setCatalogImportingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<McpServerCatalogEntry[]>([]);
   const [editing, setEditing] = useState<HttpMcpServer | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState(EMPTY_MANIFEST_TEXT);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -101,9 +166,29 @@ export function McpServerManagement({ sessionToken }: McpServerManagementProps) 
     }
   }, [sessionToken]);
 
+  const fetchCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    try {
+      const response = await fetch('/api/mcp/servers/catalog', {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      });
+      if (!response.ok) throw new Error(await readApiError(response, 'Failed to load MCP server catalog'));
+      const data = await response.json();
+      setCatalog(data.catalog || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load MCP server catalog');
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [sessionToken]);
+
   useEffect(() => {
     fetchServers();
   }, [fetchServers]);
+
+  useEffect(() => {
+    fetchCatalog();
+  }, [fetchCatalog]);
 
   const showSuccess = (message: string) => {
     setSuccess(message);
@@ -134,6 +219,76 @@ export function McpServerManagement({ sessionToken }: McpServerManagementProps) 
     setFormOpen(false);
     setEditing(null);
     setForm(emptyForm());
+  };
+
+  const openImport = () => {
+    setImportOpen(true);
+    setError(null);
+  };
+
+  const closeImport = () => {
+    setImportOpen(false);
+    setImportText(EMPTY_MANIFEST_TEXT);
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/mcp/servers/export', {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      });
+      if (!response.ok) throw new Error(await readApiError(response, 'Failed to export MCP servers'));
+      const data = await response.json();
+      downloadJson(`mcp-servers-${new Date().toISOString().slice(0, 10)}.json`, data.manifest);
+      showSuccess('MCP server manifest exported');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export MCP servers');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const importManifest = async (
+    manifest: unknown,
+    options: { catalogId?: string; closeEditor?: boolean } = {},
+  ) => {
+    if (options.catalogId) setCatalogImportingId(options.catalogId);
+    else setImporting(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/mcp/servers/import', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ manifest }),
+      });
+      if (!response.ok) throw new Error(await readApiError(response, 'Failed to import MCP servers'));
+      const data = await response.json();
+      await fetchServers();
+      if (options.closeEditor) closeImport();
+      const result = data.result || {};
+      showSuccess(`Imported ${result.createdCount || 0} new, updated ${result.updatedCount || 0}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import MCP servers');
+    } finally {
+      if (options.catalogId) setCatalogImportingId(null);
+      else setImporting(false);
+    }
+  };
+
+  const handleImportText = async () => {
+    let manifest: unknown;
+    try {
+      manifest = JSON.parse(importText);
+    } catch {
+      setError('Import manifest must be valid JSON');
+      return;
+    }
+    await importManifest(manifest, { closeEditor: true });
   };
 
   const validateForm = (): string | null => {
@@ -247,10 +402,33 @@ export function McpServerManagement({ sessionToken }: McpServerManagementProps) 
               Connect remote HTTP MCP servers to chat. Host stdio servers are operator-managed.
             </CardDescription>
           </div>
-          <Button onClick={openCreate} size="sm" className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Server
-          </Button>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <Button
+              aria-label="Export MCP server manifest"
+              onClick={handleExport}
+              size="sm"
+              variant="outline"
+              disabled={exporting}
+              className="shrink-0"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exporting ? 'Exporting...' : 'Export'}
+            </Button>
+            <Button
+              aria-label="Import MCP server manifest"
+              onClick={openImport}
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import
+            </Button>
+            <Button onClick={openCreate} size="sm" className="shrink-0">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Server
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -354,10 +532,95 @@ export function McpServerManagement({ sessionToken }: McpServerManagementProps) 
           </div>
         )}
 
+        {importOpen && (
+          <div className="rounded-md border border-dashed p-4">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-medium">Import MCP Server Manifest</h3>
+                <p className="text-sm text-muted-foreground">
+                  Paste a FinetuneLab MCP manifest. Auth tokens are optional and write-only.
+                </p>
+              </div>
+              <Button aria-label="Close MCP manifest import" variant="ghost" size="icon" onClick={closeImport}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mcp-manifest-json">Manifest JSON</Label>
+              <Textarea
+                id="mcp-manifest-json"
+                className="min-h-[220px] font-mono text-sm"
+                value={importText}
+                onChange={(event) => setImportText(event.target.value)}
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={closeImport} disabled={importing}>
+                Cancel
+              </Button>
+              <Button onClick={handleImportText} disabled={importing}>
+                {importing ? 'Importing...' : 'Import Manifest'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="rounded-md border p-4 text-sm text-muted-foreground">Loading MCP servers...</div>
         ) : (
           <div className="space-y-4">
+            <div className="space-y-2">
+              <h3 className="flex items-center gap-2 text-sm font-medium">
+                <Library className="h-4 w-4" />
+                Catalog
+              </h3>
+              {catalogLoading ? (
+                <div className="rounded-md border p-4 text-sm text-muted-foreground">Loading MCP catalog...</div>
+              ) : catalog.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  No catalog entries available.
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  {catalog.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{entry.name}</span>
+                          <Badge variant="outline">HTTP</Badge>
+                          {!entry.requiresAuthToken && <Badge variant="secondary">No auth</Badge>}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{entry.description}</p>
+                        <a
+                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                          href={entry.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Source
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                      <Button
+                        aria-label={`Add ${entry.name} MCP server`}
+                        variant="outline"
+                        size="sm"
+                        disabled={catalogImportingId === entry.id}
+                        onClick={() => importManifest(entry.manifest, { catalogId: entry.id })}
+                        className="shrink-0"
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        {catalogImportingId === entry.id ? 'Adding...' : 'Add'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Configured HTTP Servers</h3>
               {servers.length === 0 ? (

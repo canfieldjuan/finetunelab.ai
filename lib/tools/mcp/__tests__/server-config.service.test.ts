@@ -38,6 +38,13 @@ function makeSupabase(result: QueryResult) {
   return { supabase: { from } as unknown as SupabaseClient, from, builder };
 }
 
+function makeSupabaseSequence(results: QueryResult[]) {
+  const builders = results.map(makeBuilder);
+  let index = 0;
+  const from = vi.fn(() => builders[Math.min(index++, builders.length - 1)]);
+  return { supabase: { from } as unknown as SupabaseClient, from, builders };
+}
+
 const httpRow = {
   id: 'srv-1',
   user_id: 'u1',
@@ -121,6 +128,111 @@ describe('McpServerConfigService', () => {
     ]);
     // http auth token is decrypted for the client manager.
     expect(servers[0].authToken).toBe('tok');
+  });
+
+  it('exportUserServers returns a portable manifest without auth tokens', async () => {
+    const { supabase } = makeSupabase({ data: [httpRow], error: null });
+    const service = new McpServerConfigService(supabase);
+
+    const manifest = await service.exportUserServers('u1');
+
+    expect(manifest).toEqual({
+      kind: 'finetunelab.mcp_servers',
+      schemaVersion: 1,
+      exportedAt: expect.any(String),
+      servers: [
+        {
+          name: 'github',
+          transport: 'http',
+          url: 'https://api.example.com/mcp',
+          enabled: true,
+          hasAuthToken: true,
+        },
+      ],
+    });
+    expect(JSON.stringify(manifest)).not.toContain('tok');
+    expect(JSON.stringify(manifest)).not.toContain('auth_token_encrypted');
+  });
+
+  it('importHttpServerManifest rejects stdio command shapes before querying rows', async () => {
+    const { supabase, from } = makeSupabase({ data: [], error: null });
+    const service = new McpServerConfigService(supabase);
+
+    await expect(
+      service.importHttpServerManifest('u1', {
+        kind: 'finetunelab.mcp_servers',
+        schemaVersion: 1,
+        servers: [
+          {
+            name: 'shell',
+            transport: 'stdio',
+            command: 'npx',
+            args: ['danger'],
+          },
+        ],
+      }),
+    ).rejects.toThrow(/HTTP servers|host-config-only/);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('importHttpServerManifest updates existing names and creates missing names', async () => {
+    const updatedRow = {
+      ...httpRow,
+      url: 'https://new.example.com/mcp',
+      enabled: false,
+    };
+    const newRow = {
+      id: 'srv-2',
+      user_id: 'u1',
+      name: 'learn_docs',
+      transport: 'http',
+      url: 'https://learn.microsoft.com/api/mcp',
+      auth_token_encrypted: 'ENC(secret)',
+      enabled: true,
+    };
+    const { supabase, builders } = makeSupabaseSequence([
+      { data: [httpRow], error: null },
+      { data: updatedRow, error: null },
+      { data: newRow, error: null },
+    ]);
+    const service = new McpServerConfigService(supabase);
+
+    const result = await service.importHttpServerManifest('u1', {
+      kind: 'finetunelab.mcp_servers',
+      schemaVersion: 1,
+      servers: [
+        {
+          name: 'github',
+          transport: 'http',
+          url: 'https://new.example.com/mcp',
+          enabled: false,
+        },
+        {
+          name: 'learn_docs',
+          transport: 'http',
+          url: 'https://learn.microsoft.com/api/mcp',
+          enabled: true,
+          authToken: 'secret',
+        },
+      ],
+    });
+
+    expect(builders[1].update).toHaveBeenCalledWith({
+      url: 'https://new.example.com/mcp',
+      enabled: false,
+    });
+    expect(builders[2].insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 'u1',
+        name: 'learn_docs',
+        transport: 'http',
+        url: 'https://learn.microsoft.com/api/mcp',
+        auth_token_encrypted: 'ENC(secret)',
+        enabled: true,
+      }),
+    );
+    expect(result.createdCount).toBe(1);
+    expect(result.updatedCount).toBe(1);
   });
 
   it('listEnabledServers excludes disabled host stdio servers', async () => {
