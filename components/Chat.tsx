@@ -79,6 +79,7 @@ import { ScrollToBottomButton } from "./chat/ScrollToBottomButton";
 import { ChatCommandPalette } from "./chat/ChatCommandPalette";
 import { ChatHeader } from "./chat/ChatHeader";
 import { GenerationControls } from "./chat/GenerationControls";
+import { ToolBindingControls } from "./chat/ToolBindingControls";
 const ContextInspectorPanel = dynamic(() => import("./debug/ContextInspectorPanel").then(mod => ({ default: mod.ContextInspectorPanel })), {
   loading: () => null
 });
@@ -96,7 +97,7 @@ import { log } from "@/lib/utils/logger";
 import { useConversationValidation } from "@/hooks/useConversationValidation";
 import type { ConversationData, ConversationValidationResult } from "@/lib/validation/conversation-validator";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import type { ChatProps, GenerationSettings } from "./chat/types";
+import type { ChatProps, GenerationSettings, PortalChatTool } from "./chat/types";
 import type { ChatAttachmentDto } from "@/lib/chat/attachments";
 // New focused hooks for state management
 import {
@@ -153,20 +154,8 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Input, loading, messages, error, abortController now managed by useChat hook (see chatHookResult below)
   const [connectionError, setConnectionError] = useState<boolean>(false);
 
-  // Tool type matching useChat.ts Tool interface
-  type Tool = {
-    type: 'function';
-    function: {
-      name: string;
-      description: string;
-      parameters: {
-        type: 'object';
-        properties: Record<string, unknown>;
-        required?: string[];
-      };
-    };
-  };
-  const [tools, setTools] = useState<Tool[]>([]);
+  const [tools, setTools] = useState<PortalChatTool[]>([]);
+  const [disabledToolNamesByChat, setDisabledToolNamesByChat] = useState<Record<string, string[]>>({});
   
   // Feedback state management - using useFeedbackState hook
   const {
@@ -273,6 +262,47 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Ref to track if currently streaming (prevents effect loops)
   const isStreamingRef = useRef(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const toolBindingChatKey = activeId || 'draft';
+  const disabledToolNames = useMemo(() => (
+    new Set(disabledToolNamesByChat[toolBindingChatKey] ?? [])
+  ), [disabledToolNamesByChat, toolBindingChatKey]);
+  const enabledToolNames = useMemo(() => (
+    new Set(tools
+      .map((tool) => tool.function.name)
+      .filter((name) => !disabledToolNames.has(name)))
+  ), [disabledToolNames, tools]);
+  const enabledTools = useMemo(() => (
+    tools.filter((tool) => enabledToolNames.has(tool.function.name))
+  ), [enabledToolNames, tools]);
+
+  const handleToggleToolBinding = useCallback((toolName: string, enabled: boolean) => {
+    setDisabledToolNamesByChat((current) => {
+      const nextDisabled = new Set(current[toolBindingChatKey] ?? []);
+      if (enabled) {
+        nextDisabled.delete(toolName);
+      } else {
+        nextDisabled.add(toolName);
+      }
+      return {
+        ...current,
+        [toolBindingChatKey]: Array.from(nextDisabled),
+      };
+    });
+  }, [toolBindingChatKey]);
+
+  const handleEnableAllTools = useCallback(() => {
+    setDisabledToolNamesByChat((current) => ({
+      ...current,
+      [toolBindingChatKey]: [],
+    }));
+  }, [toolBindingChatKey]);
+
+  const handleDisableAllTools = useCallback(() => {
+    setDisabledToolNamesByChat((current) => ({
+      ...current,
+      [toolBindingChatKey]: tools.map((tool) => tool.function.name),
+    }));
+  }, [toolBindingChatKey, tools]);
 
   // Thinking mode state - for Qwen3 and similar models with <think> tags
   const [enableThinking, setEnableThinking] = useState(false);
@@ -326,7 +356,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   } = useChat({
     user,
     activeId,
-    tools,
+    tools: enabledTools,
     enableDeepResearch,
     selectedModelId,
     contextTrackerRef,
@@ -625,7 +655,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
         log.error('Chat', 'Error loading tools', { error: toolsError });
         return;
       }
-      const apiTools: Tool[] = data.map((tool) => ({
+      const apiTools: PortalChatTool[] = data.map((tool) => ({
         type: "function" as const,
         function: {
           name: tool.name,
@@ -1494,6 +1524,16 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
                 setGenerationSettings(buildGenerationDefaults());
                 setGenerationSettingsDirty(false);
               }}
+            />
+          }
+          toolControls={
+            <ToolBindingControls
+              tools={tools}
+              enabledToolNames={enabledToolNames}
+              disabled={loading}
+              onToggleTool={handleToggleToolBinding}
+              onEnableAll={handleEnableAllTools}
+              onDisableAll={handleDisableAllTools}
             />
           }
         />

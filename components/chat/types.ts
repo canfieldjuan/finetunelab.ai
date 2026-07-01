@@ -93,6 +93,19 @@ export interface GenerationSettings {
   presencePenalty: number;
 }
 
+export interface PortalChatTool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: 'object';
+      properties: Record<string, unknown>;
+      required?: string[];
+    };
+  };
+}
+
 export type PendingChatAttachmentStatus = 'uploading' | 'uploaded' | 'deleting' | 'error';
 
 export interface PendingChatAttachment {

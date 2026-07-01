@@ -2,9 +2,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
-import type { Message } from '../chat/types';
-import type { GenerationSettings } from '../chat/types';
-import type { PendingChatAttachment } from '../chat/types';
+import type { GenerationSettings, Message, PendingChatAttachment, PortalChatTool } from '../chat/types';
 import type { Citation } from "@/lib/graphrag/service";
 import type { ChatAttachmentDto } from '@/lib/chat/attachments';
 import {
@@ -32,19 +30,6 @@ import {
 } from './chatMessageMetadata';
 import { getSseDataLine, splitSseLines } from './sseStream';
 
-
-interface Tool {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: {
-      type: 'object';
-      properties: Record<string, unknown>;
-      required?: string[];
-    };
-  };
-}
 
 interface ChatAttachmentUploadResponse {
   success?: boolean;
@@ -87,7 +72,7 @@ interface UseChatOptions {
   /** The active conversation ID. */
   activeId: string;
   /** The available tools. */
-  tools: Tool[];
+  tools: PortalChatTool[];
   /** Whether deep research is enabled. */
   enableDeepResearch: boolean;
   /** The selected model ID. */

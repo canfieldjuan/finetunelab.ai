@@ -3,6 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChat } from '../useChat';
+import type { PortalChatTool } from '@/components/chat/types';
 
 const getSession = vi.hoisted(() => vi.fn());
 const from = vi.hoisted(() => vi.fn());
@@ -56,11 +57,25 @@ class MockEventSource {
   }
 }
 
-function renderUseChat() {
+function portalTool(name: string): PortalChatTool {
+  return {
+    type: 'function',
+    function: {
+      name,
+      description: `${name} test tool`,
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  };
+}
+
+function renderUseChat(options?: { tools?: PortalChatTool[] }) {
   return renderHook(() => useChat({
     user: null,
     activeId: '',
-    tools: [],
+    tools: options?.tools ?? [],
     enableDeepResearch: false,
     selectedModelId: 'model-vllm-qwen',
     contextTrackerRef: { current: null },
@@ -75,11 +90,14 @@ function renderUseChat() {
   }));
 }
 
-function renderAuthenticatedUseChat(initialActiveId = '22222222-2222-4222-8222-222222222222') {
+function renderAuthenticatedUseChat(
+  initialActiveId = '22222222-2222-4222-8222-222222222222',
+  options?: { tools?: PortalChatTool[] },
+) {
   return renderHook(({ activeId }) => useChat({
     user: { id: 'user-1' } as never,
     activeId,
-    tools: [],
+    tools: options?.tools ?? [],
     enableDeepResearch: false,
     selectedModelId: 'model-vllm-qwen',
     contextTrackerRef: { current: null },
@@ -222,6 +240,32 @@ describe('useChat MCP SSE metadata', () => {
         'Content-Type': 'application/json',
       }),
     }));
+  });
+
+  it('sends only the selected built-in portal tools in the chat request', async () => {
+    const chatRequests: Array<{ tools?: PortalChatTool[] }> = [];
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (input === '/api/chat') {
+        chatRequests.push(JSON.parse(String(init?.body)));
+        return streamResponse([
+          'data: {"content":"Tool-filtered response."}\n\n',
+          'data: [DONE]\n\n',
+        ]);
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)}`);
+    });
+
+    const { result } = renderUseChat({
+      tools: [portalTool('calculator')],
+    });
+
+    await act(async () => {
+      await result.current.handleSendMessage('Use only the selected tool.');
+    });
+
+    expect(chatRequests).toHaveLength(1);
+    expect(chatRequests[0].tools?.map((tool) => tool.function.name)).toEqual(['calculator']);
   });
 
   it('persists completed generated image results as assistant messages', async () => {

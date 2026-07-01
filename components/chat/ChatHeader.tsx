@@ -20,6 +20,7 @@ interface ChatHeaderProps {
   onCompareModels?: () => void;
   modelSelector?: React.ReactNode;
   modelControls?: React.ReactNode;
+  toolControls?: React.ReactNode;
 }
 
 export function ChatHeader({
@@ -31,7 +32,8 @@ export function ChatHeader({
   onExport,
   onCompareModels,
   modelSelector,
-  modelControls
+  modelControls,
+  toolControls
 }: ChatHeaderProps) {
   const [copied, setCopied] = useState(false);
 
@@ -58,6 +60,7 @@ export function ChatHeader({
         <div className="flex justify-start ml-2 gap-1">
           {modelSelector}
           {modelControls}
+          {toolControls}
         </div>
 
         {/* Center: Title */}

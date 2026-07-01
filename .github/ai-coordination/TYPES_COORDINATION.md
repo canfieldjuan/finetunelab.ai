@@ -10,6 +10,12 @@
 
 ### In Progress
 
+**Portal Chat Tool Binding Types**
+- **Started:** 2026-07-01
+- **Branch:** `codex/chat-tool-binding-controls`
+- **Locations:** `components/chat/types.ts`, `components/Chat.tsx`, `components/hooks/useChat.ts`, `components/chat/ToolBindingControls.tsx`
+- **Status:** `PortalChatTool` is the shared built-in portal tool definition shape passed from loaded DB tools, through the binding controls, into the `/api/chat` request body.
+
 **Chat Attachment Types**
 - **Started:** 2026-06-30
 - **Branch:** `codex/chat-attachment-ui`
@@ -106,6 +112,30 @@ per-image cap, 12 MB per-turn image cap, and image token estimate
 `max(512, ceil(bytes / 1024))`. `attachmentIds` must name still-uploaded rows
 that the route can atomically claim for the current turn; `replayAttachmentIds`
 must name finalized rows whose status is already `attached`.
+
+#### PortalChatTool
+
+**Location:** `components/chat/types.ts`
+
+```typescript
+interface PortalChatTool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: "object";
+      properties: Record<string, unknown>;
+      required?: string[];
+    };
+  };
+}
+```
+
+**Rules:** this type represents built-in portal tool definitions sent by the
+client to `POST /api/chat`. `Chat.tsx` uses it for loaded globally enabled
+tools and for the filtered per-chat enabled set. MCP tool definitions are
+server-discovered and do not flow through this client-side type.
 
 #### ChatMessageContent / ChatMessageContentPart
 
@@ -497,4 +527,4 @@ export enum TrainingStatus {
 
 ---
 
-**Last Updated:** 2025-12-19
+**Last Updated:** 2026-07-01
