@@ -77,6 +77,7 @@ describe('GET /api/image/stream', () => {
       prompt: 'a fox',
       status: 'completed',
       resultUrl: 'https://signed/x.png',
+      resultPath: 'u1/generated/x.png',
       source: 'comfyui',
       createdAt: 't',
       updatedAt: 't',
@@ -89,6 +90,7 @@ describe('GET /api/image/stream', () => {
     expect(body).toContain('"type":"connected"');
     expect(body).toContain('"type":"image_complete"');
     expect(body).toContain('https://signed/x.png');
+    expect(body).toContain('"storagePath":"u1/generated/x.png"');
   });
 
   it('streams a failure immediately when the job already failed', async () => {

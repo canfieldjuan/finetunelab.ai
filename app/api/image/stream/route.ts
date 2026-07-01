@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
             jobId,
             status: 'completed',
             url: job.resultUrl,
+            storagePath: job.resultPath,
             source: job.source,
             attribution: job.attribution,
             prompt: job.prompt,

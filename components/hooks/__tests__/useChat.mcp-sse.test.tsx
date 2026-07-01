@@ -40,6 +40,22 @@ function streamResponse(chunks: string[]): Response {
   });
 }
 
+class MockEventSource {
+  static instances: MockEventSource[] = [];
+
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: (() => void) | null = null;
+  close = vi.fn();
+
+  constructor(public readonly url: string) {
+    MockEventSource.instances.push(this);
+  }
+
+  emit(payload: unknown) {
+    this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent);
+  }
+}
+
 function renderUseChat() {
   return renderHook(() => useChat({
     user: null,
@@ -59,10 +75,10 @@ function renderUseChat() {
   }));
 }
 
-function renderAuthenticatedUseChat() {
-  return renderHook(() => useChat({
+function renderAuthenticatedUseChat(initialActiveId = '22222222-2222-4222-8222-222222222222') {
+  return renderHook(({ activeId }) => useChat({
     user: { id: 'user-1' } as never,
-    activeId: '22222222-2222-4222-8222-222222222222',
+    activeId,
     tools: [],
     enableDeepResearch: false,
     selectedModelId: 'model-vllm-qwen',
@@ -75,7 +91,7 @@ function renderAuthenticatedUseChat() {
     setActiveResearchJob: vi.fn(),
     contextInjectionEnabled: false,
     allowAnonymous: false,
-  }));
+  }), { initialProps: { activeId: initialActiveId } });
 }
 
 interface MockAttachmentRow {
@@ -104,13 +120,21 @@ function mockSupabaseTables(options?: {
   persistAssistant?: boolean;
 }) {
   const attachmentSelect = createAttachmentSelect(options?.attachmentRows ?? []);
-  const messageInsert = vi.fn((payload: { role?: string; content?: string; metadata?: unknown }) => ({
+  let persistedAssistantCount = 0;
+  const messageInsert = vi.fn((payload: {
+    conversation_id?: string;
+    user_id?: string;
+    role?: string;
+    content?: string;
+    metadata?: unknown;
+  }) => ({
     select: vi.fn(() => ({
       single: vi.fn(async () => {
         if (options?.persistAssistant && payload.role === 'assistant') {
+          persistedAssistantCount += 1;
           return {
             data: {
-              id: 'assistant-db-1',
+              id: `assistant-db-${persistedAssistantCount}`,
               role: 'assistant',
               content: payload.content,
               metadata: payload.metadata,
@@ -154,6 +178,7 @@ function restoredAttachmentRow(overrides?: Partial<MockAttachmentRow>): MockAtta
 describe('useChat MCP SSE metadata', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    MockEventSource.instances = [];
     mockSupabaseTables();
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
@@ -197,6 +222,148 @@ describe('useChat MCP SSE metadata', () => {
         'Content-Type': 'application/json',
       }),
     }));
+  });
+
+  it('persists completed generated image results as assistant messages', async () => {
+    getSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
+    const { messageInsert } = mockSupabaseTables({ persistAssistant: true });
+    vi.stubGlobal('EventSource', MockEventSource);
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      if (input === '/api/chat') {
+        return streamResponse([
+          'data: {"type":"image_generation_started","jobId":"img-job-1","prompt":"a flux test","streamToken":"signed-token"}\n\n',
+          'data: {"content":"I started the image."}\n\n',
+          'data: [DONE]\n\n',
+        ]);
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)}`);
+    });
+
+    const { result } = renderAuthenticatedUseChat();
+
+    await act(async () => {
+      await result.current.handleSendMessage('Make an image.');
+    });
+
+    expect(result.current.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'I started the image.',
+      }),
+    ]));
+
+    await waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1);
+    });
+    expect(MockEventSource.instances[0].url).toBe('/api/image/stream?jobId=img-job-1&token=signed-token');
+
+    await act(async () => {
+      MockEventSource.instances[0].emit({
+        type: 'image_complete',
+        jobId: 'img-job-1',
+        url: 'https://images.example/generated.png',
+        storagePath: 'user-1/img-job-1.png',
+        source: 'comfyui',
+        prompt: 'a flux test',
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(messageInsert.mock.calls.some(([payload]) => (
+        payload.role === 'assistant' &&
+        payload.content === 'Generated image: a flux test'
+      ))).toBe(true);
+    });
+
+    const assistantTextIndex = messageInsert.mock.calls.findIndex(([payload]) => (
+      payload.role === 'assistant' &&
+      payload.content === 'I started the image.'
+    ));
+    const imageIndex = messageInsert.mock.calls.findIndex(([payload]) => (
+      payload.role === 'assistant' &&
+      payload.content === 'Generated image: a flux test'
+    ));
+    expect(imageIndex).toBeGreaterThan(assistantTextIndex);
+
+    const imageInsert = messageInsert.mock.calls[imageIndex];
+    expect(imageInsert?.[0]).toMatchObject({
+      conversation_id: '22222222-2222-4222-8222-222222222222',
+      user_id: 'user-1',
+      role: 'assistant',
+      content: 'Generated image: a flux test',
+      metadata: {
+        generated_image: {
+          job_id: 'img-job-1',
+          prompt: 'a flux test',
+          source: 'comfyui',
+          storage_path: 'user-1/img-job-1.png',
+        },
+      },
+    });
+    expect(imageInsert?.[0].content).not.toContain('https://images.example/generated.png');
+    expect(result.current.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'assistant-db-2',
+        role: 'assistant',
+        content: '![a flux test](https://images.example/generated.png)',
+        skipJudgments: true,
+      }),
+    ]));
+  });
+
+  it('persists completed generated images to the originating conversation after navigation', async () => {
+    getSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
+    const { messageInsert } = mockSupabaseTables({ persistAssistant: true });
+    vi.stubGlobal('EventSource', MockEventSource);
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      if (input === '/api/chat') {
+        return streamResponse([
+          'data: {"type":"image_generation_started","jobId":"img-job-2","prompt":"a slow flux test","streamToken":"signed-token"}\n\n',
+          'data: {"content":"I started the image."}\n\n',
+          'data: [DONE]\n\n',
+        ]);
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)}`);
+    });
+
+    const { result, rerender } = renderAuthenticatedUseChat();
+
+    await act(async () => {
+      await result.current.handleSendMessage('Make an image.');
+    });
+
+    await waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      rerender({ activeId: '33333333-3333-4333-8333-333333333333' });
+    });
+
+    await act(async () => {
+      MockEventSource.instances[0].emit({
+        type: 'image_complete',
+        jobId: 'img-job-2',
+        url: 'https://images.example/slow.png',
+        storagePath: 'user-1/img-job-2.png',
+        source: 'comfyui',
+        prompt: 'a slow flux test',
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(messageInsert.mock.calls.some(([payload]) => (
+        payload.conversation_id === '22222222-2222-4222-8222-222222222222' &&
+        payload.content === 'Generated image: a slow flux test'
+      ))).toBe(true);
+    });
+    expect(result.current.messages.some((message) => (
+      message.content === '![a slow flux test](https://images.example/slow.png)'
+    ))).toBe(false);
   });
 
   it('uploads attachments first and sends only attachment ids with the chat turn', async () => {

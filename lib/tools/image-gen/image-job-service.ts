@@ -91,6 +91,7 @@ class ImageJobService {
         type: IMAGE_EVENT_TYPES.COMPLETE,
         status: 'completed',
         url: job.resultUrl,
+        storagePath: job.resultPath,
         source: job.source,
         attribution: job.attribution,
         prompt: job.prompt,

@@ -1,6 +1,7 @@
 import type { Citation } from '@/lib/graphrag/service';
 import type { ChatAttachmentDto } from '@/lib/chat/attachments';
 import type { WebSearchDocument } from '@/lib/tools/web-search/types';
+import type { ImageAttribution } from '@/lib/tools/image-gen/types';
 
 export interface GraphRAGMessageMetadataInput {
   citations?: Citation[];
@@ -29,6 +30,25 @@ export interface AttachmentMessageMetadataInput {
   attachmentIds?: string[];
   attachments?: ChatAttachmentDto[];
   timestamp?: string;
+}
+
+export interface GeneratedImageMessageMetadataInput {
+  jobId: string;
+  prompt: string;
+  source?: string | null;
+  url?: string | null;
+  storagePath?: string | null;
+  attribution?: ImageAttribution | null;
+  timestamp?: string;
+}
+
+export interface HydratedGeneratedImageMetadata {
+  jobId: string;
+  prompt: string;
+  source?: string;
+  url?: string;
+  storagePath?: string;
+  attribution?: ImageAttribution;
 }
 
 interface PersistedGraphRAGMetadata {
@@ -60,12 +80,50 @@ export interface HydratedAttachmentMessageFields {
   attachments?: ChatAttachmentDto[];
 }
 
+export interface HydratedGeneratedImageMessageFields {
+  generatedImage?: HydratedGeneratedImageMetadata;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeImageAttribution(value: unknown): ImageAttribution | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const authorName = nonEmptyString(value.authorName);
+  const authorUrl = nonEmptyString(value.authorUrl);
+  const sourceName = nonEmptyString(value.sourceName);
+  const sourceUrl = nonEmptyString(value.sourceUrl);
+
+  if (!authorName || !authorUrl || !sourceName || !sourceUrl) {
+    return undefined;
+  }
+
+  return {
+    authorName,
+    authorUrl,
+    sourceName,
+    sourceUrl,
+  };
+}
+
+function escapeMarkdownLabel(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/[[\]]/g, '\\$&')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
 }
 
 function normalizeCitation(value: unknown): Citation | null {
@@ -198,6 +256,48 @@ export function buildAttachmentMessageMetadata(input: AttachmentMessageMetadataI
   };
 }
 
+export function buildGeneratedImageMessageMetadata(input: GeneratedImageMessageMetadataInput): Record<string, unknown> | undefined {
+  const jobId = nonEmptyString(input.jobId);
+  const prompt = nonEmptyString(input.prompt) ?? 'generated image';
+  if (!jobId) return undefined;
+
+  const source = nonEmptyString(input.source);
+  const storagePath = nonEmptyString(input.storagePath);
+  const url = nonEmptyString(input.url);
+  const attribution = normalizeImageAttribution(input.attribution);
+  const generatedImage = {
+    job_id: jobId,
+    prompt,
+    ...(source ? { source } : {}),
+    ...(storagePath ? { storage_path: storagePath } : {}),
+    ...(!storagePath && url ? { url } : {}),
+    ...(attribution ? { attribution } : {}),
+  };
+
+  return {
+    generated_image: generatedImage,
+    timestamp: input.timestamp ?? new Date().toISOString(),
+  };
+}
+
+export function buildGeneratedImageFallbackContent(prompt: string): string {
+  return `Generated image: ${nonEmptyString(prompt) ?? 'generated image'}`;
+}
+
+export function buildGeneratedImageMarkdown(input: {
+  prompt: string;
+  url: string;
+  attribution?: ImageAttribution | null;
+}): string {
+  const alt = escapeMarkdownLabel(input.prompt || 'generated image') || 'generated image';
+  let content = `![${alt}](${input.url})`;
+  const attribution = normalizeImageAttribution(input.attribution);
+  if (attribution) {
+    content += `\n\n*Photo by [${escapeMarkdownLabel(attribution.authorName)}](${attribution.authorUrl}) on [${escapeMarkdownLabel(attribution.sourceName)}](${attribution.sourceUrl})*`;
+  }
+  return content;
+}
+
 export function hydrateAttachmentMessageFields(metadata: unknown): HydratedAttachmentMessageFields {
   if (!isRecord(metadata)) return {};
 
@@ -235,5 +335,27 @@ export function hydrateGraphRAGMessageFields(metadata: unknown): HydratedGraphRA
     ...(finiteNumber(graphRAG.context_relevance_score) !== undefined ? { graphrag_relevance: graphRAG.context_relevance_score } : {}),
     ...(typeof graphRAG.answer_grounded_in_graph === 'boolean' ? { graphrag_grounded: graphRAG.answer_grounded_in_graph } : {}),
     ...(typeof graphRAG.retrieval_method === 'string' && graphRAG.retrieval_method ? { graphrag_method: graphRAG.retrieval_method } : {}),
+  };
+}
+
+export function hydrateGeneratedImageMessageFields(metadata: unknown): HydratedGeneratedImageMessageFields {
+  if (!isRecord(metadata) || !isRecord(metadata.generated_image)) {
+    return {};
+  }
+
+  const generatedImage = metadata.generated_image;
+  const jobId = nonEmptyString(generatedImage.job_id);
+  const prompt = nonEmptyString(generatedImage.prompt);
+  if (!jobId || !prompt) return {};
+
+  return {
+    generatedImage: {
+      jobId,
+      prompt,
+      ...(nonEmptyString(generatedImage.source) ? { source: nonEmptyString(generatedImage.source) } : {}),
+      ...(nonEmptyString(generatedImage.url) ? { url: nonEmptyString(generatedImage.url) } : {}),
+      ...(nonEmptyString(generatedImage.storage_path) ? { storagePath: nonEmptyString(generatedImage.storage_path) } : {}),
+      ...(normalizeImageAttribution(generatedImage.attribution) ? { attribution: normalizeImageAttribution(generatedImage.attribution) } : {}),
+    },
   };
 }

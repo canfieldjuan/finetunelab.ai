@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAssistantMessageMetadata,
   buildAttachmentMessageMetadata,
+  buildGeneratedImageFallbackContent,
+  buildGeneratedImageMarkdown,
+  buildGeneratedImageMessageMetadata,
   hydrateAttachmentMessageFields,
+  hydrateGeneratedImageMessageFields,
   hydrateGraphRAGMessageFields,
 } from '../chatMessageMetadata';
 
@@ -192,5 +196,71 @@ describe('chat message metadata helpers', () => {
         },
       ],
     });
+  });
+
+  it('persists generated-image storage paths without the expiring signed URL', () => {
+    const metadata = buildGeneratedImageMessageMetadata({
+      jobId: 'img-job-1',
+      prompt: 'a flux test',
+      source: 'comfyui',
+      url: 'https://signed.example/generated.png',
+      storagePath: 'user-1/img-job-1.png',
+      timestamp: '2026-07-01T18:45:00.000Z',
+    });
+
+    expect(metadata).toEqual({
+      timestamp: '2026-07-01T18:45:00.000Z',
+      generated_image: {
+        job_id: 'img-job-1',
+        prompt: 'a flux test',
+        source: 'comfyui',
+        storage_path: 'user-1/img-job-1.png',
+      },
+    });
+    expect(hydrateGeneratedImageMessageFields(metadata)).toEqual({
+      generatedImage: {
+        jobId: 'img-job-1',
+        prompt: 'a flux test',
+        source: 'comfyui',
+        storagePath: 'user-1/img-job-1.png',
+      },
+    });
+  });
+
+  it('keeps permanent generated-image URLs for sources without storage paths', () => {
+    const metadata = buildGeneratedImageMessageMetadata({
+      jobId: 'img-job-2',
+      prompt: 'a mountain',
+      source: 'unsplash',
+      url: 'https://images.unsplash.com/photo.jpg',
+      attribution: {
+        authorName: 'Jane',
+        authorUrl: 'https://example.com/jane',
+        sourceName: 'Unsplash',
+        sourceUrl: 'https://unsplash.com',
+      },
+      timestamp: '2026-07-01T18:45:00.000Z',
+    });
+
+    expect(metadata).toMatchObject({
+      generated_image: {
+        job_id: 'img-job-2',
+        prompt: 'a mountain',
+        source: 'unsplash',
+        url: 'https://images.unsplash.com/photo.jpg',
+        attribution: {
+          authorName: 'Jane',
+          sourceName: 'Unsplash',
+        },
+      },
+    });
+  });
+
+  it('builds generated-image display markdown and durable fallback content', () => {
+    expect(buildGeneratedImageMarkdown({
+      prompt: 'a [flux] test',
+      url: 'https://signed.example/generated.png',
+    })).toBe('![a \\[flux\\] test](https://signed.example/generated.png)');
+    expect(buildGeneratedImageFallbackContent('a flux test')).toBe('Generated image: a flux test');
   });
 });

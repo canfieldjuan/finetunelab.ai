@@ -54,7 +54,12 @@ describe('imageJobService', () => {
 
   it('runImageJob completes a job and records the result', async () => {
     get.mockResolvedValue({ ...pendingJob });
-    generateImage.mockResolvedValue({ url: 'https://img/x.png', source: 'comfyui', prompt: 'a fox' });
+    generateImage.mockResolvedValue({
+      url: 'https://img/x.png',
+      storagePath: 'u1/generated/x.png',
+      source: 'comfyui',
+      prompt: 'a fox',
+    });
 
     await imageJobService.runImageJob('j1', 'u1');
 
@@ -64,11 +69,17 @@ describe('imageJobService', () => {
     const final = update.mock.calls[update.mock.calls.length - 1][0];
     expect(final.status).toBe('completed');
     expect(final.resultUrl).toBe('https://img/x.png');
+    expect(final.resultPath).toBe('u1/generated/x.png');
     expect(final.source).toBe('comfyui');
     expect(final.completedAt).toBeTruthy();
     expect(sendEvent).toHaveBeenCalledWith(
       'j1',
-      expect.objectContaining({ type: 'image_complete', url: 'https://img/x.png', source: 'comfyui' }),
+      expect.objectContaining({
+        type: 'image_complete',
+        url: 'https://img/x.png',
+        storagePath: 'u1/generated/x.png',
+        source: 'comfyui',
+      }),
     );
   });
 
