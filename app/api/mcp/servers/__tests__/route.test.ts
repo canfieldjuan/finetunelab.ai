@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { GET, POST } from '../route';
+import { GET as GETCatalog } from '../catalog/route';
+import { GET as GETExport } from '../export/route';
+import { POST as POSTImport } from '../import/route';
+import { GET as GETServers, POST as POSTServer } from '../route';
 import { DELETE, PATCH } from '../[id]/route';
 
 const mocks = vi.hoisted(() => ({
@@ -59,6 +62,20 @@ function makeSupabase(result: QueryResult) {
   return { supabase, builder, getUser };
 }
 
+function makeSupabaseSequence(results: QueryResult[]) {
+  const builders = results.map(makeBuilder);
+  let index = 0;
+  const getUser = vi.fn(async () => ({
+    data: { user: { id: 'user-1', email: 'user@example.com' } },
+    error: null,
+  }));
+  const supabase = {
+    auth: { getUser },
+    from: vi.fn(() => builders[Math.min(index++, builders.length - 1)]),
+  };
+  return { supabase, builders, getUser };
+}
+
 function request(path: string, init: RequestInit = {}) {
   return new NextRequest(`http://localhost${path}`, {
     method: init.method,
@@ -100,7 +117,7 @@ describe('/api/mcp/servers', () => {
     const { supabase } = makeSupabase({ data: [], error: null });
     mocks.createClient.mockReturnValue(supabase);
 
-    const response = await GET(new NextRequest('http://localhost/api/mcp/servers'));
+    const response = await GETServers(new NextRequest('http://localhost/api/mcp/servers'));
 
     expect(response.status).toBe(401);
     expect(mocks.createClient).not.toHaveBeenCalled();
@@ -128,7 +145,7 @@ describe('/api/mcp/servers', () => {
       },
     ]);
 
-    const response = await GET(request('/api/mcp/servers'));
+    const response = await GETServers(request('/api/mcp/servers'));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -157,11 +174,150 @@ describe('/api/mcp/servers', () => {
     expect(JSON.stringify(body.hostServers)).not.toContain('SECRET');
   });
 
+  it('exports a versioned token-redacted HTTP server manifest', async () => {
+    const { supabase } = makeSupabase({ data: [httpRow], error: null });
+    mocks.createClient.mockReturnValue(supabase);
+
+    const response = await GETExport(request('/api/mcp/servers/export'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.manifest).toEqual({
+      kind: 'finetunelab.mcp_servers',
+      schemaVersion: 1,
+      exportedAt: expect.any(String),
+      servers: [
+        {
+          name: 'github_docs',
+          transport: 'http',
+          url: 'https://api.example.com/mcp',
+          enabled: true,
+          hasAuthToken: true,
+        },
+      ],
+    });
+    expect(JSON.stringify(body.manifest)).not.toContain('secret-token');
+    expect(JSON.stringify(body.manifest)).not.toContain('auth_token_encrypted');
+  });
+
+  it('imports HTTP server manifests by updating matching names and creating missing servers', async () => {
+    const updatedRow = {
+      ...httpRow,
+      url: 'https://new.example.com/mcp',
+      enabled: false,
+    };
+    const newRow = {
+      id: 'srv-2',
+      user_id: 'user-1',
+      name: 'learn_docs',
+      transport: 'http',
+      url: 'https://learn.microsoft.com/api/mcp',
+      auth_token_encrypted: 'ENC(new-token)',
+      enabled: true,
+    };
+    const { supabase, builders } = makeSupabaseSequence([
+      { data: [httpRow], error: null },
+      { data: updatedRow, error: null },
+      { data: newRow, error: null },
+    ]);
+    mocks.createClient.mockReturnValue(supabase);
+
+    const response = await POSTImport(
+      jsonRequest('/api/mcp/servers/import', 'POST', {
+        kind: 'finetunelab.mcp_servers',
+        schemaVersion: 1,
+        servers: [
+          {
+            name: 'github_docs',
+            transport: 'http',
+            url: 'https://new.example.com/mcp',
+            enabled: false,
+          },
+          {
+            name: 'learn_docs',
+            transport: 'http',
+            url: 'https://learn.microsoft.com/api/mcp',
+            enabled: true,
+            authToken: 'new-token',
+          },
+        ],
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(builders[1].update).toHaveBeenCalledWith({
+      url: 'https://new.example.com/mcp',
+      enabled: false,
+    });
+    expect(builders[1].eq).toHaveBeenCalledWith('id', 'srv-1');
+    expect(builders[1].eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(builders[2].insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 'user-1',
+        name: 'learn_docs',
+        transport: 'http',
+        url: 'https://learn.microsoft.com/api/mcp',
+        auth_token_encrypted: 'ENC(new-token)',
+        enabled: true,
+      }),
+    );
+    expect(body.result.createdCount).toBe(1);
+    expect(body.result.updatedCount).toBe(1);
+    expect(JSON.stringify(body)).not.toContain('new-token');
+  });
+
+  it('rejects executable stdio-shaped imports before touching server rows', async () => {
+    const { supabase } = makeSupabase({ data: [], error: null });
+    mocks.createClient.mockReturnValue(supabase);
+
+    const response = await POSTImport(
+      jsonRequest('/api/mcp/servers/import', 'POST', {
+        kind: 'finetunelab.mcp_servers',
+        schemaVersion: 1,
+        servers: [
+          {
+            name: 'shell',
+            transport: 'stdio',
+            command: 'npx',
+            args: ['danger'],
+            env: { SECRET: 'nope' },
+          },
+        ],
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.details).toMatch(/HTTP servers|host-config-only/);
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('lists a safe HTTP MCP catalog without executable config fields', async () => {
+    const { supabase } = makeSupabase({ data: [], error: null });
+    mocks.createClient.mockReturnValue(supabase);
+
+    const response = await GETCatalog(request('/api/mcp/servers/catalog'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.catalog.map((entry: { id: string }) => entry.id)).toEqual(['microsoft-learn', 'deepwiki']);
+    expect(body.catalog[0].manifest.servers[0]).toMatchObject({
+      name: 'microsoft_learn',
+      transport: 'http',
+      url: 'https://learn.microsoft.com/api/mcp',
+      enabled: true,
+    });
+    expect(JSON.stringify(body.catalog)).not.toContain('command');
+    expect(JSON.stringify(body.catalog)).not.toContain('env');
+    expect(JSON.stringify(body.catalog)).not.toContain('authToken');
+  });
+
   it('creates HTTP MCP servers through the real config service', async () => {
     const { supabase, builder } = makeSupabase({ data: httpRow, error: null });
     mocks.createClient.mockReturnValue(supabase);
 
-    const response = await POST(
+    const response = await POSTServer(
       jsonRequest('/api/mcp/servers', 'POST', {
         name: ' github_docs ',
         url: ' https://api.example.com/mcp ',
@@ -196,7 +352,7 @@ describe('/api/mcp/servers', () => {
     const { supabase, builder } = makeSupabase({ data: httpRow, error: null });
     mocks.createClient.mockReturnValue(supabase);
 
-    const response = await POST(
+    const response = await POSTServer(
       jsonRequest('/api/mcp/servers', 'POST', {
         name: 'metadata',
         url: 'http://169.254.169.254/latest/meta-data',
@@ -216,7 +372,7 @@ describe('/api/mcp/servers', () => {
       { id: 'host-stdio:docs', name: 'github docs', transport: 'stdio', command: 'npx', enabled: true },
     ]);
 
-    const response = await POST(
+    const response = await POSTServer(
       jsonRequest('/api/mcp/servers', 'POST', {
         name: 'github_docs',
         url: 'https://api.example.com/mcp',
@@ -233,7 +389,7 @@ describe('/api/mcp/servers', () => {
     const { supabase, builder } = makeSupabase({ data: httpRow, error: null });
     mocks.createClient.mockReturnValue(supabase);
 
-    const response = await POST(
+    const response = await POSTServer(
       jsonRequest('/api/mcp/servers', 'POST', {
         name: 'shell',
         transport: 'stdio',

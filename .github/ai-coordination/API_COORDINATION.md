@@ -10,6 +10,19 @@
 
 ### In Progress
 
+**MCP Server Manifest Import/Export/Catalog**
+- **Started:** 2026-07-01
+- **Model:** Codex
+- **Branch:** `codex/tool-config-catalog`
+- **Work:** Add a versioned, token-redacted manifest contract for user-managed HTTP MCP servers, plus export/import/catalog routes consumed by the MCP settings panel.
+- **Issue:** #79
+- **Endpoints:** `GET /api/mcp/servers/export`, `POST /api/mcp/servers/import`, `GET /api/mcp/servers/catalog`
+- **Files:**
+  - API: `app/api/mcp/servers/export/route.ts`, `app/api/mcp/servers/import/route.ts`, `app/api/mcp/servers/catalog/route.ts`
+  - Service/catalog: `lib/tools/mcp/server-config.service.ts`, `lib/tools/mcp/catalog.ts`
+  - UI: `components/settings/McpServerManagement.tsx`
+  - Tests: `app/api/mcp/servers/__tests__/route.test.ts`, `lib/tools/mcp/__tests__/server-config.service.test.ts`, `components/settings/__tests__/McpServerManagement.test.tsx`
+
 **Chat Tool Binding Controls**
 - **Started:** 2026-07-01
 - **Model:** Codex
@@ -277,6 +290,90 @@ for the current chat session.
 - User-scoped MCP tools are not controlled by this field. They are discovered
   server-side for the authenticated user and routed through the MCP toolset
   path.
+
+### MCP Server Manifest APIs
+
+#### GET /api/mcp/servers/export
+
+**Purpose:** Export the authenticated user's configured HTTP MCP servers as a
+portable FinetuneLab manifest.
+
+**Authentication:** Required Supabase bearer session.
+
+**Response (200):**
+```typescript
+{
+  success: true;
+  manifest: McpServerManifest;
+}
+```
+
+**Behavior:** The manifest includes `kind: "finetunelab.mcp_servers"`,
+`schemaVersion: 1`, `exportedAt`, and the user's HTTP server names/URLs/enabled
+flags. Bearer tokens are never exported; tokened servers are represented with
+`hasAuthToken: true`.
+
+#### POST /api/mcp/servers/import
+
+**Purpose:** Import a FinetuneLab MCP server manifest without hand-editing
+`mcp_servers` rows.
+
+**Authentication:** Required Supabase bearer session.
+
+**Request:** either the manifest object directly or `{ manifest }`.
+```typescript
+{
+  kind: "finetunelab.mcp_servers";
+  schemaVersion: 1;
+  servers: Array<{
+    name: string;
+    transport: "http";
+    url: string;
+    enabled?: boolean;
+    authToken?: string;
+  }>;
+}
+```
+
+**Response (200):**
+```typescript
+{
+  success: true;
+  result: {
+    created: McpServerSummary[];
+    updated: McpServerSummary[];
+    createdCount: number;
+    updatedCount: number;
+  };
+}
+```
+
+**Behavior:** Imports at most 25 servers per request. Existing servers are
+matched by name and updated in place; missing names are created. Omitted
+`authToken` values preserve the saved token on updates and create tokenless rows
+for new servers. The parser rejects malformed names, unsafe/private URLs,
+duplicate names, non-HTTP transports, and any `command`/`args`/`env` fields
+before database writes. Stdio MCP servers remain operator-only through
+`MCP_STDIO_SERVERS`.
+
+#### GET /api/mcp/servers/catalog
+
+**Purpose:** Return a small authenticated catalog of safe HTTP MCP server
+manifests that can be imported through the same manifest route.
+
+**Authentication:** Required Supabase bearer session.
+
+**Response (200):**
+```typescript
+{
+  success: true;
+  catalog: McpServerCatalogEntry[];
+  count: number;
+}
+```
+
+**Behavior:** Catalog entries contain source URLs and HTTP-only manifests. They
+do not contain bearer tokens or executable host config fields.
 
 ### Snippet Revision APIs
 

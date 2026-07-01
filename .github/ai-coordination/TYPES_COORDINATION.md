@@ -10,6 +10,12 @@
 
 ### In Progress
 
+**MCP Server Manifest Types**
+- **Started:** 2026-07-01
+- **Branch:** `codex/tool-config-catalog`
+- **Locations:** `lib/tools/mcp/server-config.service.ts`, `lib/tools/mcp/catalog.ts`, `components/settings/McpServerManagement.tsx`
+- **Status:** `McpServerManifest` is the versioned import/export contract for user-managed HTTP MCP server definitions. It is token-redacted on export, accepts optional write-only `authToken` on import, and rejects stdio/command-shaped configs.
+
 **Portal Chat Tool Binding Types**
 - **Started:** 2026-07-01
 - **Branch:** `codex/chat-tool-binding-controls`
@@ -136,6 +142,51 @@ interface PortalChatTool {
 client to `POST /api/chat`. `Chat.tsx` uses it for loaded globally enabled
 tools and for the filtered per-chat enabled set. MCP tool definitions are
 server-discovered and do not flow through this client-side type.
+
+#### McpServerManifest
+
+**Location:** `lib/tools/mcp/server-config.service.ts`
+
+```typescript
+interface McpServerManifest {
+  kind: "finetunelab.mcp_servers";
+  schemaVersion: 1;
+  exportedAt?: string;
+  servers: Array<{
+    name: string;
+    transport: "http";
+    url: string;
+    enabled: boolean;
+    hasAuthToken?: boolean;
+    authToken?: string;
+  }>;
+}
+```
+
+**Rules:** this is the only portable user-managed MCP server config shape.
+Exported manifests omit `authToken` and include `hasAuthToken` only as a
+redacted signal. Imported manifests may include `authToken`, but it is write-only
+and encrypted before storage. The normalizer rejects non-HTTP transports,
+duplicate names, unsafe URLs, and executable `command`/`args`/`env` fields before
+database writes; stdio servers remain `MCP_STDIO_SERVERS` host config only.
+
+#### McpServerCatalogEntry
+
+**Location:** `lib/tools/mcp/catalog.ts`
+
+```typescript
+interface McpServerCatalogEntry {
+  id: string;
+  name: string;
+  description: string;
+  sourceUrl: string;
+  requiresAuthToken: boolean;
+  manifest: McpServerManifest;
+}
+```
+
+**Rules:** catalog entries are authenticated UI seeds for HTTP-only MCP server
+manifests. They must not include auth tokens or host-executable config fields.
 
 #### ChatMessageContent / ChatMessageContentPart
 
