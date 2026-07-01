@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
+import { applySnippetRevision } from '@/lib/snippet-revision';
 
 const MODEL_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -95,7 +96,7 @@ describe('POST /api/snippet-revision/rewrite', () => {
       error: null,
     });
     unifiedChat.mockResolvedValue({
-      content: '<replacement>Sharper middle.</replacement>',
+      content: '<replacement>{"text":"Sharper middle."}</replacement>',
       usage: {
         input_tokens: 10,
         output_tokens: 4,
@@ -142,7 +143,7 @@ describe('POST /api/snippet-revision/rewrite', () => {
         expect.objectContaining({ role: 'system' }),
         expect.objectContaining({
           role: 'user',
-          content: expect.stringContaining('Output contract:'),
+          content: expect.stringContaining('<replacement>{"text":"..."}</replacement>'),
         }),
         expect.objectContaining({
           role: 'user',
@@ -152,7 +153,7 @@ describe('POST /api/snippet-revision/rewrite', () => {
       expect.objectContaining({
         userId: 'user-1',
         temperature: 0.2,
-        maxTokens: 524,
+        maxTokens: 562,
         skipGuardrails: false,
       }),
     );
@@ -174,9 +175,9 @@ describe('POST /api/snippet-revision/rewrite', () => {
         status: 'completed',
         inputTokens: 10,
         outputTokens: 4,
-        maxTokens: 524,
+        maxTokens: 562,
         outputData: {
-          content: '<replacement>Sharper middle.</replacement>',
+          content: '<replacement>{"text":"Sharper middle."}</replacement>',
         },
       }),
     );
@@ -492,6 +493,169 @@ describe('POST /api/snippet-revision/rewrite', () => {
       replacement: '',
       modelId: MODEL_ID,
     });
+  });
+
+  it('preserves significant trailing newlines for line-boundary selections', async () => {
+    const sourceText = '- old\n- next';
+    const expectedText = '- old\n';
+    unifiedChat.mockResolvedValue({
+      content: '<replacement>{"text":"- new\\n"}</replacement>',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 4,
+      },
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody({
+      sourceText,
+      selection: {
+        start: 0,
+        end: expectedText.length,
+        expectedText,
+      },
+    })));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json() as { replacement: string; modelId: string };
+    expect(payload).toEqual({
+      replacement: '- new\n',
+      modelId: MODEL_ID,
+    });
+
+    expect(applySnippetRevision(sourceText, {
+      mode: 'replace_range',
+      start: 0,
+      end: expectedText.length,
+      expectedText,
+      replace: payload.replacement,
+    })).toEqual({
+      ok: true,
+      applied: true,
+      updatedText: '- new\n- next',
+      unchanged: false,
+      change: {
+        mode: 'replace_range',
+        start: 0,
+        end: expectedText.length,
+        original: expectedText,
+        replacement: '- new\n',
+      },
+    });
+  });
+
+  it('ignores wrapper-formatting newlines around structured replacement payloads', async () => {
+    unifiedChat.mockResolvedValue({
+      content: '<replacement>\n{"text":"Sharper middle."}\n</replacement>',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 4,
+      },
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      replacement: 'Sharper middle.',
+      modelId: MODEL_ID,
+    });
+  });
+
+  it('preserves replacement text that is itself a JSON object', async () => {
+    const replacement = '{"text":"hello","role":"user"}';
+    unifiedChat.mockResolvedValue({
+      content: `<replacement>${JSON.stringify({ text: replacement })}</replacement>`,
+      usage: {
+        input_tokens: 10,
+        output_tokens: 4,
+      },
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      replacement,
+      modelId: MODEL_ID,
+    });
+  });
+
+  it('rejects unescaped JSON objects instead of dropping extra fields', async () => {
+    unifiedChat.mockResolvedValue({
+      content: '<replacement>{"text":"hello","role":"user"}</replacement>',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 4,
+      },
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'replacement_payload_invalid',
+        message: 'The model returned invalid replacement JSON.',
+      },
+    });
+  });
+
+  it('rejects raw replacement text now that structured payloads are required', async () => {
+    unifiedChat.mockResolvedValue({
+      content: '<replacement>\nSharper middle.\n</replacement>',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 4,
+      },
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'replacement_payload_invalid',
+        message: 'The model returned invalid replacement JSON.',
+      },
+    });
+  });
+
+  it('accounts for JSON escaping when enforcing the selected model output budget', async () => {
+    modelSingle.mockResolvedValue({
+      data: {
+        id: MODEL_ID,
+        max_output_tokens: 700,
+        context_length: 8192,
+        is_global: false,
+        user_id: 'user-1',
+      },
+      error: null,
+    });
+    const selected = '\n'.repeat(100);
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody({
+      sourceText: selected,
+      selection: {
+        start: 0,
+        end: selected.length,
+        expectedText: selected,
+      },
+    })));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'selection_exceeds_model_output',
+        message: 'Selected text is too long for the selected model output limit.',
+      },
+    });
+    expect(unifiedChat).not.toHaveBeenCalled();
   });
 
   it('caps selected text length before generation can truncate the replacement', async () => {

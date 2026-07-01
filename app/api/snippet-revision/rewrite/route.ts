@@ -48,6 +48,8 @@ const MIN_REWRITE_TOKENS = 128;
 const OUTPUT_REWRITE_SLACK_TOKENS = 512;
 const REWRITE_PROMPT_OVERHEAD_TOKENS = 512;
 const REWRITE_CONTEXT_SAFETY_TOKENS = 128;
+const REPLACEMENT_OPEN_TAG = '<replacement>';
+const REPLACEMENT_CLOSE_TAG = '</replacement>';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
@@ -314,8 +316,8 @@ function getRewriteCapacity(
   request: SnippetRewriteRequest,
   model: { maxOutputTokens: number; contextLength: number },
 ): RewriteCapacityResult {
-  const selectedLength = request.selection.expectedText.length;
-  const maxTokens = getRequiredRewriteTokens(selectedLength);
+  const structuredOutputLength = estimateStructuredReplacementOutputLength(request.selection.expectedText);
+  const maxTokens = getRequiredRewriteTokens(structuredOutputLength);
 
   if (maxTokens > model.maxOutputTokens) {
     return {
@@ -366,13 +368,14 @@ function buildRewriteMessages(request: SnippetRewriteRequest, contextCharsPerSid
       role: 'system',
       content:
         'You rewrite only the selected text from an assistant answer. ' +
-        'Return replacement text only inside exactly one <replacement>...</replacement> block. ' +
+        'Return exactly one <replacement>{"text":"..."}</replacement> block where text is a JSON string containing only the replacement text. ' +
+        'Use JSON escapes such as \\n for line breaks inside the replacement text. ' +
         'Do not include the surrounding text, explanations, Markdown fences, or labels.',
     },
     {
       role: 'user',
       content: [
-        'Output contract:\nReturn exactly one <replacement>...</replacement> block. Do not include surrounding context, labels, commentary, or Markdown fences.',
+        'Output contract:\nReturn exactly one <replacement>{"text":"..."}</replacement> block. The content between the tags must be a JSON object with a string text property. Use JSON escapes such as \\n for line breaks in the replacement. Do not include surrounding context, labels, commentary, or Markdown fences.',
         `Instruction:\n${instruction}`,
         `Context before selection:\n${before || '[start of message]'}`,
         `Selected text to rewrite:\n${selection.expectedText}`,
@@ -452,8 +455,44 @@ function extractReplacementText(responseText: string): ReplacementParseResult {
     };
   }
 
-  const replacement = matches[0][1].replace(/^\n/, '').replace(/\n$/, '');
-  return { ok: true, replacement };
+  const payload = matches[0][1];
+  if (payload.length === 0) {
+    return { ok: true, replacement: '' };
+  }
+
+  return parseStructuredReplacementPayload(payload);
+}
+
+function parseStructuredReplacementPayload(payload: string): ReplacementParseResult {
+  const trimmedPayload = payload.trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmedPayload);
+  } catch {
+    return {
+      ok: false,
+      code: 'replacement_payload_invalid',
+      message: 'The model returned invalid replacement JSON.',
+    };
+  }
+
+  const keys = isRecord(parsed) ? Object.keys(parsed) : [];
+  if (!isRecord(parsed) || keys.length !== 1 || keys[0] !== 'text' || typeof parsed.text !== 'string') {
+    return {
+      ok: false,
+      code: 'replacement_payload_invalid',
+      message: 'The model returned invalid replacement JSON.',
+    };
+  }
+
+  return { ok: true, replacement: parsed.text };
+}
+
+function estimateStructuredReplacementOutputLength(replacement: string): number {
+  return REPLACEMENT_OPEN_TAG.length +
+    JSON.stringify({ text: replacement }).length +
+    REPLACEMENT_CLOSE_TAG.length;
 }
 
 async function endRewriteTrace(

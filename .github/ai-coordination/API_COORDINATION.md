@@ -10,6 +10,17 @@
 
 ### In Progress
 
+**Snippet Revision Newline Preservation**
+- **Started:** 2026-07-01
+- **Model:** Codex
+- **Branch:** `codex/snippet-revision-newline-preservation`
+- **Work:** Fix primary-path snippet rewrite correctness for line-boundary selections by disambiguating wrapper-formatting newlines from significant replacement text.
+- **Issue:** #96
+- **Endpoints:** `POST /api/snippet-revision/rewrite`
+- **Files:**
+  - API: `app/api/snippet-revision/rewrite/route.ts`
+  - Tests: `app/api/snippet-revision/rewrite/__tests__/route.test.ts`
+
 **Portal Snippet Revision UI**
 - **Started:** 2026-06-30
 - **Model:** Codex
@@ -267,7 +278,7 @@
 - Rejects `selection_exceeds_model_output` before any model call when the selected span cannot fit inside the selected model's configured `max_output_tokens`.
 - Rejects `selection_exceeds_model_context` before any model call when the selected span plus instruction cannot fit inside the selected model's configured `context_length`.
 - Uses bounded surrounding context rather than sending the entire source text to the model, and scales context per side down to fit the selected model's context window.
-- Prompts the model to return replacement text only and requires exactly one `<replacement>...</replacement>` wrapper. Missing wrappers are 502 errors; empty wrappers are valid deletion edits; raw explanatory output is not accepted.
+- Prompts the model to return exactly one `<replacement>{"text":"..."}</replacement>` wrapper, where the tag payload is a JSON object with exactly one string `text` property. The parser trims wrapper-formatting whitespace around structured JSON, preserves the parsed `text` value verbatim, and still treats exact empty `<replacement></replacement>` as a deletion edit. Missing/multiple wrappers, invalid replacement JSON, and raw non-JSON payloads are 502 errors. The rewrite output capacity gate budgets against the escaped structured payload size, including wrapper tags and JSON escape overhead.
 - Wraps the rewrite LLM call in a root `llm.snippet_rewrite` trace so usage metering records direct rewrite generations.
 - Returns stable generic `rewrite_failed` errors for provider/runtime failures while logging details server-side.
 - The portal UI applies successful replacements through `requestSnippetRevision({ action: "apply", revision: { mode: "replace_range", ... } })` before mutating message content.
