@@ -16,12 +16,13 @@
 - **Branch:** `codex/portal-snippet-revision-ui`
 - **Work:** Add a source-range assistant message revision flow so users can rewrite selected text without regenerating the full assistant output.
 - **Issue:** #91
-- **Endpoints:** `POST /api/snippet-revision/rewrite`, `POST /api/snippet-revision`
+- **Endpoints:** `POST /api/snippet-revision/rewrite`, `POST /api/snippet-revision`, `POST /api/snippet-revision/persist`
 - **Files:**
-  - API: `app/api/snippet-revision/rewrite/route.ts`
+  - API: `app/api/snippet-revision/rewrite/route.ts`, `app/api/snippet-revision/persist/route.ts`
+  - Migration: `supabase/migrations/20260701040500_create_snippet_revision_message_update_rpc.sql`
   - Client: `lib/snippet-revision/client.ts`
   - UI: `components/chat/SnippetRevisionDialog.tsx`, `components/chat/MessageList.tsx`, `components/Chat.tsx`
-  - Tests: `app/api/snippet-revision/rewrite/__tests__/route.test.ts`, `lib/snippet-revision/__tests__/client.test.ts`, `components/chat/__tests__/MessageList.test.tsx`
+  - Tests: `app/api/snippet-revision/rewrite/__tests__/route.test.ts`, `app/api/snippet-revision/persist/__tests__/route.test.ts`, `lib/snippet-revision/__tests__/client.test.ts`, `components/chat/__tests__/MessageList.test.tsx`
 
 **Snippet Revision Client Boundary Follow-up**
 - **Started:** 2026-06-30
@@ -246,9 +247,40 @@
 - Rejects missing/default/non-UUID/inaccessible models before calling the LLM client.
 - Uses bounded surrounding context rather than sending the entire source text to the model.
 - Prompts the model to return replacement text only and requires exactly one `<replacement>...</replacement>` wrapper. Missing wrappers are 502 errors; empty wrappers are valid deletion edits; raw explanatory output is not accepted.
+- Wraps the rewrite LLM call in a root `llm.snippet_rewrite` trace so usage metering records direct rewrite generations.
 - Returns stable generic `rewrite_failed` errors for provider/runtime failures while logging details server-side.
 - The portal UI applies successful replacements through `requestSnippetRevision({ action: "apply", revision: { mode: "replace_range", ... } })` before mutating message content.
 - Locally truncated messages from `useMessages` are marked with structured `contentTruncated` / `originalContentLength` fields and are not editable; callers must load full source before attempting a surgical edit.
+
+#### POST /api/snippet-revision/persist
+
+**Purpose:** Persist a deterministic assistant-message snippet revision after the client has previewed/applied it locally with `POST /api/snippet-revision`.
+
+**Authentication:** Required Supabase bearer session. The route fails closed with `server_config_error` when the public Supabase URL/key env vars are missing.
+
+**Request:**
+```typescript
+{
+  messageId: string;        // saved assistant message UUID, not temp-*
+  conversationId: string;   // conversation UUID
+  expectedContent: string;  // full pre-edit assistant content, max 200,000 chars
+  updatedText: string;      // full post-edit assistant content, max 200,000 chars
+}
+```
+
+**Response (200):**
+```typescript
+{
+  ok: true;
+  messageId: string;
+}
+```
+
+**Behavior:**
+- Calls `public.update_assistant_message_content_if_current(...)` through the authenticated Supabase client.
+- The RPC binds the update to `auth.uid()`, `messageId`, `conversationId`, `role = 'assistant'`, and the expected current content in one atomic SQL update.
+- The expected full message content is sent in the RPC POST body rather than a PostgREST query-string filter, avoiding request-URI limits and access-log exposure.
+- Returns `message_changed` with HTTP 409 when the message is missing, not owned by the caller, no longer assistant-role, or its content changed before save.
 
 #### POST /api/snippet-revision
 

@@ -10,6 +10,8 @@ const modelSingle = vi.hoisted(() => vi.fn());
 const modelEq = vi.hoisted(() => vi.fn());
 const modelSelect = vi.hoisted(() => vi.fn());
 const fromMock = vi.hoisted(() => vi.fn());
+const startTrace = vi.hoisted(() => vi.fn());
+const endTrace = vi.hoisted(() => vi.fn());
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: createClientMock,
@@ -18,6 +20,13 @@ vi.mock('@supabase/supabase-js', () => ({
 vi.mock('@/lib/llm/unified-client', () => ({
   unifiedLLMClient: {
     chat: unifiedChat,
+  },
+}));
+
+vi.mock('@/lib/tracing/trace.service', () => ({
+  traceService: {
+    startTrace,
+    endTrace,
   },
 }));
 
@@ -88,6 +97,15 @@ describe('POST /api/snippet-revision/rewrite', () => {
         output_tokens: 4,
       },
     });
+    startTrace.mockResolvedValue({
+      traceId: 'trace-1',
+      spanId: 'span-1',
+      userId: 'user-1',
+      startTime: new Date('2026-07-01T00:00:00.000Z'),
+      spanName: 'llm.snippet_rewrite',
+      operationType: 'llm_call',
+    });
+    endTrace.mockResolvedValue(undefined);
   });
 
   it('generates replacement text with an authorized selected model', async () => {
@@ -122,6 +140,30 @@ describe('POST /api/snippet-revision/rewrite', () => {
         temperature: 0.2,
         maxTokens: 516,
         skipGuardrails: false,
+      }),
+    );
+    expect(startTrace).toHaveBeenCalledWith(expect.objectContaining({
+      spanName: 'llm.snippet_rewrite',
+      operationType: 'llm_call',
+      modelName: MODEL_ID,
+      userId: 'user-1',
+      metadata: expect.objectContaining({
+        feature: 'snippet_revision',
+      }),
+    }));
+    expect(endTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        traceId: 'trace-1',
+        spanId: 'span-1',
+      }),
+      expect.objectContaining({
+        status: 'completed',
+        inputTokens: 10,
+        outputTokens: 4,
+        maxTokens: 516,
+        outputData: {
+          content: '<replacement>Sharper middle.</replacement>',
+        },
       }),
     );
   });
@@ -232,6 +274,17 @@ describe('POST /api/snippet-revision/rewrite', () => {
         message: 'Failed to generate replacement text.',
       },
     });
+    expect(endTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        traceId: 'trace-1',
+        spanId: 'span-1',
+      }),
+      expect.objectContaining({
+        status: 'failed',
+        errorMessage: 'provider secret: sk-live-sensitive',
+        errorType: 'Error',
+      }),
+    );
   });
 
   it('rejects model output that omits the replacement wrapper', async () => {
@@ -251,6 +304,27 @@ describe('POST /api/snippet-revision/rewrite', () => {
       error: {
         code: 'replacement_tag_missing',
         message: 'The model did not return a replacement block.',
+      },
+    });
+  });
+
+  it('rejects model output with multiple replacement blocks', async () => {
+    unifiedChat.mockResolvedValue({
+      content: '<replacement>First.</replacement>\n<replacement>Second.</replacement>',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 8,
+      },
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'replacement_tag_multiple',
+        message: 'The model returned multiple replacement blocks.',
       },
     });
   });

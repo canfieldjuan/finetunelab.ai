@@ -974,11 +974,11 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
 
     try {
       await persistAssistantSnippetRevision({
-        client: supabase,
         messageId,
         conversationId: activeId,
         expectedContent: currentMessage.content,
         updatedText,
+        authToken: session.access_token,
       });
     } catch (error) {
       log.error('Chat', 'Failed to save snippet revision', { error, messageId });
@@ -990,7 +990,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
         ? { ...message, content: updatedText, contentTruncated: false, originalContentLength: undefined }
         : message
     )));
-  }, [activeId, demoMode, isWidgetMode, messages, session?.access_token, setMessages, user]);
+  }, [activeId, demoMode, isWidgetMode, messages, session, setMessages, user]);
 
   const handleArchiveConversation = async (conversationId: string) => {
     if ((!userId || !user) && !demoMode) {

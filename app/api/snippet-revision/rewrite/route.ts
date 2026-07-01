@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { ChatMessage } from '@/lib/llm/openai';
 import { unifiedLLMClient } from '@/lib/llm/unified-client';
+import { traceService } from '@/lib/tracing/trace.service';
+import type { TraceContext } from '@/lib/tracing/types';
 
 export const runtime = 'nodejs';
 
@@ -303,18 +305,52 @@ async function generateReplacementText(params: {
   selectedLength: number;
   modelMaxOutputTokens: number;
 }): Promise<string> {
-  const response = await unifiedLLMClient.chat(params.modelId, params.messages, {
+  const maxTokens = getRewriteMaxTokens(params.selectedLength, params.modelMaxOutputTokens);
+  const traceContext = await traceService.startTrace({
+    spanName: 'llm.snippet_rewrite',
+    operationType: 'llm_call',
+    modelName: params.modelId,
     userId: params.userId,
-    temperature: 0.2,
-    maxTokens: getRewriteMaxTokens(params.selectedLength, params.modelMaxOutputTokens),
-    skipGuardrails: false,
+    metadata: {
+      feature: 'snippet_revision',
+      max_tokens: maxTokens,
+      selected_text_chars: params.selectedLength,
+      tags: ['snippet_revision', 'rewrite'],
+    },
   });
-  return response.content;
+
+  try {
+    const response = await unifiedLLMClient.chat(params.modelId, params.messages, {
+      userId: params.userId,
+      temperature: 0.2,
+      maxTokens,
+      skipGuardrails: false,
+    });
+
+    await endRewriteTrace(traceContext, {
+      status: 'completed',
+      modelId: params.modelId,
+      maxTokens,
+      responseText: response.content,
+      inputTokens: response.usage?.input_tokens,
+      outputTokens: response.usage?.output_tokens,
+    });
+
+    return response.content;
+  } catch (error) {
+    await endRewriteTrace(traceContext, {
+      status: 'failed',
+      modelId: params.modelId,
+      maxTokens,
+      error,
+    });
+    throw error;
+  }
 }
 
 function extractReplacementText(responseText: string): ReplacementParseResult {
-  const match = /<replacement>([\s\S]*?)<\/replacement>/i.exec(responseText);
-  if (!match) {
+  const matches = Array.from(responseText.matchAll(/<replacement>([\s\S]*?)<\/replacement>/gi));
+  if (matches.length === 0) {
     return {
       ok: false,
       code: 'replacement_tag_missing',
@@ -322,8 +358,50 @@ function extractReplacementText(responseText: string): ReplacementParseResult {
     };
   }
 
-  const replacement = match[1].replace(/^\n/, '').replace(/\n$/, '');
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      code: 'replacement_tag_multiple',
+      message: 'The model returned multiple replacement blocks.',
+    };
+  }
+
+  const replacement = matches[0][1].replace(/^\n/, '').replace(/\n$/, '');
   return { ok: true, replacement };
+}
+
+async function endRewriteTrace(
+  traceContext: TraceContext,
+  params: {
+    status: 'completed' | 'failed';
+    modelId: string;
+    maxTokens: number;
+    responseText?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    error?: unknown;
+  },
+): Promise<void> {
+  try {
+    await traceService.endTrace(traceContext, {
+      endTime: new Date(),
+      status: params.status,
+      inputTokens: params.inputTokens,
+      outputTokens: params.outputTokens,
+      maxTokens: params.maxTokens,
+      outputData: params.responseText === undefined ? undefined : {
+        content: params.responseText.slice(0, 10_000),
+      },
+      errorMessage: params.error instanceof Error ? params.error.message : undefined,
+      errorType: params.error instanceof Error ? params.error.constructor.name : undefined,
+      metadata: {
+        feature: 'snippet_revision',
+        modelName: params.modelId,
+      },
+    });
+  } catch (traceError) {
+    console.error('[SnippetRewrite] Failed to end trace:', traceError);
+  }
 }
 
 function getRewriteMaxTokens(selectedLength: number, modelMaxOutputTokens: number): number {
