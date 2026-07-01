@@ -3,6 +3,7 @@ import { validateConversations } from '@/lib/validation/conversation-validator';
 import {
   MESSAGE_CONTENT_TRUNCATION_LIMIT,
   buildValidationMessageProjection,
+  hydrateGeneratedImageMessageForDisplay,
   truncateMessageContentForDisplay,
 } from '../useMessages';
 import type { Message } from '@/components/chat/types';
@@ -118,5 +119,50 @@ describe('useMessages validation projection', () => {
       contentTruncated: true,
       originalContentLength: originalContent.length,
     });
+  });
+
+  it('re-signs generated-image storage paths for history display', async () => {
+    const message: Message = {
+      id: 'msg-img',
+      role: 'assistant',
+      content: 'Generated image: a flux test',
+      metadata: {
+        generated_image: {
+          job_id: 'img-job-1',
+          prompt: 'a flux test',
+          source: 'comfyui',
+          storage_path: 'user-1/img-job-1.png',
+        },
+      },
+    };
+
+    const hydrated = await hydrateGeneratedImageMessageForDisplay(
+      message,
+      async (storagePath) => {
+        expect(storagePath).toBe('user-1/img-job-1.png');
+        return 'https://fresh-signed.example/generated.png';
+      },
+    );
+
+    expect(hydrated.content).toBe('![a flux test](https://fresh-signed.example/generated.png)');
+  });
+
+  it('leaves generated-image fallback text when re-signing fails', async () => {
+    const message: Message = {
+      id: 'msg-img',
+      role: 'assistant',
+      content: 'Generated image: a flux test',
+      metadata: {
+        generated_image: {
+          job_id: 'img-job-1',
+          prompt: 'a flux test',
+          storage_path: 'user-1/img-job-1.png',
+        },
+      },
+    };
+
+    const hydrated = await hydrateGeneratedImageMessageForDisplay(message, async () => null);
+
+    expect(hydrated.content).toBe('Generated image: a flux test');
   });
 });

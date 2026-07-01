@@ -22,7 +22,14 @@ import {
   reduceWebSearchStreamEvent,
 } from './chatSearchStream';
 import { normalizeToolCalls } from './chatToolStream';
-import { buildAssistantMessageMetadata, buildAttachmentMessageMetadata, normalizeGraphRAGCitations } from './chatMessageMetadata';
+import {
+  buildAssistantMessageMetadata,
+  buildAttachmentMessageMetadata,
+  buildGeneratedImageFallbackContent,
+  buildGeneratedImageMarkdown,
+  buildGeneratedImageMessageMetadata,
+  normalizeGraphRAGCitations,
+} from './chatMessageMetadata';
 import { getSseDataLine, splitSseLines } from './sseStream';
 
 
@@ -60,6 +67,15 @@ interface SendMessageOptions {
   includePendingAttachments?: boolean;
   attachmentIds?: string[];
   attachments?: ChatAttachmentDto[];
+}
+
+interface PendingGeneratedImageMessage {
+  localMessageId: string;
+  displayContent: string;
+  persistedContent: string;
+  conversationId: string;
+  metadata?: Record<string, unknown>;
+  renderedLocally: boolean;
 }
 
 /**
@@ -399,6 +415,9 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     let actualInputTokens: number | null = null;
     let actualOutputTokens: number | null = null;
     const THROTTLE_MS = 500;
+    const pendingGeneratedImageMessages: PendingGeneratedImageMessage[] = [];
+    let assistantPersistenceDone = false;
+    let flushingGeneratedImageMessages = false;
 
     const updateMessageThrottled = () => {
       if (updateThrottle) clearTimeout(updateThrottle);
@@ -429,59 +448,65 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
       }, THROTTLE_MS);
     };
 
+    const persistGeneratedImageDraft = async (draft: PendingGeneratedImageMessage) => {
+      if (!user || allowAnonymous || !draft.conversationId) return;
+
+      const { data: imageMsg, error: dbError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: draft.conversationId,
+          user_id: user.id,
+          role: 'assistant',
+          content: draft.persistedContent,
+          ...(draft.metadata ? { metadata: draft.metadata } : {}),
+        })
+        .select()
+        .single();
+
+      if (dbError) {
+        log.error('useChat', 'Failed to save generated image message', { error: dbError });
+        return;
+      }
+      if (!imageMsg || !draft.renderedLocally || activeIdRef.current !== draft.conversationId) return;
+
+      setMessages((msgs) =>
+        msgs.map((m) =>
+          m.id === draft.localMessageId
+            ? {
+                ...imageMsg,
+                content: draft.displayContent,
+                metadata: draft.metadata,
+                skipJudgments: true,
+              }
+            : m
+        )
+      );
+    };
+
+    const flushGeneratedImageMessages = async () => {
+      if (!assistantPersistenceDone || flushingGeneratedImageMessages) return;
+      flushingGeneratedImageMessages = true;
+      try {
+        while (pendingGeneratedImageMessages.length > 0) {
+          const draft = pendingGeneratedImageMessages.shift();
+          if (draft) await persistGeneratedImageDraft(draft);
+        }
+      } finally {
+        flushingGeneratedImageMessages = false;
+      }
+    };
+
+    const queueGeneratedImagePersistence = (draft: PendingGeneratedImageMessage) => {
+      pendingGeneratedImageMessages.push(draft);
+      void flushGeneratedImageMessages();
+    };
+
     // Inline image delivery: a generate_image job finishes asynchronously (after
     // this chat response), so we subscribe to its owner-scoped SSE stream and, on
     // completion, append the image to the conversation as markdown (renders via
     // MessageContent's img path; data-URIs are already blocked there).
-    const persistGeneratedImageMessage = (
-      localMessageId: string,
-      content: string,
-      conversationId: string,
-    ) => {
-      setMessages((prev) => [
-        ...prev,
-        { id: localMessageId, role: 'assistant', content, skipJudgments: true },
-      ]);
-
-      if (!user || allowAnonymous || !conversationId) return;
-
-      void supabase
-        .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          user_id: user.id,
-          role: 'assistant',
-          content,
-        })
-        .select()
-        .single()
-        .then(({ data: imageMsg, error: dbError }) => {
-          if (dbError) {
-            log.error('useChat', 'Failed to save generated image message', { error: dbError });
-            return;
-          }
-          if (!imageMsg || activeIdRef.current !== conversationId) return;
-
-          setMessages((msgs) =>
-            msgs.map((m) =>
-              m.id === localMessageId
-                ? { ...imageMsg, skipJudgments: true }
-                : m
-            )
-          );
-        });
-    };
-
     const subscribeToImageJob = (imgJobId: string, imgPrompt: string, streamToken: string) => {
       const originatingConversationId = activeId;
-      // Escape the user-controlled prompt so it can't break out of the markdown
-      // image alt text (e.g. a `]` terminating the label and injecting a URL).
-      const escapeMarkdownAlt = (s: string) =>
-        s
-          .replace(/\\/g, '\\\\')
-          .replace(/[[\]]/g, '\\$&')
-          .replace(/[\r\n]+/g, ' ')
-          .trim();
       try {
         const es = new EventSource(
           `/api/image/stream?jobId=${encodeURIComponent(imgJobId)}&token=${encodeURIComponent(streamToken)}`
@@ -497,15 +522,40 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
               if (done) return;
               done = true;
               close();
-              // Drop the result if the user has since switched conversations.
-              if (activeIdRef.current !== originatingConversationId) return;
-              const alt = escapeMarkdownAlt(imgPrompt || 'generated image');
-              let content = `![${alt}](${evt.url})`;
-              const attr = evt.attribution;
-              if (attr && typeof attr === 'object' && typeof attr.authorName === 'string') {
-                content += `\n\n*Photo by [${attr.authorName}](${attr.authorUrl}) on [${attr.sourceName}](${attr.sourceUrl})*`;
+              const prompt = typeof evt.prompt === 'string' && evt.prompt.trim()
+                ? evt.prompt
+                : imgPrompt;
+              const displayContent = buildGeneratedImageMarkdown({
+                prompt,
+                url: evt.url,
+                attribution: evt.attribution,
+              });
+              const storagePath = typeof evt.storagePath === 'string' ? evt.storagePath : undefined;
+              const metadata = buildGeneratedImageMessageMetadata({
+                jobId: imgJobId,
+                prompt,
+                source: typeof evt.source === 'string' ? evt.source : undefined,
+                url: evt.url,
+                storagePath,
+                attribution: evt.attribution,
+              });
+              const renderedLocally = activeIdRef.current === originatingConversationId;
+              if (renderedLocally) {
+                setMessages((prev) => [
+                  ...prev,
+                  { id: `img-${imgJobId}`, role: 'assistant', content: displayContent, skipJudgments: true },
+                ]);
               }
-              persistGeneratedImageMessage(`img-${imgJobId}`, content, originatingConversationId);
+              queueGeneratedImagePersistence({
+                localMessageId: `img-${imgJobId}`,
+                displayContent,
+                persistedContent: storagePath
+                  ? buildGeneratedImageFallbackContent(prompt)
+                  : displayContent,
+                conversationId: originatingConversationId,
+                metadata,
+                renderedLocally,
+              });
             } else if (evt.type === 'image_failed') {
               if (done) return;
               done = true;
@@ -855,7 +905,7 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
     });
 
     if (user && activeId && !allowAnonymous) {
-      void supabase
+      const assistantPersistence = supabase
         .from('messages')
         .insert({
           conversation_id: activeId,
@@ -906,6 +956,13 @@ export function useChat({ user, activeId, tools, enableDeepResearch, selectedMod
             log.debug('useChat', 'Message updated with real ID', { realId: aiMsg.id, tempId: tempMessageId });
           }
         });
+      void Promise.resolve(assistantPersistence).finally(() => {
+        assistantPersistenceDone = true;
+        void flushGeneratedImageMessages();
+      });
+    } else {
+      assistantPersistenceDone = true;
+      void flushGeneratedImageMessages();
     }
   };
 

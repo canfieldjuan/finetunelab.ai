@@ -3,7 +3,12 @@ import { supabase } from '../../lib/supabaseClient';
 import { log } from '../../lib/utils/logger';
 import type { Message } from '../chat/types';
 import { normalizeToolCalls } from './chatToolStream';
-import { hydrateAttachmentMessageFields, hydrateGraphRAGMessageFields } from './chatMessageMetadata';
+import {
+  buildGeneratedImageMarkdown,
+  hydrateAttachmentMessageFields,
+  hydrateGeneratedImageMessageFields,
+  hydrateGraphRAGMessageFields,
+} from './chatMessageMetadata';
 import { normalizeWebSearchResults } from '@/lib/tools/web-search/result-normalizer';
 
 interface ConversationData {
@@ -29,6 +34,8 @@ interface ValidationResult {
 }
 
 export const MESSAGE_CONTENT_TRUNCATION_LIMIT = 50_000;
+const GENERATED_IMAGE_BUCKET = 'chat-images';
+const GENERATED_IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export function truncateMessageContentForDisplay(message: Message): Message {
   if (!message.content || message.content.length <= MESSAGE_CONTENT_TRUNCATION_LIMIT) {
@@ -73,6 +80,37 @@ export function buildValidationMessageProjection(messages: Message[]): Message[]
     output_tokens: msg.output_tokens,
     latency_ms: msg.latency_ms,
   }));
+}
+
+export async function hydrateGeneratedImageMessageForDisplay(
+  message: Message,
+  signGeneratedImagePath: (storagePath: string) => Promise<string | null>,
+): Promise<Message> {
+  const { generatedImage } = hydrateGeneratedImageMessageFields(message.metadata);
+  if (!generatedImage) return message;
+
+  if (generatedImage.storagePath) {
+    const signedUrl = await signGeneratedImagePath(generatedImage.storagePath);
+    if (!signedUrl) return message;
+    return {
+      ...message,
+      content: buildGeneratedImageMarkdown({
+        prompt: generatedImage.prompt,
+        url: signedUrl,
+        attribution: generatedImage.attribution,
+      }),
+    };
+  }
+
+  if (!generatedImage.url) return message;
+  return {
+    ...message,
+    content: buildGeneratedImageMarkdown({
+      prompt: generatedImage.prompt,
+      url: generatedImage.url,
+      attribution: generatedImage.attribution,
+    }),
+  };
 }
 
 /**
@@ -176,12 +214,31 @@ export function useMessages(
           let enrichedCount = 0;
           let fallbackCount = 0;
 
-          const processedMessages = data.map((msg: Message) => {
+          const signGeneratedImagePath = async (storagePath: string): Promise<string | null> => {
+            const { data: signed, error: signError } = await supabase
+              .storage
+              .from(GENERATED_IMAGE_BUCKET)
+              .createSignedUrl(storagePath, GENERATED_IMAGE_SIGNED_URL_TTL_SECONDS);
+
+            if (signError || !signed?.signedUrl) {
+              log.warn('useMessages', 'Failed to re-sign generated image path', {
+                conversationId: activeId,
+                storagePath,
+                error: signError?.message,
+              });
+              return null;
+            }
+
+            return signed.signedUrl;
+          };
+
+          const processedMessages = await Promise.all(data.map(async (msg: Message) => {
             const enrichedMsg: Message = { ...msg };
             const toolCalls = normalizeToolCalls(msg.tools_called);
             if (toolCalls) {
               enrichedMsg.tools_called = toolCalls;
             }
+            let hasPersistedModelName = false;
 
             // PRIORITY 1: Use persisted metadata if available
             if (msg.metadata && typeof msg.metadata === 'object') {
@@ -212,31 +269,37 @@ export function useMessages(
 
               if (meta.model_name) {
                 enrichedMsg.model_name = meta.model_name;
+                hasPersistedModelName = true;
                 enrichedCount++;
                 // Also use persisted provider if message provider field is missing
                 if (!enrichedMsg.provider && meta.provider) {
                   enrichedMsg.provider = meta.provider;
                 }
-
-                return truncateMessageContentForDisplay(enrichedMsg);
               }
             }
 
-            // PRIORITY 2: Try to get model name from llm_models lookup (for old messages)
-            const modelInfo = msg.model_id ? modelMap.get(msg.model_id) : null;
+            if (!hasPersistedModelName) {
+              // PRIORITY 2: Try to get model name from llm_models lookup (for old messages)
+              const modelInfo = msg.model_id ? modelMap.get(msg.model_id) : null;
 
-            if (modelInfo?.name) {
-              // Found in llm_models table
-              enrichedMsg.model_name = modelInfo.name;
-              enrichedCount++;
-            } else if (msg.model_id) {
-              // PRIORITY 3: Fallback - use model_id directly as display name
-              enrichedMsg.model_name = msg.model_id;
-              fallbackCount++;
+              if (modelInfo?.name) {
+                // Found in llm_models table
+                enrichedMsg.model_name = modelInfo.name;
+                enrichedCount++;
+              } else if (msg.model_id) {
+                // PRIORITY 3: Fallback - use model_id directly as display name
+                enrichedMsg.model_name = msg.model_id;
+                fallbackCount++;
+              }
             }
 
-            return truncateMessageContentForDisplay(enrichedMsg);
-          });
+            return hydrateGeneratedImageMessageForDisplay(
+              truncateMessageContentForDisplay(enrichedMsg),
+              signGeneratedImagePath,
+            );
+          }));
+
+          if (cancelled) return;
 
           // Log enrichment summary once (not per message to avoid loop detection)
           if (enrichedCount > 0 || fallbackCount > 0) {

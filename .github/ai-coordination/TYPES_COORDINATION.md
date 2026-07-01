@@ -28,6 +28,12 @@
 - **Locations:** `lib/llm/openai.ts`, `lib/chat/attachments.ts`, `lib/chat/attachment-limits.ts`, `lib/llm/adapters/huggingface-adapter.ts`, `app/api/chat/route.ts`
 - **Status:** Private image attachments remain metadata-only in DTOs; the chat route creates transient multimodal model message parts only for vision-capable model configs after image byte validation, image byte-budget checks, image-aware context estimation, and attached-only replay validation. Raw inbound `image_url` parts are rejected.
 
+**Generated Image Message Metadata**
+- **Started:** 2026-07-01
+- **Branch:** `codex/chat-image-generation-result-ui`
+- **Locations:** `components/hooks/chatMessageMetadata.ts`, `components/hooks/useChat.ts`, `components/hooks/useMessages.ts`, `app/api/image/stream/route.ts`
+- **Status:** Completed image stream events carry both the immediate display URL and `storagePath` when available. Persisted ComfyUI image messages store `generated_image.storage_path` metadata and fallback text, then re-sign on history load; they do not persist the expiring signed URL as the durable source.
+
 ### Recently Completed
 
 **Training Stats Types**
@@ -154,6 +160,29 @@ interface ChatAttachmentDownloadResponse {
 **Rules:** `url` is a short-lived Supabase Storage signed URL generated per
 request for the authenticated user. Do not persist it into message metadata or
 `ChatAttachmentDto`.
+
+#### Generated Image Message Metadata
+
+**Location:** `components/hooks/chatMessageMetadata.ts`
+
+```typescript
+interface GeneratedImageMessageMetadata {
+  generated_image: {
+    job_id: string;
+    prompt: string;
+    source?: "comfyui" | "unsplash";
+    storage_path?: string;
+    url?: string;
+    attribution?: ImageAttribution;
+  };
+  timestamp: string;
+}
+```
+
+**Rules:** ComfyUI results use `storage_path` as the durable reference and
+persist fallback text in `messages.content`; `useMessages` re-signs that path
+for display when history loads. `url` is only durable metadata for sources that
+do not provide a private storage path, such as Unsplash CDN results.
 
 ### Training Types
 

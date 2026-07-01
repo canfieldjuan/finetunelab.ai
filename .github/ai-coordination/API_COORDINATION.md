@@ -599,6 +599,25 @@ contract instead of reusing the durable GraphRAG document upload path.
 - Async tools deliver completion out-of-band, so repeated calls can queue duplicate background work and exhaust model tool-round limits.
 - Structural capability changes are required; prompt instructions or advisory tool-result text are only defense-in-depth.
 
+### 2026-07-01: Generated Image Streams Carry Durable Storage Paths
+
+**Decision:** Completed image stream events include `storagePath` when the image
+was uploaded to private Supabase Storage. The client persists that path in
+message metadata and re-signs it on history load instead of storing the
+short-lived signed URL as durable message content.
+
+**Files:**
+- `app/api/image/stream/route.ts`
+- `lib/tools/image-gen/image-job-service.ts`
+- `components/hooks/chatMessageMetadata.ts`
+- `components/hooks/useChat.ts`
+- `components/hooks/useMessages.ts`
+
+**Rationale:**
+- ComfyUI display URLs are signed URLs that expire after seven days.
+- The stable storage path is already produced by the image service, so the
+  stream contract must carry it to the chat persistence layer.
+
 ### 2025-12-19: Training Stats API
 
 **Decision:** Return job counts broken down by status
