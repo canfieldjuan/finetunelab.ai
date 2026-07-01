@@ -60,6 +60,7 @@ describe('POST /api/snippet-revision/rewrite', () => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
 
     const modelQuery = {
       select: modelSelect,
@@ -72,6 +73,9 @@ describe('POST /api/snippet-revision/rewrite', () => {
       data: {
         id: MODEL_ID,
         max_output_tokens: 4096,
+        context_length: 8192,
+        is_global: false,
+        user_id: 'user-1',
       },
       error: null,
     });
@@ -118,8 +122,18 @@ describe('POST /api/snippet-revision/rewrite', () => {
       replacement: 'Sharper middle.',
       modelId: MODEL_ID,
     });
+    expect(createClientMock).toHaveBeenCalledWith(
+      'https://example.supabase.co',
+      'service-role-key',
+      expect.objectContaining({
+        auth: expect.objectContaining({
+          autoRefreshToken: false,
+          persistSession: false,
+        }),
+      }),
+    );
     expect(fromMock).toHaveBeenCalledWith('llm_models');
-    expect(modelSelect).toHaveBeenCalledWith('id, max_output_tokens');
+    expect(modelSelect).toHaveBeenCalledWith('id, max_output_tokens, context_length, is_global, user_id');
     expect(modelEq).toHaveBeenCalledWith('id', MODEL_ID);
     expect(modelEq).toHaveBeenCalledWith('enabled', true);
     expect(unifiedChat).toHaveBeenCalledWith(
@@ -138,7 +152,7 @@ describe('POST /api/snippet-revision/rewrite', () => {
       expect.objectContaining({
         userId: 'user-1',
         temperature: 0.2,
-        maxTokens: 516,
+        maxTokens: 524,
         skipGuardrails: false,
       }),
     );
@@ -160,7 +174,7 @@ describe('POST /api/snippet-revision/rewrite', () => {
         status: 'completed',
         inputTokens: 10,
         outputTokens: 4,
-        maxTokens: 516,
+        maxTokens: 524,
         outputData: {
           content: '<replacement>Sharper middle.</replacement>',
         },
@@ -259,6 +273,136 @@ describe('POST /api/snippet-revision/rewrite', () => {
       },
     });
     expect(unifiedChat).not.toHaveBeenCalled();
+  });
+
+  it('authorizes enabled global models without selecting stored credentials', async () => {
+    modelSingle.mockResolvedValue({
+      data: {
+        id: MODEL_ID,
+        max_output_tokens: 4096,
+        context_length: 8192,
+        is_global: true,
+        user_id: 'other-user',
+      },
+      error: null,
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(200);
+    expect(modelSelect).toHaveBeenCalledWith('id, max_output_tokens, context_length, is_global, user_id');
+    expect(modelSelect).not.toHaveBeenCalledWith(expect.stringContaining('api_key'));
+    expect(modelSelect).not.toHaveBeenCalledWith(expect.stringContaining('auth_headers'));
+    expect(unifiedChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects enabled models that are neither global nor owned by the caller', async () => {
+    modelSingle.mockResolvedValue({
+      data: {
+        id: MODEL_ID,
+        max_output_tokens: 4096,
+        context_length: 8192,
+        is_global: false,
+        user_id: 'other-user',
+      },
+      error: null,
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'model_forbidden',
+        message: 'Selected model is not available for this user.',
+      },
+    });
+    expect(unifiedChat).not.toHaveBeenCalled();
+  });
+
+  it('rejects selections that exceed the selected model output budget', async () => {
+    modelSingle.mockResolvedValue({
+      data: {
+        id: MODEL_ID,
+        max_output_tokens: 128,
+        context_length: 8192,
+        is_global: false,
+        user_id: 'user-1',
+      },
+      error: null,
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'selection_exceeds_model_output',
+        message: 'Selected text is too long for the selected model output limit.',
+      },
+    });
+    expect(unifiedChat).not.toHaveBeenCalled();
+  });
+
+  it('rejects rewrite prompts that exceed the selected model context window', async () => {
+    modelSingle.mockResolvedValue({
+      data: {
+        id: MODEL_ID,
+        max_output_tokens: 4096,
+        context_length: 700,
+        is_global: false,
+        user_id: 'user-1',
+      },
+      error: null,
+    });
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody()));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'selection_exceeds_model_context',
+        message: 'Selected text and instruction exceed the selected model context window.',
+      },
+    });
+    expect(unifiedChat).not.toHaveBeenCalled();
+  });
+
+  it('trims surrounding context to fit the selected model context window', async () => {
+    modelSingle.mockResolvedValue({
+      data: {
+        id: MODEL_ID,
+        max_output_tokens: 4096,
+        context_length: 4096,
+        is_global: false,
+        user_id: 'user-1',
+      },
+      error: null,
+    });
+    const before = 'b'.repeat(2_000);
+    const after = 'a'.repeat(2_000);
+    const selected = 'Target text.';
+    const { POST } = await import('../route');
+
+    const response = await POST(makeRequest(validBody({
+      sourceText: `${before}${selected}${after}`,
+      selection: {
+        start: before.length,
+        end: before.length + selected.length,
+        expectedText: selected,
+      },
+    })));
+
+    expect(response.status).toBe(200);
+    const messages = unifiedChat.mock.calls[0][1];
+    const userPrompt = messages.find((message: { role: string }) => message.role === 'user')?.content;
+    expect(userPrompt).toContain('Target text.');
+    expect(userPrompt).not.toContain('b'.repeat(2_000));
+    expect(userPrompt).not.toContain('a'.repeat(2_000));
   });
 
   it('returns a generic rewrite failure instead of leaking provider errors', async () => {

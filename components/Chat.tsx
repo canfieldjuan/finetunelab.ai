@@ -301,6 +301,7 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
   // Determine widget/demo mode early so it's available to hooks below
   const isWidgetMode = !!widgetConfig;
   const isDemoOrWidget = demoMode || isWidgetMode;
+  const canUseSnippetRevision = Boolean(session?.access_token && !isDemoOrWidget);
 
   // Chat messaging state and actions - using useChat hook
   const {
@@ -1563,9 +1564,9 @@ export default function Chat({ widgetConfig, demoMode = false }: ChatProps) {
             onDownloadResearch={handleDownloadResearch}
             isDeepResearchResult={isDeepResearchResult}
             onRegenerate={handleRegenerate}
-            onApplySnippetRevision={session?.access_token ? handleApplySnippetRevision : undefined}
-            snippetRevisionModelId={selectedModelId}
-            snippetRevisionAuthToken={session?.access_token || null}
+            onApplySnippetRevision={canUseSnippetRevision ? handleApplySnippetRevision : undefined}
+            snippetRevisionModelId={canUseSnippetRevision ? selectedModelId : null}
+            snippetRevisionAuthToken={canUseSnippetRevision ? session?.access_token ?? null : null}
           />
 
           {/* Structured Research Viewer (v2 with SSE streaming) */}

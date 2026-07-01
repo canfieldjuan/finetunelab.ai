@@ -27,19 +27,27 @@ type AuthResult =
   | { ok: false; code: string; message: string; status: number };
 
 type ModelAuthorizationResult =
-  | { ok: true; modelId: string; maxOutputTokens: number }
+  | { ok: true; modelId: string; maxOutputTokens: number; contextLength: number }
   | { ok: false; code: string; message: string; status: number };
 
 type ReplacementParseResult =
   | { ok: true; replacement: string }
   | { ok: false; code: string; message: string };
 
+type RewriteCapacityResult =
+  | { ok: true; maxTokens: number; contextCharsPerSide: number }
+  | { ok: false; code: string; message: string; status: number };
+
 const MAX_SOURCE_TEXT_CHARS = 200_000;
 const MAX_SELECTED_TEXT_CHARS = 4_000;
 const MAX_INSTRUCTION_CHARS = 2_000;
 const CONTEXT_CHARS_PER_SIDE = 2_000;
 const DEFAULT_MAX_REWRITE_TOKENS = 2_000;
+const DEFAULT_CONTEXT_LENGTH = 4_096;
 const MIN_REWRITE_TOKENS = 128;
+const OUTPUT_REWRITE_SLACK_TOKENS = 512;
+const REWRITE_PROMPT_OVERHEAD_TOKENS = 512;
+const REWRITE_CONTEXT_SAFETY_TOKENS = 128;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
@@ -61,12 +69,17 @@ export async function POST(request: NextRequest) {
   }
 
   const { request: rewriteRequest } = parsed;
-  const modelAuthorization = await authorizeRewriteModel(auth.supabase, rewriteRequest.modelId);
+  const modelAuthorization = await authorizeRewriteModel(auth.supabase, rewriteRequest.modelId, auth.userId);
   if (!modelAuthorization.ok) {
     return validationError(modelAuthorization.code, modelAuthorization.message, modelAuthorization.status);
   }
 
-  const messages = buildRewriteMessages(rewriteRequest);
+  const capacity = getRewriteCapacity(rewriteRequest, modelAuthorization);
+  if (!capacity.ok) {
+    return validationError(capacity.code, capacity.message, capacity.status);
+  }
+
+  const messages = buildRewriteMessages(rewriteRequest, capacity.contextCharsPerSide);
 
   try {
     const rawReplacement = await generateReplacementText({
@@ -74,7 +87,8 @@ export async function POST(request: NextRequest) {
       modelId: modelAuthorization.modelId,
       userId: auth.userId,
       selectedLength: rewriteRequest.selection.expectedText.length,
-      modelMaxOutputTokens: modelAuthorization.maxOutputTokens,
+      maxTokens: capacity.maxTokens,
+      contextCharsPerSide: capacity.contextCharsPerSide,
     });
     const replacement = extractReplacementText(rawReplacement);
 
@@ -208,6 +222,7 @@ function parseSnippetRewriteRequest(body: unknown): ParseResult {
 async function authorizeRewriteModel(
   supabase: SupabaseClient,
   modelId?: string | null,
+  userId?: string,
 ): Promise<ModelAuthorizationResult> {
   const normalizedModelId = normalizeModelId(modelId);
   if (!normalizedModelId) {
@@ -228,9 +243,10 @@ async function authorizeRewriteModel(
     };
   }
 
-  const { data, error } = await supabase
+  const authzClient = getModelAuthorizationClient(supabase);
+  const { data, error } = await authzClient
     .from('llm_models')
-    .select('id, max_output_tokens')
+    .select('id, max_output_tokens, context_length, is_global, user_id')
     .eq('id', normalizedModelId)
     .eq('enabled', true)
     .single();
@@ -254,7 +270,7 @@ async function authorizeRewriteModel(
     };
   }
 
-  if (!data?.id) {
+  if (!data?.id || !isModelAuthorizedForUser(data, userId)) {
     return {
       ok: false,
       code: 'model_forbidden',
@@ -267,13 +283,81 @@ async function authorizeRewriteModel(
     ok: true,
     modelId: data.id,
     maxOutputTokens: normalizeMaxOutputTokens(data.max_output_tokens),
+    contextLength: normalizeContextLength(data.context_length),
   };
 }
 
-function buildRewriteMessages(request: SnippetRewriteRequest): ChatMessage[] {
+function getModelAuthorizationClient(supabase: SupabaseClient): SupabaseClient {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return supabase;
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+function isModelAuthorizedForUser(
+  model: { is_global?: unknown; user_id?: unknown },
+  userId?: string,
+): boolean {
+  return model.is_global === true || (typeof model.user_id === 'string' && model.user_id === userId);
+}
+
+function getRewriteCapacity(
+  request: SnippetRewriteRequest,
+  model: { maxOutputTokens: number; contextLength: number },
+): RewriteCapacityResult {
+  const selectedLength = request.selection.expectedText.length;
+  const maxTokens = getRequiredRewriteTokens(selectedLength);
+
+  if (maxTokens > model.maxOutputTokens) {
+    return {
+      ok: false,
+      code: 'selection_exceeds_model_output',
+      message: 'Selected text is too long for the selected model output limit.',
+      status: 400,
+    };
+  }
+
+  const availableInputTokens = model.contextLength - maxTokens - REWRITE_CONTEXT_SAFETY_TOKENS;
+  const fixedInputTokens =
+    estimateTokenCount(request.instruction) +
+    estimateTokenCount(request.selection.expectedText) +
+    REWRITE_PROMPT_OVERHEAD_TOKENS;
+
+  if (availableInputTokens < fixedInputTokens) {
+    return {
+      ok: false,
+      code: 'selection_exceeds_model_context',
+      message: 'Selected text and instruction exceed the selected model context window.',
+      status: 400,
+    };
+  }
+
+  const contextBudgetTokens = availableInputTokens - fixedInputTokens;
+  const contextCharsPerSide = Math.max(
+    0,
+    Math.min(CONTEXT_CHARS_PER_SIDE, Math.floor(contextBudgetTokens / 2)),
+  );
+
+  return {
+    ok: true,
+    maxTokens,
+    contextCharsPerSide,
+  };
+}
+
+function buildRewriteMessages(request: SnippetRewriteRequest, contextCharsPerSide: number): ChatMessage[] {
   const { sourceText, selection, instruction } = request;
-  const beforeStart = Math.max(0, selection.start - CONTEXT_CHARS_PER_SIDE);
-  const afterEnd = Math.min(sourceText.length, selection.end + CONTEXT_CHARS_PER_SIDE);
+  const beforeStart = Math.max(0, selection.start - contextCharsPerSide);
+  const afterEnd = Math.min(sourceText.length, selection.end + contextCharsPerSide);
   const before = sourceText.slice(beforeStart, selection.start);
   const after = sourceText.slice(selection.end, afterEnd);
 
@@ -303,9 +387,10 @@ async function generateReplacementText(params: {
   modelId: string;
   userId: string;
   selectedLength: number;
-  modelMaxOutputTokens: number;
+  maxTokens: number;
+  contextCharsPerSide: number;
 }): Promise<string> {
-  const maxTokens = getRewriteMaxTokens(params.selectedLength, params.modelMaxOutputTokens);
+  const maxTokens = params.maxTokens;
   const traceContext = await traceService.startTrace({
     spanName: 'llm.snippet_rewrite',
     operationType: 'llm_call',
@@ -315,6 +400,7 @@ async function generateReplacementText(params: {
       feature: 'snippet_revision',
       max_tokens: maxTokens,
       selected_text_chars: params.selectedLength,
+      context_chars_per_side: params.contextCharsPerSide,
       tags: ['snippet_revision', 'rewrite'],
     },
   });
@@ -404,10 +490,12 @@ async function endRewriteTrace(
   }
 }
 
-function getRewriteMaxTokens(selectedLength: number, modelMaxOutputTokens: number): number {
-  const desiredTokens = Math.ceil(selectedLength / 3) + 512;
-  const requestedTokens = Math.max(MIN_REWRITE_TOKENS, desiredTokens);
-  return Math.min(modelMaxOutputTokens, requestedTokens);
+function getRequiredRewriteTokens(selectedLength: number): number {
+  return Math.max(MIN_REWRITE_TOKENS, selectedLength + OUTPUT_REWRITE_SLACK_TOKENS);
+}
+
+function estimateTokenCount(text: string): number {
+  return text.length;
 }
 
 function normalizeMaxOutputTokens(value: unknown): number {
@@ -416,6 +504,14 @@ function normalizeMaxOutputTokens(value: unknown): number {
   }
 
   return DEFAULT_MAX_REWRITE_TOKENS;
+}
+
+function normalizeContextLength(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  return DEFAULT_CONTEXT_LENGTH;
 }
 
 function normalizeModelId(modelId?: string | null): string | null {
