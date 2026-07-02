@@ -1,5 +1,12 @@
 # GitHub Actions Self-Hosted Runner Setup
 
+> **Status: retired from CI.** The `ai-code-review.yml` workflow this guide supported has been
+> removed. It ran on a self-hosted runner, so whenever that runner was offline the `code-review`
+> job sat queued indefinitely and every PR stayed in a pending (yellow) state; when it did run it
+> was advisory-only (never failed the build), and AI review on PRs is now covered by the Copilot
+> pull-request reviewer. The local review script still works on demand: `npm run review:ai`.
+> This guide is kept for reference in case a self-hosted runner is reintroduced.
+
 This guide shows you how to set up a self-hosted GitHub Actions runner on your local machine with Ollama.
 
 ## Why Self-Hosted?
